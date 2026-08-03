@@ -1,0 +1,9 @@
+^.*\.Rproj$
+^\.Rproj\.user$
+^\.github$
+^README\.Rmd$
+^\.gitignore$
+^dev$
+^docs$
+^test_data_anchoveta$
+^\.github$

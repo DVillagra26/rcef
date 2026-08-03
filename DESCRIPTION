@@ -1,0 +1,50 @@
+Package: rcef
+Type: Package
+Title: Discard Raising and Length/Age Allocation over CEF (RDBES) Data
+Version: 0.1.0
+Authors@R: person("Damian", "Villagra",
+                  email = "damian.villagra@ilvo.vlaanderen.be",
+                  role = c("aut", "cre"))
+Author: Damian Villagra [aut, cre]
+Maintainer: Damian Villagra <damian.villagra@ilvo.vlaanderen.be>
+Description: Implements the ICES discard-raising and length/age catch
+    allocation workflows over CEF (RDBES) long-format data. Provides
+    stratum construction and sampling-status classification, automatic
+    (hierarchical cascade) and manual raising-group definition, wrappers
+    around the ICES catchRaising() and catchAllocationAoL() routines, a
+    consistent plotting layer, and emitters that write the analysis out as
+    a reproducible script set in ICES TAF layout. The Shiny workbench that
+    drives these functions ships with the package and is started with
+    run_app(); every function here is usable from a plain R session
+    without it.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Depends:
+    R (>= 4.1)
+Imports:
+    dplyr,
+    magrittr,
+    tidyselect,
+    tidyr,
+    rlang,
+    purrr,
+    ggplot2,
+    scales,
+    grDevices,
+    stats,
+    tools,
+    utils
+Suggests:
+    shiny,
+    DT,
+    ggalluvial,
+    ggrepel,
+    jsonlite,
+    htmltools,
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown
+RoxygenNote: 7.3.1
+Roxygen: list(markdown = TRUE)
+URL: https://github.com/USERNAME/rcef
+BugReports: https://github.com/USERNAME/rcef/issues
