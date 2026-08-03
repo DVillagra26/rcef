@@ -123,3 +123,4 @@ devtools::check()         # R CMD check
 ## Licence
 
 MIT.
+# rcef
