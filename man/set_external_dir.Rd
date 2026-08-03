@@ -2,7 +2,7 @@
 % Please edit documentation in R/rcef-package.R
 \name{set_external_dir}
 \alias{set_external_dir}
-\title{Point the package at your copy of the ICES routines}
+\title{Point the package at a folder of ICES scripts (superseded)}
 \usage{
 set_external_dir(path)
 }
@@ -13,22 +13,9 @@ set_external_dir(path)
 The path, invisibly.
 }
 \description{
-\code{catchRaising()} and friends are distributed as loose scripts, not as a
-package, so their location differs on every machine. Set it once per
-session, or once per project in \code{.Rprofile}.
-}
-\details{
-The alternative - bundling a copy - was rejected on purpose: it would
-pin this package to one revision of code that ICES revises on its own
-schedule, and a stock raised with a stale copy would be wrong in a way
-nothing here could detect.
-}
-\examples{
-\dontrun{
-set_external_dir("~/ICES/scripts")
-load_external()
-}
+The ICES routines are bundled now, so this is no longer needed. Kept so
+existing scripts keep running.
 }
 \seealso{
-\code{\link[=external_dir]{external_dir()}}, \code{\link[=load_external]{load_external()}}
+\code{\link[=use_external_ices]{use_external_ices()}}, \code{\link[=ices_routine_status]{ices_routine_status()}}
 }

@@ -26,14 +26,20 @@ by clicking through an app is not reproducible, so the app's job is to
 help you decide, and the package's job is to do the work and write down
 what was done.
 }
-\section{External dependencies}{
+\section{The ICES routines}{
 
-The ICES routines \code{catchRaising()}, \code{catchAllocationAoL()},
-\code{catchAtAoLAggregation()}, \code{funIntercatchCEF()} and \code{funICoutCEF()} are
-not on CRAN and are not bundled here. Point \code{\link[=set_external_dir]{set_external_dir()}} at your
-copy of the ICES scripts before running anything that raises or
-allocates. Everything else - stratification, classification, grouping,
-plotting, script emission - works without them.
+\code{catchRaising()}, \code{catchAllocationAoL()}, \code{catchAtAoLAggregation()},
+\code{funIntercatchCEF()} and \code{funICoutCEF()} are \strong{bundled}, so the package
+works out of the box with nothing else to install or configure.
+
+They are a SNAPSHOT. ICES revises these scripts on its own schedule, and
+a stock raised with a stale copy would be wrong in a way nothing here
+could detect. \code{\link[=ices_routine_status]{ices_routine_status()}} says what you have;
+\code{\link[=use_external_ices]{use_external_ices()}} points at a newer copy on disk and says loudly
+which routines it replaced.
+
+They are also not this package's work. See \code{inst/scripts/README_ices_source.txt}
+and the \code{Authors@R} \code{ctb} entry; check the licence before redistributing.
 }
 
 \seealso{
@@ -46,6 +52,11 @@ Useful links:
 }
 \author{
 \strong{Maintainer}: Damian Villagra \email{damian.villagra@ilvo.vlaanderen.be}
+
+Other contributors:
+\itemize{
+  \item ICES (authors of the bundled raising and allocation routines in R/ices_*.R) [contributor, copyright holder]
+}
 
 }
 \keyword{internal}

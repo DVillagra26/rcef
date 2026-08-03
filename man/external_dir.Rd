@@ -2,17 +2,16 @@
 % Please edit documentation in R/rcef-package.R
 \name{external_dir}
 \alias{external_dir}
-\title{The folder the ICES routines are read from}
+\title{The override folder, if one was set (superseded)}
 \usage{
 external_dir()
 }
 \value{
-A path, or \code{NULL} when none has been set.
+A path, or \code{NULL}.
 }
 \description{
-Falls back to the \code{rcef.external_dir} option, so a project can set it in
-\code{.Rprofile} and never call \code{\link[=set_external_dir]{set_external_dir()}}.
+The override folder, if one was set (superseded)
 }
 \seealso{
-\code{\link[=set_external_dir]{set_external_dir()}}
+\code{\link[=use_external_ices]{use_external_ices()}}
 }

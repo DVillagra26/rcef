@@ -2,21 +2,22 @@
 % Please edit documentation in R/rcef-package.R
 \name{load_external}
 \alias{load_external}
-\title{Source the ICES routines into the search path}
+\title{Source ICES routines from disk (superseded)}
 \usage{
-load_external(
-  dir = external_dir(),
-  required = c("catchRaising", "catchAllocationAoL")
-)
+load_external(dir = external_dir(), required = NULL)
 }
 \arguments{
 \item{dir}{Folder to read from; defaults to \code{\link[=external_dir]{external_dir()}}.}
 
-\item{required}{Names of functions that must exist afterwards.}
+\item{required}{Ignored; kept for call compatibility.}
 }
 \value{
-The functions found, invisibly.
+The status table from \code{\link[=ices_routine_status]{ices_routine_status()}}, invisibly.
 }
 \description{
-Source the ICES routines into the search path
+Forwards to \code{\link[=use_external_ices]{use_external_ices()}}. With no folder set it now does
+nothing and says so, rather than failing: the routines are already here.
+}
+\seealso{
+\code{\link[=use_external_ices]{use_external_ices()}}, \code{\link[=ices_routine_status]{ices_routine_status()}}
 }

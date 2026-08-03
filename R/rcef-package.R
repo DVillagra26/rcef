@@ -25,13 +25,19 @@
 #' help you decide, and the package's job is to do the work and write down
 #' what was done.
 #'
-#' @section External dependencies:
-#' The ICES routines `catchRaising()`, `catchAllocationAoL()`,
-#' `catchAtAoLAggregation()`, `funIntercatchCEF()` and `funICoutCEF()` are
-#' not on CRAN and are not bundled here. Point [set_external_dir()] at your
-#' copy of the ICES scripts before running anything that raises or
-#' allocates. Everything else - stratification, classification, grouping,
-#' plotting, script emission - works without them.
+#' @section The ICES routines:
+#' `catchRaising()`, `catchAllocationAoL()`, `catchAtAoLAggregation()`,
+#' `funIntercatchCEF()` and `funICoutCEF()` are **bundled**, so the package
+#' works out of the box with nothing else to install or configure.
+#'
+#' They are a SNAPSHOT. ICES revises these scripts on its own schedule, and
+#' a stock raised with a stale copy would be wrong in a way nothing here
+#' could detect. [ices_routine_status()] says what you have;
+#' [use_external_ices()] points at a newer copy on disk and says loudly
+#' which routines it replaced.
+#'
+#' They are also not this package's work. See `inst/scripts/README_ices_source.txt`
+#' and the `Authors@R` `ctb` entry; check the licence before redistributing.
 #'
 #' @keywords internal
 "_PACKAGE"
@@ -65,71 +71,40 @@
 #' @importFrom utils head tail write.csv read.csv zip modifyList
 #' @importFrom grDevices col2rgb rgb colorRampPalette png dev.off
 #' @importFrom tidyselect where
+#' @importFrom tibble tibble as_tibble tribble
 NULL
 
 # ----------------------------------------------------------
-#  Where the ICES scripts live
+#  Legacy accessors
 # ----------------------------------------------------------
-
-#' Pipe operator
-#'
-#' Re-exported from magrittr so package code and user code use the same one.
-#'
-#' @name %>%
-#' @rdname pipe
-#' @keywords internal
-#' @export
-#' @importFrom magrittr %>%
-#' @usage lhs \%>\% rhs
-#' @param lhs A value.
-#' @param rhs A function call.
-#' @return The result of calling `rhs` on `lhs`.
-NULL
-
-# The ICES routines are sourced at run time from a folder the user points
-# at, so R CMD check cannot see them and reports each as an undefined
-# global. Declaring them here says "these are resolved elsewhere, on
-# purpose" rather than silencing the check wholesale.
-utils::globalVariables(c(
-  "catchRaising", "catchAllocationAoL", "catchAtAoLAggregation",
-  "meanWoLatAoLAggregation", "funIntercatchCEF", "funICoutCEF",
-  "getQuovisData", "getPolarisData"))
+# The routines used to be sourced from a folder, so the app and older
+# scripts call set_external_dir() before anything else. They are bundled
+# now, so these do nothing but record a path and forward to the override.
+# Kept rather than removed: silently deleting a function that appears in
+# somebody's saved script buys nothing, and a deprecation message tells
+# them what to use instead.
 
 .rcef_env <- new.env(parent = emptyenv())
 
-#' Point the package at your copy of the ICES routines
+#' Point the package at a folder of ICES scripts (superseded)
 #'
-#' `catchRaising()` and friends are distributed as loose scripts, not as a
-#' package, so their location differs on every machine. Set it once per
-#' session, or once per project in `.Rprofile`.
-#'
-#' The alternative - bundling a copy - was rejected on purpose: it would
-#' pin this package to one revision of code that ICES revises on its own
-#' schedule, and a stock raised with a stale copy would be wrong in a way
-#' nothing here could detect.
+#' The ICES routines are bundled now, so this is no longer needed. Kept so
+#' existing scripts keep running.
 #'
 #' @param path Folder holding the ICES `.R` files.
 #' @return The path, invisibly.
-#' @seealso [external_dir()], [load_external()]
+#' @seealso [use_external_ices()], [ices_routine_status()]
 #' @export
-#' @examples
-#' \dontrun{
-#' set_external_dir("~/ICES/scripts")
-#' load_external()
-#' }
 set_external_dir <- function(path) {
   if (!dir.exists(path)) stop("no such folder: ", path)
   assign("external_dir", normalizePath(path), envir = .rcef_env)
   invisible(path)
 }
 
-#' The folder the ICES routines are read from
+#' The override folder, if one was set (superseded)
 #'
-#' Falls back to the `rcef.external_dir` option, so a project can set it in
-#' `.Rprofile` and never call [set_external_dir()].
-#'
-#' @return A path, or `NULL` when none has been set.
-#' @seealso [set_external_dir()]
+#' @return A path, or `NULL`.
+#' @seealso [use_external_ices()]
 #' @export
 external_dir <- function() {
   if (exists("external_dir", envir = .rcef_env, inherits = FALSE))
@@ -137,25 +112,24 @@ external_dir <- function() {
   getOption("rcef.external_dir", default = NULL)
 }
 
-#' Source the ICES routines into the search path
+#' Source ICES routines from disk (superseded)
+#'
+#' Forwards to [use_external_ices()]. With no folder set it now does
+#' nothing and says so, rather than failing: the routines are already here.
 #'
 #' @param dir Folder to read from; defaults to [external_dir()].
-#' @param required Names of functions that must exist afterwards.
-#' @return The functions found, invisibly.
+#' @param required Ignored; kept for call compatibility.
+#' @return The status table from [ices_routine_status()], invisibly.
+#' @seealso [use_external_ices()], [ices_routine_status()]
 #' @export
-load_external <- function(dir = external_dir(),
-                          required = c("catchRaising", "catchAllocationAoL")) {
-  if (is.null(dir))
-    stop("No ICES script folder set. Call set_external_dir(), or set ",
-         "options(rcef.external_dir = ...) in your .Rprofile.")
-  fs <- list.files(dir, pattern = "\\.R$", full.names = TRUE)
-  if (!length(fs)) stop("no .R files in ", dir)
-  for (f in fs) try(sys.source(f, envir = globalenv()), silent = TRUE)
-  missing <- required[!vapply(required, exists, logical(1))]
-  if (length(missing))
-    warning("sourced ", length(fs), " files from ", dir,
-            " but these are still missing: ", paste(missing, collapse = ", "))
-  invisible(setdiff(required, missing))
+load_external <- function(dir = external_dir(), required = NULL) {
+  if (is.null(dir)) {
+    message("The ICES routines ship with rcef - nothing to load. ",
+            "Use ices_routine_status() to see what is available, or ",
+            "use_external_ices(dir) to override with a newer copy.")
+    return(invisible(ices_routine_status()))
+  }
+  use_external_ices(dir)
 }
 
 # ----------------------------------------------------------
@@ -169,8 +143,8 @@ load_external <- function(dir = external_dir(),
 #' colleague who only wants to script the raising should not have to
 #' install a web framework to do it.
 #'
-#' @param external_dir Folder holding the ICES routines. Defaults to
-#'   [external_dir()].
+#' @param external_dir Optional folder of ICES scripts to override the
+#'   bundled ones with. `NULL` (the default) uses what ships with rcef.
 #' @param ... Passed to [shiny::runApp()], e.g. `launch.browser`, `port`.
 #' @return Does not return; runs until the app is stopped.
 #' @export
@@ -179,13 +153,14 @@ load_external <- function(dir = external_dir(),
 #' rcef::run_app()
 #' rcef::run_app(external_dir = "~/ICES/scripts", launch.browser = TRUE)
 #' }
-run_app <- function(external_dir = rcef::external_dir(), ...) {
+run_app <- function(external_dir = NULL, ...) {
   for (p in c("shiny", "DT")) {
     if (!requireNamespace(p, quietly = TRUE))
       stop("run_app() needs the '", p, "' package.\n",
            "  install.packages(c(\"shiny\", \"DT\"))")
   }
-  if (!is.null(external_dir)) set_external_dir(external_dir)
+  # only ever an override now; the bundled routines are already loaded
+  if (!is.null(external_dir)) use_external_ices(external_dir)
   app <- system.file("app", package = "rcef")
   if (!nzchar(app))
     stop("the bundled app is missing - reinstall rcef")

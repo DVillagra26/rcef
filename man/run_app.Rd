@@ -4,11 +4,11 @@
 \alias{run_app}
 \title{Launch the RCEF Workbench}
 \usage{
-run_app(external_dir = rcef::external_dir(), ...)
+run_app(external_dir = NULL, ...)
 }
 \arguments{
-\item{external_dir}{Folder holding the ICES routines. Defaults to
-\code{\link[=external_dir]{external_dir()}}.}
+\item{external_dir}{Optional folder of ICES scripts to override the
+bundled ones with. \code{NULL} (the default) uses what ships with rcef.}
 
 \item{...}{Passed to \code{\link[shiny:runApp]{shiny::runApp()}}, e.g. \code{launch.browser}, \code{port}.}
 }

@@ -87,3 +87,100 @@ test_that("the palette separates its colours", {
   d <- as.matrix(dist(tolab(PAL_BASE[1:16]))); diag(d) <- Inf
   expect_gt(min(d), 15)
 })
+
+test_that("the ICES routines are bundled and callable", {
+  # the whole point of folding them in: no folder to configure, nothing to
+  # source, and the status table says so
+  st <- ices_routine_status()
+  expect_true(all(st$available))
+  expect_true(all(st$source == "rcef"))
+  for (f in c("catchRaising", "catchAllocationAoL", "funIntercatchCEF",
+              "check_group_conditions"))
+    expect_true(is.function(get(f, envir = asNamespace("rcef"))))
+  expect_true(all(c("catchRaising", "catchAllocationAoL") %in%
+                    getNamespaceExports("rcef")))
+})
+
+test_that("external_status reports capability from the bundled code", {
+  s <- external_status()
+  expect_true(s$raising)
+  expect_true(s$catch_alloc)
+  expect_true(s$ic_exchange)
+})
+
+test_that("loading rcef attaches nothing", {
+  # The library() block that used to sit at the top of fn_utils.R would
+  # have failed this: attaching packages as a side effect of loading is
+  # exactly what turning the scripts into a package had to stop.
+  #
+  # Two things on the search path are NOT the package's doing and are
+  # excluded by name rather than by loosening the assertion:
+  #   testthat        - attached by the runner
+  #   devtools_shims  - scaffolding devtools inserts under load_all() and
+  #                     test_local(). Absent under R CMD check. An earlier
+  #                     version of this test failed on it and looked like a
+  #                     leak in rcef, which cost a bisect to disprove.
+  runner <- c("package:testthat", "devtools_shims", "package:devtools",
+              "package:pkgload")
+  extra <- setdiff(search(), c(".GlobalEnv", "package:rcef", "package:stats",
+    "package:graphics", "package:grDevices", "package:utils",
+    "package:datasets", "package:methods", "Autoloads", "package:base",
+    runner))
+  # naming what leaked matters more than the count
+  expect_true(length(extra) == 0,
+              info = paste("unexpectedly attached:", paste(extra, collapse = ", ")))
+})
+
+test_that("the library()-inside-body behaviour is pinned, not forgotten", {
+  # Several bundled ICES functions call library() inside their own bodies.
+  # That runs at CALL time, so loading rcef stays clean - but calling
+  # catchRaising() will attach dplyr to the user's search path, and that is
+  # documented in README.md and in inst/scripts/README_ices_source.txt.
+  #
+  # This pins the behaviour by inspecting the function bodies rather than
+  # by calling them, so the test does not pollute its own session. If a
+  # future ICES revision removes those calls, this fails and the notes can
+  # come out - which is the point: a documented caveat that silently stops
+  # being true is just a wrong document.
+  has_attach <- function(fn) {
+    f <- get0(fn, envir = asNamespace("rcef"))
+    if (!is.function(f)) return(NA)
+    any(grepl("\\b(library|require)\\(", deparse(body(f))))
+  }
+  offenders <- c("catchRaising", "catchAllocationAoL", "check_group_conditions",
+                 "funMakeRelation")
+  hits <- vapply(offenders, has_attach, logical(1))
+  expect_true(any(hits, na.rm = TRUE),
+              info = paste("if this now fails, upstream has cleaned these up:",
+                           paste(offenders, collapse = ", ")))
+})
+
+test_that("no name is defined twice in the package namespace", {
+  # Folding the ICES scripts in produced two collisions - `%||%` and
+  # load_external() - and both were found only because something else
+  # broke. Two definitions of one name in a namespace is a bug waiting to
+  # be blamed on something unrelated, so it is checked directly.
+  #
+  # Run against the development R/ when it is reachable; the installed
+  # package does not ship its sources, so under R CMD check this skips
+  # rather than pretending to pass.
+  dev <- NULL
+  for (p in c("R", file.path("..", "..", "R"), file.path("..", "..", "..", "R")))
+    if (dir.exists(p) && length(list.files(p, pattern = "\\.R$"))) { dev <- p; break }
+  skip_if(is.null(dev), "development R/ not reachable from the test directory")
+
+  defs <- list()
+  for (f in list.files(dev, pattern = "\\.R$", full.names = TRUE))
+    for (e in as.list(parse(f)))
+      if (is.call(e) && length(e) >= 3 &&
+          identical(as.character(e[[1]]), "<-") && is.name(e[[2]]))
+        defs[[length(defs) + 1]] <- c(nm = as.character(e[[2]]), f = basename(f))
+  nm <- vapply(defs, `[[`, character(1), "nm")
+  fl <- vapply(defs, `[[`, character(1), "f")
+  dup <- unique(nm[duplicated(nm)])
+  expect_length(dup, 0)
+  if (length(dup))
+    cat("\nduplicated:\n", paste(sprintf("  %s -> %s", dup,
+        vapply(dup, function(d) paste(unique(fl[nm == d]), collapse = ", "),
+               character(1))), collapse = "\n"), "\n")
+})

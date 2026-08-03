@@ -2,10 +2,14 @@ Package: rcef
 Type: Package
 Title: Discard Raising and Length/Age Allocation over CEF (RDBES) Data
 Version: 0.1.0
-Authors@R: person("Damian", "Villagra",
-                  email = "damian.villagra@ilvo.vlaanderen.be",
-                  role = c("aut", "cre"))
-Author: Damian Villagra [aut, cre]
+Authors@R: c(
+    person("Damian", "Villagra",
+           email = "damian.villagra@ilvo.vlaanderen.be",
+           role = c("aut", "cre")),
+    person("ICES", role = c("ctb", "cph"),
+           comment = "authors of the bundled raising and allocation routines in R/ices_*.R"))
+Author: Damian Villagra [aut, cre],
+  ICES [ctb, cph]
 Maintainer: Damian Villagra <damian.villagra@ilvo.vlaanderen.be>
 Description: Implements the ICES discard-raising and length/age catch
     allocation workflows over CEF (RDBES) long-format data. Provides
@@ -24,6 +28,7 @@ Depends:
 Imports:
     dplyr,
     magrittr,
+    tibble,
     tidyselect,
     tidyr,
     rlang,
@@ -36,6 +41,16 @@ Imports:
     utils
 Suggests:
     shiny,
+    data.table,
+    icesVocab,
+    icesSD,
+    RstoxData,
+    plyr,
+    readr,
+    stringr,
+    units,
+    glue,
+    forcats,
     DT,
     ggalluvial,
     ggrepel,

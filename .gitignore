@@ -2,3 +2,8 @@
 .Rhistory
 .RData
 .Ruserdata
+*.Rproj
+docs/
+inst/doc/
+test_data_anchoveta/
+output/
