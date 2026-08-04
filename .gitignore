@@ -2,8 +2,9 @@
 .Rhistory
 .RData
 .Ruserdata
-*.Rproj
-docs/
+*.Rcheck/
+*.tar.gz
+rsconnect/
 inst/doc/
-test_data_anchoveta/
-output/
+docs/
+.DS_Store

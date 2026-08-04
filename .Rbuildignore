@@ -1,9 +1,8 @@
+^dev$
+^MANIFEST\.md$
+^DROPPED\.md$
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^\.github$
-^README\.Rmd$
-^\.gitignore$
-^dev$
-^docs$
-^test_data_anchoveta$
-^\.github$
+^rsconnect$
+^build.*\.py$

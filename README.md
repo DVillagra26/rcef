@@ -1,126 +1,86 @@
-# rcef
+# rcef — RCEF Workbench
 
-Discard raising and length/age catch allocation over CEF (RDBES)
-long-format data, following the ICES workflows.
+ICES discard raising and length/age catch allocation over CEF (RDBES)
+long-format data. **One package, one repo**: the analysis functions, the
+vendored RDBESStockCoord engines, and the shiny application that drives
+them.
 
-The package is two halves, and the split is deliberate.
-
-The **analysis functions** are plain R. They build strata from a CEF catch
-table, classify sampling status, define raising groups automatically or by
-hand, drive the ICES raising and allocation routines, and write the whole
-analysis out as a runnable script set. None of it needs Shiny.
-
-The **workbench** is a Shiny app that drives those functions
-interactively. It ships inside the package and is a client of it, not the
-other way round. An assessment that can only be reproduced by clicking
-through an app is not reproducible, so the app's job is to help you decide
-and the package's job is to do the work and write down what was done.
-
-## Installation
+## Install and run
 
 ```r
-# install.packages("remotes")
-remotes::install_github("USERNAME/rcef")
-
-# with the workbench
-remotes::install_github("USERNAME/rcef", dependencies = TRUE)
-```
-
-`shiny` and `DT` are Suggests, not Imports: a colleague who only wants to
-script the raising should not have to install a web framework to do it.
-`dependencies = TRUE` pulls them in; the default does not.
-
-## The ICES routines
-
-`catchRaising()`, `catchAllocationAoL()`, `catchAtAoLAggregation()`,
-`funIntercatchCEF()` and `funICoutCEF()` are distributed by ICES as loose
-scripts, not as a package, and are **not bundled here**. Bundling a copy
-would pin this package to one revision of code ICES revises on its own
-schedule, and a stock raised with a stale copy would be wrong in a way
-nothing here could detect.
-
-Point the package at your copy:
-
-```r
-library(rcef)
-set_external_dir("~/ICES/scripts")
-load_external()
-```
-
-Or once per project, in `.Rprofile`:
-
-```r
-options(rcef.external_dir = "~/ICES/scripts")
-```
-
-Everything that does not raise or allocate — stratification,
-classification, grouping, plotting, script emission — works without them.
-
-## The workbench
-
-```r
+remotes::install_github("DVillagra26/rcef")
 rcef::run_app()
 ```
 
-## Scripting it instead
+Headless — the whole point of the split:
 
 ```r
 library(rcef)
-
-catch  <- read.csv("CEF_catches.csv")
-catch  <- derive_fields(catch)          # metier4/5/6, ICES area levels, Season
-
-dims   <- c("metier4", "Country", "ICESDivision", "Season")
-strata <- classify_strata(build_strata(catch, dims), threshold = 50)
-
-# how much of the stock carries a discard estimate, and where the gaps are
-plot_coverage(strata, type = "heatmap", y = "metier4", fill = "Season",
-              threshold = 50)
-
-# automatic grouping: a cascade down fleet -> area -> season
-rec   <- recommend_raising(strata, hierarchy = c("metier4","ICESDivision","Season"),
-                           thresholds = c(50, 50, 50))
-conds <- conds_from_auto(rec)
-
-raised <- catchRaising(catch, conds$strataCond, conds$matchedDataCond)
+cef  <- derive_fields(readr::read_csv("catches_CEF_v17.1.csv"))
+st   <- classify_strata(build_strata(cef, c("metier4", "ICESDivision")))
+grp  <- define_raising_groups_auto(st)
+out  <- catchRaising(cef, grp$strataCond, grp$matchedDataCond)
 ```
 
-## Writing the analysis out
+No shiny is loaded. `shiny` and `DT` are **Suggests**, pulled in only by
+`run_app()`.
 
-The workbench and the package both emit the session as an ICES TAF script
-set — seven files wired together by what they read and write on disk, so a
-stage can be re-run on its own:
+## Layout
 
 ```
-data.R                            read and wrangle; nothing is decided
-model_explore_discards.R          coverage and discard rates
-model_allocate_raise_discards.R   group definition + catchRaising()
-model_explore_length_age.R        length/age sampling coverage
-model_allocate_length_age.R       group definition + catchAllocationAoL()
-output.R                          the result figures
-report.R                          left for the working group
+R/                     THE PACKAGE
+  aaa-package.R          package doc, imports, globals
+  RDBESStockCoord_*.R    vendored ICES WG code — do not refactor
+  rcef_*.R               our analysis logic
+  viz_*.R                our theme and plots (ggplot2 only)
+  run_app.R              the single entry point into the app
+  rcef_status.R          replaces the old external_loader.R
+inst/app/              THE APPLICATION — shipped, never R CMD check'ed
+  app.R, app_ui_helpers.R, app_mod_intercatch_ui.R, app_state.R
+inst/extdata/          CSV fixtures (was data/)
+dev/                   tests, tooling, deploy (.Rbuildignore'd)
 ```
+
+**MANIFEST.md** maps every file to where it came from. **DROPPED.md**
+lists what was removed and why.
+
+## The one rule
+
+> If a function needs `input`, `session`, or returns a shiny tag, it lives
+> in `inst/app/`. If it does arithmetic on catch data, it lives in `R/`.
+
+There is deliberately no shiny call anywhere under `R/` except the
+Suggests-guarded `shiny::runApp()` inside `run_app()`.
+
+## Developing
 
 ```r
-bundle <- taf_bundle(ctx, kept_plots)
-taf_write(bundle, "analysis/")
+source("dev/setup.R")        # pkgload::load_all(".") — no install needed
+shiny::runApp("inst/app")    # the app against the working tree
+devtools::document()         # regenerate NAMESPACE and man/
 ```
 
-`model_allocate_length_age.R` reads `model/catch_data_raised.rds`, not the
-unraised table. Numbers at length and age are raised to the total catch,
-which only exists once the discards have been raised — so the dependency
-is a file the script cannot run without, rather than a comment asking you
-to remember.
-
-## Development
-
-```r
-devtools::load_all()      # develop against the source
-devtools::document()      # regenerate NAMESPACE and man/ from roxygen
-devtools::check()         # R CMD check
+```sh
+Rscript dev/check_syntax.R   # parse() every file; must print DONE, 0 failures
 ```
 
-## Licence
+## Deploying to shinyapps.io
 
-MIT.
-# rcef
+`dev/deploy_shinyapps.R`. The catch worth knowing before you hit it:
+shinyapps.io resolves dependencies from CRAN, and `rcef` is not there. So
+install it **from GitHub** locally first — `remotes::install_github()`
+writes `RemoteType`/`RemoteUrl` into the installed DESCRIPTION and
+`rsconnect` reads them. Install with `devtools::install()` or
+`R CMD INSTALL` instead and the deploy fails with *"Unable to determine
+package source"*.
+
+## Vendored code
+
+`R/RDBESStockCoord_*.R` is not ours. Function names, argument lists,
+defaults and return shapes are upstream's and must not be changed here —
+a local rename would silently fork us from the working group. Local edits
+are packaging-only and every one carries a `## [pkg]` marker:
+
+```sh
+grep -rn '## \[pkg\]' R/     # a complete diff against upstream
+```

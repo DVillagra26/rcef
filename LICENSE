@@ -1,2 +1,8 @@
-YEAR: 2026
-COPYRIGHT HOLDER: Damian Villagra / ILVO
+Copyright (c) 2026 ILVO (Flanders Research Institute for Agriculture,
+Fisheries and Food) and contributors.
+
+The files R/RDBESStockCoord_*.R are vendored from the ICES RDBESStockCoord
+working-group code and remain under their upstream licence and authorship
+(Yves Reecht and RDBESStockCoord contributors). Replace this file with the
+licence text you and the working group agree on before making the
+repository public.

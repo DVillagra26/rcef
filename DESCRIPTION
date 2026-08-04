@@ -1,65 +1,52 @@
 Package: rcef
 Type: Package
-Title: Discard Raising and Length/Age Allocation over CEF (RDBES) Data
+Title: Discard Raising and Length/Age Catch Allocation over CEF (RDBES) Data
 Version: 0.1.0
 Authors@R: c(
-    person("Damian", "Villagra",
-           email = "damian.villagra@ilvo.vlaanderen.be",
+    person("Damian", "<surname>", email = "<you>@ilvo.vlaanderen.be",
            role = c("aut", "cre")),
-    person("ICES", role = c("ctb", "cph"),
-           comment = "authors of the bundled raising and allocation routines in R/ices_*.R"))
-Author: Damian Villagra [aut, cre],
-  ICES [ctb, cph]
-Maintainer: Damian Villagra <damian.villagra@ilvo.vlaanderen.be>
+    person("Yves", "Reecht", role = "aut",
+           comment = "RDBESStockCoord functions, vendored (see R/RDBESStockCoord_*.R)"),
+    person("RDBESStockCoord contributors", role = "ctb"))
 Description: Implements the ICES discard-raising and length/age catch
-    allocation workflows over CEF (RDBES) long-format data. Provides
-    stratum construction and sampling-status classification, automatic
-    (hierarchical cascade) and manual raising-group definition, wrappers
-    around the ICES catchRaising() and catchAllocationAoL() routines, a
-    consistent plotting layer, and emitters that write the analysis out as
-    a reproducible script set in ICES TAF layout. The Shiny workbench that
-    drives these functions ships with the package and is started with
-    run_app(); every function here is usable from a plain R session
-    without it.
-License: MIT + file LICENSE
+    allocation workflows over CEF (RDBES) long-format data: strata
+    construction, sampling-status classification, automatic and manual
+    definition of raising/allocation groups, and the emission of a
+    reproducible script or ICES TAF script set. Wraps the RDBESStockCoord
+    engines catchRaising() and catchAllocationAoL().
+License: file LICENSE
+URL: https://github.com/DVillagra26/rcef
+BugReports: https://github.com/DVillagra26/rcef/issues
 Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = FALSE)
+RoxygenNote: 7.3.2
 Depends:
     R (>= 4.1)
 Imports:
     dplyr,
-    magrittr,
-    tibble,
-    tidyselect,
     tidyr,
     rlang,
     purrr,
-    ggplot2,
-    scales,
-    grDevices,
-    stats,
-    tools,
-    utils
-Suggests:
-    shiny,
-    data.table,
-    icesVocab,
-    icesSD,
-    RstoxData,
-    plyr,
-    readr,
     stringr,
-    units,
-    glue,
-    forcats,
-    DT,
+    data.table,
+    ggplot2,
     ggalluvial,
     ggrepel,
+    scales,
     jsonlite,
-    htmltools,
-    testthat (>= 3.0.0),
-    knitr,
-    rmarkdown
-RoxygenNote: 7.3.1
-Roxygen: list(markdown = TRUE)
-URL: https://github.com/USERNAME/rcef
-BugReports: https://github.com/USERNAME/rcef/issues
+    tibble,
+    stats,
+    utils,
+    tools,
+    grDevices
+Suggests:
+    shiny,
+    DT,
+    icesVocab,
+    icesSD,
+    units,
+    pkgload,
+    remotes,
+    rsconnect,
+    testthat (>= 3.0.0)

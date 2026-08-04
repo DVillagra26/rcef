@@ -1,51 +1,47 @@
 # ============================================================
-#  Discard Raising Explorer  (v2)
-#  Shiny front end over the 0_Functions_*.R data modules
-#  Run with:  shiny::runApp("app.R")
+#  RCEF Workbench  --  shiny front end over the rcef package
+#  Run with:  rcef::run_app()
+#  This file is inst/app/app.R: it is NOT package code and is never
+#  seen by R CMD check.
 # ============================================================
 
 library(shiny)
 library(DT)
 
-# Where the helper files live. On shinyapps.io (deployed with
-# appDir = "R_development") they sit in the working directory, so ".".
-# Run locally from the parent APP/ folder they are in "R_development/".
-# Auto-detect rather than hard-coding, so both layouts work; an explicit
-# rcef.app_dir option still overrides.
+# ============================================================
+#  Loading
+#
+#  Everything that is not shiny now lives in the rcef package:
+#  the workbench functions AND the vendored RDBESStockCoord engines
+#  (catchRaising(), catchAllocationAoL(), funIntercatchCEF(), ...).
+#  There is no external loader and no source() of data modules.
+#
+#  Two ways in:
+#    installed  library(rcef); rcef::run_app()
+#    working tree  pkgload::load_all(".") then shiny::runApp("inst/app")
+# ============================================================
+if (!requireNamespace("rcef", quietly = TRUE) &&
+    !exists("catchRaising", mode = "function")) {
+  stop("The rcef package is not installed and not loaded.\n",
+       "  remotes::install_github(\"DVillagra26/rcef\")\n",
+       "or, in the working tree:  pkgload::load_all(\".\")", call. = FALSE)
+}
+if (requireNamespace("rcef", quietly = TRUE)) library(rcef)
+
+# Shiny-only helpers. These are the ONLY files the app sources; they are
+# excluded from the package because they build tags or read reactives.
 APP_DIR <- getOption(
   "rcef.app_dir",
-  if (file.exists("0_Functions_utils.R")) "." else "R_development")
-# ---- data modules: package-ready, no shiny, usable on their own in RStudio.
-# Order matters only here: utils and theme define the vocabulary, units and
-# palettes the rest build on. They ship in this folder (not the external R/
-# one) so they load on shinyapps.io too.
-source(file.path(APP_DIR, "0_Functions_utils.R"))     # vocab, derive, units
-source(file.path(APP_DIR, "0_Functions_theme.R"))     # one look, stable colours
-source(file.path(APP_DIR, "0_Functions_classify.R"))  # sampling status
-source(file.path(APP_DIR, "0_Functions_groups.R"))    # auto + manual grouping
-source(file.path(APP_DIR, "0_Functions_raising.R"))   # apply, scenarios, compare
-source(file.path(APP_DIR, "0_Functions_emit.R"))      # the reproducible script
-source(file.path(APP_DIR, "0_Functions_taf.R"))       # the same, as an ICES TAF set
-# ---- shiny-only helpers (icons, panel sizes, legend panel, DT styling)
-source(file.path(APP_DIR, "app_ui_helpers.R"))
-source(file.path(APP_DIR, "session_log.R"))
-source(file.path(APP_DIR, "summaries.R"))
-source(file.path(APP_DIR, "mod_length.R"))
-source(file.path(APP_DIR, "mod_alloc_raising.R"))
-source(file.path(APP_DIR, "external_loader.R"))
-source(file.path(APP_DIR, "mod_intercatch.R"))
-source(file.path(APP_DIR, "mod_native_raising.R"))
-# The plotting module is package-ready and lives in the external R/ folder
-# for standalone use, but a copy ships here and is sourced directly: the
-# plots are core to the app and the external R/ folder is not part of the
-# shinyapps.io bundle, so it must load regardless.
-source(file.path(APP_DIR, "0_Functions_plots.R"))
+  if (file.exists("app_ui_helpers.R")) "." else "inst/app")
+source(file.path(APP_DIR, "app_ui_helpers.R"))        # icons, heights, legend
+source(file.path(APP_DIR, "app_mod_intercatch_ui.R")) # ic_ui()
+source(file.path(APP_DIR, "app_state.R"))             # state_capture()
 
-# The InterCatch and raising functions are maintained outside this app;
-# load whatever is present and carry on without the rest.
-EXT_DIR <- getOption("rcef.app_dir", "R")
-EXT <- load_external(getOption("rcef.external_dir", EXT_DIR))
-EXT_STATUS <- external_status(EXT)
+# What the installed package can actually do. Same shape the old
+# load_external()/external_status() pair returned, so the Availability
+# panel and the TAF context are unchanged.
+EXT <- rcef_sources()
+EXT_STATUS <- rcef_status(EXT)
 
 suppressPackageStartupMessages({
   library(dplyr); library(tidyr); library(ggplot2); library(rlang)
@@ -53,7 +49,6 @@ suppressPackageStartupMessages({
   # jsonlite is NOT attached: its validate() would mask shiny::validate()
   requireNamespace("jsonlite", quietly = TRUE)
 })
-
 
 
 alloc_box <- function() uiOutput("alloc_box")
