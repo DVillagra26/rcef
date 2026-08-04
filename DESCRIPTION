@@ -3,11 +3,11 @@ Type: Package
 Title: Discard Raising and Length/Age Catch Allocation over CEF (RDBES) Data
 Version: 0.1.0
 Authors@R: c(
-    person("Damian", "<surname>", email = "<you>@ilvo.vlaanderen.be",
+    person("Damian", "Villagra", email = "damian.villagra@ilvo.vlaanderen.be",
            role = c("aut", "cre")),
     person("Yves", "Reecht", role = "aut",
            comment = "RDBESStockCoord functions, vendored (see R/RDBESStockCoord_*.R)"),
-    person("RDBESStockCoord contributors", role = "ctb"))
+    person("RDBESStockCoord contributors", role = "ctb", comment = "ICES WG"))
 Description: Implements the ICES discard-raising and length/age catch
     allocation workflows over CEF (RDBES) long-format data: strata
     construction, sampling-status classification, automatic and manual
@@ -18,7 +18,6 @@ License: file LICENSE
 URL: https://github.com/DVillagra26/rcef
 BugReports: https://github.com/DVillagra26/rcef/issues
 Encoding: UTF-8
-LazyData: true
 Roxygen: list(markdown = FALSE)
 RoxygenNote: 7.3.2
 Depends:

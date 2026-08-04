@@ -57,12 +57,18 @@ Suggests-guarded `shiny::runApp()` inside `run_app()`.
 ```r
 source("dev/setup.R")        # pkgload::load_all(".") — no install needed
 shiny::runApp("inst/app")    # the app against the working tree
-devtools::document()         # regenerate NAMESPACE and man/
 ```
 
 ```sh
 Rscript dev/check_syntax.R   # parse() every file; must print DONE, 0 failures
+Rscript dev/check_exports.R  # 118 functions still untagged — read this first
 ```
+
+**Do not run `devtools::document()` yet.** `NAMESPACE` is hand-written and
+deliberately lacks the roxygen marker line, so `document()` will refuse to
+overwrite it rather than silently hiding 118 functions — including
+`catchRaising()` and `catchAllocationAoL()`. See the comment at the top of
+`NAMESPACE`.
 
 ## Deploying to shinyapps.io
 
