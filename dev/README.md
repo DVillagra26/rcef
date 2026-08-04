@@ -6,7 +6,8 @@
 |---|---|
 | `setup.R` | `pkgload::load_all(".")` — develop without installing |
 | `check_syntax.R` | `parse()` every `.R` file; must print `DONE ... 0 failure(s)` |
-| `check_exports.R` | every function must carry `@export`; must print `NOT EXPORTED : 0` |
+| `check_exports.R` | every top-level object — functions **and constants** — must be exported; must print `NOT EXPORTED : 0` |
+| `check_app.R` | sources `inst/app/app.R` against the installed package and renders the UI |
 | `DOC_BACKLOG.txt` | the 94 functions exported with `@noRd` — no man page yet |
 | `deploy_shinyapps.R` | shinyapps.io, with the GitHub-remote caveat spelled out |
 | `tests/` | the 11 suites + `run_tests.R` |

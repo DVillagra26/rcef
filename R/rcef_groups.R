@@ -48,6 +48,7 @@
 
 #' @keywords internal
 #' @name rcef-groups-imports
+#' @noRd
 #' @importFrom dplyr %>% across all_of arrange count desc group_by mutate n
 #'   row_number select summarise
 #' @importFrom rlang %||%

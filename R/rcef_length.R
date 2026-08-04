@@ -32,10 +32,16 @@
 # mix mm and cm, or g and kg. Everything is converted once, on the way
 # in, to mm / N / g. Anything unrecognised is left alone and reported,
 # rather than being silently treated as the base unit.
+#' @noRd
+#' @export
 LEN_CLASS_TO_MM <- c(mm = 1, cm = 10, dm = 100, m = 1000)
+#' @noRd
+#' @export
 NUMBER_TO_N     <- c(N = 1, n = 1, thousands = 1000, kN = 1000,
                      millions = 1e6, MN = 1e6,
                      NE3 = 1e3, NE6 = 1e6, NE9 = 1e9)
+#' @noRd
+#' @export
 WEIGHT_TO_G     <- c(g = 1, kg = 1000, t = 1e6, mg = 0.001)
 
 #' @noRd

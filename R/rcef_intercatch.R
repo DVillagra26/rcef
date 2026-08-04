@@ -18,9 +18,13 @@
 #  edited by hand afterwards.
 # ============================================================
 
+#' @noRd
+#' @export
 OUTPUT_FORMATS <- c("to_environment", "to_file", "to_upload", "to_list")
 
 # shown in small grey caps beside each choice
+#' @noRd
+#' @export
 OUTPUT_DESC <- list(
   to_environment = "assigns catches / distributions / effort to the global env",
   to_file        = "writes the three CEF csv files, with headers",
@@ -32,6 +36,8 @@ OUTPUT_DESC <- list(
 # the directory, rbinds them and splits on the record-type column (HI /
 # SI / SD), so a single combined export is the normal input; asking for
 # three separate files was wrong.
+#' @noRd
+#' @export
 IC_FILE_ROLES <- list(
   exchange = list(
     EXCHANGE = "one InterCatch exchange file, holding the HI, SI and SD records"),
@@ -40,6 +46,8 @@ IC_FILE_ROLES <- list(
     NumbersAtAgeLength = "numbers at age or length",
     MeanWeigthAtAgeLength = "mean weight at age or length"))
 
+#' @noRd
+#' @export
 IC_FILE_PATTERN <- c(EXCHANGE = "\\.csv$",
                      StockOverview = "stockoverview",
                      NumbersAtAgeLength = "number",
@@ -111,6 +119,8 @@ ic_stage_uploads <- function(files, source_type, years) {
 # matches "StockOverview", "Numbers", "MeanWeigth"; funIntercatchCEF()
 # reads every csv and splits on the RecordType column, so exchange files
 # only need to be csv - but we still normalise the names for clarity.
+#' @noRd
+#' @export
 IC_CANONICAL <- list(
   output = c(StockOverview = "StockOverview.txt",
              NumbersAtAgeLength = "NumbersAtAgeLength.txt",

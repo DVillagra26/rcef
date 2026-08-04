@@ -53,6 +53,7 @@
 #' readers, prefer a facet or a shape over a colour.
 #'
 #' @keywords internal
+#' @export
 PAL_BASE <- c(
   "#4980B6", "#FFB649", "#00DB92", "#B60049", "#FF92FF", "#495B12",
   "#EDB6B6", "#5B37A4", "#00DBED", "#A4C849", "#924912", "#80495B",

@@ -45,6 +45,7 @@
 
 #' @keywords internal
 #' @name rcef-plots-imports
+#' @noRd
 #' @import ggplot2
 #' @importFrom dplyr %>% across all_of arrange bind_rows case_when desc filter
 #'   first group_by group_split left_join mutate row_number select summarise

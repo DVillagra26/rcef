@@ -31,10 +31,8 @@
 #'
 #' @param year Year from which to extract the ICES stock databases
 #'
-#' @returns
 #' @export
 #'
-#' @examples
 funMakeRelation <- function(year){
   ## [pkg] require(icesVocab)/require(icesSD) -> Suggests + guard below
   for (p in c("icesVocab", "icesSD", "tidyr", "data.table")) {

@@ -25,14 +25,12 @@
 #' InterCatch exchange format to CEF v17.1
 #'
 #' @param dat_path folder with intercatch echange format files
-#' @param stock_relation
+#' @param stock_relation stock/area/species lookup, as built by funMakeRelation()
 #' @param output_format where should the output go
 #' @param out_path if it should be in files, where
 #'
-#' @returns
 #' @export
 #'
-#' @examples
 funIntercatchCEF <- function(dat_path = getwd(),
                              stock_relation = stock_relation,
                              output_format = c("to_environment", "to_file", "to_upload_file"), #

@@ -22,6 +22,8 @@
 # "LengthTotal" fails the match.arg, and passing "Length" silently
 # matches no rows. So the value is translated for the call AND the
 # column is rewritten to agree with it.
+#' @noRd
+#' @export
 ALLOC_TYPE <- c(LengthTotal = "Length", Length = "Length", Age = "Age")
 
 #' @noRd
@@ -175,6 +177,8 @@ agg_meanweight <- function(alloc, grouping = c("catchCategory", "sampledOrEstima
 #   W_Age_3        = mean weight at age 3
 # so the class has to be read out of the name and pivoted long before
 # anything can be plotted.
+#' @noRd
+#' @export
 ALLOC_WIDE_RE <- "^([NW])_(Length|Age)_(.+)$"
 
 #' @noRd
@@ -200,6 +204,8 @@ alloc_pivot_long <- function(d, kind = c("N", "W"), value_name = "value") {
 # "sampled" rows were measured and imported; "estimated" rows are what
 # the allocation put there. Older builds used importedOrRaised, so both
 # are accepted.
+#' @noRd
+#' @export
 ALLOC_SRC_COLS <- c("sampledOrEstimated", "importedOrRaised")
 
 #' @noRd

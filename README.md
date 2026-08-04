@@ -63,13 +63,16 @@ devtools::document()         # regenerate NAMESPACE and man/ after any change
 ```sh
 Rscript dev/check_syntax.R   # parse() every file; must print DONE, 0 failures
 Rscript dev/check_exports.R  # must print NOT EXPORTED : 0
+Rscript dev/check_app.R      # sources the app + renders the UI (needs install)
 R CMD build .                # catches DESCRIPTION errors in 2s — run before every push
 ```
 
 `NAMESPACE` and `man/` are **generated** and committed. Every top-level
-function carries `@export`, so `document()` is safe to run; 114 of them
-carry `@noRd` as well, meaning they export correctly but have no man page
-yet. That backlog is `dev/DOC_BACKLOG.txt` — replacing a `@noRd` with a
+object carries `@export` — all 223 functions **and all 30 constants**;
+the constants are the ones easily forgotten, and a missing one fails at
+runtime with `object 'X' not found`, not at build time. `document()` is
+safe to run. 134 objects also carry `@noRd`, meaning they export
+correctly but have no man page yet. That backlog is `dev/DOC_BACKLOG.txt` — replacing a `@noRd` with a
 real roxygen block is the unit of work. `dev/check_exports.R` fails if a
 new function is ever added without a tag.
 

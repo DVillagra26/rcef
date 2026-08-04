@@ -44,6 +44,7 @@
 
 #' @keywords internal
 #' @name rcef-classify-imports
+#' @noRd
 #' @importFrom dplyr %>% across all_of arrange case_when count filter first
 #'   group_by mutate n row_number select summarise
 NULL

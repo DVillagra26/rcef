@@ -19,6 +19,8 @@ funIntercatchCEF(
 \arguments{
 \item{dat_path}{folder with intercatch echange format files}
 
+\item{stock_relation}{stock/area/species lookup, as built by funMakeRelation()}
+
 \item{output_format}{where should the output go}
 
 \item{out_path}{if it should be in files, where}

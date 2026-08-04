@@ -74,6 +74,7 @@ fmt_t3 <- function(x) formatC(x, format = "f", digits = 3, big.mark = ",")
 #' columns [derive_fields()] creates.
 #'
 #' @keywords internal
+#' @export
 FLEET_LEVELS <- c("Metier 4 (gear)"          = "metier4",
                   "Metier 5 (gear_target)"   = "metier5",
                   "Metier 6 (gear_tgt_mesh)" = "metier6",
@@ -85,6 +86,7 @@ FLEET_LEVELS <- c("Metier 4 (gear)"          = "metier4",
 #' `label = column`.
 #'
 #' @keywords internal
+#' @export
 AREA_LEVELS  <- c("ICES subarea (27.X)"          = "ICESSubArea",
                   "ICES division (27.X.X)"       = "ICESDivision",
                   "ICES subdivision (27.X.X.X)"  = "ICESSubdivision",
@@ -95,6 +97,7 @@ AREA_LEVELS  <- c("ICES subarea (27.X)"          = "ICESSubArea",
 #' Every derived and native column the filter builder is allowed to offer.
 #'
 #' @keywords internal
+#' @export
 FILTER_VARS <- c("metier4", "metier5", "metier6", "fleetValue",
                  "target", "mesh", "FleetType", "Country",
                  "ICESSubArea", "ICESDivision", "ICESSubdivision",
@@ -189,6 +192,7 @@ derive_fields <- function(x) {
 #' Weight-unit conversion factors to tonnes
 #'
 #' @keywords internal
+#' @export
 WEIGHT_TO_TONNES <- c(kg = 1e-3, g = 1e-6, t = 1, tonnes = 1, KG = 1e-3, G = 1e-6)
 
 #' Convert a CEF weight to tonnes

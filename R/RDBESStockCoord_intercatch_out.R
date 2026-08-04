@@ -29,10 +29,8 @@
 #' @param years year for whih IC data will be loaded
 #' @param output_format "to_environment" and/or "to_file"
 #'
-#' @returns
 #' @export
 #'
-#' @examples
 funICoutCEF <- function(dat_path,
                        years,
                        stock_relation = NULL,

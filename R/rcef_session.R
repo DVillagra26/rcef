@@ -22,6 +22,8 @@
 
 # Blocks are written in this order regardless of when they were set,
 # so the emitted script always reads top to bottom in a sensible order.
+#' @noRd
+#' @export
 LOG_ORDER <- c("header", "setup", "intercatch", "load_cef", "derive",
                "strata", "explore", "auto_raising", "manual_groups",
                "native_raising", "scenarios", "session")
@@ -64,6 +66,8 @@ log_write <- function(lg, path) {
 # ------------------------------------------------------------
 # Buttons carry a click count, not a setting; replaying them would fire
 # the action again on load, so they are dropped.
+#' @noRd
+#' @export
 STATE_SKIP <- paste0("^(save_|add_|del_|move_|apply_all|mirror|to_strata|",
                      "to_matched|clear_|run_|rule_move|up_sc|dl_|file$)")
 

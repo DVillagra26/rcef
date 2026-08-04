@@ -29,6 +29,8 @@
 # columns in the wrong order fails with an opaque join error:
 #   "Join columns in `y` must be present in the data."
 # Everything handed to catchRaising() is therefore reordered first.
+#' @noRd
+#' @export
 CEF_ORDER <- c("recordType", "vesselFlagCountry", "year", "workingGroup",
                "stock", "speciesCode", "catchCategory", "seasonType",
                "seasonValue", "areaType", "areaValue",
@@ -37,6 +39,8 @@ CEF_ORDER <- c("recordType", "vesselFlagCountry", "year", "workingGroup",
                "originType", "variableType", "variableUnit", "total",
                "variance", "PSU", "numPSUs", "numTrips", "comment")
 
+#' @noRd
+#' @export
 CEF_REQUIRED <- c("vesselFlagCountry", "year", "workingGroup", "stock",
                   "speciesCode", "catchCategory", "seasonType", "seasonValue",
                   "areaType", "areaValue", "fisheriesManagementUnit",
