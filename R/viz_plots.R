@@ -67,6 +67,7 @@ NULL
 #' @return A ggplot facet layer, or `NULL`.
 #' @keywords internal
 #' @noRd
+#' @export
 maybe_facet <- function(facet_var, free_y = TRUE, ncol = 2) {
   if (is.null(facet_var) || !nzchar(facet_var)) return(NULL)
   facet_wrap(vars(.data[[facet_var]]),
@@ -86,6 +87,7 @@ maybe_facet <- function(facet_var, free_y = TRUE, ncol = 2) {
 #' @return A ggplot facet layer, or `NULL`.
 #' @keywords internal
 #' @noRd
+#' @export
 facet_two <- function(f1, f2, ncol = 2, scales = "fixed") {
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
   if (has(f1) && has(f2))
@@ -108,6 +110,7 @@ facet_two <- function(f1, f2, ncol = 2, scales = "fixed") {
 #' @return `s` with unsampled strata removed.
 #' @keywords internal
 #' @noRd
+#' @export
 sampled_for_discards <- function(s) {
   keep <- !is.na(s$discard_rate)
   if ("landings_with_discards" %in% names(s))
@@ -134,6 +137,7 @@ sampled_for_discards <- function(s) {
 #' @return One row per cell, re-classified.
 #' @keywords internal
 #' @noRd
+#' @export
 collapse_cells <- function(sc, keys, threshold, what = "discard", min_meas = 0) {
   keys <- keys[!is.na(keys) & nzchar(keys)]
   if (!length(keys)) return(sc)
@@ -163,6 +167,7 @@ collapse_cells <- function(sc, keys, threshold, what = "discard", min_meas = 0) 
 #' @return "Discard", "Length" or "Age".
 #' @keywords internal
 #' @noRd
+#' @export
 cov_title_what <- function(what)
   switch(what, length = "Length", age = "Age", "Discard")
 
@@ -172,6 +177,7 @@ cov_title_what <- function(what)
 #' @return "discard", "length" or "age".
 #' @keywords internal
 #' @noRd
+#' @export
 samp_word <- function(what)
   switch(what, length = "length", age = "age", "discard")
 

@@ -62,6 +62,7 @@ NULL
 #' @return A string: `"x"` for one value, `c("a", "b")` for several.
 #' @keywords internal
 #' @noRd
+#' @export
 fmt_vals <- function(v) {
   v <- unique(as.character(v))
   if (length(v) == 1) paste0('"', v, '"')
@@ -73,6 +74,7 @@ fmt_vals <- function(v) {
 #' @return A string such as `metier4 %in% c("OTB", "TBB")`.
 #' @keywords internal
 #' @noRd
+#' @export
 clause_string <- function(cl) {
   rhs <- if (!is.null(cl$set) && nzchar(cl$set)) cl$set else fmt_vals(cl$values)
   core <- sprintf("%s %%in%% %s", cl$var, rhs)
@@ -84,6 +86,7 @@ clause_string <- function(cl) {
 #' @return A condition string, or "TRUE" when there are no clauses.
 #' @keywords internal
 #' @noRd
+#' @export
 cond_string <- function(clauses) {
   if (!length(clauses)) return("TRUE")
   paste(vapply(clauses, clause_string, character(1)), collapse = " & ")
@@ -96,6 +99,7 @@ cond_string <- function(clauses) {
 #' @return A logical vector, one element per row of `df`.
 #' @keywords internal
 #' @noRd
+#' @export
 eval_clauses <- function(df, clauses, sets = list()) {
   if (!length(clauses)) return(rep(TRUE, nrow(df)))
   Reduce(`&`, lapply(clauses, function(cl) {
@@ -111,6 +115,7 @@ eval_clauses <- function(df, clauses, sets = list()) {
 #' @return A condition string pinning each key to the row's value.
 #' @keywords internal
 #' @noRd
+#' @export
 row_condition <- function(row, keys) {
   paste(vapply(keys, function(k)
     sprintf('%s %%in%% %s', k, fmt_vals(row[[k]])), character(1)),
@@ -146,6 +151,7 @@ flag_donor_exclusion <- function(s, dr_min = NA, dr_max = NA) {
 #' @return A logical vector; all `TRUE` when `donor_ok` is absent.
 #' @keywords internal
 #' @noRd
+#' @export
 donor_ok_of <- function(s)
   if ("donor_ok" %in% names(s)) s$donor_ok else rep(TRUE, nrow(s))
 
@@ -155,6 +161,7 @@ donor_ok_of <- function(s)
 #' @return A negated `%in%` expression string, or `NULL`.
 #' @keywords internal
 #' @noRd
+#' @export
 donor_exclusion_expr <- function(excluded, dims) {
   if (!length(excluded)) return(NULL)
   present <- dims[nzchar(dims)]
@@ -448,6 +455,7 @@ new_rule <- function(id, label = "", raise = list(), source = NULL,
 #' @return A string such as `discard_rate >= 0.05`, or "".
 #' @keywords internal
 #' @noRd
+#' @export
 dr_clause_string <- function(r) {
   bits <- c(if (!is.na(r$dr_min %||% NA)) sprintf("discard_rate >= %s", r$dr_min),
             if (!is.na(r$dr_max %||% NA)) sprintf("discard_rate <= %s", r$dr_max))
@@ -460,6 +468,7 @@ dr_clause_string <- function(r) {
 #' @return The `matchedDataCond` string for the rule.
 #' @keywords internal
 #' @noRd
+#' @export
 source_cond_string <- function(r, dims = NULL) {
   base <- cond_string(r$source)
   dr <- dr_clause_string(r)
@@ -480,6 +489,7 @@ source_cond_string <- function(r, dims = NULL) {
 #'   and not named for exclusion.
 #' @keywords internal
 #' @noRd
+#' @export
 source_match <- function(df, r, sets = list(), dims = NULL) {
   m <- eval_clauses(df, r$source, sets)
   # drop any stratum the user named for exclusion from this donor pool
@@ -507,6 +517,7 @@ source_match <- function(df, r, sets = list(), dims = NULL) {
 #'   matches each row.
 #' @keywords internal
 #' @noRd
+#' @export
 apply_rules_first <- function(df, rules, sets = list()) {
   out <- rep(NA_character_, nrow(df))
   for (r in rules) {
@@ -523,6 +534,7 @@ apply_rules_first <- function(df, rules, sets = list()) {
 #' @return A list-column of character vectors, one per row.
 #' @keywords internal
 #' @noRd
+#' @export
 apply_rules_all <- function(df, rules, sets = list()) {
   hits <- lapply(rules, function(r) source_match(df, r, sets))
   ids  <- vapply(rules, `[[`, character(1), "id")

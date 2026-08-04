@@ -24,6 +24,8 @@
 # column is rewritten to agree with it.
 ALLOC_TYPE <- c(LengthTotal = "Length", Length = "Length", Age = "Age")
 
+#' @noRd
+#' @export
 alloc_type_of <- function(app_type) {
   v <- unname(ALLOC_TYPE[app_type])
   if (is.na(v)) stop("no allocation vocabulary for distributionType '",
@@ -33,6 +35,8 @@ alloc_type_of <- function(app_type) {
 
 # Rewrite distributionType so the function's internal filter finds the
 # rows it was handed. Nothing else about the table is touched.
+#' @noRd
+#' @export
 prep_for_alloc <- function(dist, app_type = "LengthTotal") {
   d <- as.data.frame(dist, stringsAsFactors = FALSE)
   target <- alloc_type_of(app_type)
@@ -48,6 +52,8 @@ prep_for_alloc <- function(dist, app_type = "LengthTotal") {
 # Returns the two tables catchAllocationAoL() produces, plus the
 # condition checks, or an object of class "alloc_error" carrying the
 # message - the app shows that rather than falling over.
+#' @noRd
+#' @export
 run_allocation <- function(catch_raised, dist, groups,
                            app_type = "LengthTotal",
                            originType_catch = "WGEstimate",
@@ -121,6 +127,8 @@ run_allocation <- function(catch_raised, dist, groups,
 # ------------------------------------------------------------
 # Thin wrappers so the app and the emitted script call the same thing,
 # and so a missing function degrades to NULL instead of an error.
+#' @noRd
+#' @export
 agg_numbers <- function(alloc, grouping = c("catchCategory", "sampledOrEstimated"),
                         minAoL = 0, maxAoL = NA, plusGroup = FALSE,
                         unit = NULL, round = 2,
@@ -137,6 +145,8 @@ agg_numbers <- function(alloc, grouping = c("catchCategory", "sampledOrEstimated
     error = function(e) NULL)
 }
 
+#' @noRd
+#' @export
 agg_meanweight <- function(alloc, grouping = c("catchCategory", "sampledOrEstimated"),
                            minAoL = 0, maxAoL = NA, plusGroup = FALSE,
                            unit = "g", round = 1,
@@ -167,6 +177,8 @@ agg_meanweight <- function(alloc, grouping = c("catchCategory", "sampledOrEstima
 # anything can be plotted.
 ALLOC_WIDE_RE <- "^([NW])_(Length|Age)_(.+)$"
 
+#' @noRd
+#' @export
 alloc_pivot_long <- function(d, kind = c("N", "W"), value_name = "value") {
   kind <- match.arg(kind)
   if (is.null(d) || !nrow(d)) return(NULL)
@@ -190,16 +202,22 @@ alloc_pivot_long <- function(d, kind = c("N", "W"), value_name = "value") {
 # are accepted.
 ALLOC_SRC_COLS <- c("sampledOrEstimated", "importedOrRaised")
 
+#' @noRd
+#' @export
 alloc_src_col <- function(d) {
   hit <- ALLOC_SRC_COLS[ALLOC_SRC_COLS %in% names(d)]
   if (length(hit)) hit[1] else NULL
 }
 
+#' @noRd
+#' @export
 alloc_src_label <- function(v)
   ifelse(tolower(as.character(v)) %in% c("sampled", "imported"),
          "Imported", "Allocated")
 
 # Numbers at age/length, imported vs allocated.
+#' @noRd
+#' @export
 alloc_compare_numbers <- function(alloc, grouping = c("catchCategory")) {
   n <- agg_numbers(alloc, grouping = unique(c(grouping, "sampledOrEstimated")))
   long <- alloc_pivot_long(n, "N", ".val")
@@ -212,6 +230,8 @@ alloc_compare_numbers <- function(alloc, grouping = c("catchCategory")) {
 }
 
 # Stock weight at age/length = numbers x mean weight, in tonnes.
+#' @noRd
+#' @export
 alloc_stock_weight <- function(alloc, grouping = c("catchCategory")) {
   g <- unique(c(grouping, "sampledOrEstimated"))
   nl <- alloc_pivot_long(agg_numbers(alloc, grouping = g), "N", ".val")
@@ -234,6 +254,8 @@ alloc_stock_weight <- function(alloc, grouping = c("catchCategory")) {
 # ------------------------------------------------------------
 #  Comparison plots
 # ------------------------------------------------------------
+#' @noRd
+#' @export
 plot_alloc_numbers <- function(d, facet_var = NULL, what = "Length",
                                ncol = 2) {
   if (is.null(d) || !nrow(d)) return(NULL)
@@ -256,6 +278,8 @@ plot_alloc_numbers <- function(d, facet_var = NULL, what = "Length",
     app_theme()
 }
 
+#' @noRd
+#' @export
 plot_alloc_stockweight <- function(d, facet_var = NULL, what = "Length",
                                    ncol = 2) {
   if (is.null(d) || !nrow(d)) return(NULL)
@@ -281,6 +305,8 @@ plot_alloc_stockweight <- function(d, facet_var = NULL, what = "Length",
 }
 
 # A short overview table: what the allocation added, per category.
+#' @noRd
+#' @export
 alloc_overview <- function(alloc) {
   n <- alloc_compare_numbers(alloc)
   if (is.null(n) || !nrow(n)) return(NULL)
@@ -304,6 +330,8 @@ alloc_overview <- function(alloc) {
 
 # The aggregation and comparison calls that follow an allocation, so the
 # script reproduces the tables and plots the app showed.
+#' @noRd
+#' @export
 emit_alloc_agg_code <- function(tag = "Length") {
   c("## aggregated numbers, imported and allocated kept apart",
     "numbers_at <- catchAtAoLAggregation(",
@@ -343,6 +371,8 @@ emit_alloc_agg_code <- function(tag = "Length") {
 # saved allocation is run through catchAllocationAoL(), then the numbers
 # and stock weights are put side by side so the choice is made on the
 # difference it makes rather than on the rules alone.
+#' @noRd
+#' @export
 run_allocation_set <- function(allocs, catch_raised, dist, app_type,
                                ...) {
   if (!length(allocs)) return(list())
@@ -356,6 +386,8 @@ run_allocation_set <- function(allocs, catch_raised, dist, app_type,
 }
 
 # Numbers and stock weight per allocation, long, ready to plot.
+#' @noRd
+#' @export
 compare_allocations <- function(runs, grouping = c("catchCategory")) {
   ok <- names(runs)[!vapply(runs, function(r) inherits(r, "alloc_error"),
                             logical(1))]
@@ -383,6 +415,8 @@ compare_allocations <- function(runs, grouping = c("catchCategory")) {
 
 # A totals table: one row per allocation, so the headline difference is
 # readable without squinting at a plot.
+#' @noRd
+#' @export
 comparison_totals <- function(cmp) {
   if (is.null(cmp) || !nrow(cmp)) return(NULL)
   cmp %>%
@@ -399,6 +433,8 @@ comparison_totals <- function(cmp) {
 
 # The comparison plot: one line per allocation so the shapes can be laid
 # over each other, split imported vs allocated.
+#' @noRd
+#' @export
 plot_allocation_comparison <- function(cmp, value = c("numbers", "tonnes"),
                                        facet_var = NULL, what = "Length",
                                        ncol = 2) {

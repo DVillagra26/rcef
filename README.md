@@ -57,18 +57,21 @@ Suggests-guarded `shiny::runApp()` inside `run_app()`.
 ```r
 source("dev/setup.R")        # pkgload::load_all(".") — no install needed
 shiny::runApp("inst/app")    # the app against the working tree
+devtools::document()         # regenerate NAMESPACE and man/ after any change
 ```
 
 ```sh
 Rscript dev/check_syntax.R   # parse() every file; must print DONE, 0 failures
-Rscript dev/check_exports.R  # 118 functions still untagged — read this first
+Rscript dev/check_exports.R  # must print NOT EXPORTED : 0
+R CMD build .                # catches DESCRIPTION errors in 2s — run before every push
 ```
 
-**Do not run `devtools::document()` yet.** `NAMESPACE` is hand-written and
-deliberately lacks the roxygen marker line, so `document()` will refuse to
-overwrite it rather than silently hiding 118 functions — including
-`catchRaising()` and `catchAllocationAoL()`. See the comment at the top of
-`NAMESPACE`.
+`NAMESPACE` and `man/` are **generated** and committed. Every top-level
+function carries `@export`, so `document()` is safe to run; 114 of them
+carry `@noRd` as well, meaning they export correctly but have no man page
+yet. That backlog is `dev/DOC_BACKLOG.txt` — replacing a `@noRd` with a
+real roxygen block is the unit of work. `dev/check_exports.R` fails if a
+new function is ever added without a tag.
 
 ## Deploying to shinyapps.io
 

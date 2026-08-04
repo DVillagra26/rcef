@@ -56,6 +56,7 @@ NULL
 
 ##' @rdname dis_raising
 ##'
+##' @export
 grp_catch_raising <- function(raising_st_catch,
                               matched_data_catch,
                               originType = c("WGEstimate", "Official"),
@@ -247,6 +248,7 @@ grp_catch_raising <- function(raising_st_catch,
 ##' @param condition_matched_data Condition for the selection of matching estimates. Similar format
 ##'     specification as for `condition_raising_st`.
 ##'
+##' @export
 grp_catch_raising_condition <- function(catch_data, 
                                         condition_raising_st,
                                         condition_matched_data = condition_raising_st,
@@ -376,6 +378,7 @@ grp_catch_raising_condition <- function(catch_data,
 ##' @param assembled_output Logical; whether to assemble raised, census and estimated data. Only
 ##'     raised data are returned otherwise.
 ##'
+##' @export
 catchRaising <- function(catch_data, 
                          condition_raising_st_list,
                          condition_matched_data_list = condition_raising_st_list,

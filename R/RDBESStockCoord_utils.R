@@ -51,6 +51,7 @@
 ##' @param append Whether to append to the log file (FALSE: override it).
 ##' @return Group conditions as a named list of logicals (1 per group).
 ##' @author Yves Reecht
+##' @export
 check_group_conditions <- function(catch_data,
                                    condition_list,
                                    conditionType = c("strata", "matched_data"),
@@ -282,6 +283,8 @@ check_group_conditions <- function(catch_data,
 ## Misc. helper functions:
 
 
+#' @noRd
+#' @export
 unit2ratio <- function(from, to)
 {
     ## Purpose:
@@ -325,6 +328,8 @@ unit2ratio <- function(from, to)
     return(res)
 }
 
+#' @noRd
+#' @export
 convert_field <- function(data, valueField,
                           unitField = "variableUnit", 
                           to = c("kg", "N"))
@@ -379,6 +384,8 @@ convert_field <- function(data, valueField,
 }
 
 
+#' @noRd
+#' @export
 fieldsToStrata <- function(.data, ...)
 {
     ## Purpose:

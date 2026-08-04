@@ -38,6 +38,8 @@
 ### 
 ####################################################################################################
 
+#' @noRd
+#' @export
 grp_AoL_alloc_N <- function(alloc_st_catch,
                             matched_data_catch,
                             distribution_data,
@@ -227,6 +229,8 @@ grp_AoL_alloc_N <- function(alloc_st_catch,
     ## catch_bio_est_N %>% group_by(!is.na(domainBiology)) %>% slice_head(n = 2) %>% as.data.frame()
 }
 
+#' @noRd
+#' @export
 grp_AoL_alloc_WL <- function(alloc_st_catch,
                              matched_data_catch,
                              distribution_data,
@@ -450,6 +454,8 @@ grp_AoL_alloc_WL <- function(alloc_st_catch,
 }
 
 
+#' @noRd
+#' @export
 grp_AoL_alloc_condition <- function(catch_data, 
                                     distribution_data,
                                     condition_alloc_st,
@@ -633,6 +639,8 @@ grp_AoL_alloc_condition <- function(catch_data,
 
 
 
+#' @noRd
+#' @export
 catchAllocationAoL <- function(catch_data,
                                distribution_data,
                                condition_alloc_st_list,
@@ -829,6 +837,8 @@ catchAllocationAoL <- function(catch_data,
 ## ###########################################################################
 ## Reporting functions:
 
+#' @noRd
+#' @export
 catchAtAoLAggregation <- function(distribution_data,
                                   catch_data,
                                   grouping = c("catchCategory", "attributeType",
@@ -913,6 +923,8 @@ catchAtAoLAggregation <- function(distribution_data,
 }
 
 
+#' @noRd
+#' @export
 meanWoLatAoLAggregation <- function(distribution_data,
                                     catch_data,
                                     grouping = c("catchCategory", "attributeType",

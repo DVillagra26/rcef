@@ -50,6 +50,7 @@ suppressPackageStartupMessages({
 #' @return `a`, or `b` when `a` is NULL/NA.
 #' @keywords internal
 #' @noRd
+#' @export
 `%||%` <- function(a, b) if (is.null(a) || (length(a) == 1 && is.na(a))) b else a
 
 #' Format a weight in tonnes for display

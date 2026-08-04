@@ -45,6 +45,8 @@ IC_FILE_PATTERN <- c(EXCHANGE = "\\.csv$",
                      NumbersAtAgeLength = "number",
                      MeanWeigthAtAgeLength = "meanweig|mean_weig")
 
+#' @noRd
+#' @export
 ic_code <- function(i) {
   fmt <- if (length(i$output_format))
     paste0('c("', paste(i$output_format, collapse = '", "'), '")') else '"to_list"'
@@ -92,6 +94,8 @@ ic_code <- function(i) {
 }
 
 # Lay uploaded files out the way the functions expect
+#' @noRd
+#' @export
 ic_stage_uploads <- function(files, source_type, years) {
   root <- file.path(tempdir(), paste0("ic_", as.integer(Sys.time())))
   dir.create(root, recursive = TRUE, showWarnings = FALSE)
@@ -124,6 +128,8 @@ IC_CANONICAL <- list(
 #          source file paths (skip empty/NA - role not supplied).
 # Returns the dat_path to hand to the function (the ROOT, not the year
 # subfolder), so funICoutCEF(dat_path = <this>, years = <year>) works.
+#' @noRd
+#' @export
 ic_stage_mapping <- function(mapping, source_type, year) {
   canon <- IC_CANONICAL[[source_type]]
   root <- file.path(tempdir(),
@@ -143,6 +149,8 @@ ic_stage_mapping <- function(mapping, source_type, year) {
 # Pull a four-digit year out of a filename or its contents, so the user
 # does not have to type it. Looks at the file names first (e.g.
 # "pok_2022_StockOverview.txt"), then at the Year column if present.
+#' @noRd
+#' @export
 ic_detect_year <- function(files, contents_ok = TRUE) {
   from_name <- unlist(regmatches(files,
     gregexpr("(19|20)[0-9]{2}", basename(files))))

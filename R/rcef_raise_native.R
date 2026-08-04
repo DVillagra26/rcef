@@ -44,11 +44,15 @@ CEF_REQUIRED <- c("vesselFlagCountry", "year", "workingGroup", "stock",
                   "domainCatchBMS", "domainBiology", "originType",
                   "variableType", "variableUnit", "total")
 
+#' @noRd
+#' @export
 cef_reorder <- function(d) {
   present <- intersect(CEF_ORDER, names(d))
   d[, c(present, setdiff(names(d), present)), drop = FALSE]
 }
 
+#' @noRd
+#' @export
 cef_check <- function(catch_data) {
   miss <- setdiff(CEF_REQUIRED, names(catch_data))
   list(ok = length(miss) == 0, missing = miss)
@@ -62,6 +66,8 @@ cef_check <- function(catch_data) {
 # evaluable row by row. So they are joined back onto every row of the
 # stratum they belong to. Without this the generated matchedDataCond
 # fails with "object 'discard_rate' not found".
+#' @noRd
+#' @export
 cef_prepare <- function(catch_data, dims) {
   d <- derive_fields(catch_data)
   # catchRaising() multiplies `total` by a unit-conversion ratio, so it
@@ -85,6 +91,8 @@ cef_prepare <- function(catch_data, dims) {
 
 
 # ---- run --------------------------------------------------------------
+#' @noRd
+#' @export
 run_native_raising <- function(catch_data, dims, conds,
                                type = "discards",
                                originType = "WGEstimate",
@@ -112,6 +120,8 @@ run_native_raising <- function(catch_data, dims, conds,
 
 # Summarise a catchRaising result the same way the app summarises its own,
 # so the two can sit side by side in the comparison
+#' @noRd
+#' @export
 native_summary <- function(raised, dims) {
   raised %>%
     filter(toupper(catchCategory) %in% c("DIS")) %>%
@@ -123,6 +133,8 @@ native_summary <- function(raised, dims) {
 }
 
 # ---- emitted code -----------------------------------------------------
+#' @noRd
+#' @export
 emit_native_code <- function(conds, dims, type = "discards",
                              originType = "WGEstimate",
                              variableType = "WeightLive",

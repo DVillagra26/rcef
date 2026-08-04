@@ -26,10 +26,14 @@ LOG_ORDER <- c("header", "setup", "intercatch", "load_cef", "derive",
                "strata", "explore", "auto_raising", "manual_groups",
                "native_raising", "scenarios", "session")
 
+#' @noRd
+#' @export
 log_new <- function() list(blocks = list(), stamp = list())
 
 # Setting the same id twice REPLACES the block: the script reflects the
 # current state of the app, not a transcript of every fumble.
+#' @noRd
+#' @export
 log_set <- function(lg, id, lines) {
   if (is.null(lines) || !length(lines)) { lg$blocks[[id]] <- NULL; return(lg) }
   lg$blocks[[id]] <- lines
@@ -37,6 +41,8 @@ log_set <- function(lg, id, lines) {
   lg
 }
 
+#' @noRd
+#' @export
 log_render <- function(lg) {
   ids <- c(intersect(LOG_ORDER, names(lg$blocks)),
            setdiff(names(lg$blocks), LOG_ORDER))
@@ -44,6 +50,8 @@ log_render <- function(lg) {
   unlist(lapply(ids, function(i) c(lg$blocks[[i]], "")), use.names = FALSE)
 }
 
+#' @noRd
+#' @export
 log_write <- function(lg, path) {
   d <- dirname(path)
   if (!dir.exists(d)) dir.create(d, recursive = TRUE, showWarnings = FALSE)
@@ -59,8 +67,12 @@ log_write <- function(lg, path) {
 STATE_SKIP <- paste0("^(save_|add_|del_|move_|apply_all|mirror|to_strata|",
                      "to_matched|clear_|run_|rule_move|up_sc|dl_|file$)")
 
+#' @noRd
+#' @export
 state_to_json <- function(st) jsonlite::toJSON(st, auto_unbox = TRUE, pretty = TRUE,
                                                null = "null")
+#' @noRd
+#' @export
 state_from_json <- function(txt)
   jsonlite::fromJSON(paste(txt, collapse = "\n"),
                      simplifyDataFrame = FALSE, simplifyVector = TRUE)
@@ -68,6 +80,8 @@ state_from_json <- function(txt)
 # Which updater an input needs. Explicit rules first, then patterns;
 # anything unrecognised is skipped rather than guessed at, because a
 # wrong updater silently corrupts the control.
+#' @noRd
+#' @export
 state_updater <- function(id, value) {
   if (grepl("^(thr_|self_thr$|ar_dr$|rule_dr$|catchall_dr$)", id)) return("slider")
   if (grepl(paste0("^(self_on|dr_jitter|box_points|box_pooled|clause_neg|",
@@ -87,6 +101,8 @@ state_updater <- function(id, value) {
   NA_character_
 }
 
+#' @noRd
+#' @export
 state_apply <- function(session, st) {
   applied <- skipped <- character(0)
   for (id in names(st$inputs)) {
@@ -111,6 +127,8 @@ state_apply <- function(session, st) {
 # ------------------------------------------------------------
 #  Code fragments contributed by each section
 # ------------------------------------------------------------
+#' @noRd
+#' @export
 code_header <- function(script_name) c(
   "## ===========================================================",
   "## Discard / sampling raising workflow",
@@ -138,6 +156,8 @@ code_setup <- function(external_dir = NULL) c(
       "## script was generated. It is NOT sourced: the package vendors them.",
       sprintf('## (was: %s)', external_dir)) else NULL)
 
+#' @noRd
+#' @export
 code_session <- function(st_path) c(
   "## ---- Session state ---------------------------------------",
   sprintf("## App state saved to: %s", st_path),
@@ -156,6 +176,8 @@ code_session <- function(st_path) c(
 # Manual allocations are the opposite case: there the grouping IS the
 # decision, so the explicit strataCond / matchedDataCond lists are what
 # gets written.
+#' @noRd
+#' @export
 code_auto_rule <- function(name, dims, hierarchy, thresholds, self_threshold,
                            mode, dr_min = NA, dr_max = NA) {
   c(sprintf("## ---- Allocation '%s' (automatic rule) --------------------", name),
@@ -188,6 +210,8 @@ code_auto_rule <- function(name, dims, hierarchy, thresholds, self_threshold,
     "")
 }
 
+#' @noRd
+#' @export
 code_manual_rule <- function(name, dims, rules, sets = list()) {
   cd <- conds_from_rules(rules, sets)
   q <- function(l) vapply(seq_along(l), function(i)
@@ -205,6 +229,8 @@ code_manual_rule <- function(name, dims, rules, sets = list()) {
 }
 
 # Raising is always catchRaising(); the built-in shortcut is gone.
+#' @noRd
+#' @export
 code_raise <- function(name, dims, type = "discards", originType = "WGEstimate",
                        variableType = "WeightLive", log_file = "Log.txt") {
   c(sprintf("## ---- Raise with allocation '%s' --------------------------", name),
@@ -219,6 +245,8 @@ code_raise <- function(name, dims, type = "discards", originType = "WGEstimate",
     "")
 }
 
+#' @noRd
+#' @export
 code_compare <- function(names_vec) {
   if (length(names_vec) < 2) return(character(0))
   c("## ---- Compare allocations ---------------------------------",
@@ -234,6 +262,8 @@ code_compare <- function(names_vec) {
     "")
 }
 
+#' @noRd
+#' @export
 code_final <- function(name) c(
   "## ===========================================================",
   sprintf("## FINAL: allocation '%s' was the one adopted.", name),
@@ -244,6 +274,8 @@ code_final <- function(name) c(
   "")
 
 # Plot code, so the script reproduces what was on screen
+#' @noRd
+#' @export
 code_plots <- function(active) {
   if (!length(active)) return(character(0))
   c("## ---- Plots shown in the session --------------------------",

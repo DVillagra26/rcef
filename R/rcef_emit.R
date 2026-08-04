@@ -40,6 +40,7 @@
 #' @return A character vector of wrapped lines.
 #' @keywords internal
 #' @noRd
+#' @export
 wrap_lines <- function(x, width = 74, indent = "         ") {
   if (nchar(x) <= width) return(x)
   parts <- strsplit(x, " & ", fixed = TRUE)[[1]]

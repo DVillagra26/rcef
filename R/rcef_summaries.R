@@ -16,6 +16,8 @@
 # ------------------------------------------------------------
 #  catches
 # ------------------------------------------------------------
+#' @noRd
+#' @export
 catches_summary <- function(catches) {
   if (is.null(catches) || !nrow(catches))
     return(data.frame(item = character(0), value = character(0)))
@@ -53,6 +55,8 @@ catches_summary <- function(catches) {
 }
 
 # Catch weight by category, the shape people expect at the top of a report
+#' @noRd
+#' @export
 catches_by_category <- function(catches) {
   u <- if ("variableUnit" %in% names(catches)) catches$variableUnit else NULL
   d <- catches %>%
@@ -72,6 +76,8 @@ catches_by_category <- function(catches) {
 # AND that key turns up in the distributions table. distributionType
 # says what was measured (LengthTotal / Age), variableType says what the
 # value is (Number / WeightLive).
+#' @noRd
+#' @export
 biology_coverage <- function(catches, distributions, dims) {
   miss <- setdiff(dims, names(catches))
   if (length(miss))
@@ -101,6 +107,8 @@ biology_coverage <- function(catches, distributions, dims) {
     as.data.frame()
 }
 
+#' @noRd
+#' @export
 distributions_summary <- function(distributions, catches = NULL) {
   if (is.null(distributions) || !nrow(distributions))
     return(data.frame(item = "Rows", value = "0", stringsAsFactors = FALSE))
@@ -128,6 +136,8 @@ distributions_summary <- function(distributions, catches = NULL) {
 }
 
 # What was measured, and for which catch category
+#' @noRd
+#' @export
 distributions_by_type <- function(distributions) {
   distributions %>%
     group_by(distributionType, variableType, catchCategory) %>%
@@ -139,6 +149,8 @@ distributions_by_type <- function(distributions) {
 # ------------------------------------------------------------
 #  effort
 # ------------------------------------------------------------
+#' @noRd
+#' @export
 effort_summary <- function(effort) {
   if (is.null(effort) || !nrow(effort))
     return(data.frame(item = "Rows", value = "0", stringsAsFactors = FALSE))
@@ -160,6 +172,8 @@ effort_summary <- function(effort) {
 #  Raised output
 # ------------------------------------------------------------
 # Catch category x imported/raised, with the share within each category.
+#' @noRd
+#' @export
 raised_overview_table <- function(raised) {
   u <- if ("variableUnit" %in% names(raised)) raised$variableUnit else NULL
   d <- raised %>%
@@ -183,6 +197,8 @@ raised_overview_table <- function(raised) {
 
 # Country x area style cross-tab: one block of Landings / Discards / BMS
 # per level of col_var, plus a Total block and a Total row.
+#' @noRd
+#' @export
 raised_crosstab <- function(raised, row_var = "vesselFlagCountry",
                             col_var = "areaValue") {
   u <- if ("variableUnit" %in% names(raised)) raised$variableUnit else NULL
@@ -211,6 +227,8 @@ raised_crosstab <- function(raised, row_var = "vesselFlagCountry",
 }
 
 # Landings and discards split into imported and raised
+#' @noRd
+#' @export
 plot_raised_composition <- function(raised, x_var = NULL, facet_var = NULL,
                                     ncol = 2) {
   u <- if ("variableUnit" %in% names(raised)) raised$variableUnit else NULL

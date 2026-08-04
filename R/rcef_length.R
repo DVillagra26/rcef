@@ -38,6 +38,8 @@ NUMBER_TO_N     <- c(N = 1, n = 1, thousands = 1000, kN = 1000,
                      NE3 = 1e3, NE6 = 1e6, NE9 = 1e9)
 WEIGHT_TO_G     <- c(g = 1, kg = 1000, t = 1e6, mg = 0.001)
 
+#' @noRd
+#' @export
 unit_factor <- function(units, table_, what) {
   u <- as.character(units)
   f <- unname(table_[u])
@@ -55,6 +57,8 @@ unit_factor <- function(units, table_, what) {
 # a stratum measured in mm must never end up on the same axis as one in
 # cm - so this is not offered as a choice, it is enforced here.
 # .class / .value_std are the only fields the rest of the app reads.
+#' @noRd
+#' @export
 prep_distributions <- function(dist, type = "LengthTotal") {
   if (is.null(dist) || !nrow(dist)) return(NULL)
   d <- as.data.frame(dist, stringsAsFactors = FALSE)
@@ -98,6 +102,8 @@ prep_distributions <- function(dist, type = "LengthTotal") {
 
 # Which units the file arrived in, so the screen can say what was
 # converted rather than silently changing the numbers.
+#' @noRd
+#' @export
 distribution_units <- function(dist, type = "LengthTotal") {
   if (is.null(dist) || !nrow(dist)) return(NULL)
   d <- as.data.frame(dist)
@@ -118,6 +124,8 @@ distribution_units <- function(dist, type = "LengthTotal") {
 # the same catch category. A filled key that matches nothing is a
 # dangling reference, and is reported separately - it is a data problem,
 # not evidence of sampling.
+#' @noRd
+#' @export
 biology_link <- function(catches, dist, dims, catch_category = NULL,
                          type = "LengthTotal") {
   d <- derive_fields(as.data.frame(catches))
@@ -161,6 +169,8 @@ biology_link <- function(catches, dist, dims, catch_category = NULL,
 # it is flagged rather than silently ignored. Returns a data frame of the
 # orphan domainBiology / catchCategory keys with the number of distribution
 # rows each covers, or NULL when every distribution matches a catch.
+#' @noRd
+#' @export
 dist_without_catch <- function(catches, dist, catch_category = NULL,
                                type = "LengthTotal") {
   pd <- prep_distributions(dist, type)
@@ -186,6 +196,8 @@ dist_without_catch <- function(catches, dist, catch_category = NULL,
 # The stratum keys carried by the catch table, attached to every
 # distribution row through domainBiology. This is what lets a length
 # distribution be plotted by fleet, country, area or season.
+#' @noRd
+#' @export
 link_dist_to_strata <- function(catches, dist, dims, catch_category = NULL,
                                 type = "LengthTotal") {
   pd <- prep_distributions(dist, type)
@@ -218,6 +230,8 @@ link_dist_to_strata <- function(catches, dist, dims, catch_category = NULL,
 # ------------------------------------------------------------
 # Numbers at length: additive, so summing over whatever is not plotted
 # is correct.
+#' @noRd
+#' @export
 length_numbers <- function(linked, group_vars = character(0)) {
   if (is.null(linked) || !nrow(linked)) return(NULL)
   d <- linked[linked$.var_kind == "numbers", , drop = FALSE]
@@ -240,6 +254,8 @@ length_numbers <- function(linked, group_vars = character(0)) {
 # deviation of the strata that went into each point, and n_strata says
 # how many there were. A point built from one stratum has no spread, and
 # gets NA rather than a misleading zero.
+#' @noRd
+#' @export
 length_meanweight <- function(linked, group_vars = character(0)) {
   if (is.null(linked) || !nrow(linked)) return(NULL)
   mw <- linked[linked$.var_kind == "meanweight", , drop = FALSE]
@@ -291,6 +307,8 @@ length_meanweight <- function(linked, group_vars = character(0)) {
 # reports what the numbers imply so the mismatch is not silently plotted.
 # Only meaningful for lengths: an age has no weight-length relationship
 # to check against.
+#' @noRd
+#' @export
 length_scale_check <- function(linked) {
   if (is.null(linked) || !nrow(linked)) return(NULL)
   if (identical(linked$.dist_type[1], "Age")) return(NULL)
@@ -317,6 +335,8 @@ length_scale_check <- function(linked) {
 
 
 # A short summary of what the biology link found, for the screen.
+#' @noRd
+#' @export
 length_link_summary <- function(bl, linked, type = "LengthTotal") {
   cls_word <- if (identical(type, "Age")) "age" else "length"
   cls_unit <- if (identical(type, "Age")) "years" else "cm"
@@ -358,6 +378,8 @@ length_link_summary <- function(bl, linked, type = "LengthTotal") {
 # keep_cc = FALSE: once the other keys are exhausted the category is
 #   dropped too, and whatever is still unresolved pools landings and
 #   discards together.
+#' @noRd
+#' @export
 alloc_steps <- function(keys, thresholds, keep_cc = TRUE) {
   keys <- keys[nzchar(keys)]
   thr <- function(i) if (length(thresholds) >= i) thresholds[i] else NA_real_
@@ -405,11 +427,15 @@ alloc_steps <- function(keys, thresholds, keep_cc = TRUE) {
 }
 
 # Which pass a step belongs to, for the table and the chain.
+#' @noRd
+#' @export
 alloc_step_scope <- function(step)
   if (isTRUE(step$drop_cc)) "categories joined" else "within category"
 
 # The condition text for one group, as it will appear in the emitted
 # allocStrataCond / bioMatchedCond lists.
+#' @noRd
+#' @export
 alloc_cond_string <- function(vals, keep_cc = TRUE) {
   parts <- character(0)
   if (!is.null(vals$catchCategory) && length(vals$catchCategory))
@@ -433,6 +459,8 @@ alloc_cond_string <- function(vals, keep_cc = TRUE) {
 
 # The same clause as an evaluable quosure, so the app can assign strata
 # with it and the emitted script can run the identical expression.
+#' @noRd
+#' @export
 alloc_quo <- function(vals) {
   txt <- alloc_cond_string(vals)
   rlang::new_quosure(str2lang(txt), env = rlang::global_env())
@@ -441,6 +469,8 @@ alloc_quo <- function(vals) {
 # Emit the two lists the allocation takes. Names follow the ICES script:
 # allocStrataCond for the strata being allocated, bioMatchedCond for the
 # sampled data each is matched to.
+#' @noRd
+#' @export
 emit_alloc_conditions <- function(groups) {
   fmt <- function(nm, field) {
     if (!length(groups)) return(sprintf("%s <- list()", nm))
@@ -519,6 +549,8 @@ emit_alloc_grouping_code <- function(spec, method = "hierarchical",
     "alloc_groups <- cascade_to_groups(assigned, alloc_cols)")
 }
 
+#' @noRd
+#' @export
 emit_alloc_code <- function(groups, distributionType = "LengthTotal",
                             originType = "WGEstimate",
                             variableType = "WeightLive",
@@ -556,6 +588,8 @@ emit_alloc_code <- function(groups, distributionType = "LengthTotal",
 # like, so by default a clause naming "Dis" also picks up "BMS". Turning
 # the option off treats them as the separate categories they formally
 # are.
+#' @noRd
+#' @export
 expand_cc <- function(vals, bms_as_dis = TRUE) {
   if (!length(vals)) return(vals)
   if (bms_as_dis && any(vals %in% "Dis") && !any(vals %in% "BMS"))
@@ -565,6 +599,8 @@ expand_cc <- function(vals, bms_as_dis = TRUE) {
 # Assign each stratum to the first group whose allocStrataCond matches,
 # exactly like the discard rules: order is the tie-breaker, so moving a
 # group up or down changes what it catches.
+#' @noRd
+#' @export
 assign_alloc_groups <- function(strata, groups, bms_as_dis = TRUE) {
   if (is.null(strata) || !nrow(strata)) return(NULL)
   strata$alloc_group <- NA_character_
@@ -584,6 +620,8 @@ assign_alloc_groups <- function(strata, groups, bms_as_dis = TRUE) {
 }
 
 # One row per group: what it allocates and what it is matched to.
+#' @noRd
+#' @export
 alloc_group_summary <- function(assigned, groups) {
   if (is.null(assigned) || !nrow(assigned)) return(NULL)
   base <- assigned %>%
@@ -609,6 +647,8 @@ alloc_group_summary <- function(assigned, groups) {
 
 # The river for the allocation: stratum on the left, the MEANING of the
 # rule that allocates it on the right - same reading as the discard one.
+#' @noRd
+#' @export
 plot_alloc_river <- function(assigned, dims, groups, pal = NULL) {
   if (is.null(assigned) || !nrow(assigned)) return(NULL)
   d <- assigned[!is.na(assigned$alloc_group), , drop = FALSE]
@@ -635,6 +675,8 @@ plot_alloc_river <- function(assigned, dims, groups, pal = NULL) {
 # step's threshold read against the pool's sampled fraction, so a step
 # that would borrow from barely-sampled neighbours is skipped rather
 # than used.
+#' @noRd
+#' @export
 assign_alloc_cascade <- function(bl, keys, steps, bms_as_dis = TRUE) {
   if (is.null(bl) || !nrow(bl)) return(NULL)
   d <- as.data.frame(bl)
@@ -684,6 +726,8 @@ assign_alloc_cascade <- function(bl, keys, steps, bms_as_dis = TRUE) {
 }
 
 # What each rung of the cascade actually resolved.
+#' @noRd
+#' @export
 alloc_cascade_table <- function(assigned, steps) {
   if (is.null(assigned) || !nrow(assigned)) return(NULL)
   tot_w <- sum(assigned$weight, na.rm = TRUE)
@@ -722,6 +766,8 @@ alloc_cascade_table <- function(assigned, steps) {
 # "records assigned to more than one stratum". So each group is written
 # as an OR over its actual key tuples, with any key that is constant
 # across the group factored out in front to keep it readable.
+#' @noRd
+#' @export
 cascade_to_groups <- function(assigned, keys) {
   if (is.null(assigned) || !nrow(assigned)) return(list())
   d <- assigned[!is.na(assigned$alloc_step), , drop = FALSE]
@@ -769,6 +815,8 @@ cascade_to_groups <- function(assigned, keys) {
 # numMeasurements is carried per domain in the distributions table, so it
 # is summed back onto the stratum and used as a second, independent
 # threshold. A stratum is a usable donor only if it clears both.
+#' @noRd
+#' @export
 stratum_measurements <- function(catches, dist, dims,
                                  catch_category = NULL,
                                  type = "LengthTotal") {
@@ -790,6 +838,8 @@ stratum_measurements <- function(catches, dist, dims,
 }
 
 # Attach the measurement counts to a biology link and flag both tests.
+#' @noRd
+#' @export
 add_sufficiency <- function(bl, meas, min_coverage = 50, min_measurements = 0) {
   if (is.null(bl) || !nrow(bl)) return(bl)
   if (!is.null(meas)) {
@@ -811,6 +861,8 @@ add_sufficiency <- function(bl, meas, min_coverage = 50, min_measurements = 0) {
 }
 
 # A one-line warning about thinly measured strata, for the screen.
+#' @noRd
+#' @export
 measurement_warning <- function(bl, min_measurements) {
   if (is.null(bl) || !nrow(bl) || min_measurements <= 0) return(NULL)
   thin <- bl[bl$n_measurements > 0 & bl$n_measurements < min_measurements, ,
@@ -829,6 +881,8 @@ measurement_warning <- function(bl, min_measurements) {
 # holding both `alloc` and `alloc_expr` a lookup of `$matched` returns
 # `matched_expr` - a quosure where a string was wanted. `[[` matches
 # exactly, which is what is needed here.
+#' @noRd
+#' @export
 fld <- function(x, nm, default = NULL) {
   v <- x[[nm]]
   if (is.null(v)) default else v
@@ -839,6 +893,8 @@ fld <- function(x, nm, default = NULL) {
 # table: one row per rule in the order it is tested, the strata and
 # weight it claims, and the running total - so the gap closing (or not)
 # is visible as the rules go in, rather than only at the end.
+#' @noRd
+#' @export
 manual_progress <- function(assigned, groups, weight_col = "weight") {
   if (is.null(assigned) || !nrow(assigned)) return(NULL)
   w <- assigned[[weight_col]]
@@ -878,6 +934,8 @@ manual_progress <- function(assigned, groups, weight_col = "weight") {
 
 # The strata not yet claimed by any rule, listed so they can be read and
 # a rule written for them. Sorted by weight: the biggest hole first.
+#' @noRd
+#' @export
 manual_missing <- function(assigned, dims, weight_col = "weight") {
   if (is.null(assigned) || !nrow(assigned)) return(NULL)
   miss <- assigned[is.na(assigned$alloc_group), , drop = FALSE]
@@ -894,6 +952,8 @@ manual_missing <- function(assigned, dims, weight_col = "weight") {
 # A richer per-group summary, in the shape the discard section uses:
 # what each group RAISES on the left, what it is SOURCED from on the
 # right, plus how much is still unassigned.
+#' @noRd
+#' @export
 alloc_group_table <- function(assigned, groups, dims,
                               weight_col = "weight") {
   if (is.null(assigned) || !nrow(assigned) || !length(groups)) return(NULL)
@@ -943,6 +1003,8 @@ alloc_group_table <- function(assigned, groups, dims,
 #
 # Deliberately crude: two sparklines on a shared x range, no axes, no
 # legend. It is a glance, not a plot.
+#' @noRd
+#' @export
 stratum_sparkline <- function(linked, dims, key, width = 220, height = 96) {
   if (is.null(linked) || !nrow(linked)) return(NULL)
   present <- intersect(dims, names(linked))
@@ -997,6 +1059,8 @@ stratum_sparkline <- function(linked, dims, key, width = 220, height = 96) {
 
 # Build the whole lookup once: key -> svg. Cheap enough for the number
 # of strata in play, and it means the tooltip is instant on hover.
+#' @noRd
+#' @export
 stratum_sparkline_map <- function(linked, dims, keys) {
   if (is.null(linked) || !length(keys)) return(list())
   out <- lapply(keys, function(k)

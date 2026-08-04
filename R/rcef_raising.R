@@ -208,6 +208,7 @@ run_scenario <- function(sc, catch_data) {
 #' @return The intersection of their column names.
 #' @keywords internal
 #' @noRd
+#' @export
 common_keys <- function(runs) Reduce(intersect, lapply(runs, names))
 
 #' Put several scenario runs side by side
