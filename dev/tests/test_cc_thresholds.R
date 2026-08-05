@@ -81,5 +81,48 @@ ok(identical(fmt_cc_spec(list(Lan = c(50, 40), Dis = c(30, 20))),
              "list(Lan = c(50, 40), Dis = c(30, 20))"),
    "fmt_cc_spec round-trips a pair")
 
+## --- the last-resort rung ---------------------------------------------
+##
+## Every rung above has a bar, so a stratum thinner than all of them ends
+## unallocated - and "unallocated" is not neutral downstream: the weight
+## never reaches the numbers at length and the totals quietly stop adding
+## up. The ladder therefore ends with one rung that has no bar.
+lt <- alloc_steps("Country", thresholds = list(Lan = 60, Dis = 30),
+                  keep_cc = TRUE)
+ok(identical(lt[[length(lt)]]$id, "last"), "the ladder ends with a last rung")
+ok(all(is.infinite(lt[[length(lt)]]$threshold)),
+   "the last rung has no coverage bar")
+ok(all(lt[[length(lt)]]$min_meas == 0), "and no measurement bar")
+ok(!isTRUE(lt[[length(lt)]]$drop_cc),
+   "with keep_cc it pools within the category - discards never take landings")
+
+lf <- alloc_steps("Country", thresholds = list(Lan = 60, Dis = 30),
+                  keep_cc = FALSE)
+ok(isTRUE(lf[[length(lf)]]$drop_cc),
+   "without keep_cc the last rung pools both categories")
+ok(sum(vapply(lf, function(x) identical(x$id, "last"), logical(1))) == 1,
+   "exactly one last rung, whichever way keep_cc is set")
+
+bl2 <- data.frame(
+  catchCategory   = c("Lan", "Dis", "Dis"),
+  Country         = c("BE", "BE", "NL"),
+  weight          = c(100, 50, 40),
+  weight_measured = c(90, 2, 1),
+  n_measurements  = c(900, 12, 6),
+  stringsAsFactors = FALSE)
+a2 <- assign_alloc_cascade(bl2, "Country", lt)
+ok(a2$alloc_step[1] == 1, "well-sampled landings still resolve on their own data")
+ok(all(!is.na(a2$alloc_step)), "nothing is left unallocated")
+ok(all(a2$alloc_level[2:3] == lt[[length(lt)]]$label),
+   "the thin discard strata fall to the last rung, not off the end")
+
+## "no threshold" is not "no data"
+bl3 <- data.frame(catchCategory = "Dis", Country = "BE",
+                  weight = 10, weight_measured = 0, n_measurements = 0,
+                  stringsAsFactors = FALSE)
+a3 <- assign_alloc_cascade(bl3, "Country", lt)
+ok(is.na(a3$alloc_step[1]),
+   "a pool with nothing measured in it does NOT pass the last rung")
+
 cat(sprintf("\nDONE  %d failure(s)\n", FAIL))
 if (FAIL) quit(status = 1L)

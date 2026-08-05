@@ -282,3 +282,15 @@ facet_scales <- function(free_x = FALSE, free_y = FALSE) {
 #' @export
 class_axis_label <- function(type = "LengthTotal")
   if (identical(type, "Age")) "Age (years)" else "Length (cm)"
+
+
+#' Stratum columns a biology table may carry
+#'
+#' Used where a helper must keep "whatever stratum columns are present"
+#' without knowing which grouping the caller chose.
+#'
+#' @format A character vector.
+#' @export
+DIMS_ALL_CANDIDATES <- c("metier4", "metier5", "metier6", "Country",
+                         "ICESSubArea", "ICESDivision", "ICESSubdivision",
+                         "Season", "FleetType", "target", "mesh")

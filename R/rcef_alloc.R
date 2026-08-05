@@ -71,9 +71,15 @@ run_allocation <- function(catch_raised, dist, groups,
       return(structure(list(message = paste0(f, "() is not loaded.")),
                        class = "alloc_error"))
 
-  alloc_l <- lapply(groups, `[[`, "alloc_expr")
-  match_l <- lapply(groups, function(g) g$matched_expr %||% g$alloc_expr)
-  names(alloc_l) <- names(match_l) <- names(groups)
+  # Complemented, or catchAllocationAoL() refuses the whole set with
+  # "N records assigned to more than one stratum". The app resolves
+  # overlaps first-match-wins; the engine does not. The EMITTER has
+  # complemented since it was written - this is the same helper - so the
+  # script in the R tab was right while the run behind the button was
+  # not, which is the worst way round for the two to disagree.
+  cnd <- alloc_conds_from_groups(groups)
+  alloc_l <- cnd$allocStrataCond
+  match_l <- cnd$bioMatchedCond
 
   # The conditions are written against the DERIVED stratum fields
   # (metier4, Country, Area1, Season), which a raw CEF catches table does
@@ -411,6 +417,14 @@ compare_allocations <- function(runs, grouping = c("catchCategory")) {
         summarise(tonnes = sum(.tonnes, na.rm = TRUE), .groups = "drop")
       nn <- nn %>% left_join(ww, by = intersect(names(nn), names(ww)))
     } else nn$tonnes <- NA_real_
+
+    # Mean weight per class, derived from the two columns above rather
+    # than aggregated separately, so it cannot disagree with them:
+    # tonnes = numbers * mean weight, so mean weight = tonnes / numbers.
+    # A grouping change that moves the numbers moves this with them.
+    nn$mean_weight <- ifelse(is.finite(nn$numbers) & nn$numbers > 0 &
+                               is.finite(nn$tonnes),
+                             nn$tonnes * 1e6 / nn$numbers, NA_real_)
     nn$allocation <- nm
     nn
   })
@@ -441,16 +455,33 @@ comparison_totals <- function(cmp) {
 # over each other, split imported vs allocated.
 #' @noRd
 #' @export
-plot_allocation_comparison <- function(cmp, value = c("numbers", "tonnes"),
+plot_allocation_comparison <- function(cmp,
+                                       value = c("numbers", "tonnes",
+                                                 "meanweight"),
                                        facet_var = NULL, what = "Length",
                                        ncol = 2) {
   value <- match.arg(value)
   if (is.null(cmp) || !nrow(cmp)) return(NULL)
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
-  d <- cmp %>%
+  col <- if (value == "meanweight") "mean_weight" else value
+  if (!col %in% names(cmp)) return(NULL)
+  # Numbers and tonnes are extensive - they add across whatever the
+  # grouping collapsed. A mean weight is not: summing it would produce a
+  # number with no meaning, so it is re-weighted by the numbers behind it.
+  d <- if (value == "meanweight")
+    cmp %>%
+      group_by(across(all_of(c(".cls", "allocation",
+                               if (has(facet_var)) facet_var)))) %>%
+      summarise(v = {
+        w <- .data$numbers; x <- .data$mean_weight
+        ok <- is.finite(w) & is.finite(x) & w > 0
+        if (any(ok)) sum(x[ok] * w[ok]) / sum(w[ok]) else NA_real_
+      }, .groups = "drop") %>%
+      filter(is.finite(v))
+  else cmp %>%
     group_by(across(all_of(c(".cls", "allocation",
                              if (has(facet_var)) facet_var)))) %>%
-    summarise(v = sum(.data[[value]], na.rm = TRUE), .groups = "drop") %>%
+    summarise(v = sum(.data[[col]], na.rm = TRUE), .groups = "drop") %>%
     filter(is.finite(v))
   if (!nrow(d)) return(NULL)
   ggplot(d, aes(x = .cls, y = v, colour = allocation, group = allocation)) +
@@ -463,10 +494,14 @@ plot_allocation_comparison <- function(cmp, value = c("numbers", "tonnes"),
     (if (has(facet_var)) facet_wrap(vars(.data[[facet_var]]), ncol = ncol,
                                     scales = "free_y") else NULL) +
     labs(title = sprintf("%s at %s by allocation",
-                         if (value == "tonnes") "Stock weight" else "Numbers",
+                         switch(value, tonnes = "Stock weight",
+                                meanweight = "Mean weight", "Numbers"),
                          tolower(what)),
-         subtitle = "Every allocation re-run against the same data",
+         subtitle = if (value == "meanweight")
+           "Numbers-weighted across the grouping; every allocation re-run against the same data"
+         else "Every allocation re-run against the same data",
          x = if (what == "Age") "Age" else "Length (cm)",
-         y = if (value == "tonnes") "Tonnes" else "Numbers") +
+         y = switch(value, tonnes = "Tonnes",
+                    meanweight = "Mean weight (g)", "Numbers")) +
     app_theme()
 }

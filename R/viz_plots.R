@@ -1217,3 +1217,106 @@ plot_comparison <- function(cmp, x_var, facet_var = NULL, ncol = 2) {
          x = x_var, y = "Discards (t)", fill = "Scenario") +
     app_theme() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
 }
+
+# ----------------------------------------------------------
+#  Mean weight, drawn as a spread rather than a point
+# ----------------------------------------------------------
+
+#' Mean weight at length or age, as boxes
+#'
+#' The companion to [plot_length_meanweight()], and a separate plot
+#' rather than an option on it, because the two answer different
+#' questions and should not silently swap places. The line plot says
+#' "what is the mean weight at this class"; this says "how much did the
+#' strata that were averaged into it disagree".
+#'
+#' A box is drawn wherever a class and group has more than one
+#' contributing stratum. Where it has exactly one there is no spread to
+#' show, so a point is drawn instead - which is the honest rendering and
+#' also what happens naturally once the facets are fine enough to leave
+#' one stratum per cell.
+#'
+#' `shape_var` does not replace the box, it decorates it: the box still
+#' shows the spread, and the dots on top are shaped by the variable so
+#' the season, or country, behind each value is readable.
+#'
+#' @param d A [length_meanweight_raw()] table.
+#' @param colour_var Column mapped to box fill.
+#' @param facet1,facet2 Up to two facet columns.
+#' @param shape_var Column mapped to point shape, drawn over the boxes.
+#' @param show_points Draw the underlying values over the boxes.
+#' @param ncol Facet columns.
+#' @param scales Facet scales, as `facet_wrap()` takes.
+#' @param class_label X axis label.
+#' @return A ggplot, or `NULL` if there is nothing to draw.
+#' @seealso [plot_length_meanweight()], [length_meanweight_raw()]
+#' @export
+plot_length_meanweight_box <- function(d, colour_var = NULL, facet1 = NULL,
+                                       facet2 = NULL, shape_var = NULL,
+                                       show_points = TRUE, ncol = 2,
+                                       scales = "fixed",
+                                       class_label = "Length (cm)") {
+  if (is.null(d) || !nrow(d)) return(NULL)
+  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+
+  d <- d[is.finite(d$mean_weight), , drop = FALSE]
+  if (!nrow(d)) return(NULL)
+  if (!"n_group" %in% names(d)) d$n_group <- 2L
+
+  # A class axis has to be discrete for boxes to sit side by side, but
+  # keeping it numeric underneath would put every box at its own x with
+  # no dodging. Grouping on the class value gives one box per class.
+  d$.cls <- factor(d$.class, levels = sort(unique(d$.class)))
+
+  grp <- if (has(colour_var)) rlang::sym(colour_var) else NULL
+  p <- if (has(colour_var))
+    ggplot(d, aes(x = .cls, y = mean_weight, fill = factor(!!grp)))
+  else ggplot(d, aes(x = .cls, y = mean_weight))
+
+  many <- d[d$n_group > 1, , drop = FALSE]
+  one  <- d[d$n_group <= 1, , drop = FALSE]
+
+  if (nrow(many))
+    p <- p + geom_boxplot(data = many, outlier.shape = NA, alpha = 0.55,
+                          linewidth = 0.35, colour = OUTLINE,
+                          position = position_dodge(width = 0.8))
+  if (nrow(one))
+    p <- p + if (has(colour_var))
+      geom_point(data = one, shape = 21, size = 2.1, colour = OUTLINE,
+                 stroke = 0.4, position = position_dodge(width = 0.8))
+    else geom_point(data = one, shape = 21, size = 2.1, fill = PAL_BASE[1],
+                    colour = OUTLINE, stroke = 0.4)
+
+  if (show_points && nrow(many)) {
+    p <- p + if (has(shape_var))
+      geom_point(data = many, aes(shape = factor(.data[[shape_var]])),
+                 size = 1.8, alpha = 0.9,
+                 position = position_dodge(width = 0.8))
+    else geom_point(data = many, size = 1.3, alpha = 0.55,
+                    position = position_dodge(width = 0.8))
+    if (has(shape_var))
+      p <- p + scale_shape_manual(values = c(16, 17, 15, 18, 4, 3, 8, 7),
+                                  name = shape_var)
+  }
+
+  if (has(colour_var))
+    p <- p + scale_fill_var(colour_var, d[[colour_var]], name = colour_var)
+
+  n_box <- nrow(many); n_pt <- nrow(one)
+  sub <- if (n_box == 0)
+    "One stratum per class here, so every value is a point - nothing is being averaged."
+  else if (n_pt > 0)
+    sprintf("Box = the strata averaged into one mean (%d values); a point is a class with only one stratum.",
+            n_box)
+  else "Box = the strata averaged into one mean at that class."
+
+  p +
+    scale_y_continuous(labels = scales::comma) +
+    facet_two(facet1, facet2, ncol = ncol, scales = scales) +
+    labs(title = sprintf("Spread of mean weight at %s",
+                         tolower(sub(" .*", "", class_label))),
+         subtitle = sub, x = class_label, y = "Mean weight (g)",
+         fill = colour_var, shape = shape_var) +
+    app_theme() +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, size = 7))
+}

@@ -187,6 +187,20 @@ plot_coverage(strata, type = "heatmap", y = "metier4", fill = "ICESDivision")
 plot_discard_rate(strata, type = "box", x = "metier4")
 ```
 
+Mean weight at class has **two** plots rather than one plot with a
+switch, because they answer different questions and should not silently
+swap places:
+
+```{r}
+plot_length_meanweight(mw)          # what IS the mean weight at this class
+plot_length_meanweight_box(mw_raw)  # how much did the strata averaged into it disagree
+```
+
+The second takes [`length_meanweight_raw()`], the values *before* the
+collapse, and draws a box wherever more than one stratum contributes. Add
+enough facets that only one stratum lands in each cell and it draws
+points and says so — no fake boxes around single values.
+
 In the app the filter sits **beside the axis pickers on each figure tab**,
 so the loop is: put `metier4` on the Y axis, see the spread, pin
 `metier4` to `TBB`, look again. Each tab owns its filter — pinning the
@@ -478,6 +492,37 @@ A pool must clear *both* bars: enough coverage **and** enough measured
 fish. A pool can easily reach 80% coverage on eleven fish, and that is not
 a distribution anyone should allocate from.
 
+#### The last rung has no threshold
+
+Every rung above carries a bar, so a stratum thinner than all of them
+ends the ladder unallocated — and unallocated is not a neutral outcome.
+The weight never reaches the numbers at length, and the totals quietly
+stop adding up.
+
+The ladder therefore ends with one rung that has **no bar at all**,
+reached only by the strata the bars did not resolve:
+
+| `keep_cc` | the last rung pools |
+|---|---|
+| `TRUE` | everything **in the same catch category**. Discards are allocated from all discard data there is, landings from all landings data; the two never mix. |
+| `FALSE` | everything, both categories — and only after the category-joined rungs above have also failed. |
+
+```{r}
+steps <- alloc_steps("Country", thresholds = list(Lan = 60, Dis = 30),
+                     keep_cc = TRUE)
+vapply(steps, `[[`, "", "label")
+#> own stratum
+#> catchCategory + Country
+#> catchCategory (all other data in the same category)
+#> ALL data in the same catchCategory  (no threshold)
+```
+
+"No threshold" is not "no data": a pool with weight but nothing measured
+in it would pass a `-Inf` coverage bar and then allocate from a
+distribution that does not exist, so the last rung still requires the
+pool to contain something measured. A stratum that genuinely has no
+donor anywhere stays unallocated, which is the honest answer.
+
 #### Strata with no catch
 
 A stratum whose weight is zero has nothing to allocate. It can never clear
@@ -510,9 +555,12 @@ alloc <- run_allocation(
 | `variableType_mean` | the variable the mean weights are in. |
 | `weighting` | how the donor distributions are combined. `"NumberAtAoL"` weights by numbers. |
 
-Then aggregate. Note that the aggregation functions return **wide** tables
-with the class in the column name (`N_Length_2900`), so a plot needs a
-`pivot_longer` first — `agg_numbers()` and `agg_meanweight()` handle that:
+## 7. Aggregating the result
+
+`alloc` holds one row per allocated domain — far more rows than anyone
+wants to read, and on the file's own class scale. Aggregation turns that
+into the two tables a stock assessment actually consumes: **numbers at
+class** and **mean weight at class**.
 
 ```{r}
 numbers_at <- agg_numbers(alloc,
@@ -524,15 +572,81 @@ numbers_at <- agg_numbers(alloc,
                           round     = 2)
 
 weights_at <- agg_meanweight(alloc,
-                             grouping = c("catchCategory", "sampledOrEstimated"))
+                             grouping = c("catchCategory", "sampledOrEstimated"),
+                             unit     = "g")
 ```
+
+### `grouping` — the one that matters
+
+Everything **not** named here is summed (numbers) or averaged (mean
+weights) away. So `grouping` is not cosmetic: it decides what the output
+distinguishes and what it merges.
+
+| you put in `grouping` | the output has |
+|---|---|
+| `character(0)` | one number per class for the whole stock |
+| `"catchCategory"` | landings and discards kept apart — **almost always what you want** |
+| `c("catchCategory", "sampledOrEstimated")` | plus a split between what was measured and what was allocated onto it |
+| `c("catchCategory", "metier4")` | plus one column per fleet |
+
+`sampledOrEstimated` is the diagnostic column. It tells you how much of
+each class came from real measurements and how much the allocation
+supplied — the honest answer to "how much of this distribution is
+actually observed". Drop it once you are past checking and want the
+delivery table.
+
+Adding a fleet or area to `grouping` gives you a finer table, but the
+mean weights in it rest on fewer measurements each. That is the same
+trade-off the cascade thresholds are about, arriving one step later.
+
+### Range and the plus group
 
 | argument | what to put in it |
 |---|---|
-| `grouping` | columns the output is broken down by. `catchCategory` splits landings from discards; `sampledOrEstimated` splits what was measured from what was allocated. |
-| `minAoL`, `maxAoL` | class range to keep. `NA` for no upper bound. |
-| `plusGroup` | `TRUE` accumulates everything at or above `maxAoL` into one class. |
-| `unit` | output unit for the classes; `NULL` leaves them as they are. |
+| `minAoL` | lowest class to keep. `0` keeps everything. |
+| `maxAoL` | highest class to keep. `NA` for no upper bound. |
+| `plusGroup` | `FALSE` discards everything above `maxAoL`. `TRUE` accumulates it into a single class AT `maxAoL` — the usual "8+" group of an age-structured assessment. **`maxAoL = NA` with `plusGroup = TRUE` does nothing**: there is no bound to accumulate at. |
+
+So an age table ending in a 10+ group is `maxAoL = 10, plusGroup = TRUE`;
+a length table cut at 60 cm and everything above thrown away is
+`maxAoL = 60, plusGroup = FALSE`.
+
+### Units and rounding
+
+| argument | what to put in it |
+|---|---|
+| `unit` | output unit for the **classes**, not for the values. `NULL` leaves them on the scale the file used. CEF length classes are usually millimetres, so `"cm"` is the common choice for a length table; ages have no unit and it is ignored. |
+| `round` | decimal places. `2` for a working table; `0` for a delivery table, where a fractional fish is noise. |
+
+`agg_meanweight()` takes the same arguments, and its `unit` refers to the
+class the same way. The **weights** come out in grams; `variableType_mean`
+back in `run_allocation()` is what decides which variable is being
+averaged.
+
+### What comes back
+
+Both return **wide** tables, one column per class, with the class in the
+column name — `N_Length_2900` is the number at the 2900 (mm) length
+class. That is the shape InterCatch expects, and the wrong shape for
+ggplot, so anything plotting it has to `pivot_longer` first. The two
+wrappers above do that for you; `catchAtAoLAggregation()` called directly
+does not.
+
+```{r}
+head(numbers_at)
+alloc_pivot_long(numbers_at, "N", "value")   # long, for plotting
+```
+
+### The check worth doing
+
+```{r}
+sum(numbers_at$N_total, na.rm = TRUE)   # against the raised catch
+```
+
+If the numbers do not reconcile with what went in, the usual cause is a
+stratum the cascade left unallocated — its weight never reached the
+distribution. `alloc_cascade_table()` shows that as its own row, and the
+last rung exists precisely so it stays empty.
 
 ## 7. Getting the script back out
 

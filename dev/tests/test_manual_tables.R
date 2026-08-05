@@ -73,5 +73,48 @@ ok(any(ov1$group == "(unassigned)"), "unallocated strata get their own row")
 ok(ov1$n_strata_allocated[ov1$group == "(unassigned)"] == 2,
    "and the count is right")
 
+## ---- the conditions the ENGINE receives -----------------------------
+##
+## catchAllocationAoL() treats allocStrataCond as a partition and refuses
+## the whole run with "N records assigned to more than one stratum" if it
+## is not. The app resolves overlaps first-match-wins, so the raw clauses
+## overlap by design and MUST be complemented on the way out. The emitter
+## did this; run_allocation() did not, so the script in the R tab was
+## right while the run behind the button failed - the worst way round for
+## the two to disagree.
+cc <- alloc_conds_from_groups(list(
+  GA1 = list(alloc = 'metier4 == "TBB"', matched = "TRUE"),
+  GA2 = list(alloc = "TRUE",             matched = "coverage >= 50")))
+
+txt <- vapply(cc$allocStrataCond,
+              function(q) paste(deparse(rlang::quo_get_expr(q)), collapse = " "),
+              character(1))
+ok(!grepl("!", txt[["GA1"]]), "the first group is its own clause, untouched")
+ok(grepl("^!\\(", txt[["GA2"]]),
+   "a catch-all becomes NOT everything above it, never a bare TRUE")
+
+mtxt <- vapply(cc$bioMatchedCond,
+               function(q) paste(deparse(rlang::quo_get_expr(q)), collapse = " "),
+               character(1))
+ok(identical(mtxt[["GA2"]], "coverage >= 50"),
+   "donor conditions are NOT complemented - pools may overlap")
+
+## the two halves of a partition must never both claim the same row
+d <- data.frame(metier4 = c("TBB", "OTB"), stringsAsFactors = FALSE)
+hits <- vapply(cc$allocStrataCond,
+               function(q) sum(rlang::eval_tidy(q, data = d)), numeric(1))
+ok(sum(hits) == nrow(d), "every row is claimed exactly once")
+
+## and the metric columns the readable conditions need
+dm <- add_stratum_metrics(
+  data.frame(metier4 = c("TBB", "TBB"), ICESDivision = "27.4.b",
+             catchCategory = c("Lan", "Dis"), total = c(1000, 200),
+             domainCatchDis = c("d1", "d1"), stringsAsFactors = FALSE),
+  c("metier4", "ICESDivision"))
+ok(all(c("coverage", "discard_rate", "stratum_weight") %in% names(dm)),
+   "add_stratum_metrics puts the metrics on the CEF rows")
+ok(!is.null(rlang::eval_tidy(rlang::quo(coverage >= 50), data = dm)),
+   "so `coverage >= 50` is evaluable where the engine evaluates it")
+
 cat(sprintf("\nDONE  %d failure(s)\n", FAIL))
 if (FAIL) quit(status = 1L)

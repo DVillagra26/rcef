@@ -297,6 +297,62 @@ length_meanweight <- function(linked, group_vars = character(0)) {
     filter(is.finite(mean_weight)) %>% as.data.frame()
 }
 
+#' The values behind each mean-weight point, un-collapsed
+#'
+#' [length_meanweight()] answers "what is the mean weight at this class"
+#' by collapsing every stratum that shares the grouping into one number.
+#' That number is what should be used, but it hides how much the strata
+#' it came from disagreed - and a mean of four seasons that range from
+#' 180 g to 340 g is a different object from a mean of four that all sit
+#' at 250 g.
+#'
+#' This returns the values BEFORE the collapse, one row per contributing
+#' stratum, so a box can be drawn where a single dot would otherwise sit.
+#' The `+/- 1 sd` band on the line plot answers the same question with a
+#' summary statistic; a box answers it with the values, which for four or
+#' five strata is the more honest picture.
+#'
+#' @param linked A linked biology table, as [length_meanweight()] takes.
+#' @param group_vars Grouping columns. Everything NOT named here is what
+#'   the box spreads over.
+#' @return A data frame with `.class`, the grouping columns,
+#'   `mean_weight` (the stratum's own value), `.w` (its weight in the
+#'   mean) and `n_group`, the number of values sharing that class and
+#'   group. `NULL` if there is nothing to draw.
+#' @seealso [length_meanweight()], [plot_length_meanweight_box()]
+#' @export
+length_meanweight_raw <- function(linked, group_vars = character(0)) {
+  if (is.null(linked) || !nrow(linked)) return(NULL)
+  mw <- linked[linked$.var_kind == "meanweight", , drop = FALSE]
+  if (!nrow(mw)) return(NULL)
+  nb <- linked[linked$.var_kind == "numbers", , drop = FALSE]
+
+  join_keys <- intersect(c("domainBiology", "catchCategory", ".class",
+                           "vesselFlagCountry"), names(mw))
+  if (nrow(nb)) {
+    nb2 <- nb %>% select(all_of(join_keys), .w_num = .value_std) %>%
+      group_by(across(all_of(join_keys))) %>%
+      summarise(.w_num = sum(.w_num, na.rm = TRUE), .groups = "drop")
+    mw <- mw %>% left_join(nb2, by = join_keys)
+  } else mw$.w_num <- NA_real_
+
+  mw$.w <- ifelse(!is.na(mw$.w_num) & mw$.w_num > 0, mw$.w_num,
+                  ifelse(!is.na(mw$.n_meas) & mw$.n_meas > 0, mw$.n_meas, 1))
+
+  keys <- unique(c(".class", group_vars))
+  keep <- intersect(c(keys, "catchCategory", DIMS_ALL_CANDIDATES), names(mw))
+  out <- mw[, unique(c(keep, ".value_std", ".w", ".n_meas")), drop = FALSE]
+  names(out)[names(out) == ".value_std"] <- "mean_weight"
+  out <- out[is.finite(out$mean_weight), , drop = FALSE]
+  if (!nrow(out)) return(NULL)
+  # how many values share each box, so the plot can say where a "box" is
+  # really one point and stop pretending to show a spread
+  k <- do.call(paste, c(lapply(keys, function(v) as.character(out[[v]])),
+                        sep = "\r"))
+  out$n_group <- as.integer(table(k)[k])
+  as.data.frame(out)
+}
+
 
 
 
@@ -516,14 +572,46 @@ alloc_steps <- function(keys, thresholds, keep_cc = TRUE, min_meas = 0) {
           thr(j + 1), mm(j + 1))
     }
   }
+
+  # --- last resort: every rung above has a bar, and a stratum that
+  # clears none of them ends the ladder unallocated. That is the right
+  # answer for a stratum nobody has any data for; it is the wrong answer
+  # when data exists and is simply thinner than the bar. The catch is
+  # that "unallocated" is not a neutral outcome downstream - the weight
+  # never reaches the numbers at length, so the totals silently stop
+  # adding up.
+  #
+  # So the ladder ends with one rung that has NO bar at all: pool
+  # everything available and use it. Two versions, depending on whether
+  # the category may be dropped:
+  #
+  #   keep_cc = TRUE   pool everything IN THE SAME CATEGORY. Discards are
+  #                    allocated from all discard data there is, landings
+  #                    from all landings data. The two never mix, which is
+  #                    the whole point of keeping the category.
+  #   keep_cc = FALSE  pool everything, both categories. Only reached when
+  #                    the category-joined rungs above have also failed.
+  #
+  # It is reached ONLY by strata the bars did not resolve, so nothing that
+  # met a real threshold is affected.
+  if (isTRUE(keep_cc))
+    add("last", "ALL data in the same catchCategory  (no threshold)",
+        keys, FALSE, c(Lan = -Inf, Dis = -Inf), c(Lan = 0, Dis = 0))
+  else
+    add("last", "ALL data, both categories pooled  (no threshold)",
+        keys, TRUE, c(Lan = -Inf, Dis = -Inf), c(Lan = 0, Dis = 0))
+
   out
 }
 
 # Which pass a step belongs to, for the table and the chain.
 #' @noRd
 #' @export
-alloc_step_scope <- function(step)
-  if (isTRUE(step$drop_cc)) "categories joined" else "within category"
+alloc_step_scope <- function(step) {
+  if (identical(step$id, "last")) "last resort - no threshold"
+  else if (isTRUE(step$drop_cc)) "categories joined"
+  else "within category"
+}
 
 # The condition text for one group, as it will appear in the emitted
 # allocStrataCond / bioMatchedCond lists.
@@ -565,13 +653,26 @@ alloc_quo <- function(vals) {
 #' @noRd
 #' @export
 emit_alloc_conditions <- function(groups) {
-  fmt <- function(nm, field) {
-    if (!length(groups)) return(sprintf("%s <- list()", nm))
-    body <- vapply(names(groups), function(g)
-      sprintf("     %s = quo(%s)", g, groups[[g]][[field]]), character(1))
-    paste0(nm, " <-\n    list(", sub("^     ", "", paste(body, collapse = ",\n")), ")")
+  if (!length(groups))
+    return(c("allocStrataCond <- list()", "", "bioMatchedCond <- list()"))
+  cs <- alloc_conds_from_groups(groups)
+  one <- function(nm, txts) {
+    body <- vapply(names(txts), function(g) sprintf("     %s = quo(%s)", g,
+                                                    txts[[g]]), character(1))
+    paste0(nm, " <-\n    list(", sub("^     ", "",
+                                     paste(body, collapse = ",\n")), ")")
   }
-  c(fmt("allocStrataCond", "alloc"), "", fmt("bioMatchedCond", "matched"))
+  c("## allocStrataCond is a PARTITION: each group's condition excludes",
+    "## everything the groups above it already took. Written as plain",
+    "## quo(TRUE) a catch-all matches records an earlier group has, and",
+    "## catchAllocationAoL() rejects the run.",
+    one("allocStrataCond", cs$allocStrataText), "",
+    "## bioMatchedCond is NOT a partition - donor pools may overlap, and",
+    "## a well-sampled stratum usually feeds several groups.",
+    one("bioMatchedCond",
+        vapply(names(groups), function(g)
+          fld(groups[[g]], "matched", fld(groups[[g]], "alloc", "TRUE")),
+          character(1))))
 }
 
 # The R the app would run to allocate lengths or ages, ready to paste
@@ -913,6 +1014,15 @@ assign_alloc_cascade <- function(bl, keys, steps, bms_as_dis = TRUE) {
     # Where the counts are available the second bar is applied too; where
     # they are not, the test is skipped rather than silently failed.
     if (has_meas) ok <- ok & !is.na(nms[pid]) & nms[pid] >= mm_row
+
+    # The last-resort rung has no threshold, but "no threshold" is not
+    # "no data": a pool with weight and nothing measured in it would pass
+    # a -Inf coverage bar and then allocate from a distribution that does
+    # not exist. It still has to contain something measured.
+    if (identical(st$id, "last")) {
+      meas <- vapply(agg, function(z) unname(z["m"]), numeric(1))
+      ok <- ok & !is.na(meas[pid]) & meas[pid] > 0
+    }
     d$alloc_step[ok]  <- si
     d$alloc_level[ok] <- st$label
     d$alloc_pool[ok]  <- pid[ok]
@@ -1324,4 +1434,46 @@ alloc_matched_cond <- function(clauses, excluded = character(0), dims = NULL) {
          else paste0("(", base, ") & ", ex)
   list(text = txt, quo = rlang::new_quosure(str2lang(txt),
                                             env = rlang::global_env()))
+}
+
+#' Allocation conditions as a genuine partition
+#'
+#' `catchAllocationAoL()` rejects a run where any record matches more than
+#' one allocStrataCond - "N records assigned to more than one stratum".
+#' The app has always been first-match-wins on screen, so a catch-all
+#' written as `quo(TRUE)` looked right and then failed at the engine,
+#' because `TRUE` matches everything including what earlier groups took.
+#'
+#' The complements are made explicit here, exactly as [conds_from_rules()]
+#' has always done on the discard side. bioMatchedCond is left alone:
+#' donor pools may overlap and usually should.
+#'
+#' @param groups The allocation group list, in evaluation order.
+#' @return A list with `allocStrataCond` and `bioMatchedCond`.
+#' @seealso [conds_from_rules()], [emit_alloc_conditions()]
+#' @export
+alloc_conds_from_groups <- function(groups) {
+  if (!length(groups)) return(list(allocStrataCond = list(),
+                                   bioMatchedCond = list()))
+  mk <- function(txt) rlang::new_quosure(rlang::parse_expr(txt),
+                                         env = rlang::global_env())
+  seen <- character(0)
+  alloc <- vector("list", length(groups))
+  txts  <- character(length(groups))
+  for (i in seq_along(groups)) {
+    this <- fld(groups[[i]], "alloc", "TRUE")
+    if (!nzchar(this)) this <- "TRUE"
+    txt <- if (!length(seen)) this
+           else if (identical(this, "TRUE"))
+             paste0("!(", paste(seen, collapse = " | "), ")")
+           else paste0("(", this, ") & !(", paste(seen, collapse = " | "), ")")
+    txts[i]   <- txt
+    alloc[[i]] <- mk(txt)
+    seen <- c(seen, paste0("(", this, ")"))
+  }
+  matched <- lapply(groups, function(g)
+    mk(fld(g, "matched", fld(g, "alloc", "TRUE"))))
+  names(alloc) <- names(matched) <- names(groups)
+  list(allocStrataCond = alloc, bioMatchedCond = matched,
+       allocStrataText = stats::setNames(txts, names(groups)))
 }

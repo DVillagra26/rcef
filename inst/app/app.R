@@ -264,6 +264,7 @@ coverage_ui <- function() sidebarLayout(
     level_box("cov")),
   mainPanel(width = 9,
     div(class = "legend-strip", plotOutput("cov_legend", height = "150px")),
+    filter_banner("cov"),
     plot_slot("cov_plot", capture = TRUE)))
 
 drates_ui <- function() sidebarLayout(
@@ -287,6 +288,7 @@ drates_ui <- function() sidebarLayout(
     level_box("dr")),
   mainPanel(width = 9,
     div(class = "legend-strip", plotOutput("dr_legend", height = "120px")),
+    filter_banner("dr"),
     plot_slot("dr_plot", capture = TRUE),
     tags$hr(), h4("Underlying strata"), tbl_slot("dr_tbl")))
 
@@ -390,6 +392,7 @@ len_coverage_ui <- function(p, type = "LengthTotal") {
     mainPanel(width = 9,
       uiOutput(paste0(p, "_status")),
       div(class = "legend-strip", plotOutput(ns("legend"), height = "150px")),
+      filter_banner(ns("")),
       plot_slot(ns("plot"), capture = TRUE),
       tags$hr(), h4("Link summary"), tbl_slot(paste0(p, "_sum"))))
 }
@@ -429,6 +432,7 @@ len_numbers_ui <- function(p, type = "LengthTotal") {
     mainPanel(width = 9,
       uiOutput(paste0(p, "_status")),
       div(class = "legend-strip", plotOutput(ns("legend"), height = "120px")),
+      filter_banner(ns("")),
       plot_slot(ns("plot"), capture = TRUE)))
 }
 
@@ -449,7 +453,19 @@ len_meanw_ui <- function(p, type = "LengthTotal") {
       tags$hr(),
       len_cc_filter(ns),
       tags$hr(),
-      h4("Plot"), pick_bar(ns("type"), list(linedot = "Line + dots"), "linedot"),
+      # Two plots, not one plot with a switch: the line answers "what is
+      # the mean weight at this class", the boxes answer "how much did
+      # the strata averaged into it disagree". Swapping one for the other
+      # silently would be swapping the question.
+      h4("Plot"), pick_bar(ns("type"),
+                           list(linedot = "Line + dots", box = "Boxplot"),
+                           "linedot"),
+      span(class = "note",
+           "Boxplot draws the values BEFORE they are averaged: one box ",
+           "per class wherever more than one stratum contributes, a point ",
+           "where only one does. Add a Shape and the dots over the boxes ",
+           "carry it, so the season or country behind each value stays ",
+           "readable."),
       tags$hr(),
       role_chips(ns("r"), c(fill = "Colour", facet = "Facet",
                             shape = "Facet 2"),
@@ -465,6 +481,7 @@ len_meanw_ui <- function(p, type = "LengthTotal") {
     mainPanel(width = 9,
       uiOutput(paste0(p, "_status")),
       div(class = "legend-strip", plotOutput(ns("legend"), height = "120px")),
+      filter_banner(ns("")),
       plot_slot(ns("plot"), capture = TRUE)))
 }
 
@@ -489,6 +506,14 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
                "other keys are exhausted the category is dropped too and ",
                "landings and discards pool together."),
           uiOutput(ns("keys")),
+          # Nothing below recomputes until this is pressed. Five keys,
+          # each with four numbers, means twenty controls that each used
+          # to re-walk the whole cascade on every keystroke - setting up
+          # a ladder was slower than running it.
+          div(style = "margin:6px 0",
+              actionButton(ns("apply"), "Apply settings",
+                           class = "btn-sm btn-primary"),
+              uiOutput(ns("stale"), inline = TRUE)),
           uiOutput(ns("chain")),
           tags$hr(),
           textInput(ns("name"), "Save as", "alloc_1"),
@@ -692,7 +717,14 @@ len_raise_ui <- function(p, what = "Length") {
           tags$hr(),
           radioButtons(ns("cmpval"), "Show",
                        c("Numbers" = "numbers",
-                         "Stock weight (t)" = "tonnes"), "numbers"),
+                         "Stock weight (t)" = "tonnes",
+                         "Mean weight (g)" = "meanweight"), "numbers"),
+          span(class = "note",
+               "Mean weight is the third thing an allocation can change, ",
+               "and the one a stock assessment notices: two groupings can ",
+               "agree on numbers and still put different weights on the ",
+               "same classes. It is derived as tonnes / numbers, so it ",
+               "cannot disagree with the other two views."),
           selectInput(ns("cmpfacet"), "Facet",
                       c(NONE, "Catch category" = "catchCategory"),
                       "catchCategory"),
@@ -1047,6 +1079,11 @@ exclude_box <- function(p, metrics = c("coverage", "measurements", "rate"),
 # from the chips, pick values, add. Listing every filterable column as a
 # dropdown from the start filled the sidebar with a dozen empty boxes,
 # eleven of which were never going to be used.
+# Shown ABOVE the figure, not only beside the controls. A filter set on
+# one visit and forgotten on the next reads as a finding rather than as a
+# view, and the sidebar is usually scrolled away from the plot.
+filter_banner <- function(p) uiOutput(paste0(p, "_flt_banner"))
+
 filter_box <- function(p) div(class = "fltbox",
   div(class = "flttitle", "Filter this figure"),
   uiOutput(paste0(p, "_flt_chips")),
@@ -2062,6 +2099,17 @@ server <- function(input, output, session) {
     # Everything currently applied, one removable pill each. The overview
     # is the point: with the values hidden behind a chip you cannot see
     # what is on without it.
+    output[[id("banner")]] <- renderUI({
+      f <- flt_inputs(p)
+      if (!length(f)) return(NULL)
+      div(style = paste("background:#fff8e8;border:1px solid #d9a441;",
+                        "border-left:6px solid #d9a441;border-radius:6px;",
+                        "padding:5px 10px;margin-bottom:6px;font-size:12px;",
+                        "color:#7a4a00"),
+          tags$b("Filtered view - "), filter_label(f),
+          tags$span(class = "note", style = "margin-left:8px",
+                    "figure only; grouping and raising use the full table")) })
+
     output[[id("list")]] <- renderUI({
       f <- flt_inputs(p)
       if (!length(f))
@@ -2105,6 +2153,19 @@ server <- function(input, output, session) {
     local({ pp <- .p; filter_server(pp) })
 
   # the filtered table for one tab
+  # "Nothing to plot." on a filtered panel is the wrong message: it reads
+  # as a fault in the data when it is usually a filter that went one step
+  # too far. plot_coverage() drops strata with no landings, so filtering
+  # to a single thin stratum legitimately leaves nothing to draw - and the
+  # user, seeing the plot replaced by a bare sentence, reports that Apply
+  # "did nothing".
+  no_plot_msg <- function(p, base = "Nothing to plot with these settings.") {
+    f <- flt_inputs(p)
+    if (!length(f)) return(base)
+    paste0(base, " The filter on this figure (", filter_label(f),
+           ") leaves no stratum to draw - clear or widen it.")
+  }
+
   explore_dat <- function(p) {
     d <- dat(); f <- flt_inputs(p)
     if (!length(f)) return(d)
@@ -2143,21 +2204,45 @@ server <- function(input, output, session) {
 
   exclusion_server <- function(p, strata_of, dims_of,
                                metrics = c("coverage", "measurements", "rate"),
-                               dr_of = function() c(NA, NA)) {
+                               dr_of = function() c(NA, NA),
+                               scope_of = function() NULL) {
     tbl <- function() {
       st <- try(strata_of(), silent = TRUE)
       if (inherits(st, "try-error") || is.null(st) || !nrow(st)) NULL else st
     }
-    keys <- reactive({
-      st <- tbl(); if (is.null(st)) return(character(0))
+    # One settings object, so the expression on screen, the expression in
+    # the emitted script and the table below can never disagree.
+    spec <- reactive({
       dr <- if ("rate" %in% metrics) dr_of() else c(NA, NA)
-      excluded_keys(st, dims_of(),
-                    named    = input[[paste0(p, "_xnamed")]] %||% character(0),
-                    cov_min  = if ("coverage" %in% metrics)
-                                 excl_num(p, "cov") else NA,
-                    meas_min = if ("measurements" %in% metrics)
-                                 excl_num(p, "meas") else NA,
-                    dr_min = dr[1], dr_max = dr[2])
+      list(named    = input[[paste0(p, "_xnamed")]] %||% character(0),
+           cov_min  = if ("coverage" %in% metrics) excl_num(p, "cov") else NA,
+           meas_min = if ("measurements" %in% metrics) excl_num(p, "meas") else NA,
+           dr_min   = dr[1], dr_max = dr[2])
+    })
+
+    # What goes in the CODE: a comparison on the metric columns, not a
+    # list of several hundred stratum keys. add_stratum_metrics() puts
+    # coverage / discard_rate / n_measurements on the CEF rows, so the
+    # engines evaluate this directly.
+    expr <- reactive({
+      sp <- spec()
+      exclusion_expr(sp$cov_min, sp$meas_min, sp$dr_min, sp$dr_max,
+                     sp$named, dims_of())
+    })
+
+    # What goes in the TABLE: only strata inside this group's own scope,
+    # and only the ones whose exclusion was a decision rather than
+    # arithmetic - a stratum with no landings or no coverage at all was
+    # never a candidate donor.
+    report <- reactive({
+      st <- tbl(); if (is.null(st)) return(NULL)
+      sp <- spec()
+      exclusion_report(st, dims_of(), sp$named, sp$cov_min, sp$meas_min,
+                       sp$dr_min, sp$dr_max, scope = scope_of())
+    })
+
+    keys <- reactive({
+      d <- report(); if (is.null(d)) character(0) else d$key
     })
 
     output[[paste0(p, "_xui")]] <- renderUI({
@@ -2171,30 +2256,21 @@ server <- function(input, output, session) {
         options = list(placeholder = "no stratum excluded")) })
 
     output[[paste0(p, "_xnote")]] <- renderUI({
-      k <- keys()
-      dr <- if ("rate" %in% metrics) dr_of() else c(NA, NA)
-      lab <- exclusion_label(
-        cov_min  = if ("coverage" %in% metrics) excl_num(p, "cov") else NA,
-        meas_min = if ("measurements" %in% metrics) excl_num(p, "meas") else NA,
-        dr_min = dr[1], dr_max = dr[2],
-        n_named = length(input[[paste0(p, "_xnamed")]] %||% character(0)))
+      e <- expr(); n <- length(keys())
+      if (is.null(e))
+        return(div(class = "note", "Nothing excluded - the whole pool."))
       div(class = "note",
-          tags$b(sprintf("%d stratum/strata out of the pool. ", length(k))),
-          lab,
-          if (length(k)) tagList(tags$br(),
-            tags$span(style = "font-family:monospace;font-size:10px",
-                      donor_exclusion_expr(k, dims_of())))) })
+          tags$b(sprintf("%d stratum/strata in this group's scope are out. ", n)),
+          "This is what the script carries; the table below lists which ",
+          "strata it removes.",
+          tags$br(),
+          tags$span(style = paste("font-family:monospace;font-size:11px;",
+                                  "background:#fffaf0;padding:1px 4px;",
+                                  "border-radius:3px"), e)) })
 
     output[[paste0(p, "_xtbl")]] <- renderDT({
-      st <- tbl()
-      validate(need(!is.null(st), "No strata yet."))
-      dr <- if ("rate" %in% metrics) dr_of() else c(NA, NA)
-      d <- exclusion_overview(st, dims_of(),
-             named    = input[[paste0(p, "_xnamed")]] %||% character(0),
-             cov_min  = if ("coverage" %in% metrics) excl_num(p, "cov") else NA,
-             meas_min = if ("measurements" %in% metrics)
-                          excl_num(p, "meas") else NA,
-             dr_min = dr[1], dr_max = dr[2])
+      validate(need(!is.null(tbl()), "No strata yet."))
+      d <- report()
       validate(need(!is.null(d) && nrow(d), "Nothing excluded."))
       keep <- names(d)[vapply(d, function(x) !all(is.na(x)), logical(1))]
       d <- d[, keep, drop = FALSE]
@@ -2203,7 +2279,7 @@ server <- function(input, output, session) {
       datatable(d, rownames = FALSE,
                 options = list(scrollX = TRUE, pageLength = 8)) })
 
-    keys
+    list(keys = keys, expr = expr, report = report)
   }
 
 
@@ -2619,7 +2695,8 @@ server <- function(input, output, session) {
     n_live <- reactive(i_("n_type"))
     w_sig <- reactive(c(list(i_("w_cc"), i_("w_r_fill"), i_("w_r_facet"),
                              i_("w_r_shape"), i_("w_pt"), i_("w_points"),
-                             i_("w_freex"), i_("w_freey"), flt_sig("w")()),
+                             i_("w_freex"), i_("w_freey"), i_("w_type"),
+                             flt_sig("w")()),
                         lv_sig()))
     dist_ref <- reactive(rv$dist)
     cov_gate <- gate_of(paste0(p, "_cov"), cov_sig, refresh = dist_ref,
@@ -2851,16 +2928,41 @@ server <- function(input, output, session) {
       pt <- len_dim_col(p, input[[paste0(p, "_w_pt")]])
       gv <- unique(na.omit(c(rc("w","fill"), rc("w","facet"), rc("w","shape"), pt)))
       length_meanweight(lk, gv) })
+    mw_type <- reactive(input[[paste0(p, "_w_type")]] %||% "linedot")
+
+    # The boxes need the values BEFORE the collapse, so this is a
+    # different table, not a different geom on the same one.
+    mw_raw <- reactive({
+      lk <- linked_for("w")
+      validate(need(!is.null(lk) && nrow(lk), "No length distributions."))
+      pt <- len_dim_col(p, input[[paste0(p, "_w_pt")]])
+      gv <- unique(na.omit(c(rc("w","fill"), rc("w","facet"), rc("w","shape"), pt)))
+      length_meanweight_raw(lk, gv) })
+
     mw_obj <- gated(w_gate, {
-      d <- mw_data()
-      validate(need(!is.null(d) && nrow(d), "No mean-weight rows."))
-      plot_biology_distribution(d, quantity = "meanweight", type = "line",
-        colour = rc("w","fill"), facet1 = rc("w","facet"), facet2 = rc("w","shape"),
-        shape = len_dim_col(p, input[[paste0(p, "_w_pt")]]),
-        show_points = isTRUE(input[[paste0(p, "_w_points")]]),
-        scales = facet_scales(isTRUE(input[[paste0(p, "_w_freex")]]),
-                              isTRUE(input[[paste0(p, "_w_freey")]])),
-        class_label = class_axis_label(type)) })
+      if (identical(mw_type(), "box")) {
+        d <- mw_raw()
+        validate(need(!is.null(d) && nrow(d), "No mean-weight rows."))
+        plot_length_meanweight_box(d,
+          colour_var = rc("w","fill"), facet1 = rc("w","facet"),
+          facet2 = rc("w","shape"),
+          shape_var = len_dim_col(p, input[[paste0(p, "_w_pt")]]),
+          show_points = isTRUE(input[[paste0(p, "_w_points")]]),
+          scales = facet_scales(isTRUE(input[[paste0(p, "_w_freex")]]),
+                                isTRUE(input[[paste0(p, "_w_freey")]])),
+          class_label = class_axis_label(type))
+      } else {
+        d <- mw_data()
+        validate(need(!is.null(d) && nrow(d), "No mean-weight rows."))
+        plot_biology_distribution(d, quantity = "meanweight", type = "line",
+          colour = rc("w","fill"), facet1 = rc("w","facet"),
+          facet2 = rc("w","shape"),
+          shape = len_dim_col(p, input[[paste0(p, "_w_pt")]]),
+          show_points = isTRUE(input[[paste0(p, "_w_points")]]),
+          scales = facet_scales(isTRUE(input[[paste0(p, "_w_freex")]]),
+                                isTRUE(input[[paste0(p, "_w_freey")]])),
+          class_label = class_axis_label(type))
+      } })
     output[[paste0(p, "_w_plot_ui")]] <- renderUI({
       w_gate$now()
       d <- tryCatch(isolate(mw_data()), error = function(e) NULL)
@@ -2994,8 +3096,31 @@ server <- function(input, output, session) {
             "whether or not catchCategory is droppable."),
         k1, cc, tags$hr(style = "margin:6px 0"), rows) })
 
-    steps <- reactive(alloc_steps(alloc_keys(), alloc_thr(), keep_cc(),
-                                  min_meas = alloc_meas()))
+    # The live settings, and the ones the panel is currently drawn from.
+    hier_sig <- reactive(list(alloc_keys(), alloc_thr(), keep_cc(),
+                              alloc_meas()))
+    hier_applied <- reactiveVal(NULL)
+
+    # first pass: draw something rather than an empty panel
+    observe({
+      if (is.null(hier_applied())) {
+        sg <- tryCatch(hier_sig(), error = function(e) NULL)
+        if (!is.null(sg)) hier_applied(sg)
+      }
+    })
+    observeEvent(input[[ns("apply")]], hier_applied(hier_sig()))
+
+    output[[ns("stale")]] <- renderUI({
+      a <- hier_applied()
+      if (is.null(a) || identical(a, hier_sig())) return(NULL)
+      tags$span(class = "note", style = "color:#9a5000;margin-left:8px",
+                "settings changed - press Apply") })
+
+    steps <- reactive({
+      a <- hier_applied()
+      req(!is.null(a))
+      alloc_steps(a[[1]], a[[2]], a[[3]], min_meas = a[[4]])
+    })
 
     output[[ns("chain")]] <- renderUI({
       st <- steps()
@@ -3205,15 +3330,18 @@ server <- function(input, output, session) {
       intersect(c("catchCategory", unname(dmap(paste0(p, "_lv"))[DIMS])),
                 names(bl_metrics() %||% data.frame()))
 
-    x_keys  <- exclusion_server(ns("x"),
+    x_keys_srv <- exclusion_server(ns("x"),
       strata_of = function() bl_metrics(),
       dims_of   = alloc_dims,
       metrics   = c("coverage", "measurements"))
 
-    ca_keys <- exclusion_server(ns("ca"),
+    ca_keys_srv <- exclusion_server(ns("ca"),
       strata_of = function() bl_metrics(),
       dims_of   = alloc_dims,
       metrics   = c("coverage", "measurements"))
+
+    x_keys  <- x_keys_srv$keys
+    ca_keys <- ca_keys_srv$keys
 
     save_group <- function(gid, label, a, m, excl) {
       g <- getrv("groups") %||% list()
@@ -4278,22 +4406,26 @@ server <- function(input, output, session) {
     m <- suppressWarnings(max(s$discard_rate, na.rm = TRUE))
     if (!is.finite(m)) 1 else max(1, ceiling(m * 1.05 * 100) / 100) }
 
-  ar_excl_keys <- exclusion_server("ar",
+  ar_excl_keys_srv <- exclusion_server("ar",
     strata_of = function() strata_p("ar"),
     dims_of   = function() unname(dmap("ar")[DIMS]),
     metrics   = c("coverage", "rate"),
     dr_of     = function() ar_dr())
 
-  mg_excl_keys <- exclusion_server("mg",
+  mg_excl_keys_srv <- exclusion_server("mg",
     strata_of = function() strata_p("mg"),
     dims_of   = function() unname(dmap("mg")[DIMS]),
     metrics   = c("coverage", "rate"),
     dr_of     = function() if (isTRUE(input$dr_on)) rule_dr() else c(NA, NA))
 
-  ca_excl_keys <- exclusion_server("ca",
+  ca_excl_keys_srv <- exclusion_server("ca",
     strata_of = function() strata_p("mg"),
     dims_of   = function() unname(dmap("mg")[DIMS]),
     metrics   = c("coverage"))
+
+  ar_excl_keys <- ar_excl_keys_srv$keys
+  mg_excl_keys <- mg_excl_keys_srv$keys
+  ca_excl_keys <- ca_excl_keys_srv$keys
 
   output$man_progress <- renderDT({
     validate(need(length(rv$rules), "No groups yet."))
@@ -5049,7 +5181,7 @@ server <- function(input, output, session) {
 
   output$cov_plot <- renderPlot({
     p <- cov_plot_obj()
-    validate(need(!is.null(p), "Nothing to plot."))
+    validate(need(!is.null(p), no_plot_msg("cov")))
     p + theme(legend.position = "none") })
 
   output$cov_legend <- renderPlot({
@@ -5109,7 +5241,7 @@ server <- function(input, output, session) {
 
   output$dr_plot <- renderPlot({
     p <- dr_plot_obj()
-    validate(need(!is.null(p), "No strata with discard data."))
+    validate(need(!is.null(p), no_plot_msg("dr", "No strata with discard data.")))
     p + theme(legend.position = "none") })
 
   output$dr_legend <- renderPlot({

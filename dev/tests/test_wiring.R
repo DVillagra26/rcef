@@ -127,7 +127,14 @@ cat("\n=== 4. every reactive called is defined ===\n")
 # knowing those nine objects exist, and then reports every one of them as
 # "called before it exists", which buries the one name that might be real.
 defined <- c(cap(sv, '\\n  ([A-Za-z_][A-Za-z0-9_.]*)\\s*<-\\s*(?:reactive|gated|function)'),
-             cap(sv, '\\n\\s{4,}([A-Za-z_][A-Za-z0-9_.]*)\\s*<-\\s*(?:reactive|gated|function)'))
+             cap(sv, '\\n\\s{4,}([A-Za-z_][A-Za-z0-9_.]*)\\s*<-\\s*(?:reactive|gated|function)'),
+             ## A reactive pulled out of a list a *_server() helper
+             ## returned - `x_keys <- srv$keys` - is as much a reactive
+             ## as one written inline. Without this the audit reports
+             ## every accessor as undefined, and five false names is how
+             ## a real one gets skipped past.
+             cap(sv, '\\n\\s*([A-Za-z_][A-Za-z0-9_.]*)\\s*<-\\s*[A-Za-z_][A-Za-z0-9_.]*\\$[A-Za-z_][A-Za-z0-9_.]*'),
+             cap(sv, '\\n\\s*([A-Za-z_][A-Za-z0-9_.]*)\\s*<-\\s*[a-z_]+_server\\('))
 # scanned on the comment-free source, so a name mentioned in prose is not
 # mistaken for a call
 called  <- cap(code_only(sv), '\\b([a-z_][a-z0-9_.]*)\\(\\)')

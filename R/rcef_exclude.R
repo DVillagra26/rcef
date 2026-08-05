@@ -261,3 +261,145 @@ exclusion_label <- function(cov_min = NA, meas_min = NA, dr_min = NA,
                                                 n_named))
   if (!length(bits)) "nothing excluded" else paste(bits, collapse = "; ")
 }
+
+# ---------------------------------------------------------------------
+#  Exclusion as a READABLE condition
+# ---------------------------------------------------------------------
+# The first version resolved every threshold into a list of stratum keys
+# and emitted `!paste(...) %in% c(<236 strings>)`. It was correct and it
+# was unusable: a reader could not tell a 50% coverage bar from a hand
+# picked list, and the line ran to eight thousand characters.
+#
+# The fix is to put the metrics ON the data instead. add_stratum_metrics()
+# joins coverage, discard rate and measurement counts onto the CEF rows,
+# keyed by stratum, so a condition can simply say `coverage >= 50`.
+# catchRaising() and catchAllocationAoL() both evaluate their conditions
+# with filter(!!cond) against the data frame they are given, so any column
+# present there is fair game.
+#
+# Hand-picked strata still have to be named - there is no metric behind
+# "the WG decided this one is unreliable" - but that list is short by
+# construction, because it is a human decision.
+
+#' Attach stratum-level metrics to a CEF table
+#'
+#' Adds `coverage`, `discard_rate`, `stratum_weight` and, where the
+#' distributions are supplied, `n_measurements` to every row, computed
+#' over the stratum that row belongs to. This is what lets a raising or
+#' allocation condition read `coverage >= 50` instead of carrying a list
+#' of several hundred stratum keys.
+#'
+#' Call it once, after `derive_fields()` and before building conditions.
+#' Existing columns of the same name are overwritten, so re-running it
+#' after changing `dims` is safe and is in fact required: the metrics are
+#' only meaningful at the resolution they were computed for.
+#'
+#' @param data A CEF long-format table.
+#' @param dims The stratum key columns.
+#' @param strata Optional pre-built stratum table from [build_strata()].
+#'   Supply it to keep one definition of coverage across the app;
+#'   otherwise it is built here.
+#' @return `data` with the metric columns added, plus `stratum_id`.
+#' @seealso [exclusion_expr()], [build_strata()]
+#' @export
+add_stratum_metrics <- function(data, dims, strata = NULL) {
+  if (is.null(data) || !nrow(data)) return(data)
+  if (is.null(strata)) strata <- build_strata(data, dims)
+  key <- stratum_keys(data, dims)
+  m <- stratum_metrics(strata, dims)
+  if (is.null(m)) return(data)
+  i <- match(key, m$key)
+  data$stratum_id     <- key
+  data$stratum_weight <- m$weight[i]
+  data$coverage       <- m$coverage[i]
+  data$discard_rate   <- m$discard_rate[i]
+  if (any(!is.na(m$n_measurements))) data$n_measurements <- m$n_measurements[i]
+  data
+}
+
+#' A donor-exclusion condition, written the way it was decided
+#'
+#' Thresholds come out as comparisons on the metric columns, which is
+#' short, self-explaining and survives a change in the data. Only
+#' hand-picked strata are named, and that list is short because a person
+#' typed it.
+#'
+#' @param cov_min Minimum coverage, percent. `NA` to omit.
+#' @param meas_min Minimum measurements. `NA` to omit.
+#' @param dr_min,dr_max Discard-rate window. `NA` to omit either bound.
+#' @param named Stratum keys picked out by hand.
+#' @param dims Key columns, needed only if `named` is non-empty.
+#' @return A length-one character vector, or `NULL` if nothing is set.
+#' @seealso [add_stratum_metrics()], [excluded_keys()]
+#' @export
+#' @examples
+#' exclusion_expr(cov_min = 50, dr_max = 0.9)
+#' exclusion_expr(named = "TBB | 27.4.b", dims = c("metier4", "ICESDivision"))
+exclusion_expr <- function(cov_min = NA, meas_min = NA, dr_min = NA,
+                           dr_max = NA, named = character(0), dims = NULL) {
+  bits <- character(0)
+  if (!is.na(cov_min))  bits <- c(bits, sprintf("coverage >= %s", cov_min))
+  if (!is.na(meas_min)) bits <- c(bits, sprintf("n_measurements >= %s", meas_min))
+  if (!is.na(dr_min))   bits <- c(bits, sprintf("discard_rate >= %s", dr_min))
+  if (!is.na(dr_max))   bits <- c(bits, sprintf("discard_rate <= %s", dr_max))
+  if (length(named) && !is.null(dims))
+    bits <- c(bits, donor_exclusion_expr(named, dims))
+  if (!length(bits)) NULL else paste(bits, collapse = " & ")
+}
+
+#' Combine a clause with a donor-exclusion condition
+#'
+#' @param base The clause condition, or `"TRUE"`.
+#' @param excl An exclusion condition from [exclusion_expr()], or `NULL`.
+#' @return A length-one character vector.
+#' @export
+#' @examples
+#' and_condition('metier4 %in% "TBB"', "coverage >= 50")
+and_condition <- function(base, excl) {
+  if (is.null(excl) || !nzchar(excl)) return(base)
+  if (is.null(base) || !nzchar(base) || identical(base, "TRUE")) return(excl)
+  paste0(base, " & ", excl)
+}
+
+#' Strata a rule would actually drop, within its own scope
+#'
+#' Two things the first version got wrong, both of which made the
+#' "currently excluded" list unreadable:
+#'
+#' * It listed every stratum in the stock. If the group only raises TBB,
+#'   being told that an OTB stratum is out of its donor pool is noise -
+#'   that stratum was never in it.
+#' * It listed strata with no landings and strata with zero coverage.
+#'   Neither can donate a discard rate under any threshold, so they are
+#'   not a decision anyone makes; they are arithmetic.
+#'
+#' @inheritParams exclusion_overview
+#' @param scope Logical vector over `strata`, or `NULL` for all of it.
+#'   Pass the group's own raise clause here.
+#' @param drop_unusable Remove zero-weight and zero-coverage strata from
+#'   the report. They are still excluded by the condition; they are just
+#'   not worth listing.
+#' @return A data frame as [exclusion_overview()], scoped and pruned.
+#' @export
+exclusion_report <- function(strata, dims, named = character(0),
+                             cov_min = NA, meas_min = NA, dr_min = NA,
+                             dr_max = NA, scope = NULL,
+                             drop_unusable = TRUE) {
+  d <- as.data.frame(strata)
+  if (!is.null(scope)) {
+    scope[is.na(scope)] <- FALSE
+    if (length(scope) == 1L) scope <- rep(scope, nrow(d))
+    d <- d[scope, , drop = FALSE]
+  }
+  if (!nrow(d)) return(NULL)
+  ov <- exclusion_overview(d, dims, named, cov_min, meas_min, dr_min, dr_max)
+  if (is.null(ov) || !nrow(ov)) return(NULL)
+  if (isTRUE(drop_unusable)) {
+    keep <- !( (!is.na(ov$weight) & ov$weight <= 0) |
+               (!is.na(ov$coverage) & ov$coverage <= 0) )
+    ov <- ov[keep, , drop = FALSE]
+  }
+  if (!nrow(ov)) return(NULL)
+  rownames(ov) <- NULL
+  ov
+}
