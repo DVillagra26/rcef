@@ -1800,6 +1800,195 @@ startup_modal <- function() modalDialog(
 
 server <- function(input, output, session) {
 
+  # =========================================================
+  #  Shared helpers, defined FIRST
+  # =========================================================
+  # These were defined further down, next to the tabs that use them.
+  # That worked for anything called from inside a reactive - lookup is
+  # lazy - but not for a module server that calls one while the server
+  # body is still executing: length_alloc_server() is invoked ~1000
+  # lines above where exclusion_server() used to be defined, so it hit
+  # 'could not find function', the server function aborted, and every
+  # definition after that point never ran. Hence the cascade of
+  # unrelated-looking 'could not find flt_inputs' errors: they were all
+  # one failure.
+  #
+  # Anything a module server calls directly belongs here.
+  # ---------------------------------------------------------
+  #  Exploration filter
+  # ---------------------------------------------------------
+  # dat()          -> what gets GROUPED and RAISED. Never filtered here.
+  # explore_dat()  -> what gets PLOTTED. Filtered.
+  #
+  # Two objects rather than one switch, because the failure mode of a
+  # single filtered object is silent and expensive: a stock raised on one
+  # metier while the figures looked complete. Anything feeding
+  # recommend_raising(), the manual builder, the donor pool or
+  # catchRaising() reads dat() and cannot see the filter at all.
+  expf_levels <- reactive({
+    d <- tryCatch(dat(), error = function(e) NULL)
+    if (is.null(d)) list() else explore_filter_levels(d)
+  })
+
+  # One filter per figure tab. The inputs are named <prefix>_flt_<column>,
+  # so two tabs never share a control and pinning metier4 on the coverage
+  # figure leaves the discard-rate figure alone.
+  filter_prefixes <- reactiveVal(character(0))
+
+  flt_inputs <- function(p) {
+    lv <- expf_levels()
+    if (!length(lv)) return(list())
+    f <- lapply(names(lv), function(v) input[[paste0(p, "_flt_", v)]])
+    names(f) <- names(lv)
+    clean_filters(f)
+  }
+
+  # Registered lazily: a renderUI for a tab that has never been opened
+  # never runs, so the registry fills in as tabs are visited and the
+  # script only ever reports filters that were really set.
+  filter_server <- function(p) {
+    output[[paste0(p, "_flt_ui")]] <- renderUI({
+      lv <- expf_levels()
+      if (!length(lv))
+        return(span(class = "note", "Nothing filterable in this table."))
+      cur <- filter_prefixes()
+      if (!p %in% cur) filter_prefixes(c(cur, p))
+      tagList(lapply(names(lv), function(v)
+        selectizeInput(paste0(p, "_flt_", v), v, choices = lv[[v]],
+                       selected = isolate(input[[paste0(p, "_flt_", v)]]),
+                       multiple = TRUE, width = "100%",
+                       options = list(placeholder = FILTER_ANY))))
+    })
+
+    # Rows can survive a filter while weight does not. A figure drawn on
+    # 40% of the rows and 2% of the landings is not a view of the fleet,
+    # so both numbers sit under the control rather than in a tooltip.
+    output[[paste0(p, "_flt_note")]] <- renderUI({
+      f <- flt_inputs(p)
+      if (!length(f))
+        return(span(class = "note", "No filter - the whole table."))
+      d <- tryCatch(dat(), error = function(e) NULL)
+      if (is.null(d)) return(NULL)
+      cv <- tryCatch(filter_coverage(d, f), error = function(e) NULL)
+      if (is.null(cv)) return(NULL)
+      div(class = "note", style = "color:#9a5000",
+          sprintf("%d of %d rows (%.0f%%)", cv$n_kept, cv$n_all, cv$pct_rows),
+          if (!is.null(cv$pct_weight))
+            sprintf(", %.1f%% of the weight.", cv$pct_weight) else ".")
+    })
+  }
+
+  # every prefix that owns a figure and therefore a filter box
+  # The grouping tabs are deliberately absent: a cascade must be built on
+  # the whole table, and a filter there would be a foot-gun.
+  for (.p in c("cov", "dr",
+               as.vector(outer(c("len", "age"), c("cov", "n", "w"),
+                               paste, sep = "_"))))
+    local({ pp <- .p; filter_server(pp) })
+
+  # the filtered table for one tab
+  explore_dat <- function(p) {
+    d <- dat(); f <- flt_inputs(p)
+    if (!length(f)) return(d)
+    out <- apply_filters(d, f)
+    validate(need(nrow(out) > 0,
+                  paste0("No rows left after this figure's filter (",
+                         filter_label(f), "). Clear it to see the figure.")))
+    out
+  }
+
+  # every filter that is actually set, for the emitted script
+  explore_filters_all <- reactive({
+    ps <- filter_prefixes()
+    out <- list()
+    for (p in ps) { f <- flt_inputs(p); if (length(f)) out[[p]] <- f }
+    out
+  })
+
+
+  # ---------------------------------------------------------
+  #  Exclusion, one server for all four blocks
+  # ---------------------------------------------------------
+  # Every block resolves to the same thing: a set of stratum keys. A
+  # threshold is turned into keys HERE, against the stratum table,
+  # because the condition that reaches catchRaising() is evaluated on
+  # CEF rows and those carry no `coverage` column - coverage is a
+  # property of a stratum, computed from many rows. So what the engine
+  # receives is always an explicit list, whichever route produced it.
+  #
+  # `strata_of` is a function rather than a fixed prefix because the
+  # biology blocks are built on a biology link, not on build_strata().
+  excl_num <- function(p, which) {
+    x <- input[[paste0(p, "_x", which)]]
+    if (is.null(x) || !length(x) || all(is.na(x))) NA_real_ else as.numeric(x)[1]
+  }
+
+  exclusion_server <- function(p, strata_of, dims_of,
+                               metrics = c("coverage", "measurements", "rate"),
+                               dr_of = function() c(NA, NA)) {
+    tbl <- function() {
+      st <- try(strata_of(), silent = TRUE)
+      if (inherits(st, "try-error") || is.null(st) || !nrow(st)) NULL else st
+    }
+    keys <- reactive({
+      st <- tbl(); if (is.null(st)) return(character(0))
+      dr <- if ("rate" %in% metrics) dr_of() else c(NA, NA)
+      excluded_keys(st, dims_of(),
+                    named    = input[[paste0(p, "_xnamed")]] %||% character(0),
+                    cov_min  = if ("coverage" %in% metrics)
+                                 excl_num(p, "cov") else NA,
+                    meas_min = if ("measurements" %in% metrics)
+                                 excl_num(p, "meas") else NA,
+                    dr_min = dr[1], dr_max = dr[2])
+    })
+
+    output[[paste0(p, "_xui")]] <- renderUI({
+      st <- tbl()
+      selectizeInput(paste0(p, "_xnamed"), NULL,
+        choices = if (is.null(st)) character(0)
+                  else exclusion_choices(st, dims_of(),
+                         order_by = input[[paste0(p, "_xsort")]] %||% "weight"),
+        selected = isolate(input[[paste0(p, "_xnamed")]]),
+        multiple = TRUE, width = "100%",
+        options = list(placeholder = "no stratum excluded")) })
+
+    output[[paste0(p, "_xnote")]] <- renderUI({
+      k <- keys()
+      dr <- if ("rate" %in% metrics) dr_of() else c(NA, NA)
+      lab <- exclusion_label(
+        cov_min  = if ("coverage" %in% metrics) excl_num(p, "cov") else NA,
+        meas_min = if ("measurements" %in% metrics) excl_num(p, "meas") else NA,
+        dr_min = dr[1], dr_max = dr[2],
+        n_named = length(input[[paste0(p, "_xnamed")]] %||% character(0)))
+      div(class = "note",
+          tags$b(sprintf("%d stratum/strata out of the pool. ", length(k))),
+          lab,
+          if (length(k)) tagList(tags$br(),
+            tags$span(style = "font-family:monospace;font-size:10px",
+                      donor_exclusion_expr(k, dims_of())))) })
+
+    output[[paste0(p, "_xtbl")]] <- renderDT({
+      st <- tbl()
+      validate(need(!is.null(st), "No strata yet."))
+      dr <- if ("rate" %in% metrics) dr_of() else c(NA, NA)
+      d <- exclusion_overview(st, dims_of(),
+             named    = input[[paste0(p, "_xnamed")]] %||% character(0),
+             cov_min  = if ("coverage" %in% metrics) excl_num(p, "cov") else NA,
+             meas_min = if ("measurements" %in% metrics)
+                          excl_num(p, "meas") else NA,
+             dr_min = dr[1], dr_max = dr[2])
+      validate(need(!is.null(d) && nrow(d), "Nothing excluded."))
+      keep <- names(d)[vapply(d, function(x) !all(is.na(x)), logical(1))]
+      d <- d[, keep, drop = FALSE]
+      num <- vapply(d, is.numeric, logical(1))
+      d[num] <- lapply(d[num], function(x) round(x, 3))
+      datatable(d, rownames = FALSE,
+                options = list(scrollX = TRUE, pageLength = 8)) })
+
+    keys
+  }
+
+
   showModal(startup_modal())
 
   # show/hide the centred busy overlay. with_busy() wraps a slow action so
@@ -3550,97 +3739,6 @@ server <- function(input, output, session) {
     d
   })
 
-  # ---------------------------------------------------------
-  #  Exploration filter
-  # ---------------------------------------------------------
-  # dat()          -> what gets GROUPED and RAISED. Never filtered here.
-  # explore_dat()  -> what gets PLOTTED. Filtered.
-  #
-  # Two objects rather than one switch, because the failure mode of a
-  # single filtered object is silent and expensive: a stock raised on one
-  # metier while the figures looked complete. Anything feeding
-  # recommend_raising(), the manual builder, the donor pool or
-  # catchRaising() reads dat() and cannot see the filter at all.
-  expf_levels <- reactive({
-    d <- tryCatch(dat(), error = function(e) NULL)
-    if (is.null(d)) list() else explore_filter_levels(d)
-  })
-
-  # One filter per figure tab. The inputs are named <prefix>_flt_<column>,
-  # so two tabs never share a control and pinning metier4 on the coverage
-  # figure leaves the discard-rate figure alone.
-  filter_prefixes <- reactiveVal(character(0))
-
-  flt_inputs <- function(p) {
-    lv <- expf_levels()
-    if (!length(lv)) return(list())
-    f <- lapply(names(lv), function(v) input[[paste0(p, "_flt_", v)]])
-    names(f) <- names(lv)
-    clean_filters(f)
-  }
-
-  # Registered lazily: a renderUI for a tab that has never been opened
-  # never runs, so the registry fills in as tabs are visited and the
-  # script only ever reports filters that were really set.
-  filter_server <- function(p) {
-    output[[paste0(p, "_flt_ui")]] <- renderUI({
-      lv <- expf_levels()
-      if (!length(lv))
-        return(span(class = "note", "Nothing filterable in this table."))
-      cur <- filter_prefixes()
-      if (!p %in% cur) filter_prefixes(c(cur, p))
-      tagList(lapply(names(lv), function(v)
-        selectizeInput(paste0(p, "_flt_", v), v, choices = lv[[v]],
-                       selected = isolate(input[[paste0(p, "_flt_", v)]]),
-                       multiple = TRUE, width = "100%",
-                       options = list(placeholder = FILTER_ANY))))
-    })
-
-    # Rows can survive a filter while weight does not. A figure drawn on
-    # 40% of the rows and 2% of the landings is not a view of the fleet,
-    # so both numbers sit under the control rather than in a tooltip.
-    output[[paste0(p, "_flt_note")]] <- renderUI({
-      f <- flt_inputs(p)
-      if (!length(f))
-        return(span(class = "note", "No filter - the whole table."))
-      d <- tryCatch(dat(), error = function(e) NULL)
-      if (is.null(d)) return(NULL)
-      cv <- tryCatch(filter_coverage(d, f), error = function(e) NULL)
-      if (is.null(cv)) return(NULL)
-      div(class = "note", style = "color:#9a5000",
-          sprintf("%d of %d rows (%.0f%%)", cv$n_kept, cv$n_all, cv$pct_rows),
-          if (!is.null(cv$pct_weight))
-            sprintf(", %.1f%% of the weight.", cv$pct_weight) else ".")
-    })
-  }
-
-  # every prefix that owns a figure and therefore a filter box
-  # The grouping tabs are deliberately absent: a cascade must be built on
-  # the whole table, and a filter there would be a foot-gun.
-  for (.p in c("cov", "dr",
-               as.vector(outer(c("len", "age"), c("cov", "n", "w"),
-                               paste, sep = "_"))))
-    local({ pp <- .p; filter_server(pp) })
-
-  # the filtered table for one tab
-  explore_dat <- function(p) {
-    d <- dat(); f <- flt_inputs(p)
-    if (!length(f)) return(d)
-    out <- apply_filters(d, f)
-    validate(need(nrow(out) > 0,
-                  paste0("No rows left after this figure's filter (",
-                         filter_label(f), "). Clear it to see the figure.")))
-    out
-  }
-
-  # every filter that is actually set, for the emitted script
-  explore_filters_all <- reactive({
-    ps <- filter_prefixes()
-    out <- list()
-    for (p in ps) { f <- flt_inputs(p); if (length(f)) out[[p]] <- f }
-    out
-  })
-
   dmap <- function(p) {
     f <- input[[paste0(p, "_fleet")]]; a <- input[[paste0(p, "_area")]]
     c(Fleet = if (is.null(f)) "metier4" else f, Country = "Country",
@@ -3873,88 +3971,6 @@ server <- function(input, output, session) {
     if (inherits(s, "try-error")) return(1)
     m <- suppressWarnings(max(s$discard_rate, na.rm = TRUE))
     if (!is.finite(m)) 1 else max(1, ceiling(m * 1.05 * 100) / 100) }
-
-  # ---------------------------------------------------------
-  #  Exclusion, one server for all four blocks
-  # ---------------------------------------------------------
-  # Every block resolves to the same thing: a set of stratum keys. A
-  # threshold is turned into keys HERE, against the stratum table,
-  # because the condition that reaches catchRaising() is evaluated on
-  # CEF rows and those carry no `coverage` column - coverage is a
-  # property of a stratum, computed from many rows. So what the engine
-  # receives is always an explicit list, whichever route produced it.
-  #
-  # `strata_of` is a function rather than a fixed prefix because the
-  # biology blocks are built on a biology link, not on build_strata().
-  excl_num <- function(p, which) {
-    x <- input[[paste0(p, "_x", which)]]
-    if (is.null(x) || !length(x) || all(is.na(x))) NA_real_ else as.numeric(x)[1]
-  }
-
-  exclusion_server <- function(p, strata_of, dims_of,
-                               metrics = c("coverage", "measurements", "rate"),
-                               dr_of = function() c(NA, NA)) {
-    tbl <- function() {
-      st <- try(strata_of(), silent = TRUE)
-      if (inherits(st, "try-error") || is.null(st) || !nrow(st)) NULL else st
-    }
-    keys <- reactive({
-      st <- tbl(); if (is.null(st)) return(character(0))
-      dr <- if ("rate" %in% metrics) dr_of() else c(NA, NA)
-      excluded_keys(st, dims_of(),
-                    named    = input[[paste0(p, "_xnamed")]] %||% character(0),
-                    cov_min  = if ("coverage" %in% metrics)
-                                 excl_num(p, "cov") else NA,
-                    meas_min = if ("measurements" %in% metrics)
-                                 excl_num(p, "meas") else NA,
-                    dr_min = dr[1], dr_max = dr[2])
-    })
-
-    output[[paste0(p, "_xui")]] <- renderUI({
-      st <- tbl()
-      selectizeInput(paste0(p, "_xnamed"), NULL,
-        choices = if (is.null(st)) character(0)
-                  else exclusion_choices(st, dims_of(),
-                         order_by = input[[paste0(p, "_xsort")]] %||% "weight"),
-        selected = isolate(input[[paste0(p, "_xnamed")]]),
-        multiple = TRUE, width = "100%",
-        options = list(placeholder = "no stratum excluded")) })
-
-    output[[paste0(p, "_xnote")]] <- renderUI({
-      k <- keys()
-      dr <- if ("rate" %in% metrics) dr_of() else c(NA, NA)
-      lab <- exclusion_label(
-        cov_min  = if ("coverage" %in% metrics) excl_num(p, "cov") else NA,
-        meas_min = if ("measurements" %in% metrics) excl_num(p, "meas") else NA,
-        dr_min = dr[1], dr_max = dr[2],
-        n_named = length(input[[paste0(p, "_xnamed")]] %||% character(0)))
-      div(class = "note",
-          tags$b(sprintf("%d stratum/strata out of the pool. ", length(k))),
-          lab,
-          if (length(k)) tagList(tags$br(),
-            tags$span(style = "font-family:monospace;font-size:10px",
-                      donor_exclusion_expr(k, dims_of())))) })
-
-    output[[paste0(p, "_xtbl")]] <- renderDT({
-      st <- tbl()
-      validate(need(!is.null(st), "No strata yet."))
-      dr <- if ("rate" %in% metrics) dr_of() else c(NA, NA)
-      d <- exclusion_overview(st, dims_of(),
-             named    = input[[paste0(p, "_xnamed")]] %||% character(0),
-             cov_min  = if ("coverage" %in% metrics) excl_num(p, "cov") else NA,
-             meas_min = if ("measurements" %in% metrics)
-                          excl_num(p, "meas") else NA,
-             dr_min = dr[1], dr_max = dr[2])
-      validate(need(!is.null(d) && nrow(d), "Nothing excluded."))
-      keep <- names(d)[vapply(d, function(x) !all(is.na(x)), logical(1))]
-      d <- d[, keep, drop = FALSE]
-      num <- vapply(d, is.numeric, logical(1))
-      d[num] <- lapply(d[num], function(x) round(x, 3))
-      datatable(d, rownames = FALSE,
-                options = list(scrollX = TRUE, pageLength = 8)) })
-
-    keys
-  }
 
   ar_excl_keys <- exclusion_server("ar",
     strata_of = function() strata_p("ar"),

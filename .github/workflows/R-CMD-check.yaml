@@ -24,3 +24,10 @@ jobs:
         with:
           args: 'c("--no-manual", "--as-cran")'
           error-on: '"error"'
+
+      - name: Structural checks
+        run: |
+          Rscript dev/check_syntax.R
+          Rscript dev/check_exports.R
+          Rscript dev/check_sections.R
+        shell: bash

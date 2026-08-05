@@ -65,9 +65,13 @@ devtools::document()         # regenerate NAMESPACE and man/ after any change
 ```
 
 ```sh
+bash dev/check_all.sh        # everything below, in one go
+
 Rscript dev/check_syntax.R   # parse() every file; must print DONE, 0 failures
 Rscript dev/check_exports.R  # must print NOT EXPORTED : 0
 Rscript dev/check_app.R      # sources the app + renders the UI (needs install)
+Rscript dev/check_server.R   # RUNS the server function (needs install)
+Rscript dev/check_sections.R # the two manual builders must present the same steps
 R CMD build .                # catches DESCRIPTION errors in 2s — run before every push
 ```
 

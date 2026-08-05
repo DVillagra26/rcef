@@ -8,10 +8,13 @@
 | `check_syntax.R` | `parse()` every `.R` file; must print `DONE ... 0 failure(s)` |
 | `check_exports.R` | every top-level object — functions **and constants** — must be exported; must print `NOT EXPORTED : 0` |
 | `check_app.R` | sources `inst/app/app.R` against the installed package and renders the UI |
+| `check_server.R` | **runs the server function** in a test session. `check_app.R` only builds tags, so it cannot see a helper defined after the module server that calls it |
 | `check_sections.R` | the discard and biology manual builders must present the same 8 numbered steps |
 | `DOC_BACKLOG.txt` | the 94 functions exported with `@noRd` — no man page yet |
 | `deploy_shinyapps.R` | shinyapps.io, with the GitHub-remote caveat spelled out |
-| `tests/` | the suites + `run_tests.R`; `test_cc_thresholds.R` (Lan/Dis split, zero-weight strata) and `test_exclusion.R` (donor exclusion) |
+| `check_all.sh` | every check above, with real exit-code handling |
+| `tests/` | `test_cc_thresholds.R` (Lan/Dis split, zero-weight strata), `test_exclusion.R` (donor exclusion) |
+| `tests/legacy/` | the 11 pre-package suites. **All currently error** on paths that no longer exist; quarantined so they cannot hide a real failure. See the README there. |
 | `testdata/` | `make_test_data_anchoveta.R` — synthetic CEF fixtures |
 
 ## Running the tests
