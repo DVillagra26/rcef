@@ -187,8 +187,13 @@ plot_coverage(strata, type = "heatmap", y = "metier4", fill = "ICESDivision")
 plot_discard_rate(strata, type = "box", x = "metier4")
 ```
 
-To look at one fleet on its own — the usual reason to reach for a filter —
-subset the **catches**, not the strata, and rebuild:
+In the app the filter sits **beside the axis pickers on each figure tab**,
+so the loop is: put `metier4` on the Y axis, see the spread, pin
+`metier4` to `TBB`, look again. Each tab owns its filter — pinning the
+coverage figure leaves the discard-rate figure alone — and none of them
+touch the grouping or the raising.
+
+Here, subset the **catches**, not the strata, and rebuild:
 
 ```{r}
 explore_data <- apply_filters(catch_data, list(metier4 = "TBB"))
@@ -296,6 +301,64 @@ writes the complements out explicitly when it builds the conditions, so
 what `catchRaising()` gets is a genuine partition — it rejects anything
 that double-assigns a stratum.
 
+### Keeping strata out of a donor pool
+
+A stratum that is itself barely sampled is a poor donor: raising a
+neighbour on it lends the neighbour a rate resting on very little. Three
+routes, all reaching the same place — a set of stratum keys:
+
+```{r}
+exclusion_choices(strata, dims, order_by = "coverage")   # what to pick from
+excluded_keys(strata, dims,
+              named    = "TBB | 27.4.c",   # expert judgement
+              cov_min  = 40,               # coverage bar
+              meas_min = 30,               # measurement bar (biology)
+              dr_min   = 0.02, dr_max = 0.8)
+exclusion_overview(strata, dims, cov_min = 40)  # and why each one is out
+```
+
+`exclusion_choices()` labels carry the numbers the decision is made on —
+coverage, discard rate, measurements, weight — so the list can be read
+and acted on without a table beside it. Order it by `"coverage"` to put
+the thinnest strata, the likeliest candidates, at the top.
+
+Why the thresholds resolve to keys rather than staying as expressions:
+the condition handed to `catchRaising()` is evaluated against **CEF
+rows**, and those carry no `coverage` column — coverage is a property of
+a stratum, computed from many rows. So a bar is applied here, against the
+stratum table, and emitted as an explicit list. Whatever the route, the
+engine receives a plain `!paste(...) %in% c(...)`.
+
+Feed it to the cascade:
+
+```{r}
+strata <- flag_donor_exclusion(strata, cov_min = 40,
+                               excluded = excluded_keys(strata, dims,
+                                                        cov_min = 40),
+                               dims = dims)
+```
+
+**Exclusion narrows the donor pool only.** It never removes a stratum
+from what is raised or allocated — a stratum too thin to lend its data is
+exactly the one that most needs to borrow.
+
+For the biology groups, the same keys fold into `bioMatchedCond`:
+
+```{r}
+alloc_matched_cond(list(catchCategory = "Dis"),
+                   excluded = excluded_keys(bio_link, dims, meas_min = 30),
+                   dims = dims)
+```
+
+### The catch-all
+
+The last group in a manual set carries no clause, so it claims whatever
+no earlier group claimed. It has **its own** exclusion bars rather than
+inheriting the ones above: a stratum kept out of one group's pool is
+usually still wanted as a last resort, but one with almost nothing
+measured is a bad donor everywhere. Both builders offer the same control,
+plus a tick-box to inherit the group exclusions as well.
+
 `sets` lets a list of values be named once and reused:
 
 ```{r}
@@ -376,6 +439,56 @@ bio_groups <- define_raising_groups_auto(
   hierarchy  = c("metier4", "ICESDivision"),
   thresholds = c(50, 40),
   dims       = dims)
+```
+
+#### Landings and discards, held to different standards
+
+Discards are sampled less than landings almost everywhere. A single
+coverage bar therefore either lets landings resolve on too little data or
+pushes every discard stratum to the bottom rung. The biology cascade takes
+its thresholds as a **pair**:
+
+```{r}
+steps <- alloc_steps(
+  keys       = c("metier4", "ICESDivision"),
+  thresholds = list(Lan = c(60, 50, 40), Dis = c(30, 25, 20)),
+  min_meas   = list(Lan = c(100, 50, 30), Dis = c(20, 10, 10)),
+  keep_cc    = TRUE)
+
+assigned <- assign_alloc_cascade(bio_link, alloc_cols, steps)
+```
+
+| shape | meaning |
+|---|---|
+| `50` | one bar, both categories, every rung |
+| `c(50, 40, 30)` | one bar per rung, both categories |
+| `list(Lan = ..., Dis = ...)` | a bar per rung, per category |
+
+All three are accepted, so a scenario saved before the split still loads.
+
+Two things worth knowing about how the pair is read:
+
+* **The bar belongs to the stratum being allocated, not to the pool it
+  draws on.** A discard stratum keeps its looser bar even at a rung where
+  `keep_cc = FALSE` has joined the categories and the pool now holds
+  landings too.
+* **BMS follows discards**, matching `bms_as_dis` elsewhere.
+
+A pool must clear *both* bars: enough coverage **and** enough measured
+fish. A pool can easily reach 80% coverage on eleven fish, and that is not
+a distribution anyone should allocate from.
+
+#### Strata with no catch
+
+A stratum whose weight is zero has nothing to allocate. It can never clear
+a coverage test — the denominator is zero — so it is taken out **before**
+the ladder runs, labelled `"no catch to allocate"`, and reported on its
+own row rather than in the unresolved list. Left in, it would send you
+loosening thresholds to chase strata that need nothing.
+
+```{r}
+table(assigned$alloc_level)
+subset(assigned, alloc_empty)      # the ones that needed no resolution
 ```
 
 Then allocate:

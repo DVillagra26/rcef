@@ -136,13 +136,37 @@ row_condition <- function(row, keys) {
 #'
 #' @param s A stratum table.
 #' @param dr_min,dr_max Rate window bounds (fractions, e.g. 0.05); `NA` = open.
+#' @param cov_min Minimum coverage, percent, to remain an eligible donor.
+#'   A stratum that is itself barely sampled lends a rate resting on very
+#'   little. `NA` = off.
+#' @param meas_min Minimum number of measurements to remain eligible.
+#'   `NA` = off.
+#' @param excluded Stratum keys picked out by hand, as produced by
+#'   [excluded_keys()].
+#' @param dims Key columns, needed to match `excluded` against the rows.
 #' @return `s` with a `donor_ok` logical column.
 #' @seealso [recommend_raising()]
 #' @export
-flag_donor_exclusion <- function(s, dr_min = NA, dr_max = NA) {
+flag_donor_exclusion <- function(s, dr_min = NA, dr_max = NA,
+                                 cov_min = NA, meas_min = NA,
+                                 excluded = character(0), dims = NULL) {
   ok <- rep(TRUE, nrow(s))
   if (!is.na(dr_min)) ok <- ok & (is.na(s$discard_rate) | s$discard_rate >= dr_min)
   if (!is.na(dr_max)) ok <- ok & (is.na(s$discard_rate) | s$discard_rate <= dr_max)
+
+  # A stratum that is itself barely sampled is a bad donor: raising a
+  # neighbour on it lends the neighbour a discard rate that rests on very
+  # little. NA coverage is left in rather than dropped - unknown is not
+  # the same as low, and dropping it silently would shrink the pool in a
+  # way nothing on screen explains.
+  if (!is.na(cov_min) && "coverage" %in% names(s))
+    ok <- ok & (is.na(s$coverage) | s$coverage >= cov_min)
+  if (!is.na(meas_min) && "n_measurements" %in% names(s))
+    ok <- ok & (is.na(s$n_measurements) | s$n_measurements >= meas_min)
+
+  if (length(excluded) && !is.null(dims))
+    ok <- ok & !(stratum_keys(s, dims) %in% excluded)
+
   s$donor_ok <- ok
   s
 }

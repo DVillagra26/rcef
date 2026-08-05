@@ -226,16 +226,8 @@ cef_load_ui <- function() sidebarLayout(
     selectInput("sep", "Separator", c("," = ",", ";" = ";", "tab" = "\t")),
     tags$hr(),
     uiOutput("stock_ui"), uiOutput("year_ui"),
-    tags$hr(),
-    tags$b("Exploration filter"),
     span(class = "note",
-         "Narrows the FIGURES only - coverage, discard rates, numbers at ",
-         "length/age and mean weights. Grouping and raising always run on ",
-         "the full table for this stock and year. Use it to look at one ",
-         "fleet or area on its own before deciding how to group."),
-    uiOutput("expf_ui"),
-    uiOutput("expf_cov"),
-    actionButton("expf_clear", "Clear filter", class = "btn-sm"),
+         "Each figure tab carries its own filter, beside the axis pickers."),
     span(class = "note",
          "Sufficiency thresholds are set where they are used: on each ",
          "Sampling coverage tab.")),
@@ -266,6 +258,7 @@ coverage_ui <- function() sidebarLayout(
     tags$hr(),
     role_chips("cov", c(y = "Y axis", fill = "X / Fill", facet = "Facet"),
                c("Fleet", "Season", "Country"), stacked = TRUE),
+    filter_box("cov"),
     apply_bar("cov"),
     tags$hr(),
     level_box("cov")),
@@ -288,6 +281,7 @@ drates_ui <- function() sidebarLayout(
                  c("Country", "Area", ""), stacked = TRUE),
       checkboxInput("box_points", "Show individual strata", TRUE),
       checkboxInput("box_pooled", "Show catch-weighted pooled rate", TRUE)),
+    filter_box("dr"),
     apply_bar("dr"),
     tags$hr(),
     level_box("dr")),
@@ -390,6 +384,7 @@ len_coverage_ui <- function(p, type = "LengthTotal") {
       tags$hr(),
       role_chips(ns("r"), c(y = "Y axis", fill = "X / Fill", facet = "Facet"),
                  c("Fleet", "Country", "Area"), stacked = TRUE),
+      filter_box(paste0(p, "_cov")),
       apply_bar(paste0(p, "_cov")),
       tags$hr(), level_box(paste0(p, "_lv"))),
     mainPanel(width = 9,
@@ -428,6 +423,7 @@ len_numbers_ui <- function(p, type = "LengthTotal") {
         span(class = "note",
              "Turn it down for a well-sampled stratum to keep the detail, ",
              "up for a sparse or noisy one so the shape stays readable.")),
+      filter_box(paste0(p, "_n")),
       apply_bar(paste0(p, "_n")),
       tags$hr(), level_box(paste0(p, "_lv"))),
     mainPanel(width = 9,
@@ -463,6 +459,7 @@ len_meanw_ui <- function(p, type = "LengthTotal") {
                   c("-- none (average the rest) --" = "",
                     setNames(DIMS, DIMS)), ""),
       checkboxInput(ns("points"), "Show points", TRUE),
+      filter_box(paste0(p, "_w")),
       apply_bar(paste0(p, "_w")),
       tags$hr(), level_box(paste0(p, "_lv"))),
     mainPanel(width = 9,
@@ -517,19 +514,45 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
           uiOutput(ns("step_rivers"))))),
     conditionalPanel(sprintf("input.%s == 'manual'", ns("method")),
       sidebarLayout(
-        sidebarPanel(width = 3,
-          h4("Build a clause"),
-          span(class = "note",
-               "Build a clause, then drop it into either box. The two can ",
-               "differ: a group of strata may be allocated from a wider ",
-               "pool of sampled data."),
+        sidebarPanel(width = 4,
+          # Numbered the same as the discard manual builder, step for
+          # step, because they are the same decision made on a different
+          # quantity and a user who has learnt one should not have to
+          # learn the other.
+          h4("1. Group"),
+          fluidRow(column(5, textInput(ns("gid"), "Id", "GA1")),
+                   column(7, textInput(ns("glab"), "Label", ""))),
+
+          h4("2. Build a clause"),
+          span(class = "note", "A clause is one or more variable restrictions ",
+               "combined with AND. Add them one at a time."),
           selectInput(ns("var"), "Variable", LEN_DIMS, "Area"),
           uiOutput(ns("vals")),
           checkboxInput(ns("neg"), "NOT in these", FALSE),
           actionButton(ns("add"), "Add to clause", class = "btn-sm btn-primary"),
           actionButton(ns("clear"), "Clear", class = "btn-sm"),
           uiOutput(ns("clause")),
+
           tags$hr(),
+          h4("3. Exclude donors"),
+          span(class = "note",
+               "Narrows bioMatchedCond only - never the strata being ",
+               "allocated. A stratum too thinly measured to lend a ",
+               "distribution is exactly the one that needs to borrow one."),
+          exclude_box(ns("x"), metrics = c("coverage", "measurements"),
+                      title = NULL,
+                      note = paste("Coverage is the share of catch weight",
+                                   "carrying a distribution; measurements is",
+                                   "the number of fish behind it. A pool can",
+                                   "reach 80% coverage on eleven fish, and",
+                                   "that is not a distribution to allocate",
+                                   "from.")),
+
+          tags$hr(),
+          h4("4. Assign the clause"),
+          span(class = "note",
+               "The two can differ: a group of strata may be allocated from ",
+               "a wider pool of sampled data."),
           div(class = "condbox",
               div(class = "condtitle", "allocStrataCond - strata to allocate"),
               uiOutput(ns("alloc_txt")),
@@ -543,22 +566,47 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
               uiOutput(ns("matched_txt")),
               actionButton(ns("to_matched"), "Put clause here",
                            class = "btn-sm btn-info")),
+
+          actionButton(ns("saverule"), "5. Save group", class = "btn-success"),
           tags$hr(),
-          h4("5. Save group"),
-          textInput(ns("gid"), "Group id", "GA1"),
-          textInput(ns("glab"), "Label", ""),
-          actionButton(ns("saverule"), "Save group", class = "btn-success"),
-          tags$hr(),
-          h4("6. Order"),
+
+          h4("6. Catch-all group"),
           span(class = "note",
-               "First match wins, so the order decides what each group ",
-               "catches. Use the arrows to reorder."),
+               "Adds a final group with no clause. Its allocStrataCond is ",
+               "the COMPLEMENT of everything above it, so it allocates only ",
+               "the strata no earlier group claimed - a stratum is never ",
+               "allocated twice. Its bioMatchedCond is every stratum, ",
+               "including those already used: a donor can be reused, only an ",
+               "allocated stratum cannot. Put it last."),
+          exclude_box(ns("ca"), metrics = c("coverage", "measurements"),
+                      title = NULL,
+                      note = paste("The catch-all is the last resort, so it",
+                                   "usually wants the widest pool - but a",
+                                   "stratum with almost nothing measured is",
+                                   "still a bad donor here. Set its own bars",
+                                   "rather than inheriting the ones above.")),
+          checkboxInput(ns("ca_keep"),
+                        "Also apply the group exclusions above to the catch-all",
+                        FALSE),
+          span(class = "note",
+               "Off by default: a stratum kept out of one group's pool is ",
+               "usually still wanted as a last resort."),
+          actionButton(ns("addcatchall"), "Add catch-all", class = "btn-sm"),
+          tags$hr(),
+
+          h4("7. Order"),
+          span(class = "note",
+               "Evaluated top to bottom; first match wins. A stratum is ",
+               "allocated by exactly one group - the first that claims it. ",
+               "Donor pools are the opposite: they may overlap freely, so ",
+               "one stratum can feed several groups."),
           uiOutput(ns("order")),
           tags$hr(),
+          h4("8. Save allocation"),
           textInput(ns("mname"), "Save this set as", "manual_1"),
           actionButton(ns("savemanual"), "Save allocation",
                        class = "btn-success")),
-        mainPanel(width = 9,
+        mainPanel(width = 8,
           uiOutput(ns("bmsnote")),
           h4("allocStrataCond / bioMatchedCond"),
           span(class = "note",
@@ -904,6 +952,63 @@ NONE <- c("-- none --" = "")
 # Per-tab level-of-detail box, pinned to the bottom of each sidebar.
 # Pinned to the bottom-right of the window and highlighted, because it
 # silently changes what every other control on the tab means.
+# A filter that belongs to ONE figure tab, and lives beside the axis
+# pickers because that is where it gets used: pick metier4 on the Y axis,
+# see the spread, then pin metier4 to TBB and look again. Walking back to
+# the Data tab to do that broke the loop.
+#
+# Temporary by design. It is not stored in the scenario, it does not
+# survive a tab change, and it never touches dat() - the grouping and the
+# raising always run on the whole table. The box is coloured like a
+# warning for that reason.
+# The exclusion block, in one place because it now appears four times:
+# the discard cascade, the discard manual rules, the discard catch-all
+# and the biology manual rules. Written out four times it drifted; the
+# discard tab grew a "% coverage" box that the biology tab never got.
+#
+# `metrics` says which tests this instance offers. Discard rate is
+# meaningless for a biology pool and measurement count is meaningless for
+# a discard pool, so neither is shown where it does not apply.
+exclude_box <- function(p, metrics = c("coverage", "measurements", "rate"),
+                        cov_default = NA, meas_default = NA,
+                        title = "Exclude donors", note = NULL) {
+  n <- function(x) paste0(p, "_x", x)
+  cols <- list()
+  if ("coverage" %in% metrics)
+    cols <- c(cols, list(column(6,
+      numericInput(n("cov"), "% coverage below", cov_default, 0, 100, 5,
+                   width = "100%"))))
+  if ("measurements" %in% metrics)
+    cols <- c(cols, list(column(6,
+      numericInput(n("meas"), "measurements below", meas_default, 0, 100000,
+                   10, width = "100%"))))
+  ord <- c("Weight" = "weight",
+           if ("coverage" %in% metrics) c("Coverage" = "coverage"),
+           if ("rate" %in% metrics) c("Discard rate" = "rate"),
+           if ("measurements" %in% metrics) c("Measurements" = "measurements"))
+  tagList(
+    h4(title),
+    if (!is.null(note)) span(class = "note", note),
+    span(class = "note",
+         "Blank switches a test off. A stratum kept out of a donor pool ",
+         "is still raised or allocated itself - being too thin to lend is ",
+         "exactly the reason to borrow."),
+    if (length(cols)) do.call(fluidRow, cols),
+    span(class = "note",
+         "Or drop named strata out by expert judgement. The list carries ",
+         "the numbers the decision is made on."),
+    radioButtons(n("sort"), "Order the list by", ord, ord[[1]], inline = TRUE),
+    uiOutput(n("ui")),
+    uiOutput(n("note")),
+    h4("Currently excluded", style = "font-size:13px;margin-top:8px"),
+    tbl_slot(n("tbl")))
+}
+
+filter_box <- function(p) div(class = "fltbox",
+  div(class = "flttitle", "Filter this figure"),
+  uiOutput(paste0(p, "_flt_ui")),
+  uiOutput(paste0(p, "_flt_note")))
+
 level_box <- function(p, fleet = "metier4", area = "ICESDivision") {
   div(class = "lodbox",
       div(class = "lodtitle", "Level of detail"),
@@ -1016,7 +1121,19 @@ ui <- navbarPage(
     .shiny-plot-output{margin-bottom:10px}
     .dtwrap{margin-top:18px;margin-bottom:30px;clear:both}
     /* level-of-detail panel, pinned bottom right */
-    .lodbox{position:fixed;bottom:14px;right:14px;z-index:1030;width:250px;
+    .fltbox{border:1px solid #d9a441;border-radius:6px;padding:6px 8px;
+  margin:6px 0;background:#fffaf0}
+.flttitle{font-size:11px;font-weight:600;color:#9a5000;text-transform:uppercase;
+  letter-spacing:.4px;margin-bottom:4px}
+.fltbox .form-group{margin-bottom:4px}
+.fltbox .control-label{font-size:11px;margin-bottom:1px}
+.hier-key-row .form-group{margin-bottom:2px}
+.hier-key-row .control-label{font-size:11px;margin-bottom:1px}
+.ccpane{border-radius:5px;padding:4px 6px}
+.ccpane-lan{background:#eef6ee;border:1px solid #cfe3cf}
+.ccpane-dis{background:#fdf1e7;border:1px solid #f0d3b6}
+.ccpane-title{font-size:11px;font-weight:600;letter-spacing:.3px}
+.lodbox{position:fixed;bottom:14px;right:14px;z-index:1030;width:250px;
             background:#fff6e5;border:2px solid #F28E2B;border-radius:9px;
             padding:9px 11px;box-shadow:0 3px 12px rgba(0,0,0,.22)}
     .lodbox .form-group{margin-bottom:5px}
@@ -1386,21 +1503,12 @@ ui <- navbarPage(
                    "step of the cascade."),
               uiOutput("ar_dr_ui"),
               tags$hr(),
-              span(class = "note",
-                   "Drop specific stratum/strata out of the donor group based ",
-                   "on expert judgement."),
-              radioButtons("ar_excl_sort", "Order the list by",
-                           c("Landings" = "landings",
-                             "Discard rate" = "rate"), "landings",
-                           inline = TRUE),
-              uiOutput("ar_excl_ui"),
-              uiOutput("ar_excl_note"),
-              h4("Currently excluded", style = "font-size:13px;margin-top:8px"),
-              span(class = "note",
-                   "From both routes together - named strata and anything ",
-                   "outside the rate window - so it is clear why each one is ",
-                   "out of the pool."),
-              tbl_slot("ar_excl_tbl"),
+              exclude_box("ar", metrics = c("coverage", "rate"),
+                          title = NULL,
+                          note = paste("A stratum whose own coverage is low",
+                                       "lends a discard rate that rests on",
+                                       "very little, so it can be kept out",
+                                       "of every pool in the cascade.")),
               tags$hr(),
               h4("4. Save scenario"),
               textInput("auto_name", "Scenario name", "auto_1"),
@@ -1443,20 +1551,10 @@ ui <- navbarPage(
                    "tab, so the two read the same way."),
               checkboxInput("dr_on", "Exclude on discard rate", FALSE),
               conditionalPanel("input.dr_on == true", uiOutput("rule_dr_ui")),
-              span(class = "note",
-                   "Drop specific stratum/strata out of the donor group based ",
-                   "on expert judgement."),
-              radioButtons("mg_excl_sort", "Order the list by",
-                           c("Landings" = "landings",
-                             "Discard rate" = "rate"), "landings",
-                           inline = TRUE),
-              uiOutput("mg_excl_ui"),
-              uiOutput("mg_excl_note"),
-              h4("Currently excluded", style = "font-size:13px;margin-top:8px"),
-              span(class = "note",
-                   "Applies to THIS group's donor pool only. The stratum stays ",
-                   "available to later groups and to the catch-all."),
-              tbl_slot("mg_excl_tbl"),
+              exclude_box("mg", metrics = c("coverage", "rate"), title = NULL,
+                          note = paste("Applies to THIS group's donor pool",
+                                       "only. The stratum stays available to",
+                                       "later groups and to the catch-all.")),
 
               tags$hr(),
               h4("4. Assign the clause"),
@@ -1498,13 +1596,21 @@ ui <- navbarPage(
                    "those already used by earlier groups: a donor can be ",
                    "reused, only a raised stratum cannot. Put it last."),
               sliderInput("catchall_dr", "Catch-all discard rate", 0, 1, c(0, 1), 0.01),
+              exclude_box("ca", metrics = c("coverage"), title = NULL,
+                          note = paste("The catch-all is the last resort, so",
+                                       "it usually wants the widest pool -",
+                                       "but a stratum too thin to lend is",
+                                       "still too thin here. Set its own",
+                                       "bars rather than inheriting the",
+                                       "ones above.")),
               checkboxInput("catchall_keep_excl",
-                            "Also apply the exclusions above to the catch-all",
+                            "Also apply the group exclusions above to the catch-all",
                             FALSE),
               span(class = "note",
                    "Off by default: a stratum kept out of one group's donor ",
                    "pool is usually still wanted as a last resort. Tick it to ",
-                   "keep it out of the catch-all too."),
+                   "keep it out of the catch-all too, on top of the bars set ",
+                   "here."),
               actionButton("add_catchall", "Add catch-all", class = "btn-sm"),
               tags$hr(),
 
@@ -2071,12 +2177,12 @@ server <- function(input, output, session) {
       if (identical(cc_of(view), "Dis")) "discards" else "landings"
 
     linked_for <- function(view) {
-      d <- tryCatch(explore_dat(), error = function(e) NULL)
+      d <- tryCatch(explore_dat(paste0(p, "_", view)), error = function(e) NULL)
       req(!is.null(d), !is.null(dist_tbl()))
       link_dist_to_strata(d, dist_tbl(), dims_of(), cc_of(view), type) }
 
     blink_for <- function(view) {
-      d <- tryCatch(explore_dat(), error = function(e) NULL)
+      d <- tryCatch(explore_dat(paste0(p, "_", view)), error = function(e) NULL)
       req(!is.null(d))
       biology_link(d, dist_tbl(), dims_of(), cc_of(view), type) }
 
@@ -2091,18 +2197,21 @@ server <- function(input, output, session) {
     # the plot TYPE is deliberately absent from both signatures - switching
     # heatmap/bubbles/bars, or histogram/density, is a different view of the
     # same configuration and should be immediate
+    flt_sig <- function(view) reactive(flt_inputs(paste0(p, "_", view)))
     cov_sig <- reactive(c(list(i_("cov_cc"), i_("thr_cov"),
                                i_("thr_meas"), i_("cov_r_y"), i_("cov_r_fill"),
-                               i_("cov_r_facet")), lv_sig()))
+                               i_("cov_r_facet"), flt_sig("cov")()), lv_sig()))
     cov_live <- reactive(i_("cov_type"))
     n_sig <- reactive(c(list(i_("n_cc"), i_("n_r_fill"),
                              i_("n_r_facet"), i_("n_r_shape"), i_("n_stack"),
-                             i_("n_smooth"), i_("n_freex"), i_("n_freey")),
+                             i_("n_smooth"), i_("n_freex"), i_("n_freey"),
+                             flt_sig("n")()),
                         lv_sig()))
     n_live <- reactive(i_("n_type"))
     w_sig <- reactive(c(list(i_("w_cc"), i_("w_r_fill"), i_("w_r_facet"),
                              i_("w_r_shape"), i_("w_pt"), i_("w_points"),
-                             i_("w_freex"), i_("w_freey")), lv_sig()))
+                             i_("w_freex"), i_("w_freey"), flt_sig("w")()),
+                        lv_sig()))
     dist_ref <- reactive(rv$dist)
     cov_gate <- gate_of(paste0(p, "_cov"), cov_sig, refresh = dist_ref,
                         live = cov_live)
@@ -2412,45 +2521,72 @@ server <- function(input, output, session) {
                   character(1))
       k[nzchar(k)] })
 
-    alloc_thr <- reactive(
-      vapply(1:5, function(i) {
-        x <- input[[ns(paste0("t", i))]]
-        if (is.null(x) || all(is.na(x))) 50 else as.numeric(x)[1] }, numeric(1)))
+    # Landings and discards get their own thresholds, per rung. Discards
+    # are sampled less nearly everywhere, so one shared bar either lets
+    # landings resolve on too little data or pushes every discard stratum
+    # to the bottom of the ladder. Both pairs apply whether or not the
+    # category is droppable: the bar is a property of the stratum being
+    # allocated, not of the pool it draws on.
+    num_in <- function(id, default) {
+      x <- input[[ns(id)]]
+      if (is.null(x) || all(is.na(x))) default else as.numeric(x)[1] }
 
-    # the per-step minimum measurement counts that sit beside the coverage
-    # sliders, kept together so the emitted grouping code carries both
-    alloc_meas <- reactive(
-      vapply(1:5, function(i) {
-        x <- input[[ns(paste0("m", i))]]
-        if (is.null(x) || all(is.na(x))) 0 else as.numeric(x)[1] }, numeric(1)))
+    alloc_thr <- reactive(list(
+      Lan = vapply(1:5, function(i) num_in(paste0("t", i, "_lan"), 50), numeric(1)),
+      Dis = vapply(1:5, function(i) num_in(paste0("t", i, "_dis"), 30), numeric(1))))
+
+    alloc_meas <- reactive(list(
+      Lan = vapply(1:5, function(i) num_in(paste0("m", i, "_lan"), 0), numeric(1)),
+      Dis = vapply(1:5, function(i) num_in(paste0("m", i, "_dis"), 0), numeric(1))))
+
+    # One narrow key column, then a Landings pane and a Discards pane.
+    # The coverage control is a number box rather than the old range
+    # slider: only the lower handle was ever read, so the upper one was a
+    # control that did nothing, and two of them per row would not fit.
+    cc_pane <- function(rung, side, cov_default, meas_default) {
+      lab <- if (side == "lan") "Landings" else "Discards"
+      div(class = paste0("ccpane ccpane-", side),
+        div(class = "ccpane-title",
+            style = if (side == "lan") "color:#3d6b3d" else "color:#9a5000", lab),
+        numericInput(ns(sprintf("t%d_%s", rung, side)), "% coverage",
+                     cov_default, 0, 100, 5, width = "100%"),
+        numericInput(ns(sprintf("m%d_%s", rung, side)), "min meas.",
+                     meas_default, 0, 100000, 10, width = "100%"))
+    }
+    key_row <- function(rung, keybox)
+      fluidRow(class = "hier-key-row",
+        column(4, keybox),
+        column(4, cc_pane(rung, "lan", 50, 0)),
+        column(4, cc_pane(rung, "dis", 30, 0)))
 
     output[[ns("keys")]] <- renderUI({
-      k1 <- fluidRow(class = "hier-key-row",
-        column(6, div(class = "hier-key-fixed", tags$b("Key 1"), tags$br(),
-                      "Own stratum")),
-        column(3, sliderInput(ns("t1"), "% coverage", 0, 100, c(50, 100), 5)),
-        column(3, numericInput(ns("m1"), "min meas.", 0, 0, 100000, 10)))
+      k1 <- key_row(1, div(class = "hier-key-fixed", tags$b("Key 1"),
+                           tags$br(), "Own stratum"))
       cc <- fluidRow(class = "hier-key-row",
-        column(6, div(class = "hier-key-fixed",
+        column(4, div(class = "hier-key-fixed",
                       style = if (keep_cc()) "border-left:5px solid #59A14F" else
                               "border-left:5px solid #BFBFBF",
                       tags$b("Key 2"), tags$br(), "catchCategory",
                       tags$span(class = "note",
                                 if (keep_cc()) "kept to the end" else "droppable"))),
-        column(6, tags$span(class = "note",
+        column(8, tags$span(class = "note",
                             "no threshold - this is the ceiling of the cascade")))
       rows <- lapply(1:4, function(i)
-        fluidRow(class = "hier-key-row",
-          column(6, selectInput(ns(paste0("k", i)), paste("Key", i + 2),
-                                c(NONE, setNames(DIMS, DIMS)),
-                                c("Fleet","Country","Season","Area")[i])),
-          column(3, sliderInput(ns(paste0("t", i + 1)), "% coverage", 0, 100,
-                                c(50, 100), 5)),
-          column(3, numericInput(ns(paste0("m", i + 1)), "min meas.", 0,
-                                 0, 100000, 10))))
-      tagList(k1, cc, tags$hr(style = "margin:6px 0"), rows) })
+        key_row(i + 1,
+                selectInput(ns(paste0("k", i)), paste("Key", i + 2),
+                            c(NONE, setNames(DIMS, DIMS)),
+                            c("Fleet","Country","Season","Area")[i],
+                            width = "100%")))
+      tagList(
+        div(class = "note",
+            "Landings and discards are held to their own bars. Discards are ",
+            "sampled less, so a lower coverage and a smaller measurement ",
+            "count are usually the right settings on the right. Both apply ",
+            "whether or not catchCategory is droppable."),
+        k1, cc, tags$hr(style = "margin:6px 0"), rows) })
 
-    steps <- reactive(alloc_steps(alloc_keys(), alloc_thr(), keep_cc()))
+    steps <- reactive(alloc_steps(alloc_keys(), alloc_thr(), keep_cc(),
+                                  min_meas = alloc_meas()))
 
     output[[ns("chain")]] <- renderUI({
       st <- steps()
@@ -2500,8 +2636,14 @@ server <- function(input, output, session) {
     # a category that must be released is visible rather than inferred
     output[[ns("cmissing")]] <- renderDT({
       a <- cascade_assigned()
-      un <- a[is.na(a$alloc_step), , drop = FALSE]
-      validate(need(nrow(un), "Every stratum was resolved."))
+      # zero-weight strata never enter the ladder and need no resolution,
+      # so listing them here would send a user chasing thresholds for
+      # strata that have nothing to allocate
+      un <- a[is.na(a$alloc_step) & !isTRUE(a$alloc_empty %in% TRUE), ,
+              drop = FALSE]
+      if ("alloc_empty" %in% names(a))
+        un <- a[is.na(a$alloc_step) & !a$alloc_empty, , drop = FALSE]
+      validate(need(nrow(un), "Every stratum with catch was resolved."))
       keep <- intersect(c(dims_of(), "weight", "coverage", "n_measurements"),
                         names(un))
       d <- un[order(-un$weight), keep, drop = FALSE]
@@ -2630,22 +2772,70 @@ server <- function(input, output, session) {
         "(mirrors allocStrataCond)"
       else alloc_cond_string(getrv("match_pend"))))
 
+    # The link the exclusion lists are read off. biology_link() gives
+    # coverage but not the measurement counts, so those are joined on
+    # here - otherwise the "measurements below" box would be a control
+    # with nothing behind it.
+    bl_metrics <- reactive({
+      bl <- tryCatch(blink_for("cov"), error = function(e) NULL)
+      if (is.null(bl) || !nrow(bl)) return(NULL)
+      ms <- tryCatch(stratum_measurements(tryCatch(dat(), error = function(e) NULL),
+                                          dist_tbl(), dims_of(), NULL, type),
+                     error = function(e) NULL)
+      tryCatch(add_sufficiency(bl, ms, 0, 0), error = function(e) bl) })
+
+    alloc_dims <- function() alloc_cols_manual()
+    alloc_cols_manual <- function()
+      intersect(c("catchCategory", unname(dmap(paste0(p, "_lv"))[DIMS])),
+                names(bl_metrics() %||% data.frame()))
+
+    x_keys  <- exclusion_server(ns("x"),
+      strata_of = function() bl_metrics(),
+      dims_of   = alloc_dims,
+      metrics   = c("coverage", "measurements"))
+
+    ca_keys <- exclusion_server(ns("ca"),
+      strata_of = function() bl_metrics(),
+      dims_of   = alloc_dims,
+      metrics   = c("coverage", "measurements"))
+
+    save_group <- function(gid, label, a, m, excl) {
+      g <- getrv("groups") %||% list()
+      mc <- alloc_matched_cond(m, excl, alloc_dims())
+      g[[gid]] <- list(
+        label   = label,
+        alloc   = alloc_cond_string(a),
+        matched = mc$text,
+        excluded = excl,
+        alloc_expr   = alloc_quo(a),
+        matched_expr = mc$quo)
+      setrv("groups", g)
+      g
+    }
+
     observeEvent(input[[ns("saverule")]], {
       req(nzchar(input[[ns("gid")]] %||% ""))
       a <- getrv("alloc_pend") %||% list()
       m <- getrv("match_pend") %||% a
-      g <- getrv("groups") %||% list()
-      g[[input[[ns("gid")]]]] <- list(
-        label   = input[[ns("glab")]] %||% "",
-        alloc   = alloc_cond_string(a),
-        matched = alloc_cond_string(m),
-        alloc_expr   = alloc_quo(a),
-        matched_expr = alloc_quo(m))
-      setrv("groups", g)
+      g <- save_group(input[[ns("gid")]], input[[ns("glab")]] %||% "",
+                      a, m, x_keys())
       setrv("alloc_pend", NULL); setrv("match_pend", NULL)
       updateTextInput(session, ns("gid"),
                       value = paste0("GA", length(g) + 1))
       showNotification(paste("Saved", input[[ns("gid")]]), duration = 2) })
+
+    observeEvent(input[[ns("addcatchall")]], {
+      g <- getrv("groups") %||% list()
+      gid <- paste0("GA", length(g) + 1)
+      excl <- unique(c(ca_keys(),
+                       if (isTRUE(input[[ns("ca_keep")]])) x_keys()
+                       else character(0)))
+      # no clause on either side: allocStrataCond is the complement of
+      # everything above (assign_alloc_groups is first-match-wins), and
+      # bioMatchedCond is every stratum less whatever the bars here drop
+      save_group(gid, "catch-all", list(), list(), excl)
+      updateTextInput(session, ns("gid"), value = paste0("GA", length(g) + 2))
+      showNotification("Catch-all added at the end", duration = 2) })
 
     # reorder / delete: first match wins, so order is meaningful
     output[[ns("order")]] <- renderUI({
@@ -3376,67 +3566,80 @@ server <- function(input, output, session) {
     if (is.null(d)) list() else explore_filter_levels(d)
   })
 
-  output$expf_ui <- renderUI({
-    lv <- expf_levels()
-    if (!length(lv))
-      return(span(class = "note", "No filterable columns in this table."))
-    lapply(names(lv), function(v)
-      selectizeInput(paste0("expf_", v), v, choices = lv[[v]],
-                     selected = isolate(input[[paste0("expf_", v)]]),
-                     multiple = TRUE,
-                     options = list(placeholder = FILTER_ANY)))
-  })
+  # One filter per figure tab. The inputs are named <prefix>_flt_<column>,
+  # so two tabs never share a control and pinning metier4 on the coverage
+  # figure leaves the discard-rate figure alone.
+  filter_prefixes <- reactiveVal(character(0))
 
-  explore_filters <- reactive({
+  flt_inputs <- function(p) {
     lv <- expf_levels()
     if (!length(lv)) return(list())
-    f <- lapply(names(lv), function(v) input[[paste0("expf_", v)]])
+    f <- lapply(names(lv), function(v) input[[paste0(p, "_flt_", v)]])
     names(f) <- names(lv)
     clean_filters(f)
-  })
+  }
 
-  observeEvent(input$expf_clear, {
-    for (v in names(expf_levels()))
-      updateSelectizeInput(session, paste0("expf_", v), selected = character(0))
-  })
+  # Registered lazily: a renderUI for a tab that has never been opened
+  # never runs, so the registry fills in as tabs are visited and the
+  # script only ever reports filters that were really set.
+  filter_server <- function(p) {
+    output[[paste0(p, "_flt_ui")]] <- renderUI({
+      lv <- expf_levels()
+      if (!length(lv))
+        return(span(class = "note", "Nothing filterable in this table."))
+      cur <- filter_prefixes()
+      if (!p %in% cur) filter_prefixes(c(cur, p))
+      tagList(lapply(names(lv), function(v)
+        selectizeInput(paste0(p, "_flt_", v), v, choices = lv[[v]],
+                       selected = isolate(input[[paste0(p, "_flt_", v)]]),
+                       multiple = TRUE, width = "100%",
+                       options = list(placeholder = FILTER_ANY))))
+    })
 
-  # Rows can survive a filter while weight does not. A figure drawn on 40%
-  # of the rows and 2% of the landings is not a view of the fleet, and the
-  # number is shown next to the control rather than buried in a tooltip.
-  output$expf_cov <- renderUI({
-    f <- explore_filters()
-    if (!length(f)) return(NULL)
-    d <- tryCatch(dat(), error = function(e) NULL)
-    if (is.null(d)) return(NULL)
-    cv <- tryCatch(filter_coverage(d, f), error = function(e) NULL)
-    if (is.null(cv)) return(NULL)
-    div(class = "note", style = "color:#9a5000",
-        sprintf("Figures show %d of %d rows (%.0f%%)", cv$n_kept, cv$n_all,
-                cv$pct_rows),
-        if (!is.null(cv$pct_weight))
-          sprintf(" and %.1f%% of the weight.", cv$pct_weight) else ".")
-  })
+    # Rows can survive a filter while weight does not. A figure drawn on
+    # 40% of the rows and 2% of the landings is not a view of the fleet,
+    # so both numbers sit under the control rather than in a tooltip.
+    output[[paste0(p, "_flt_note")]] <- renderUI({
+      f <- flt_inputs(p)
+      if (!length(f))
+        return(span(class = "note", "No filter - the whole table."))
+      d <- tryCatch(dat(), error = function(e) NULL)
+      if (is.null(d)) return(NULL)
+      cv <- tryCatch(filter_coverage(d, f), error = function(e) NULL)
+      if (is.null(cv)) return(NULL)
+      div(class = "note", style = "color:#9a5000",
+          sprintf("%d of %d rows (%.0f%%)", cv$n_kept, cv$n_all, cv$pct_rows),
+          if (!is.null(cv$pct_weight))
+            sprintf(", %.1f%% of the weight.", cv$pct_weight) else ".")
+    })
+  }
 
-  # the filtered table, and the two stratum builders that sit on it
-  explore_dat <- reactive({
-    d <- dat(); f <- explore_filters()
+  # every prefix that owns a figure and therefore a filter box
+  # The grouping tabs are deliberately absent: a cascade must be built on
+  # the whole table, and a filter there would be a foot-gun.
+  for (.p in c("cov", "dr",
+               as.vector(outer(c("len", "age"), c("cov", "n", "w"),
+                               paste, sep = "_"))))
+    local({ pp <- .p; filter_server(pp) })
+
+  # the filtered table for one tab
+  explore_dat <- function(p) {
+    d <- dat(); f <- flt_inputs(p)
     if (!length(f)) return(d)
     out <- apply_filters(d, f)
     validate(need(nrow(out) > 0,
-                  paste0("No rows left after the exploration filter (",
-                         filter_label(f), "). Clear it to see the figures.")))
+                  paste0("No rows left after this figure's filter (",
+                         filter_label(f), "). Clear it to see the figure.")))
+    out
+  }
+
+  # every filter that is actually set, for the emitted script
+  explore_filters_all <- reactive({
+    ps <- filter_prefixes()
+    out <- list()
+    for (p in ps) { f <- flt_inputs(p); if (length(f)) out[[p]] <- f }
     out
   })
-
-  expf_note <- function() {
-    f <- explore_filters()
-    if (!length(f)) NULL
-    else div(class = "chain", style = "color:#9a5000",
-             tags$b("Exploration filter active: "), filter_label(f),
-             tags$br(),
-             span(class = "note",
-                  "Figures only. Grouping and raising use the full table."))
-  }
 
   dmap <- function(p) {
     f <- input[[paste0(p, "_fleet")]]; a <- input[[paste0(p, "_area")]]
@@ -3456,7 +3659,7 @@ server <- function(input, output, session) {
   # EXPLORATION path: the same thing on the filtered view. Every figure
   # reads this one; recommend_raising() and the manual builder read the
   # one above.
-  strata_x <- function(p) build_strata(explore_dat(), unname(dmap(p)[DIMS]))
+  strata_x <- function(p) build_strata(explore_dat(p), unname(dmap(p)[DIMS]))
 
   # strata aggregated to EXACTLY the columns used by the plot. Without this
   # the table still holds every dimension, so a heatmap cell or a bubble
@@ -3464,7 +3667,7 @@ server <- function(input, output, session) {
   strata_roles <- function(p, sels) {
     cols <- unique(unlist(lapply(sels, function(x) col_of(p, x))))
     validate(need(length(cols) >= 1, "Pick at least one variable."))
-    build_strata(explore_dat(), cols)
+    build_strata(explore_dat(p), cols)
   }
 
   # --- data tab summary ------------------------------------
@@ -3474,7 +3677,14 @@ server <- function(input, output, session) {
       div(class = "note", style = "font-size:12px",
           sprintf("%s rows | %s strata at the level of detail set bottom-right",
                   nrow(dat()), nrow(strata_p("dt")))),
-      expf_note()) })
+      if (length(explore_filters_all()))
+        div(class = "chain", style = "color:#9a5000",
+            tags$b("Figure filters are set on: "),
+            paste(names(explore_filters_all()), collapse = ", "),
+            tags$br(),
+            span(class = "note",
+                 "Figures only. Grouping and raising use the full table."))
+      else NULL) })
 
 
 
@@ -3664,43 +3874,104 @@ server <- function(input, output, session) {
     m <- suppressWarnings(max(s$discard_rate, na.rm = TRUE))
     if (!is.finite(m)) 1 else max(1, ceiling(m * 1.05 * 100) / 100) }
 
-  # named-stratum exclusion, shared shape between the two builders
-  excl_choices <- function(prefix, order_by = "landings") {
-    st <- try(strata_p(prefix), silent = TRUE)
-    if (inherits(st, "try-error")) return(character(0))
-    donor_choices(st, unname(dmap(prefix)[DIMS]), order_by = order_by)
+  # ---------------------------------------------------------
+  #  Exclusion, one server for all four blocks
+  # ---------------------------------------------------------
+  # Every block resolves to the same thing: a set of stratum keys. A
+  # threshold is turned into keys HERE, against the stratum table,
+  # because the condition that reaches catchRaising() is evaluated on
+  # CEF rows and those carry no `coverage` column - coverage is a
+  # property of a stratum, computed from many rows. So what the engine
+  # receives is always an explicit list, whichever route produced it.
+  #
+  # `strata_of` is a function rather than a fixed prefix because the
+  # biology blocks are built on a biology link, not on build_strata().
+  excl_num <- function(p, which) {
+    x <- input[[paste0(p, "_x", which)]]
+    if (is.null(x) || !length(x) || all(is.na(x))) NA_real_ else as.numeric(x)[1]
   }
 
-  # everything currently out of the donor pool, from either route
-  excl_table <- function(prefix, excluded, dr) {
-    st <- try(strata_p(prefix), silent = TRUE)
-    if (inherits(st, "try-error")) return(NULL)
-    excluded_overview(st, unname(dmap(prefix)[DIMS]), excluded, dr[1], dr[2])
+  exclusion_server <- function(p, strata_of, dims_of,
+                               metrics = c("coverage", "measurements", "rate"),
+                               dr_of = function() c(NA, NA)) {
+    tbl <- function() {
+      st <- try(strata_of(), silent = TRUE)
+      if (inherits(st, "try-error") || is.null(st) || !nrow(st)) NULL else st
+    }
+    keys <- reactive({
+      st <- tbl(); if (is.null(st)) return(character(0))
+      dr <- if ("rate" %in% metrics) dr_of() else c(NA, NA)
+      excluded_keys(st, dims_of(),
+                    named    = input[[paste0(p, "_xnamed")]] %||% character(0),
+                    cov_min  = if ("coverage" %in% metrics)
+                                 excl_num(p, "cov") else NA,
+                    meas_min = if ("measurements" %in% metrics)
+                                 excl_num(p, "meas") else NA,
+                    dr_min = dr[1], dr_max = dr[2])
+    })
+
+    output[[paste0(p, "_xui")]] <- renderUI({
+      st <- tbl()
+      selectizeInput(paste0(p, "_xnamed"), NULL,
+        choices = if (is.null(st)) character(0)
+                  else exclusion_choices(st, dims_of(),
+                         order_by = input[[paste0(p, "_xsort")]] %||% "weight"),
+        selected = isolate(input[[paste0(p, "_xnamed")]]),
+        multiple = TRUE, width = "100%",
+        options = list(placeholder = "no stratum excluded")) })
+
+    output[[paste0(p, "_xnote")]] <- renderUI({
+      k <- keys()
+      dr <- if ("rate" %in% metrics) dr_of() else c(NA, NA)
+      lab <- exclusion_label(
+        cov_min  = if ("coverage" %in% metrics) excl_num(p, "cov") else NA,
+        meas_min = if ("measurements" %in% metrics) excl_num(p, "meas") else NA,
+        dr_min = dr[1], dr_max = dr[2],
+        n_named = length(input[[paste0(p, "_xnamed")]] %||% character(0)))
+      div(class = "note",
+          tags$b(sprintf("%d stratum/strata out of the pool. ", length(k))),
+          lab,
+          if (length(k)) tagList(tags$br(),
+            tags$span(style = "font-family:monospace;font-size:10px",
+                      donor_exclusion_expr(k, dims_of())))) })
+
+    output[[paste0(p, "_xtbl")]] <- renderDT({
+      st <- tbl()
+      validate(need(!is.null(st), "No strata yet."))
+      dr <- if ("rate" %in% metrics) dr_of() else c(NA, NA)
+      d <- exclusion_overview(st, dims_of(),
+             named    = input[[paste0(p, "_xnamed")]] %||% character(0),
+             cov_min  = if ("coverage" %in% metrics) excl_num(p, "cov") else NA,
+             meas_min = if ("measurements" %in% metrics)
+                          excl_num(p, "meas") else NA,
+             dr_min = dr[1], dr_max = dr[2])
+      validate(need(!is.null(d) && nrow(d), "Nothing excluded."))
+      keep <- names(d)[vapply(d, function(x) !all(is.na(x)), logical(1))]
+      d <- d[, keep, drop = FALSE]
+      num <- vapply(d, is.numeric, logical(1))
+      d[num] <- lapply(d[num], function(x) round(x, 3))
+      datatable(d, rownames = FALSE,
+                options = list(scrollX = TRUE, pageLength = 8)) })
+
+    keys
   }
 
-  output$ar_excl_ui <- renderUI(
-    selectizeInput("ar_excl", NULL,
-                   choices = excl_choices("ar", input$ar_excl_sort %||% "landings"),
-                   multiple = TRUE,
-                   options = list(placeholder = "no stratum excluded")))
+  ar_excl_keys <- exclusion_server("ar",
+    strata_of = function() strata_p("ar"),
+    dims_of   = function() unname(dmap("ar")[DIMS]),
+    metrics   = c("coverage", "rate"),
+    dr_of     = function() ar_dr())
 
-  output$ar_excl_note <- renderUI({
-    ex <- input$ar_excl
-    if (!length(ex)) return(NULL)
-    div(class = "chain", style = "color:#9a5000;font-family:monospace;font-size:10.5px",
-        donor_exclusion_expr(ex, unname(dmap("ar")[DIMS]))) })
+  mg_excl_keys <- exclusion_server("mg",
+    strata_of = function() strata_p("mg"),
+    dims_of   = function() unname(dmap("mg")[DIMS]),
+    metrics   = c("coverage", "rate"),
+    dr_of     = function() if (isTRUE(input$dr_on)) rule_dr() else c(NA, NA))
 
-  output$mg_excl_ui <- renderUI(
-    selectizeInput("mg_excl", NULL,
-                   choices = excl_choices("mg", input$mg_excl_sort %||% "landings"),
-                   multiple = TRUE,
-                   options = list(placeholder = "no stratum excluded")))
-
-  output$mg_excl_note <- renderUI({
-    ex <- input$mg_excl
-    if (!length(ex)) return(NULL)
-    div(class = "chain", style = "color:#9a5000;font-family:monospace;font-size:10.5px",
-        donor_exclusion_expr(ex, unname(dmap("mg")[DIMS]))) })
+  ca_excl_keys <- exclusion_server("ca",
+    strata_of = function() strata_p("mg"),
+    dims_of   = function() unname(dmap("mg")[DIMS]),
+    metrics   = c("coverage"))
 
   # the two condition lists, ready to paste into a script
   output$man_conds <- renderText({
@@ -3727,18 +3998,6 @@ server <- function(input, output, session) {
                   error = function(e) list())
     if (length(m)) session$sendCustomMessage("stratSvg", list(map = m)) })
 
-  output$ar_excl_tbl <- renderDT({
-    d <- excl_table("ar", input$ar_excl %||% character(0), ar_dr())
-    validate(need(!is.null(d) && nrow(d), "Nothing excluded."))
-    datatable(d, rownames = FALSE, options = list(dom = "tp", pageLength = 8,
-                                                  scrollX = TRUE)) })
-
-  output$mg_excl_tbl <- renderDT({
-    d <- excl_table("mg", input$mg_excl %||% character(0), rule_dr())
-    validate(need(!is.null(d) && nrow(d), "Nothing excluded."))
-    datatable(d, rownames = FALSE, options = list(dom = "tp", pageLength = 8,
-                                                  scrollX = TRUE)) })
-
   output$ar_dr_ui <- renderUI({
     top <- dr_top("ar")
     sliderInput("ar_dr", "Allowed discard rate", 0, top, c(0, top), 0.01) })
@@ -3750,7 +4009,9 @@ server <- function(input, output, session) {
 
   rec <- reactive({
     s <- classify_strata(strata_p("ar"), input$threshold)
-    s <- flag_donor_exclusion(s, ar_dr()[1], ar_dr()[2])
+    s <- flag_donor_exclusion(s, ar_dr()[1], ar_dr()[2],
+                              excluded = ar_excl_keys(),
+                              dims = unname(dmap("ar")[DIMS]))
     recommend_raising(s, hier_cols(), hier_thr(),
                       self_threshold = self_thr_val(),
                       mode = input$hier_mode %||% "nested",
@@ -3846,7 +4107,7 @@ server <- function(input, output, session) {
     req(nzchar(input$rule_id))
     r <- new_rule(input$rule_id, input$rule_label, rv$pend_raise %||% list(),
                   rv$pend_source, rule_dr()[1], rule_dr()[2],
-                  excluded = input$mg_excl %||% character(0))
+                  excluded = mg_excl_keys())
     ids <- vapply(rv$rules, `[[`, character(1), "id")
     if (r$id %in% ids) {
       rv$rules[[which(ids == r$id)]] <- r
@@ -3867,8 +4128,10 @@ server <- function(input, output, session) {
       "catch-all", list(), NULL, dr[1], dr[2],
       # by default the catch-all keeps every stratum: an exclusion made
       # for one group is rarely meant to remove the stratum entirely
-      excluded = if (isTRUE(input$catchall_keep_excl))
-        input$mg_excl %||% character(0) else character(0))))
+      # the catch-all's own bars, plus the group exclusions only if asked
+      excluded = unique(c(ca_excl_keys(),
+        if (isTRUE(input$catchall_keep_excl)) mg_excl_keys()
+        else character(0))))))
     showNotification("Catch-all added at the end", duration = 2) })
 
   man_pal <- reactive(group_palette(vapply(rv$rules, `[[`, character(1), "id")))
@@ -5000,9 +5263,15 @@ server <- function(input, output, session) {
       }, error = function(e) NULL))
     lg <- log_set(lg, "manual_groups", NULL)
     lg <- log_set(lg, "native_raising", NULL)
-    lg <- log_set(lg, "explore", tryCatch(
-      c(emit_explore_filter_code(explore_filters()),
-        code_plots(active_plots())), error = function(e) NULL))
+    lg <- log_set(lg, "explore", tryCatch({
+      fl <- explore_filters_all()
+      c(if (length(fl))
+          unlist(lapply(names(fl), function(p)
+            emit_explore_filter_code(fl[[p]], to = paste0("explore_", p))),
+            use.names = FALSE)
+        else emit_explore_filter_code(list()),
+        code_plots(active_plots()))
+      }, error = function(e) NULL))
     lg <- log_set(lg, "session", code_session(state_path()))
     rv$log <- lg
   })

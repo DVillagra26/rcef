@@ -8,9 +8,10 @@
 | `check_syntax.R` | `parse()` every `.R` file; must print `DONE ... 0 failure(s)` |
 | `check_exports.R` | every top-level object — functions **and constants** — must be exported; must print `NOT EXPORTED : 0` |
 | `check_app.R` | sources `inst/app/app.R` against the installed package and renders the UI |
+| `check_sections.R` | the discard and biology manual builders must present the same 8 numbered steps |
 | `DOC_BACKLOG.txt` | the 94 functions exported with `@noRd` — no man page yet |
 | `deploy_shinyapps.R` | shinyapps.io, with the GitHub-remote caveat spelled out |
-| `tests/` | the 11 suites + `run_tests.R` |
+| `tests/` | the suites + `run_tests.R`; `test_cc_thresholds.R` (Lan/Dis split, zero-weight strata) and `test_exclusion.R` (donor exclusion) |
 | `testdata/` | `make_test_data_anchoveta.R` — synthetic CEF fixtures |
 
 ## Running the tests

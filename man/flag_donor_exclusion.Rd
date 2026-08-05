@@ -4,12 +4,32 @@
 \alias{flag_donor_exclusion}
 \title{Flag strata that may not donate, by discard-rate window}
 \usage{
-flag_donor_exclusion(s, dr_min = NA, dr_max = NA)
+flag_donor_exclusion(
+  s,
+  dr_min = NA,
+  dr_max = NA,
+  cov_min = NA,
+  meas_min = NA,
+  excluded = character(0),
+  dims = NULL
+)
 }
 \arguments{
 \item{s}{A stratum table.}
 
 \item{dr_min, dr_max}{Rate window bounds (fractions, e.g. 0.05); `NA` = open.}
+
+\item{cov_min}{Minimum coverage, percent, to remain an eligible donor.
+A stratum that is itself barely sampled lends a rate resting on very
+little. `NA` = off.}
+
+\item{meas_min}{Minimum number of measurements to remain eligible.
+`NA` = off.}
+
+\item{excluded}{Stratum keys picked out by hand, as produced by
+[excluded_keys()].}
+
+\item{dims}{Key columns, needed to match `excluded` against the rows.}
 }
 \value{
 `s` with a `donor_ok` logical column.

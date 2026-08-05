@@ -384,19 +384,103 @@ length_link_summary <- function(bl, linked, type = "LengthTotal") {
 # keep_cc = FALSE: once the other keys are exhausted the category is
 #   dropped too, and whatever is still unresolved pools landings and
 #   discards together.
+# ------------------------------------------------------------
+#  Landings and discards, held to different standards
+# ------------------------------------------------------------
+# Discards are sampled less than landings almost everywhere, so a single
+# coverage threshold either lets landings resolve on too little or forces
+# discards down to the bottom of the ladder. Every threshold in the
+# cascade is therefore a PAIR.
+#
+# A spec is accepted in three shapes, so nothing that used to pass a
+# plain vector breaks:
+#   50                  -> both categories, every rung
+#   c(50, 40, 30)       -> both categories, per rung
+#   list(Lan = c(50, 40), Dis = c(30, 20))
+#
+# BMS follows discards, matching bms_as_dis elsewhere.
+
+#' Which of the two brackets a catch category falls in
+#' @param cc Character vector of catch categories.
+#' @param bms_as_dis Fold BMS in with discards.
+#' @return `"Lan"` or `"Dis"`, one per element.
+#' @export
+#' @examples
+#' cc_bracket(c("Lan", "Dis", "BMS"))
+cc_bracket <- function(cc, bms_as_dis = TRUE) {
+  cc <- as.character(cc)
+  dis <- if (bms_as_dis) c("Dis", "BMS") else "Dis"
+  ifelse(cc %in% dis, "Dis", "Lan")
+}
+
+#' Normalise a threshold spec to a Landings / Discards pair
+#'
+#' @param x A number, a numeric vector, or a list with `Lan` and `Dis`.
+#' @param default Value used where the spec runs short.
+#' @return A list with `Lan` and `Dis`, both numeric vectors.
+#' @seealso [cc_step_value()]
+#' @export
+#' @examples
+#' as_cc_spec(50)
+#' as_cc_spec(list(Lan = c(50, 40), Dis = c(30, 20)))
+as_cc_spec <- function(x, default = NA_real_) {
+  if (is.null(x)) return(list(Lan = default, Dis = default))
+  if (is.list(x)) {
+    lan <- if (!is.null(x$Lan)) as.numeric(x$Lan) else default
+    dis <- if (!is.null(x$Dis)) as.numeric(x$Dis) else lan
+    return(list(Lan = lan, Dis = dis))
+  }
+  x <- as.numeric(x)
+  list(Lan = x, Dis = x)
+}
+
+#' The Landings / Discards pair for one rung of a cascade
+#'
+#' @param spec A spec, as accepted by [as_cc_spec()].
+#' @param i Rung number, 1-based.
+#' @param default Value used where the spec runs short.
+#' @return A named length-two numeric: `Lan` and `Dis`.
+#' @export
+#' @examples
+#' cc_step_value(list(Lan = c(50, 40), Dis = c(30, 20)), 2)
+cc_step_value <- function(spec, i, default = NA_real_) {
+  sp <- as_cc_spec(spec, default)
+  pick <- function(v) if (length(v) >= i) v[i] else
+    if (length(v)) v[length(v)] else default
+  c(Lan = pick(sp$Lan), Dis = pick(sp$Dis))
+}
+
+#' A threshold spec as R source
+#'
+#' @param x A number, numeric vector, or `Lan`/`Dis` list.
+#' @return A length-one character vector of R code.
+#' @export
+#' @examples
+#' fmt_cc_spec(list(Lan = c(50, 40), Dis = c(30, 20)))
+fmt_cc_spec <- function(x) {
+  num <- function(v) if (length(v) == 1) format(v) else
+    paste0("c(", paste(format(v), collapse = ", "), ")")
+  if (is.list(x)) {
+    sp <- as_cc_spec(x)
+    sprintf("list(Lan = %s, Dis = %s)", num(sp$Lan), num(sp$Dis))
+  } else num(as.numeric(x))
+}
+
 #' @noRd
 #' @export
-alloc_steps <- function(keys, thresholds, keep_cc = TRUE) {
+alloc_steps <- function(keys, thresholds, keep_cc = TRUE, min_meas = 0) {
   keys <- keys[nzchar(keys)]
-  thr <- function(i) if (length(thresholds) >= i) thresholds[i] else NA_real_
+  thr <- function(i) cc_step_value(thresholds, i, NA_real_)
+  mm  <- function(i) cc_step_value(min_meas, i, 0)
   out <- list()
 
-  add <- function(id, label, drop, drop_cc, threshold)
+  add <- function(id, label, drop, drop_cc, threshold, minmeas = c(Lan = 0, Dis = 0))
     out[[length(out) + 1]] <<- list(id = id, label = label, drop = drop,
-                                    drop_cc = drop_cc, threshold = threshold)
+                                    drop_cc = drop_cc, threshold = threshold,
+                                    min_meas = minmeas)
 
   # step 1 is always the stratum's own sampled data
-  add("own", "own stratum", character(0), FALSE, thr(1))
+  add("own", "own stratum", character(0), FALSE, thr(1), mm(1))
 
   # --- pass 1: stay inside the catch category, widen one key at a time
   for (i in seq_along(keys)) {
@@ -405,7 +489,7 @@ alloc_steps <- function(keys, thresholds, keep_cc = TRUE) {
     add(paste0("w", i),
         if (length(kept)) paste(c("catchCategory", kept), collapse = " + ")
         else "catchCategory (all other data in the same category)",
-        dropped, FALSE, thr(i + 1))
+        dropped, FALSE, thr(i + 1), mm(i + 1))
   }
 
   # --- pass 2: only when dropping the category is allowed.
@@ -425,8 +509,11 @@ alloc_steps <- function(keys, thresholds, keep_cc = TRUE) {
             paste0(paste(kept, collapse = " + "), "  (categories joined)")
           else "ALL data, both categories pooled",
           dropped, TRUE,
-          # same key precision as pass 1, so the same threshold applies
-          thr(j + 1))
+          # Same key precision as pass 1, so the same pair applies. The
+          # bracket is read from the stratum BEING allocated, not from the
+          # pool: a discard stratum keeps its own, looser standard even
+          # when the pool it draws on now holds landings too.
+          thr(j + 1), mm(j + 1))
     }
   }
   out
@@ -533,9 +620,9 @@ emit_alloc_grouping_code <- function(spec, method = "hierarchical",
             fmt(if (identical(tag, "Age")) "Age" else "LengthTotal")),
     "## 2. classify it: coverage AND number of measurements decide the status",
     sprintf("bio_link <- classify_strata(bio_link, threshold = %s, what = %s, min_meas = %s)",
-            fmt(spec$thresholds[1]),
+            fmt(cc_step_value(spec$thresholds, 1)["Lan"]),
             fmt(if (identical(tag, "Age")) "age" else "length"),
-            fmt(spec$min_meas[1])))
+            fmt(cc_step_value(spec$min_meas, 1)["Lan"])))
 
   if (identical(method, "manual"))
     return(c(common,
@@ -546,8 +633,13 @@ emit_alloc_grouping_code <- function(spec, method = "hierarchical",
     "## 3. the cascade: each rung widens the donor pool by dropping a key,",
     "##    and a stratum leaves at the first rung it clears",
     sprintf("alloc_keys <- %s", fmt(spec$keys)),
-    sprintf("alloc_thresholds <- %s", fmt(spec$thresholds)),
-    sprintf("steps <- alloc_steps(alloc_keys, alloc_thresholds, keep_cc = %s)",
+    "## Landings and discards carry their own thresholds: discards are",
+    "## sampled less, so holding both to one bar either lets landings",
+    "## resolve on too little or pushes discards to the bottom rung.",
+    sprintf("alloc_thresholds <- %s", fmt_cc_spec(spec$thresholds)),
+    sprintf("alloc_min_meas   <- %s", fmt_cc_spec(spec$min_meas)),
+    sprintf(paste("steps <- alloc_steps(alloc_keys, alloc_thresholds,",
+                  "keep_cc = %s, min_meas = alloc_min_meas)"),
             if (isTRUE(spec$keep_cc)) "TRUE" else "FALSE"),
     sprintf("assigned <- assign_alloc_cascade(bio_link, alloc_cols, steps, bms = %s)",
             if (isTRUE(spec$bms)) "TRUE" else "FALSE"),
@@ -691,10 +783,23 @@ assign_alloc_cascade <- function(bl, keys, steps, bms_as_dis = TRUE) {
   # with BMS folded into discards the two share a pool
   cc_pool <- if (bms_as_dis) ifelse(cc %in% c("Dis", "BMS"), "Dis", cc) else cc
 
+  brk <- cc_bracket(cc, bms_as_dis)
+  has_meas <- "n_measurements" %in% names(d)
+
   d$alloc_step  <- NA_integer_
   d$alloc_level <- NA_character_
   d$alloc_pool  <- NA_character_
   d$alloc_group <- NA_character_
+  d$alloc_bracket <- brk
+
+  # A stratum with no catch has nothing to allocate, so it is taken out
+  # BEFORE the ladder runs rather than after. Left in, it would either sit
+  # in the unresolved list for ever - it can never clear a coverage test,
+  # the denominator is zero - or, worse, get quietly assigned a donor pool
+  # at some rung and appear in the groups as though it needed one.
+  d$alloc_empty <- is.na(d$weight) | d$weight <= 0
+  d$alloc_level[d$alloc_empty] <- "no catch to allocate"
+  d$alloc_group[d$alloc_empty] <- "none"
 
   pool_id <- function(step, i) {
     kept <- setdiff(keys, step$drop)
@@ -707,27 +812,44 @@ assign_alloc_cascade <- function(bl, keys, steps, bms_as_dis = TRUE) {
 
   for (si in seq_along(steps)) {
     st <- steps[[si]]
-    todo <- is.na(d$alloc_step)
+    todo <- is.na(d$alloc_step) & !d$alloc_empty
     if (!any(todo)) break
     pid <- pool_id(st, si)
     # step 1 is the stratum on its own data
     if (identical(st$id, "own")) pid <- paste0("own::", seq_len(nrow(d)))
     agg <- tapply(seq_len(nrow(d)), pid, function(ix)
       c(w = sum(d$weight[ix], na.rm = TRUE),
-        m = sum(d$weight_measured[ix], na.rm = TRUE)))
+        m = sum(d$weight_measured[ix], na.rm = TRUE),
+        n = if (has_meas) sum(d$n_measurements[ix], na.rm = TRUE) else NA_real_))
     cov <- vapply(agg, function(z)
       if (is.na(z["w"]) || z["w"] <= 0) NA_real_ else z["m"] / z["w"] * 100,
       numeric(1))
-    thr <- if (is.na(st$threshold)) -Inf else st$threshold
-    ok <- todo & !is.na(cov[pid]) & cov[pid] >= thr
+    nms <- vapply(agg, function(z) unname(z["n"]), numeric(1))
+
+    # the threshold is a property of the stratum being resolved, so it is
+    # read per row from its own bracket
+    thr_pair <- st$threshold
+    if (is.null(thr_pair)) thr_pair <- c(Lan = NA_real_, Dis = NA_real_)
+    thr_row <- unname(thr_pair[brk]); thr_row[is.na(thr_row)] <- -Inf
+
+    mm_pair <- st$min_meas
+    if (is.null(mm_pair)) mm_pair <- c(Lan = 0, Dis = 0)
+    mm_row <- unname(mm_pair[brk]); mm_row[is.na(mm_row)] <- 0
+
+    ok <- todo & !is.na(cov[pid]) & cov[pid] >= thr_row
+    # A pool can clear the coverage bar on a handful of measured fish.
+    # Where the counts are available the second bar is applied too; where
+    # they are not, the test is skipped rather than silently failed.
+    if (has_meas) ok <- ok & !is.na(nms[pid]) & nms[pid] >= mm_row
     d$alloc_step[ok]  <- si
     d$alloc_level[ok] <- st$label
     d$alloc_pool[ok]  <- pid[ok]
     d$alloc_group[ok] <- paste0("S", si)
   }
   # anything still unresolved fell off the end of the ladder
-  d$alloc_level[is.na(d$alloc_step)] <- "not allocated"
-  d$alloc_group[is.na(d$alloc_step)] <- "none"
+  un <- is.na(d$alloc_step) & !d$alloc_empty
+  d$alloc_level[un] <- "not allocated"
+  d$alloc_group[un] <- "none"
   d
 }
 
@@ -740,20 +862,35 @@ alloc_cascade_table <- function(assigned, steps) {
   tot_n <- nrow(assigned)
   rows <- lapply(seq_along(steps), function(i) {
     sel <- which(assigned$alloc_step == i)
+    thp <- steps[[i]]$threshold
+    mmp <- steps[[i]]$min_meas
     data.frame(step = i,
                scope = alloc_step_scope(steps[[i]]),
                pool = steps[[i]]$label,
-               threshold = steps[[i]]$threshold,
+               threshold = unname(thp["Lan"]),
+               threshold_Dis = unname(thp["Dis"]),
+               min_meas = unname(if (is.null(mmp)) NA_real_ else mmp["Lan"]),
+               min_meas_Dis = unname(if (is.null(mmp)) NA_real_ else mmp["Dis"]),
                n_strata = length(sel),
                weight = sum(assigned$weight[sel], na.rm = TRUE),
                stringsAsFactors = FALSE)
   })
   out <- do.call(rbind, rows)
-  un <- which(is.na(assigned$alloc_step))
+  empty <- if ("alloc_empty" %in% names(assigned)) which(assigned$alloc_empty)
+           else integer(0)
+  un <- setdiff(which(is.na(assigned$alloc_step)), empty)
   if (length(un))
     out <- rbind(out, data.frame(step = NA_integer_, scope = "-",
-      pool = "not allocated", threshold = NA_real_, n_strata = length(un),
+      pool = "not allocated", threshold = NA_real_, threshold_Dis = NA_real_,
+      min_meas = NA_real_, min_meas_Dis = NA_real_, n_strata = length(un),
       weight = sum(assigned$weight[un], na.rm = TRUE),
+      stringsAsFactors = FALSE))
+  if (length(empty))
+    out <- rbind(out, data.frame(step = NA_integer_, scope = "-",
+      pool = "no catch to allocate (weight 0)", threshold = NA_real_,
+      threshold_Dis = NA_real_, min_meas = NA_real_, min_meas_Dis = NA_real_,
+      n_strata = length(empty),
+      weight = sum(assigned$weight[empty], na.rm = TRUE),
       stringsAsFactors = FALSE))
   out$pct_strata <- round(out$n_strata / tot_n * 100, 1)
   out$pct_weight <- round(out$weight / tot_w * 100, 1)
@@ -855,8 +992,14 @@ add_sufficiency <- function(bl, meas, min_coverage = 50, min_measurements = 0) {
   }
   if (!"n_measurements" %in% names(bl)) bl$n_measurements <- NA_real_
   bl$n_measurements[is.na(bl$n_measurements)] <- 0
-  bl$ok_coverage <- !is.na(bl$coverage) & bl$coverage >= min_coverage
-  bl$ok_measurements <- bl$n_measurements >= min_measurements
+  # thresholds may be a single number or a Lan / Dis pair
+  if (!"coverage" %in% names(bl)) bl$coverage <- NA_real_
+  brk <- if ("catchCategory" %in% names(bl))
+    cc_bracket(bl$catchCategory) else rep("Lan", nrow(bl))
+  cvp <- cc_step_value(min_coverage, 1, 0)
+  mmp <- cc_step_value(min_measurements, 1, 0)
+  bl$ok_coverage <- !is.na(bl$coverage) & bl$coverage >= unname(cvp[brk])
+  bl$ok_measurements <- bl$n_measurements >= unname(mmp[brk])
   bl$sufficient <- bl$ok_coverage & bl$ok_measurements
   # why a stratum failed, in words, so the screen can say it
   bl$shortfall <- ifelse(
@@ -1073,4 +1216,40 @@ stratum_sparkline_map <- function(linked, dims, keys) {
     tryCatch(stratum_sparkline(linked, dims, k), error = function(e) NULL))
   names(out) <- keys
   out[!vapply(out, is.null, logical(1))]
+}
+
+# ------------------------------------------------------------
+#  Excluding strata from a biology donor pool
+# ------------------------------------------------------------
+
+#' A donor condition with named strata removed
+#'
+#' The allocation groups hold their conditions as text and as a quosure,
+#' and the two must stay identical or the table on screen stops matching
+#' the script. Both are built here, from one string.
+#'
+#' The exclusion is a plain `!paste(...) %in% c(...)`, whatever produced
+#' the key list - a coverage bar, a measurement bar, or a hand-picked
+#' selection. `catchAllocationAoL()` evaluates the condition against CEF
+#' rows, which carry no coverage column, so a threshold has to arrive
+#' here already resolved into keys.
+#'
+#' @param clauses The clause list, as [alloc_cond_string()] takes.
+#' @param excluded Stratum keys to drop, from [excluded_keys()].
+#' @param dims The key columns those keys were built from.
+#' @return A list with `text` and `quo`.
+#' @seealso [excluded_keys()], [donor_exclusion_expr()]
+#' @export
+#' @examples
+#' alloc_matched_cond(list(catchCategory = "Dis"), "TBB | 27.4.b",
+#'                    c("metier4", "ICESDivision"))
+alloc_matched_cond <- function(clauses, excluded = character(0), dims = NULL) {
+  base <- alloc_cond_string(clauses)
+  ex <- if (length(excluded) && !is.null(dims))
+    donor_exclusion_expr(excluded, dims) else NULL
+  txt <- if (is.null(ex)) base
+         else if (identical(base, "TRUE")) ex
+         else paste0("(", base, ") & ", ex)
+  list(text = txt, quo = rlang::new_quosure(str2lang(txt),
+                                            env = rlang::global_env()))
 }
