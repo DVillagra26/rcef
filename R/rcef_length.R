@@ -704,17 +704,89 @@ assign_alloc_groups <- function(strata, groups, bms_as_dis = TRUE) {
   strata$alloc_group <- NA_character_
   strata$alloc_rule  <- NA_character_
   if (!length(groups)) return(strata)
+  # A clause-less group evaluates to the literal TRUE, which comes back
+  # length 1, not length nrow(). `hit & is.na(...)` recycled it silently,
+  # but `which(hit)` did not: the catch-all's donor pool came out as a
+  # single stratum. Normalised once here so both loops are safe.
+  eval_hit <- function(cond) {
+    h <- tryCatch(rlang::eval_tidy(cond, data = strata),
+                  error = function(e) rep(FALSE, nrow(strata)))
+    if (length(h) == 1L) h <- rep(h, nrow(strata))
+    h[is.na(h)] <- FALSE
+    h
+  }
+
   for (g in names(groups)) {
     cond <- groups[[g]]$alloc_expr
     if (is.null(cond)) next
-    hit <- tryCatch(rlang::eval_tidy(cond, data = strata),
-                    error = function(e) rep(FALSE, nrow(strata)))
-    hit[is.na(hit)] <- FALSE
+    hit <- eval_hit(cond)
     take <- hit & is.na(strata$alloc_group)
     strata$alloc_group[take] <- g
     strata$alloc_rule[take]  <- groups[[g]]$alloc
   }
+
+  # Donor membership, the other half of the picture. Allocation is
+  # first-match-wins so a stratum is allocated by exactly one group;
+  # donor pools are the opposite and may overlap freely, so this is a
+  # list column, not a single id. The discard side has carried the same
+  # pair since it was written - assign_rule_groups() calls them
+  # toBeRaisedGroup and usedToRaiseGroup - and without it there is no way
+  # to answer "which groups is this stratum lending its distribution to".
+  used <- vector("list", nrow(strata))
+  for (i in seq_len(nrow(strata))) used[[i]] <- character(0)
+  for (g in names(groups)) {
+    cond <- groups[[g]]$matched_expr %||% groups[[g]]$alloc_expr
+    if (is.null(cond)) next
+    hit <- eval_hit(cond)
+    for (i in which(hit)) used[[i]] <- c(used[[i]], g)
+  }
+  strata$usedToAllocGroup <- used
+  strata$usedToAllocGroups_txt <- vapply(used, paste, character(1),
+                                         collapse = ", ")
+  strata$n_donates_to <- lengths(used)
   strata
+}
+
+#' Allocated against donated, one row per allocation group
+#'
+#' The counterpart of [manual_overview()] on the discard side. Two
+#' numbers that are easy to conflate and mean different things: how many
+#' strata a group ALLOCATES (exactly one group per stratum) and how many
+#' sit in the pool it allocates FROM (a stratum can lend to several).
+#'
+#' @param assigned A table tagged by [assign_alloc_groups()].
+#' @param groups The allocation group list.
+#' @return A data frame, one row per group, plus `(unassigned)` if any.
+#' @seealso [assign_alloc_groups()], [alloc_group_summary()]
+#' @export
+alloc_overview <- function(assigned, groups) {
+  if (is.null(assigned) || !nrow(assigned) || !length(groups)) return(NULL)
+  ids <- names(groups)
+  w <- if ("weight" %in% names(assigned)) assigned$weight else rep(0, nrow(assigned))
+  used <- if ("usedToAllocGroup" %in% names(assigned)) assigned$usedToAllocGroup
+          else rep(list(character(0)), nrow(assigned))
+
+  out <- data.frame(
+    group = ids,
+    label = vapply(ids, function(g) fld(groups[[g]], "label", ""), character(1)),
+    n_strata_allocated = vapply(ids, function(g)
+      sum(assigned$alloc_group %in% g), integer(1)),
+    weight_allocated = vapply(ids, function(g)
+      sum(w[assigned$alloc_group %in% g], na.rm = TRUE), numeric(1)),
+    n_strata_in_pool = vapply(ids, function(g)
+      sum(vapply(used, function(v) g %in% v, logical(1))), integer(1)),
+    stringsAsFactors = FALSE)
+
+  un <- sum(is.na(assigned$alloc_group))
+  if (un > 0)
+    out <- rbind(out, data.frame(
+      group = "(unassigned)", label = "",
+      n_strata_allocated = un,
+      weight_allocated = sum(w[is.na(assigned$alloc_group)], na.rm = TRUE),
+      n_strata_in_pool = NA_integer_, stringsAsFactors = FALSE))
+  out$weight_allocated <- round(out$weight_allocated, 3)
+  rownames(out) <- NULL
+  out
 }
 
 # One row per group: what it allocates and what it is matched to.

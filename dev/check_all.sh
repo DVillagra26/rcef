@@ -33,5 +33,9 @@ for t in dev/tests/test_*.R; do
 done
 
 echo
+echo "--- parity report (informational, does not fail the run) ---"
+Rscript dev/check_parity.R || true
+
+echo
 if [ $fail -eq 0 ]; then echo "ALL CHECKS PASSED"; else echo "$fail CHECK(S) FAILED"; fi
 exit $fail

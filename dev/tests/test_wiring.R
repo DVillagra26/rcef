@@ -1,34 +1,36 @@
-# workbench modules live where app.R says they do; the ICES scripts
-# stay in EXT_DIR. Keeping one convention means the tests exercise
-# the same layout that ships.
-APP_DIR <- getOption("rcef.app_dir", "R_development")
-EXT_DIR <- getOption("rcef.external_dir", "R")
 # ============================================================
-#  test_wiring.R
-#  A structural audit of app.R.
+#  test_wiring.R  -- a structural audit of the installed app.R
 #
-#  Three rounds of regex surgery on this file silently deleted a
+#  Ported from the pre-package suite. It reads the app.R that SHIPS,
+#  not a file in the working tree, so it audits what a user installs.
+#
+#  Three rounds of regex surgery on app.R once silently deleted a
 #  reactive, two outputs and a whole server block. Each time the
-#  behavioural tests caught it, but only after a confusing failure
-#  deep inside an unrelated assertion. These checks fail loudly and
-#  name the missing thing.
+#  behavioural tests caught it, but only after a confusing failure deep
+#  inside an unrelated assertion. These checks fail loudly and name the
+#  missing thing.
+#
+#  Syntax is check_syntax.R's job and the server actually running is
+#  check_server.R's; this file is only about wiring.
 # ============================================================
+FAIL <- 0L
 ok <- function(l, c, detail = NULL) {
-  cat(if (isTRUE(c)) "PASS" else "**FAIL**", "-", l, "\n")
-  if (!isTRUE(c) && !is.null(detail) && length(detail))
-    cat("      ", paste(detail, collapse = ", "), "\n")
+  if (isTRUE(c)) cat("ok    ", l, "\n")
+  else {
+    FAIL <<- FAIL + 1L
+    cat("FAIL  ", l, "\n")
+    if (!is.null(detail) && length(detail))
+      cat("       ", paste(detail, collapse = ", "), "\n")
+  }
 }
 
-src <- readLines("app.R", warn = FALSE)
+app <- system.file("app/app.R", package = "rcef")
+if (!nzchar(app)) stop("rcef is not installed; R CMD INSTALL first")
+src <- readLines(app, warn = FALSE)
 txt <- paste(src, collapse = "\n")
 
 cat("=== 1. the file is valid R ===\n")
-ok("app.R parses", !inherits(try(parse("app.R"), silent = TRUE), "try-error"))
-# both directories: the workbench modules and the ICES scripts beside them
-for (f in c(list.files(APP_DIR, pattern = "\\.R$", full.names = TRUE),
-            list.files(EXT_DIR, pattern = "\\.R$", full.names = TRUE)))
-  ok(paste("parses:", basename(f)),
-     !inherits(try(parse(f), silent = TRUE), "try-error"))
+ok("app.R parses", !inherits(try(parse(app), silent = TRUE), "try-error"))
 
 i_sv <- regexpr("server <- function\\(input, output, session\\)", txt)
 ui <- substr(txt, 1, i_sv - 1); sv <- substr(txt, i_sv, nchar(txt))
@@ -178,36 +180,37 @@ unknown <- sv_in[!vapply(sv_in, function(i)
   logical(1))]
 ok("no server input reference with no UI control", length(unknown) == 0, unknown)
 
-cat("\n=== 6. helper files export what app.R needs ===\n")
-suppressMessages({
-  library(dplyr); library(tidyr); library(ggplot2); library(rlang)
-  source(file.path(APP_DIR, "0_Functions_utils.R")); source(file.path(APP_DIR, "0_Functions_theme.R"))
-  source(file.path(APP_DIR, "0_Functions_classify.R")); source(file.path(APP_DIR, "0_Functions_groups.R"))
-  source(file.path(APP_DIR, "0_Functions_raising.R")); source(file.path(APP_DIR, "0_Functions_emit.R"))
-  source(file.path(APP_DIR, "0_Functions_plots.R")); source(file.path(APP_DIR, "app_ui_helpers.R")); source(file.path(APP_DIR, "summaries.R"))
-  source(file.path(APP_DIR, "session_log.R")); source(file.path(APP_DIR, "mod_intercatch.R"))
-  source(file.path(APP_DIR, "mod_native_raising.R")); source(file.path(APP_DIR, "external_loader.R"))
-})
+cat("\n=== 6. the package exports everything app.R relies on ===\n")
+suppressMessages(library(rcef))
 need <- c("build_strata","classify_strata","recommend_raising","raising_steps",
-          "decision_tree","decision_tree2","check_partition","raising_groups",
+          "decision_tree","raising_groups",
           "plot_heatmap","plot_bubbles","plot_coverage_bars","plot_dr_raw",
           "plot_dr_box","plot_river","plot_river_level","plot_comparison",
           "comparison_table","group_palette","var_palette","app_theme",
           "to_tonnes","fmt_t3","catches_summary","catches_by_category",
-          "biology_coverage","distributions_summary","distributions_by_type",
-          "effort_summary","raised_overview_table","raised_crosstab",
-          "plot_raised_composition","conds_from_auto","conds_from_rules",
-          "run_native_raising","cef_prepare","cef_check","cef_reorder",
+          "conds_from_auto","conds_from_rules",
+          "run_native_raising","cef_prepare","cef_check",
           "code_auto_rule","code_manual_rule","code_raise","code_compare",
-          "code_final","log_set","log_render","state_capture","state_apply",
-          "ic_code","new_rule","assign_rule_groups",
-          "flag_donor_exclusion","scenario_auto","scenario_manual","run_scenario")
+          "code_final","log_set","log_render","state_apply",
+          "ic_code","new_rule","assign_rule_groups","flag_donor_exclusion",
+          # added since the package split - the audit is only worth
+          # keeping if it grows with the app
+          "apply_filters","clean_filters","explore_filter_levels",
+          "filter_label","filter_coverage",
+          "exclusion_choices","excluded_keys","exclusion_overview",
+          "exclusion_label","stratum_keys","stratum_metrics",
+          "alloc_matched_cond","alloc_overview","assign_alloc_groups",
+          "manual_progress","rules_progress","rules_unassigned",
+          "alloc_steps","assign_alloc_cascade","alloc_cascade_table",
+          "cc_bracket","as_cc_spec","cc_step_value","fmt_cc_spec",
+          "rcef_sources","rcef_status","run_app")
 absent <- need[!vapply(need, exists, logical(1), mode = "function")]
-ok("all helpers app.R relies on are defined", length(absent) == 0, absent)
+ok("all helpers app.R relies on are exported", length(absent) == 0, absent)
 ok("constants defined", all(vapply(c("OUTPUT_FORMATS","OUTPUT_DESC",
                                      "IC_FILE_ROLES","IC_FILE_PATTERN",
                                      "FLEET_LEVELS","AREA_LEVELS","FILTER_VARS",
-                                     "LOG_ORDER","CEF_ORDER","CEF_REQUIRED"),
+                                     "LOG_ORDER","CEF_ORDER","CEF_REQUIRED",
+                                     "FILTER_ANY","RCEF_APP_PKGS"),
                                    exists, logical(1))))
 
 cat("\n=== 7. things deliberately removed stay removed ===\n")
@@ -280,4 +283,13 @@ ok("no panel keyed on an id nothing publishes", length(unpub) == 0, unpub)
 ok("pickers initialise their value on load",
    grepl("pickInit", txt, fixed = TRUE))
 
-cat("\nDONE\n")
+cat("\n=== 11. things this port added ===\n")
+ok("the figure filter is a chip builder, not a wall of dropdowns",
+   grepl("_flt_chips", txt, fixed = TRUE) &&
+   !grepl('paste0(p, "_flt_", v)', txt, fixed = TRUE))
+ok("the busy dots name the task", grepl("WORK_WHAT", txt, fixed = TRUE))
+ok("no slider left where a number box belongs",
+   !grepl("catchall_dr\"", txt))
+
+cat(sprintf("\nDONE  %d failure(s)\n", FAIL))
+if (FAIL) quit(status = 1L)

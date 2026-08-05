@@ -526,7 +526,8 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
           h4("2. Build a clause"),
           span(class = "note", "A clause is one or more variable restrictions ",
                "combined with AND. Add them one at a time."),
-          selectInput(ns("var"), "Variable", LEN_DIMS, "Area"),
+          div(tags$b("Variable", style = "font-size:12px")),
+          uiOutput(ns("var_chips")),
           uiOutput(ns("vals")),
           checkboxInput(ns("neg"), "NOT in these", FALSE),
           actionButton(ns("add"), "Add to clause", class = "btn-sm btn-primary"),
@@ -553,19 +554,32 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
           span(class = "note",
                "The two can differ: a group of strata may be allocated from ",
                "a wider pool of sampled data."),
-          div(class = "condbox",
-              div(class = "condtitle", "allocStrataCond - strata to allocate"),
-              uiOutput(ns("alloc_txt")),
-              actionButton(ns("to_alloc"), "Put clause here",
-                           class = "btn-sm btn-info")),
-          div(style = "display:flex;gap:6px;margin:6px 0",
-              actionButton(ns("mirror"), HTML("Copy down &darr;"),
-                           class = "btn-sm btn-warning", style = "flex:1")),
-          div(class = "condbox",
-              div(class = "condtitle", "bioMatchedCond - sampled data used"),
-              uiOutput(ns("matched_txt")),
-              actionButton(ns("to_matched"), "Put clause here",
-                           class = "btn-sm btn-info")),
+          # side by side, the same layout as the discard builder: the two
+          # conditions are read against each other far more often than in
+          # sequence, and stacked they were a scroll apart
+          div(style = "display:flex;gap:8px;align-items:stretch",
+            div(style = "flex:1",
+              div(class = "condbox",
+                  div(class = "condtitle", "allocStrataCond"),
+                  span(class = "note", "strata to allocate"),
+                  uiOutput(ns("alloc_txt")),
+                  actionButton(ns("to_alloc"), "Put clause here",
+                               class = "btn-sm btn-info"))),
+            div(style = "flex:0 0 42px;display:flex;flex-direction:column;
+                         justify-content:center;gap:4px",
+              actionButton(ns("mirror"), HTML("&rarr;"),
+                           class = "btn-sm btn-warning",
+                           title = "copy to bioMatchedCond"),
+              actionButton(ns("mirror_back"), HTML("&larr;"),
+                           class = "btn-sm btn-warning",
+                           title = "copy back to allocStrataCond")),
+            div(style = "flex:1",
+              div(class = "condbox",
+                  div(class = "condtitle", "bioMatchedCond"),
+                  span(class = "note", "sampled data used"),
+                  uiOutput(ns("matched_txt")),
+                  actionButton(ns("to_matched"), "Put clause here",
+                               class = "btn-sm btn-info")))),
 
           actionButton(ns("saverule"), "5. Save group", class = "btn-success"),
           tags$hr(),
@@ -612,7 +626,16 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
           span(class = "note",
                "The two lists as they would be written in a script."),
           verbatimTextOutput(ns("conds")),
-          h4("What each group allocates"), tbl_slot(ns("rules")),
+          h4("Groups"), tbl_slot(ns("rules")),
+          tags$hr(),
+          uiOutput(ns("check")),
+          h4("What each group actually allocates"),
+          span(class = "note",
+               "Read top to bottom, the way the groups are evaluated. Each ",
+               "card shows what its group TAKES - after the groups above it ",
+               "have taken theirs - and the running total of the catch ",
+               "resolved so far."),
+          uiOutput(ns("ladder")),
           tags$hr(),
           h4("What is assigned, and what is still missing"),
           span(class = "note",
@@ -623,6 +646,22 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
           h4("Strata still unassigned"),
           span(class = "note", "Heaviest first, so the biggest hole is on top."),
           tbl_slot(ns("missing")),
+
+          tags$hr(),
+          h4("Strata"),
+          span(class = "note",
+               "One row per stratum: the group that allocates it, and every ",
+               "group it lends its distribution to. The same table the ",
+               "discard builder shows."),
+          tbl_slot(ns("strata_tbl")),
+          tags$hr(),
+          h4("Overview: allocated vs donated per group"),
+          span(class = "note",
+               "Two numbers that are easy to conflate. A stratum is ",
+               "ALLOCATED by exactly one group; it can sit in the donor ",
+               "pool of several, so the second column can exceed the first ",
+               "and usually should."),
+          tbl_slot(ns("ov")),
           tags$hr(),
           h4("Strata and the data they are allocated from"),
           plot_slot(ns("mriver")),
@@ -1004,9 +1043,19 @@ exclude_box <- function(p, metrics = c("coverage", "measurements", "rate"),
     tbl_slot(n("tbl")))
 }
 
+# Built like the clause builder on the grouping tabs: pick a variable
+# from the chips, pick values, add. Listing every filterable column as a
+# dropdown from the start filled the sidebar with a dozen empty boxes,
+# eleven of which were never going to be used.
 filter_box <- function(p) div(class = "fltbox",
   div(class = "flttitle", "Filter this figure"),
-  uiOutput(paste0(p, "_flt_ui")),
+  uiOutput(paste0(p, "_flt_chips")),
+  uiOutput(paste0(p, "_flt_vals")),
+  div(style = "display:flex;gap:4px;margin-top:4px",
+    actionButton(paste0(p, "_flt_add"), "Add filter",
+                 class = "btn-xs btn-primary"),
+    actionButton(paste0(p, "_flt_clear"), "Clear all", class = "btn-xs")),
+  uiOutput(paste0(p, "_flt_list")),
   uiOutput(paste0(p, "_flt_note")))
 
 level_box <- function(p, fleet = "metier4", area = "ICESDivision") {
@@ -1127,6 +1176,13 @@ ui <- navbarPage(
   letter-spacing:.4px;margin-bottom:4px}
 .fltbox .form-group{margin-bottom:4px}
 .fltbox .control-label{font-size:11px;margin-bottom:1px}
+.fltapplied{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.fltpill{display:inline-flex;align-items:center;gap:5px;font-size:11px;
+  background:#fff;border:1px solid #d9a441;border-radius:10px;
+  padding:1px 4px 1px 8px;color:#7a4a00;max-width:100%}
+.fltpill b{font-weight:600}
+.fltpill .x{cursor:pointer;font-weight:700;color:#b00;padding:0 3px}
+.fltpill .x:hover{background:#fdd;border-radius:8px}
 .hier-key-row .form-group{margin-bottom:2px}
 .hier-key-row .control-label{font-size:11px;margin-bottom:1px}
 .ccpane{border-radius:5px;padding:4px 6px}
@@ -1297,6 +1353,31 @@ ui <- navbarPage(
               font-weight:700;padding:2px 0}
     .rulebtn{border:1px solid #bbb;background:#f4f4f4;border-radius:4px;
              cursor:pointer;font-size:11px;padding:1px 6px}
+
+    /* Shiny puts .recalculating on an output while it is being redrawn.
+       Without a cue the app looks frozen on anything slow - the biology
+       link and the cascade both walk the whole distributions table - and
+       a user presses Apply again, which queues a second pass. */
+    .shiny-bound-output.recalculating{opacity:.35;transition:opacity .1s}
+    .dtwrap, .plotwrap{position:relative}
+    .busydots{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+      z-index:20;background:rgba(255,255,255,.94);border:1px solid #cbd7e3;
+      border-radius:8px;padding:8px 14px;font-size:12px;color:#12324f;
+      box-shadow:0 2px 10px rgba(0,0,0,.12);white-space:nowrap}
+    .busydots i{display:inline-block;width:5px;height:5px;border-radius:50%;
+      background:#2f6f9f;margin-left:3px;animation:bd 1s infinite}
+    .busydots i:nth-child(2){animation-delay:.15s}
+    .busydots i:nth-child(3){animation-delay:.3s}
+    @keyframes bd{0%,60%,100%{opacity:.25;transform:translateY(0)}
+                  30%{opacity:1;transform:translateY(-3px)}}
+
+    #work_pill{position:fixed;right:14px;bottom:14px;z-index:3500;display:none;
+      background:#12324f;color:#fff;font-size:12px;padding:6px 12px;
+      border-radius:16px;box-shadow:0 3px 12px rgba(0,0,0,.3)}
+    #work_pill i{display:inline-block;width:5px;height:5px;border-radius:50%;
+      background:#9fd0ff;margin-left:3px;animation:bd 1s infinite}
+    #work_pill i:nth-child(3){animation-delay:.15s}
+    #work_pill i:nth-child(4){animation-delay:.3s}
   ")),
   tags$script(HTML(
     "// A picker only sent its value on click, so on first load every
@@ -1340,6 +1421,61 @@ ui <- navbarPage(
   # A floating preview of whatever stratum the pointer is over in an
   # exclusion list. The SVGs are sent once and cached client-side, so the
   # hover is instant and costs no round-trip.
+  # A quieter companion to the centred overlay: the overlay is for a
+  # deliberate action the user is waiting on, this is for everything else
+  # Shiny happens to be recomputing. It names the task rather than saying
+  # "loading", because "loading" does not tell you whether to wait two
+  # seconds or twenty.
+  tags$div(id = "work_pill",
+           tags$span(id = "work_pill_txt", "Working"),
+           tags$i(), tags$i(), tags$i()),
+  tags$script(HTML(
+    "// Name the slow things. Anything not listed falls back to a generic
+     // line rather than claiming to know what is happening.
+     var WORK_WHAT = {
+       cov_plot:'Building sampling-coverage strata',
+       dr_plot:'Computing discard rates per stratum',
+       dr_tbl:'Aggregating the stratum table',
+       len_cov_plot:'Linking length distributions to catch strata',
+       len_n_plot:'Summing numbers at length',
+       len_w_plot:'Averaging weights at length',
+       age_cov_plot:'Linking age distributions to catch strata',
+       age_n_plot:'Summing numbers at age',
+       age_w_plot:'Averaging weights at age',
+       man_progress:'Testing each rule against the strata',
+       man_missing:'Finding the strata no rule has claimed',
+       tree_tbl:'Walking the raising cascade',
+       diag_tbl:'Classifying strata against the threshold'
+     };
+     function bdMark(){
+       document.querySelectorAll('.shiny-bound-output.recalculating')
+         .forEach(function(el){
+           var w = el.closest('.dtwrap, .plotwrap');
+           if (!w || w.querySelector('.busydots')) return;
+           var what = WORK_WHAT[el.id] || 'Recomputing';
+           var d = document.createElement('div');
+           d.className = 'busydots';
+           d.innerHTML = what + '<i></i><i></i><i></i>';
+           w.appendChild(d);
+         });
+       document.querySelectorAll('.busydots').forEach(function(d){
+         var w = d.parentNode;
+         if (!w.querySelector('.shiny-bound-output.recalculating')) d.remove();
+       });
+     }
+     function bdPill(){
+       var busy = document.documentElement.classList.contains('shiny-busy');
+       var pill = document.getElementById('work_pill');
+       if (!pill) return;
+       if (busy) {
+         var first = document.querySelector('.shiny-bound-output.recalculating');
+         var txt = (first && WORK_WHAT[first.id]) || 'Working';
+         document.getElementById('work_pill_txt').innerText = txt;
+       }
+       pill.style.display = busy ? 'block' : 'none';
+     }
+     setInterval(function(){ bdMark(); bdPill(); }, 120);")),
+
   tags$div(id = "strat_tip",
     style = "display:none;position:fixed;z-index:4000;pointer-events:none;
              box-shadow:0 4px 16px rgba(0,0,0,.28);border-radius:6px"),
@@ -1595,7 +1731,17 @@ ui <- navbarPage(
                    "twice. Its matchedDataCond is every stratum, including ",
                    "those already used by earlier groups: a donor can be ",
                    "reused, only a raised stratum cannot. Put it last."),
-              sliderInput("catchall_dr", "Catch-all discard rate", 0, 1, c(0, 1), 0.01),
+              # a box, not a slider, so it lines up with the % coverage box
+              # beside it - two controls doing the same job should not be
+              # two different kinds of control
+              fluidRow(
+                column(6, numericInput("catchall_dr_min", "discard rate above",
+                                       NA, 0, 5, 0.01, width = "100%")),
+                column(6, numericInput("catchall_dr_max", "discard rate below",
+                                       NA, 0, 5, 0.01, width = "100%"))),
+              span(class = "note",
+                   "Blank switches a bound off. Strata outside the window ",
+                   "stay out of the catch-all's donor pool."),
               exclude_box("ca", metrics = c("coverage"), title = NULL,
                           note = paste("The catch-all is the last resort, so",
                                        "it usually wants the widest pool -",
@@ -1649,11 +1795,30 @@ ui <- navbarPage(
               uiOutput("man_ladder"),
 
               tags$hr(),
+              h4("What is assigned, and what is still missing"),
+              span(class = "note",
+                   "One row per rule in the order it is tested, with the ",
+                   "running total. The last row is whatever no rule has ",
+                   "claimed yet - the gap to close. The same table the ",
+                   "length and age builders show."),
+              tbl_slot("man_progress"),
+              h4("Strata still unassigned"),
+              span(class = "note", "Heaviest first, so the biggest hole is on top."),
+              tbl_slot("man_missing"),
+
+              tags$hr(),
               h4("Groups"), tbl_slot("rules_tbl"),
               h4("Strata"), tbl_slot("rules_strata_tbl"),
               tags$hr(), h4("Overview: raised vs donated per group"), tbl_slot("man_ov"),
                     tags$hr(), h4("Which strata are raised from where"),
-              plot_slot("man_river")))))),
+              plot_slot("man_river"),
+              h4("One river per rule"),
+              span(class = "note",
+                   "The same reading as the length and age builders: what ",
+                   "each rule claims, and where it draws from. The combined ",
+                   "river above can hide a rule whose strata are few but ",
+                   "whose donor pool is wide."),
+              uiOutput("man_rule_rivers")))))),
 
       conditionalPanel("input.sec3 == 'stgraise'",
         div(style = "padding:8px 4px",
@@ -1835,29 +2000,83 @@ server <- function(input, output, session) {
   # figure leaves the discard-rate figure alone.
   filter_prefixes <- reactiveVal(character(0))
 
-  flt_inputs <- function(p) {
-    lv <- expf_levels()
-    if (!length(lv)) return(list())
-    f <- lapply(names(lv), function(v) input[[paste0(p, "_flt_", v)]])
-    names(f) <- names(lv)
-    clean_filters(f)
+  # Held in rv$flt, one named list per figure tab, rather than read back
+  # out of a dozen selectize inputs. The chip builder adds one variable at
+  # a time, so there is no input to read for a variable nobody has picked.
+  flt_inputs <- function(p) clean_filters(rv$flt[[p]] %||% list())
+
+  flt_set <- function(p, var, vals) {
+    cur <- rv$flt[[p]] %||% list()
+    if (!length(vals)) cur[[var]] <- NULL else cur[[var]] <- vals
+    rv$flt[[p]] <- cur
   }
 
   # Registered lazily: a renderUI for a tab that has never been opened
   # never runs, so the registry fills in as tabs are visited and the
   # script only ever reports filters that were really set.
+  # The variables offered first, in the order a fisheries scientist
+  # reaches for them. Everything else is behind "more variables", the same
+  # split the clause builder uses.
+  FLT_CORE <- c("metier4", "metier5", "metier6", "Country",
+                "ICESDivision", "ICESSubArea", "Season", "FleetType")
+
   filter_server <- function(p) {
-    output[[paste0(p, "_flt_ui")]] <- renderUI({
+    id <- function(x) paste0(p, "_flt_", x)
+
+    output[[id("chips")]] <- renderUI({
       lv <- expf_levels()
       if (!length(lv))
         return(span(class = "note", "Nothing filterable in this table."))
       cur <- filter_prefixes()
       if (!p %in% cur) filter_prefixes(c(cur, p))
-      tagList(lapply(names(lv), function(v)
-        selectizeInput(paste0(p, "_flt_", v), v, choices = lv[[v]],
-                       selected = isolate(input[[paste0(p, "_flt_", v)]]),
-                       multiple = TRUE, width = "100%",
-                       options = list(placeholder = FILTER_ANY))))
+      core  <- intersect(FLT_CORE, names(lv))
+      extra <- setdiff(names(lv), core)
+      sel <- input[[id("var")]] %||% (if (length(core)) core[1] else names(lv)[1])
+      tagList(div(tags$b("Variable", style = "font-size:12px")),
+              var_chips(id("var"), core, extra, sel))
+    })
+
+    output[[id("vals")]] <- renderUI({
+      lv <- expf_levels()
+      v <- input[[id("var")]] %||% (if (length(lv)) names(lv)[1] else NULL)
+      if (is.null(v) || is.null(lv[[v]])) return(NULL)
+      selectizeInput(id("valsel"), NULL, choices = lv[[v]],
+                     selected = isolate(rv$flt[[p]][[v]]),
+                     multiple = TRUE, width = "100%",
+                     options = list(placeholder = paste0("any ", v)))
+    })
+
+    observeEvent(input[[id("add")]], {
+      lv <- expf_levels()
+      v <- input[[id("var")]] %||% (if (length(lv)) names(lv)[1] else NULL)
+      req(!is.null(v))
+      flt_set(p, v, input[[id("valsel")]])
+    })
+
+    observeEvent(input[[id("clear")]], rv$flt[[p]] <- list())
+
+    observeEvent(input[[id("del")]], {
+      flt_set(p, input[[id("del")]], NULL)
+    })
+
+    # Everything currently applied, one removable pill each. The overview
+    # is the point: with the values hidden behind a chip you cannot see
+    # what is on without it.
+    output[[id("list")]] <- renderUI({
+      f <- flt_inputs(p)
+      if (!length(f))
+        return(div(class = "note", style = "margin-top:6px",
+                   "No filter - the whole table."))
+      div(class = "fltapplied", lapply(names(f), function(v)
+        tags$span(class = "fltpill",
+          tags$span(tags$b(v), ": ",
+                    if (length(f[[v]]) > 3)
+                      sprintf("%d values", length(f[[v]]))
+                    else paste(f[[v]], collapse = ", ")),
+          tags$span(class = "x", HTML("&times;"), title = paste("remove", v),
+            onclick = sprintf(
+              "Shiny.setInputValue('%s','%s',{priority:'event'})",
+              id("del"), v)))))
     })
 
     # Rows can survive a filter while weight does not. A figure drawn on
@@ -1865,8 +2084,7 @@ server <- function(input, output, session) {
     # so both numbers sit under the control rather than in a tooltip.
     output[[paste0(p, "_flt_note")]] <- renderUI({
       f <- flt_inputs(p)
-      if (!length(f))
-        return(span(class = "note", "No filter - the whole table."))
+      if (!length(f)) return(NULL)
       d <- tryCatch(dat(), error = function(e) NULL)
       if (is.null(d)) return(NULL)
       cv <- tryCatch(filter_coverage(d, f), error = function(e) NULL)
@@ -1899,9 +2117,9 @@ server <- function(input, output, session) {
 
   # every filter that is actually set, for the emitted script
   explore_filters_all <- reactive({
-    ps <- filter_prefixes()
     out <- list()
-    for (p in ps) { f <- flt_inputs(p); if (length(f)) out[[p]] <- f }
+    for (p in names(rv$flt %||% list())) {
+      f <- flt_inputs(p); if (length(f)) out[[p]] <- f }
     out
   })
 
@@ -2093,6 +2311,8 @@ server <- function(input, output, session) {
 
 
   rv <- reactiveValues(sets = list(), rules = list(), clause = list(),
+                       # per-figure-tab exploration filters, keyed by prefix
+                       flt = list(),
                        pend_raise = NULL, pend_source = NULL, scenarios = list(),
                        ic = NULL, native = NULL, log = log_new(),
                        dist = NULL, eff = NULL, final = NULL, restore = NULL,
@@ -2952,6 +3172,13 @@ server <- function(input, output, session) {
       req(length(getrv("clause")))
       setrv("match_pend", getrv("clause")); setrv("clause", list()) })
     observeEvent(input[[ns("mirror")]], setrv("match_pend", getrv("alloc_pend")))
+    observeEvent(input[[ns("mirror_back")]], setrv("alloc_pend", getrv("match_pend")))
+
+    # Same chip picker as the discard clause builder: the main stratum
+    # variables up front, everything else behind "more variables".
+    output[[ns("var_chips")]] <- renderUI({
+      sel <- input[[ns("var")]] %||% "Area"
+      var_chips(ns("var"), LEN_DIMS, character(0), sel) })
 
     output[[ns("alloc_txt")]] <- renderUI(div(class = "clausebox",
       if (is.null(getrv("alloc_pend"))) "(not set - matches every stratum)"
@@ -3061,6 +3288,83 @@ server <- function(input, output, session) {
       bl <- blink_for("cov")
       validate(need(!is.null(bl) && nrow(bl), "No catch rows."))
       assign_alloc_groups(bl, g, bms_on()) })
+
+    # The same green/red verdict the discard builder shows. A table with a
+    # STILL MISSING row states the fact; this says what to do about it.
+    output[[ns("check")]] <- renderUI({
+      g <- getrv("groups") %||% list()
+      if (!length(g)) return(NULL)
+      d <- tryCatch(manual_progress(man_assigned(), g), error = function(e) NULL)
+      if (is.null(d)) return(NULL)
+      miss <- d[d$group == "STILL MISSING", , drop = FALSE]
+      ok <- !nrow(miss) || miss$n_strata[1] == 0
+      div(style = sprintf(
+        "border-radius:7px;padding:7px 10px;font-size:12px;margin:6px 0;
+         background:%s;border:1px solid %s;color:%s",
+        if (ok) "#eef7ee" else "#fff3f3", if (ok) "#59A14F" else "#c0392b",
+        if (ok) "#14532d" else "#7a1f1f"),
+        if (ok) tagList(tags$b("Every stratum is covered."),
+                        " The groups partition the catch, so nothing is ",
+                        "allocated twice and nothing is left out.")
+        else tagList(tags$b(sprintf(
+          "%s strata (%s t) are not covered by any group.",
+          miss$n_strata[1], fmt_t3(miss$weight[1]))),
+          " They will reach catchAllocationAoL() in no group. Add a ",
+          "catch-all as the last group, or widen one above.")) })
+
+    output[[ns("ladder")]] <- renderUI({
+      g <- getrv("groups") %||% list()
+      if (!length(g)) return(div(class = "note", "No groups yet."))
+      d <- tryCatch(manual_progress(man_assigned(), g), error = function(e) NULL)
+      if (is.null(d)) return(div(class = "note", "Nothing to show."))
+      pal <- group_palette(names(g))
+      tagList(lapply(seq_len(nrow(d)), function(i) {
+        r <- d[i, ]
+        miss <- identical(r$group, "STILL MISSING")
+        col <- if (miss) "#7a1f1f" else (pal[[r$group]] %||% "#12324f")
+        div(style = sprintf(
+          "border-left:6px solid %s;background:%s;border:1px solid #e2e2e8;
+           border-radius:7px;padding:7px 10px;font-size:12px;margin-bottom:8px",
+          col, if (miss) "#fff3f3" else "#fbfbfd"),
+          tags$b(if (miss) "Not covered by any group"
+                 else sprintf("%s: %s", r$group,
+                              if (nzchar(r$label)) r$label else r$condition)),
+          tags$br(),
+          sprintf("%s stratum/strata, %s t (%s%% of the catch)",
+                  r$n_strata, fmt_t3(r$weight),
+                  ifelse(is.na(r$pct_weight), "-", r$pct_weight)),
+          if (!miss && !is.na(r$cum_pct_weight))
+            tagList(tags$br(),
+                    tags$span(class = "note",
+                              sprintf("running total: %s%% of the catch",
+                                      r$cum_pct_weight))))
+      })) })
+
+    output[[ns("strata_tbl")]] <- renderDT({
+      g <- getrv("groups") %||% list()
+      validate(need(length(g), "No groups yet."))
+      a <- man_assigned()
+      keep <- intersect(c(dims_of(), "weight", "weight_measured", "coverage",
+                          "n_measurements", "alloc_group",
+                          "usedToAllocGroups_txt", "n_donates_to"), names(a))
+      d <- a[, keep, drop = FALSE]
+      names(d)[names(d) == "usedToAllocGroups_txt"] <- "donates_to"
+      num <- vapply(d, is.numeric, logical(1))
+      d[num] <- lapply(d[num], function(x) round(x, 3))
+      dt_group_colours(
+        datatable(d, rownames = FALSE,
+                  options = list(scrollX = TRUE, pageLength = 15)),
+        "alloc_group", group_palette(names(g))) })
+
+    output[[ns("ov")]] <- renderDT({
+      g <- getrv("groups") %||% list()
+      validate(need(length(g), "No groups yet."))
+      d <- alloc_overview(man_assigned(), g)
+      validate(need(!is.null(d), "Nothing to summarise."))
+      dt_group_colours(
+        datatable(d, rownames = FALSE,
+                  options = list(scrollX = TRUE, dom = "t")),
+        "group", group_palette(names(g))) })
 
     output[[ns("conds")]] <- renderText(
       paste(emit_alloc_conditions(getrv("groups") %||% list()), collapse = "\n"))
@@ -3668,6 +3972,8 @@ server <- function(input, output, session) {
     if (!dir.exists(d)) {
       showNotification(paste("Folder not found:", d), type = "error"); return()
     }
+    set_busy(TRUE, sprintf("Reading the CEF tables from %s...", basename(d)))
+    on.exit(set_busy(FALSE), add = TRUE)
     fs <- list.files(d, pattern = "\\.(csv|txt)$", ignore.case = TRUE,
                      full.names = TRUE)
     pick <- function(pat) {
@@ -3989,6 +4295,19 @@ server <- function(input, output, session) {
     dims_of   = function() unname(dmap("mg")[DIMS]),
     metrics   = c("coverage"))
 
+  output$man_progress <- renderDT({
+    validate(need(length(rv$rules), "No groups yet."))
+    d <- rules_progress(man_strata(), rv$rules, rv$sets)
+    validate(need(!is.null(d), "Nothing to report."))
+    datatable(d, rownames = FALSE, options = list(scrollX = TRUE, dom = "t")) })
+
+  output$man_missing <- renderDT({
+    d <- rules_unassigned(man_strata(), rv$rules, rv$sets,
+                          unname(dmap("mg")[DIMS]))
+    validate(need(!is.null(d) && nrow(d), "Every stratum is claimed."))
+    datatable(d, rownames = FALSE,
+              options = list(scrollX = TRUE, pageLength = 10)) })
+
   # the two condition lists, ready to paste into a script
   output$man_conds <- renderText({
     if (!length(rv$rules)) return("(no groups yet)")
@@ -4137,9 +4456,16 @@ server <- function(input, output, session) {
     rv$clause <- list(); rv$pend_raise <- NULL; rv$pend_source <- NULL
     updateTextInput(session, "rule_id", value = paste0("G", length(rv$rules) + 1)) })
 
+  ca_dr <- reactive({
+    g <- function(id) {
+      x <- input[[id]]
+      if (is.null(x) || !length(x) || all(is.na(x))) NA_real_ else as.numeric(x)[1]
+    }
+    c(g("catchall_dr_min"), g("catchall_dr_max"))
+  })
+
   observeEvent(input$add_catchall, {
-    dr <- c(if (input$catchall_dr[1] > 0) input$catchall_dr[1] else NA,
-            if (input$catchall_dr[2] < 1) input$catchall_dr[2] else NA)
+    dr <- ca_dr()
     rv$rules <- c(rv$rules, list(new_rule(paste0("G", length(rv$rules) + 1),
       "catch-all", list(), NULL, dr[1], dr[2],
       # by default the catch-all keeps every stratum: an exclusion made
@@ -4310,6 +4636,56 @@ server <- function(input, output, session) {
     dt_group_colours(datatable(manual_overview(man_assigned(), rv$rules),
                                options = list(scrollX = TRUE, dom = "t"),
                                rownames = FALSE), "group", man_pal()) })
+
+  # One river per rule, the same view the length and age builders have
+  # had. The combined river below can hide a rule whose strata are few
+  # but whose donor pool is wide - it is one band among forty.
+  man_river_label <- function(a, dd) {
+    rl <- setNames(vapply(rv$rules, function(r) {
+      cl <- cond_string(r$raise)
+      base <- if (nzchar(r$label %||% "")) r$label else r$id
+      if (identical(cl, "TRUE")) paste0(base, ": all remaining strata  [", r$id, "]")
+      else paste0(cl, "  [", r$id, "]")
+    }, character(1)), vapply(rv$rules, `[[`, character(1), "id"))
+    right <- unname(rl[as.character(a$toBeRaisedGroup)])
+    right[is.na(right)] <- as.character(a$toBeRaisedGroup)[is.na(right)]
+    right
+  }
+
+  output$man_rule_rivers <- renderUI({
+    if (!length(rv$rules)) return(div(class = "note", "No groups yet."))
+    a <- tryCatch(man_assigned(), error = function(e) NULL)
+    if (is.null(a)) return(div(class = "note", "No strata yet."))
+    tagList(lapply(seq_along(rv$rules), function(i) {
+      r <- rv$rules[[i]]
+      n <- sum(a$toBeRaisedGroup == r$id, na.rm = TRUE)
+      div(style = "margin-bottom:8px",
+          tags$b(sprintf("%s%s - %s stratum/strata", r$id,
+                         if (nzchar(r$label %||% ""))
+                           paste0(" (", r$label, ")") else "", n)),
+          if (n > 0) plotOutput(paste0("mrriver_", i),
+                                height = paste0(max(200, 60 + n * 24), "px"))
+          else div(class = "note", "claims nothing"))
+    })) })
+
+  observe({
+    a <- tryCatch(man_assigned(), error = function(e) NULL)
+    if (!length(rv$rules) || is.null(a)) return()
+    dd <- unname(dmap("mg")[DIMS]); pal <- man_pal()
+    for (i in seq_along(rv$rules)) local({
+      j <- i; gid <- rv$rules[[j]]$id
+      output[[paste0("mrriver_", j)]] <- renderPlot({
+        sub <- a[!is.na(a$toBeRaisedGroup) & a$toBeRaisedGroup == gid, ,
+                 drop = FALSE]
+        validate(need(nrow(sub), "claims nothing"))
+        pl <- plot_river(sub, left_var = NULL, right_var = "toBeRaisedGroup",
+                         value_var = "landings", pal = pal[gid],
+                         title = NULL,
+                         left_label = stratum_label(sub, dd),
+                         right_label = man_river_label(sub, dd),
+                         stratum_axis = stratum_axis_label(dd))
+        validate(need(!is.null(pl), "Nothing to plot.")); pl })
+    }) })
 
   output$man_river <- renderPlot({
     validate(need(length(rv$rules) >= 1, "No groups yet."))
@@ -4648,8 +5024,14 @@ server <- function(input, output, session) {
   # input$cov_type is deliberately absent from the signature: switching
   # heatmap/bubbles/bars is a different view of the same configuration, not
   # a reconfiguration, so it goes through as `live` and redraws at once.
+  # flt_inputs() belongs in here. Without it a filter change never altered
+  # the signature, so the panel never went stale and Apply re-froze the
+  # same value - the figure could not redraw, because as far as the gate
+  # was concerned nothing had been reconfigured. The biology panels had
+  # it from the start; these two did not.
   cov_sig <- reactive(list(input$cov_y, input$cov_fill, input$cov_facet,
-                           input$threshold, input$cov_fleet, input$cov_area))
+                           input$threshold, input$cov_fleet, input$cov_area,
+                           flt_inputs("cov")))
   cov_live <- reactive(input$cov_type)
   cov_g <- gate_of("cov", cov_sig, live = cov_live)
 
@@ -4699,7 +5081,8 @@ server <- function(input, output, session) {
                           input$dr_shape, input$dr_facet, input$dr_jitter,
                           input$box_x, input$box_fill, input$box_facet,
                           input$box_points, input$box_pooled,
-                          input$dr_fleet, input$dr_area))
+                          input$dr_fleet, input$dr_area,
+                          flt_inputs("dr")))
   dr_live <- reactive(input$dr_type)
   dr_g <- gate_of("dr", dr_sig, live = dr_live)
 

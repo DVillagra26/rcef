@@ -1003,3 +1003,90 @@ rule_river_data <- function(strata, rules, sets = list()) {
   strata$raise_level <- ifelse(is.na(step), NA_character_, "manual rule")
   strata
 }
+
+# ----------------------------------------------------------
+#  Manual discard rules: what is claimed, and what is not
+# ----------------------------------------------------------
+# The biology manual builder has had these two tables since it was
+# written; the discard manual builder never did. Same question, same
+# shape, so the two panels read the same way: one row per rule in the
+# order it is tested, the running total, and the remainder on the last
+# row rather than left to be inferred from a gap.
+
+#' What each manual discard rule claims, and what nothing has claimed
+#'
+#' First-match-wins, so a rule receives its clause minus everything above
+#' it. The cumulative columns stop before the last row: `STILL MISSING`
+#' is the remainder, not another step, and running it into the total
+#' would read as though the gap had been closed.
+#'
+#' @param strata A stratum table.
+#' @param rules A list of rules, in evaluation order.
+#' @param sets Named value sets.
+#' @param weight_col Column to total. Defaults to `landings`.
+#' @return A data frame, one row per rule plus a `STILL MISSING` row.
+#' @seealso [rules_unassigned()], [assign_rule_groups()]
+#' @export
+rules_progress <- function(strata, rules, sets = list(),
+                           weight_col = "landings") {
+  if (is.null(strata) || !nrow(strata) || !length(rules)) return(NULL)
+  gid <- apply_rules_first(as.data.frame(strata), rules, sets)
+  w <- if (weight_col %in% names(strata)) as.numeric(strata[[weight_col]])
+       else rep(1, nrow(strata))
+  w[is.na(w)] <- 0
+  tot_w <- sum(w); tot_n <- nrow(strata)
+
+  rows <- lapply(seq_along(rules), function(i) {
+    r <- rules[[i]]
+    sel <- which(gid == r$id)
+    data.frame(order = i, group = r$id, label = r$label %||% "",
+               condition = cond_string(r$raise),
+               n_strata = length(sel),
+               weight = sum(w[sel], na.rm = TRUE),
+               stringsAsFactors = FALSE)
+  })
+  out <- do.call(rbind, rows)
+  miss <- which(is.na(gid))
+  out <- rbind(out, data.frame(order = NA_integer_, group = "STILL MISSING",
+    label = "", condition = "-", n_strata = length(miss),
+    weight = sum(w[miss], na.rm = TRUE), stringsAsFactors = FALSE))
+
+  out$pct_strata <- round(out$n_strata / tot_n * 100, 1)
+  out$pct_weight <- if (tot_w > 0) round(out$weight / tot_w * 100, 1) else NA_real_
+  claimed <- out$group != "STILL MISSING"
+  out$cum_pct_strata <- NA_real_; out$cum_pct_weight <- NA_real_
+  out$cum_pct_strata[claimed] <-
+    round(cumsum(out$n_strata[claimed]) / tot_n * 100, 1)
+  if (tot_w > 0) out$cum_pct_weight[claimed] <-
+    round(cumsum(out$weight[claimed]) / tot_w * 100, 1)
+  out$weight <- round(out$weight, 3)
+  out
+}
+
+#' The strata no manual discard rule has claimed
+#'
+#' Heaviest first, so the biggest hole is on top and the next rule to
+#' write is obvious.
+#'
+#' @inheritParams rules_progress
+#' @param dims Key columns to show.
+#' @return A data frame of unclaimed strata, or `NULL` if none.
+#' @seealso [rules_progress()]
+#' @export
+rules_unassigned <- function(strata, rules, sets = list(), dims = NULL,
+                             weight_col = "landings") {
+  if (is.null(strata) || !nrow(strata)) return(NULL)
+  d <- as.data.frame(strata)
+  gid <- if (length(rules)) apply_rules_first(d, rules, sets)
+         else rep(NA_character_, nrow(d))
+  un <- d[is.na(gid), , drop = FALSE]
+  if (!nrow(un)) return(NULL)
+  keep <- intersect(c(dims, weight_col, "coverage", "discard_rate"), names(un))
+  out <- un[, keep, drop = FALSE]
+  if (weight_col %in% names(out))
+    out <- out[order(-out[[weight_col]]), , drop = FALSE]
+  num <- vapply(out, is.numeric, logical(1))
+  out[num] <- lapply(out[num], function(x) round(x, 3))
+  rownames(out) <- NULL
+  out
+}

@@ -13,5 +13,16 @@ that nothing else does.
 Porting one means: replace the `source()` block with
 `library(rcef)`, replace `readLines("app.R")` with
 `readLines(system.file("app/app.R", package = "rcef"))`, and move it up
-to `dev/tests/`. `test_wiring.R` and `test_app_server.R` are the two
-worth doing first.
+to `dev/tests/`.
+
+**`test_wiring.R` has been ported** and now lives in `dev/tests/`. It was
+worth it: mutating one `output[[ns("ov")]]` to a typo makes it fail with
+the slot named, which is exactly what it exists for.
+
+`test_app_server.R` is the next one, but it needs more than a path fix -
+it asserts on `Area1`, a dimension removed when the area levels became
+nested, and on a `test_census.csv` fixture that no longer ships. Its
+behavioural assertions have largely been absorbed into
+`dev/check_server.R`, which runs the server against a real CEF fixture
+from `inst/extdata`. What is left worth rescuing is the per-tab
+level-of-detail independence check.
