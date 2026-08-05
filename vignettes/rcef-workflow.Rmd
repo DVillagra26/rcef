@@ -1,0 +1,457 @@
+---
+title: "The RCEF Workbench workflow"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 3
+vignette: >
+  %\VignetteIndexEntry{The RCEF Workbench workflow}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+```
+
+This walks one stock from a set of input files to numbers and mean weights
+at length and age, and says what to put in each argument along the way.
+
+Everything the app does is a call in this vignette. The app adds pickers
+and figures; it adds no arithmetic. If a run can be done here it can be
+done there, and the app's **R script** tab writes out exactly this
+sequence for the session you just ran.
+
+```{r}
+library(rcef)
+```
+
+## The shape of the thing
+
+```
+                     derive_fields()
+  input files  ──►  catch_data  ──┬──► build_strata() ──► classify_strata()
+                                  │           │
+                                  │           ▼                    explore,
+                                  │    define_raising_groups_*()   filter,
+                                  │           │                    decide
+                                  │           ▼
+                                  └──► catchRaising()  ──►  catch_raised
+                                                                │
+                              distributions ────────────────────┤
+                                                                ▼
+                                                     catchAllocationAoL()
+                                                                │
+                                       catchAtAoLAggregation()  ▼
+                                    meanWoLatAoLAggregation() ──► results
+```
+
+Two objects are worth separating in your head from the start:
+
+* **`catch_data`** — every row for the stock and year. This is what gets
+  grouped and raised.
+* **`explore_data`** — a subset you are *looking* at. This is what gets
+  plotted.
+
+They are different on purpose. Filtering to one metier to read a coverage
+figure is a normal, good thing to do; raising a stock on one metier
+because the filter was still on is not. The package never lets one become
+the other silently — see [Exploring](#exploring-with-a-filter).
+
+## 1. Loading the data
+
+Three routes in, depending on what you have. All three end at the same
+place: a CEF (RDBES) long-format `catches` table, plus a `distributions`
+table if you want length or age work.
+
+### Route A — CEF files you already have
+
+```{r}
+catch_data <- read.csv("catches_CEF_v17.1.csv", stringsAsFactors = FALSE)
+dist_data  <- read.csv("distributions_CEF_v17.1.csv", stringsAsFactors = FALSE)
+```
+
+### Route B — InterCatch exchange format
+
+One file holding the HI, SI and SD records. `funIntercatchCEF()` reads
+*every* csv in the directory it is pointed at, binds them, and splits on
+the record-type column — so a single combined export is the normal input.
+
+```{r}
+funMakeRelation()          # builds stock_relation; needs icesVocab + icesSD
+
+ic <- funIntercatchCEF(
+  dat_path       = "data/intercatch",
+  stock_relation = stock_relation,
+  output_format  = "to_list")
+
+catch_data <- ic$catches
+dist_data  <- ic$distributions
+```
+
+| argument | what to put in it |
+|---|---|
+| `dat_path` | folder holding the exchange file(s). Not a file path — a folder. |
+| `stock_relation` | the lookup from `funMakeRelation()`. It also assigns `stock_relation` into the global environment, so passing it explicitly is belt and braces. |
+| `output_format` | `"to_list"` for use here. `"to_environment"` assigns into the global env, `"to_file"` writes CEF csvs with headers, `"to_upload"` writes headerless upload files. |
+| `out_path` | only meaningful for the two file formats. |
+
+### Route C — InterCatch output format
+
+Three files: `StockOverview`, `NumbersAtAgeLength`, `MeanWeigthAtAgeLength`
+(the upstream spelling of the third is preserved — match it).
+
+```{r}
+ic <- funICoutCEF(dat_path = "data/ic_output", output_format = "to_list")
+catch_data <- ic$catches
+dist_data  <- ic$distributions
+```
+
+### Then, always
+
+```{r}
+catch_data <- derive_fields(catch_data)
+```
+
+`derive_fields()` is not optional. It splits the flat CEF columns into the
+nested ones everything downstream groups on:
+
+| in | out |
+|---|---|
+| `areaValue` | `ICESSubArea` (`27.4`), `ICESDivision` (`27.4.b`), `ICESSubdivision` (`27.4.b.1`) |
+| `fleetValue` | `metier4` (`TBB`), `metier5`, `metier6`, `target`, `mesh`, `FleetType` |
+| `vesselFlagCountry` | `Country` |
+| `seasonValue` | `Season` |
+
+A code coarser than the level asked for **repeats** rather than becoming
+`NA`: `27.4` is its own division and subdivision as far as the data goes.
+That is deliberate — a stratum reported at coarse resolution is never
+silently dropped out of a finer grouping.
+
+It needs `fleetValue`, `areaValue`, `vesselFlagCountry` and `seasonValue`
+and errors if any is missing, which is the fastest way to find out that a
+file is not really CEF.
+
+Finally, scope to one stock and year:
+
+```{r}
+catch_data <- subset(catch_data, stock == "sol.27.4" & year == 2023)
+```
+
+## 2. Strata
+
+```{r}
+dims   <- c("metier4", "Country", "ICESDivision", "Season")
+strata <- build_strata(catch_data, dims)
+```
+
+`dims` is *the* decision of this step: it is the resolution at which you
+will look at coverage and, usually, the resolution at which you will
+raise. Four dimensions — fleet, country, area, season — is the habit, but
+any subset of the derived columns works.
+
+`build_strata()` returns one row per stratum with:
+
+| column | meaning |
+|---|---|
+| `landings` | total landings, tonnes |
+| `landings_with_discards` | landings in the part of the stratum that *has* a discard observation |
+| `discards` | total discards, tonnes |
+| `coverage` | `landings_with_discards / landings * 100` — the share of landings backed by a discard observation |
+| `discard_rate` | `discards / (landings_with_discards + discards)` |
+| `stratum_id` | the dims pasted with `" | "`. This is the key `catchRaising()` conditions are written against. |
+
+Note what `coverage` is not: it is not the share of trips sampled. It is
+the share of *landings* that sit in a part of the stratum where discards
+were observed. That is the quantity that matters for whether a raising is
+defensible.
+
+Then attach a status:
+
+```{r}
+strata <- classify_strata(strata, threshold = 50)
+```
+
+| argument | what to put in it |
+|---|---|
+| `threshold` | coverage percentage at or above which a stratum is treated as sufficiently sampled. 50 is a common starting point, not a rule. |
+| `what` | `"discard"` (default), or `"length"` / `"age"` for biology coverage, which classifies on coverage **and** number of measurements. |
+| `min_meas` | only for `"length"`/`"age"`: measurements below this count as insufficient however good the coverage looks. A stratum with 99% coverage and 11 fish measured should not be green. |
+
+## 3. Exploring, with a filter {#exploring-with-a-filter}
+
+This is where you decide how to group, so it is worth doing properly.
+
+```{r}
+plot_coverage(strata, type = "heatmap", y = "metier4", fill = "ICESDivision")
+plot_discard_rate(strata, type = "box", x = "metier4")
+```
+
+To look at one fleet on its own — the usual reason to reach for a filter —
+subset the **catches**, not the strata, and rebuild:
+
+```{r}
+explore_data <- apply_filters(catch_data, list(metier4 = "TBB"))
+
+explore_strata <- classify_strata(build_strata(explore_data, dims), 50)
+plot_discard_rate(explore_strata, type = "box", x = "ICESDivision")
+```
+
+`apply_filters()` combines columns with AND and values within a column
+with OR — "beam trawl, in either of these two divisions":
+
+```{r}
+apply_filters(catch_data,
+              list(metier4 = "TBB", ICESDivision = c("27.4.b", "27.4.c")))
+```
+
+Naming a column that is not in the table is an **error**, not a silent
+pass. A figure that looks filtered and is not is the worst possible input
+to a grouping decision.
+
+Two helpers make the filter honest rather than just convenient:
+
+```{r}
+explore_filter_levels(catch_data)         # what can usefully be filtered
+filter_coverage(catch_data, list(metier4 = "TBB"))
+```
+
+`explore_filter_levels()` offers only columns that are present and have
+more than one value — a filter that cannot change the figure is not worth
+a dropdown. `filter_coverage()` reports rows kept **and weight kept**,
+because a filter can easily keep 40% of the rows and 2% of the landings,
+and a figure drawn on 2% of the landings is not a view of the fleet.
+
+```{r}
+filter_label(list(metier4 = "TBB"))   # "metier4 = TBB", for subtitles
+```
+
+In the app the same filter is a panel on the Data tab. It narrows the
+coverage, discard-rate, numbers-at-length/age and mean-weight figures and
+**nothing else**; the grouping and raising below always run on the full
+table, and a banner says so while a filter is on.
+
+## 4. Defining groups
+
+A "group" is a set of strata that will be raised together, plus the pool
+of strata whose data does the raising. Two ways to arrive at one. Both
+return the same object, so the raising step does not care which you used.
+
+### Automatic — a cascade
+
+Each stratum gets the *first* donor pool that clears its threshold: its
+own data if that is covered enough, else the narrowest wider pool that
+qualifies, else everything.
+
+```{r}
+groups <- define_raising_groups_auto(
+  strata,
+  hierarchy      = c("metier4", "ICESDivision", "Season"),
+  thresholds     = c(50, 40, 30),
+  self_threshold = 60,
+  dims           = dims)
+```
+
+| argument | what to put in it |
+|---|---|
+| `hierarchy` | the widening keys, **finest first**. Step 1 groups on all of them, the last step on the first one alone. |
+| `thresholds` | one number, or one per hierarchy level. Falling numbers are the normal shape: you accept less coverage as you are forced to widen. |
+| `self_threshold` | coverage at which a stratum raises on its own data and never enters the cascade. `NA` folds this into the first step. |
+| `dims` | the full stratum dimensions. Defaults to `hierarchy`; pass it explicitly when the strata are finer than the cascade keys, which is the usual case. |
+| `all_label` | label for the final catch-all pool. Leave it. |
+
+Inspect before you commit:
+
+```{r}
+groups$summary                 # one row per group: level, condition, n strata
+plot_river(groups$strata)      # which strata resolved at which step
+```
+
+### Manual — explicit rules
+
+When the cascade cannot express the decision — "these three metiers raise
+together because the WG said so" — write the rules out.
+
+A **rule** is a list with an `id`, a `raise` side (which strata this rule
+raises) and a `donor` side (whose data does the raising). Each side is a
+list of clauses, and a clause is `var` + `values` (or `set`), optionally
+negated:
+
+```{r}
+rules <- list(
+  list(id    = "beam_trawl",
+       raise = list(list(var = "metier4", values = "TBB")),
+       donor = list(list(var = "metier4", values = c("TBB", "TBB_DEF")))),
+  list(id    = "everything_else",
+       raise = list(),          # no clause = every remaining stratum
+       donor = list(list(var = "ICESDivision", values = "27.4.b")))
+)
+
+groups <- define_raising_groups_manual(strata, rules)
+```
+
+**Rules are first-match-wins.** A rule with an empty `raise` claims every
+stratum, but only *receives* the ones no earlier rule took. The package
+writes the complements out explicitly when it builds the conditions, so
+what `catchRaising()` gets is a genuine partition — it rejects anything
+that double-assigns a stratum.
+
+`sets` lets a list of values be named once and reused:
+
+```{r}
+sets <- list(north = c("27.4.a", "27.4.b"))
+rules <- list(list(id = "north", raise = list(list(var = "ICESDivision",
+                                                  set = "north")),
+                   donor = list()))
+groups <- define_raising_groups_manual(strata, rules, sets = sets)
+```
+
+### What both produce
+
+```{r}
+groups$strataCond        # named list of quosures: which strata each group raises
+groups$matchedDataCond   # named list of quosures: which strata donate
+```
+
+That pair is the entire interface to the raising and allocation engines.
+Anything that produces it will work, including something you write
+yourself.
+
+## 5. Raising discards
+
+```{r}
+catch_raised <- catchRaising(
+  catch_data,
+  condition_raising_st_list  = groups$strataCond,
+  condition_matched_data_list = groups$matchedDataCond,
+  type         = "discards",
+  originType   = "WGEstimate",
+  variableType = "WeightLive")
+```
+
+| argument | what to put in it |
+|---|---|
+| `type` | `"discards"` for the normal case. |
+| `originType` | the origin label written onto the raised rows. `"WGEstimate"` is the convention for a working-group estimate. |
+| `variableType` | the weight variable being raised. `"WeightLive"` unless you know otherwise. |
+| `log_file` | path for the run log. Worth setting; it records what raised what. |
+
+`run_native_raising()` is a thin wrapper that checks the CEF table has the
+columns `catchRaising()` needs before calling it, and returns a readable
+error instead of a stack trace when it does not:
+
+```{r}
+cef_check(catch_data)$missing
+catch_raised <- run_native_raising(catch_data, dims, groups,
+                                   type = "discards",
+                                   log_file = "raising_log.txt")
+```
+
+## 6. Length and age
+
+The distributions table is the second input. Prepare it, then check it
+actually links to the strata you are about to allocate over.
+
+```{r}
+dist <- prep_distributions(dist_data, type = "LengthTotal")
+link <- link_dist_to_strata(catch_data, dist_data, dims,
+                            catch_category = "Dis", type = "LengthTotal")
+```
+
+> **The one trap in the whole pipeline.** `catchAllocationAoL()` matches
+> `distributionType` against `c("Age", "Length")`, but CEF files write
+> `"LengthTotal"`. The column must be rewritten to `"Length"` before the
+> call. `run_allocation()` does this for you; if you call
+> `catchAllocationAoL()` directly, do it yourself.
+
+Groups are defined the same way as for discards — same two conditions,
+built on biology coverage rather than discard coverage:
+
+```{r}
+bio_strata <- classify_strata(build_strata(catch_data, dims),
+                              threshold = 50, what = "length", min_meas = 30)
+
+bio_groups <- define_raising_groups_auto(
+  bio_strata,
+  hierarchy  = c("metier4", "ICESDivision"),
+  thresholds = c(50, 40),
+  dims       = dims)
+```
+
+Then allocate:
+
+```{r}
+alloc <- run_allocation(
+  catch_raised, dist_data, bio_groups,
+  app_type           = "LengthTotal",   # or "Age"
+  originType_catch   = "WGEstimate",
+  variableType_catch = "WeightLive",
+  variableType_mean  = "WeightLive",
+  weighting          = "NumberAtAoL")
+```
+
+| argument | what to put in it |
+|---|---|
+| `app_type` | `"LengthTotal"` or `"Age"`. This is the app-side name; the translation to what the engine wants happens inside. |
+| `originType_catch`, `variableType_catch` | must match what the raising wrote, or the allocation finds nothing to allocate over. |
+| `variableType_mean` | the variable the mean weights are in. |
+| `weighting` | how the donor distributions are combined. `"NumberAtAoL"` weights by numbers. |
+
+Then aggregate. Note that the aggregation functions return **wide** tables
+with the class in the column name (`N_Length_2900`), so a plot needs a
+`pivot_longer` first — `agg_numbers()` and `agg_meanweight()` handle that:
+
+```{r}
+numbers_at <- agg_numbers(alloc,
+                          grouping  = c("catchCategory", "sampledOrEstimated"),
+                          minAoL    = 0,
+                          maxAoL    = NA,
+                          plusGroup = FALSE,
+                          unit      = NULL,
+                          round     = 2)
+
+weights_at <- agg_meanweight(alloc,
+                             grouping = c("catchCategory", "sampledOrEstimated"))
+```
+
+| argument | what to put in it |
+|---|---|
+| `grouping` | columns the output is broken down by. `catchCategory` splits landings from discards; `sampledOrEstimated` splits what was measured from what was allocated. |
+| `minAoL`, `maxAoL` | class range to keep. `NA` for no upper bound. |
+| `plusGroup` | `TRUE` accumulates everything at or above `maxAoL` into one class. |
+| `unit` | output unit for the classes; `NULL` leaves them as they are. |
+
+## 7. Getting the script back out
+
+The app writes this sequence for the session you ran, as a single script
+or as an ICES TAF script set. Two things about what it writes are worth
+knowing:
+
+**Only saved allocations are written.** The on-screen configuration is
+not, unless nothing at all has been saved — in which case it is written
+and clearly labelled as unsaved. This keeps a script from opening with a
+near-duplicate of the first saved block, which left a reader unable to
+tell which one produced the numbers.
+
+**The exploration filter is written as a separate object.** The script
+gets `explore_data <- catch_data %>% filter(...)`, never an overwrite of
+`catch_data`, so it stays visible on the page that the figures were drawn
+on a subset and the raising was not.
+
+```{r}
+emit_explore_filter_code(list(metier4 = "TBB"))
+```
+
+## Where things are
+
+| you want | look at |
+|---|---|
+| the workbench functions | `R/rcef_*.R` |
+| plots and theme | `R/viz_*.R` |
+| `catchRaising()`, `catchAllocationAoL()`, the CEF readers | `R/RDBESStockCoord_*.R` — vendored ICES working-group code, not modified here |
+| the app | `inst/app/`, launched by `run_app()` |
+
+The vendored files keep upstream's function names, argument lists and
+return shapes exactly. Local changes are packaging-only and every one is
+marked `## [pkg]`, so `grep -rn '## \[pkg\]' R/` is a complete diff
+against upstream.

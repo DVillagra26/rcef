@@ -16,7 +16,7 @@ Headless — the whole point of the split:
 
 ```r
 library(rcef)
-cef  <- derive_fields(readr::read_csv("catches_CEF_v17.1.csv"))
+cef  <- derive_fields(read.csv("catches_CEF_v17.1.csv"))
 st   <- classify_strata(build_strata(cef, c("metier4", "ICESDivision")))
 grp  <- define_raising_groups_auto(st)
 out  <- catchRaising(cef, grp$strataCond, grp$matchedDataCond)
@@ -43,6 +43,10 @@ dev/                   tests, tooling, deploy (.Rbuildignore'd)
 
 **MANIFEST.md** maps every file to where it came from. **DROPPED.md**
 lists what was removed and why.
+
+`vignette("rcef-workflow", package = "rcef")` walks one stock from input
+files to numbers and mean weights at length and age, with a table of what
+to put in each argument.
 
 ## The one rule
 

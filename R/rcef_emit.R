@@ -320,3 +320,44 @@ emit_rules_code <- function(rules, sets, dims = NULL) {
     "matchedDataCond <- list(", mk("source"), ")",
     "")
 }
+
+# ----------------------------------------------------------
+#  Exploration filter
+# ----------------------------------------------------------
+
+#' Emit the exploration-filter block
+#'
+#' The filter that produced the figures is written into the script as a
+#' SEPARATE object (`explore_data`), never by overwriting `catch_data`.
+#' A reader who runs the script must be able to see at a glance that the
+#' figures were drawn on a subset and the raising was not.
+#'
+#' @param filters A named list, as accepted by [apply_filters()].
+#' @param from Name of the unfiltered object in the emitted script.
+#' @param to Name to give the filtered object.
+#' @return A character vector of R code, or `NULL` if no filter is active.
+#' @seealso [apply_filters()], [filter_label()]
+#' @export
+#' @examples
+#' cat(emit_explore_filter_code(list(metier4 = "TBB")), sep = "\n")
+emit_explore_filter_code <- function(filters, from = "catch_data",
+                                     to = "explore_data") {
+  f <- clean_filters(filters)
+  if (!length(f))
+    return(c("## ---- Exploration filter ------------------------------------",
+             "## No filter was active: the figures below are drawn on the whole",
+             "## table, so explore_data is catch_data.",
+             sprintf("%s <- %s", to, from), ""))
+  c("## ---- Exploration filter ------------------------------------",
+    "## This narrows the FIGURES only. The raising and allocation below",
+    "## run on the unfiltered catch_data, exactly as they did in the app.",
+    sprintf("##   %s", filter_label(f)),
+    sprintf("%s <- %s %%>%%", to, from),
+    paste0("    ",
+           vapply(seq_along(f), function(i) {
+             v <- names(f)[i]; vals <- f[[i]]
+             sprintf("filter(%s %%in%% %s)%s", v, fmt_vals(vals),
+                     if (i < length(f)) " %>%" else "")
+           }, character(1))),
+    "")
+}

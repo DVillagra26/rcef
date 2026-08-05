@@ -39,7 +39,10 @@ Imports:
     utils,
     tools,
     grDevices
+VignetteBuilder: knitr
 Suggests:
+    knitr,
+    rmarkdown,
     shiny,
     DT,
     icesVocab,

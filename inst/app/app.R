@@ -226,6 +226,16 @@ cef_load_ui <- function() sidebarLayout(
     selectInput("sep", "Separator", c("," = ",", ";" = ";", "tab" = "\t")),
     tags$hr(),
     uiOutput("stock_ui"), uiOutput("year_ui"),
+    tags$hr(),
+    tags$b("Exploration filter"),
+    span(class = "note",
+         "Narrows the FIGURES only - coverage, discard rates, numbers at ",
+         "length/age and mean weights. Grouping and raising always run on ",
+         "the full table for this stock and year. Use it to look at one ",
+         "fleet or area on its own before deciding how to group."),
+    uiOutput("expf_ui"),
+    uiOutput("expf_cov"),
+    actionButton("expf_clear", "Clear filter", class = "btn-sm"),
     span(class = "note",
          "Sufficiency thresholds are set where they are used: on each ",
          "Sampling coverage tab.")),
@@ -2061,12 +2071,12 @@ server <- function(input, output, session) {
       if (identical(cc_of(view), "Dis")) "discards" else "landings"
 
     linked_for <- function(view) {
-      d <- tryCatch(dat(), error = function(e) NULL)
+      d <- tryCatch(explore_dat(), error = function(e) NULL)
       req(!is.null(d), !is.null(dist_tbl()))
       link_dist_to_strata(d, dist_tbl(), dims_of(), cc_of(view), type) }
 
     blink_for <- function(view) {
-      d <- tryCatch(dat(), error = function(e) NULL)
+      d <- tryCatch(explore_dat(), error = function(e) NULL)
       req(!is.null(d))
       biology_link(d, dist_tbl(), dims_of(), cc_of(view), type) }
 
@@ -3350,6 +3360,84 @@ server <- function(input, output, session) {
     d
   })
 
+  # ---------------------------------------------------------
+  #  Exploration filter
+  # ---------------------------------------------------------
+  # dat()          -> what gets GROUPED and RAISED. Never filtered here.
+  # explore_dat()  -> what gets PLOTTED. Filtered.
+  #
+  # Two objects rather than one switch, because the failure mode of a
+  # single filtered object is silent and expensive: a stock raised on one
+  # metier while the figures looked complete. Anything feeding
+  # recommend_raising(), the manual builder, the donor pool or
+  # catchRaising() reads dat() and cannot see the filter at all.
+  expf_levels <- reactive({
+    d <- tryCatch(dat(), error = function(e) NULL)
+    if (is.null(d)) list() else explore_filter_levels(d)
+  })
+
+  output$expf_ui <- renderUI({
+    lv <- expf_levels()
+    if (!length(lv))
+      return(span(class = "note", "No filterable columns in this table."))
+    lapply(names(lv), function(v)
+      selectizeInput(paste0("expf_", v), v, choices = lv[[v]],
+                     selected = isolate(input[[paste0("expf_", v)]]),
+                     multiple = TRUE,
+                     options = list(placeholder = FILTER_ANY)))
+  })
+
+  explore_filters <- reactive({
+    lv <- expf_levels()
+    if (!length(lv)) return(list())
+    f <- lapply(names(lv), function(v) input[[paste0("expf_", v)]])
+    names(f) <- names(lv)
+    clean_filters(f)
+  })
+
+  observeEvent(input$expf_clear, {
+    for (v in names(expf_levels()))
+      updateSelectizeInput(session, paste0("expf_", v), selected = character(0))
+  })
+
+  # Rows can survive a filter while weight does not. A figure drawn on 40%
+  # of the rows and 2% of the landings is not a view of the fleet, and the
+  # number is shown next to the control rather than buried in a tooltip.
+  output$expf_cov <- renderUI({
+    f <- explore_filters()
+    if (!length(f)) return(NULL)
+    d <- tryCatch(dat(), error = function(e) NULL)
+    if (is.null(d)) return(NULL)
+    cv <- tryCatch(filter_coverage(d, f), error = function(e) NULL)
+    if (is.null(cv)) return(NULL)
+    div(class = "note", style = "color:#9a5000",
+        sprintf("Figures show %d of %d rows (%.0f%%)", cv$n_kept, cv$n_all,
+                cv$pct_rows),
+        if (!is.null(cv$pct_weight))
+          sprintf(" and %.1f%% of the weight.", cv$pct_weight) else ".")
+  })
+
+  # the filtered table, and the two stratum builders that sit on it
+  explore_dat <- reactive({
+    d <- dat(); f <- explore_filters()
+    if (!length(f)) return(d)
+    out <- apply_filters(d, f)
+    validate(need(nrow(out) > 0,
+                  paste0("No rows left after the exploration filter (",
+                         filter_label(f), "). Clear it to see the figures.")))
+    out
+  })
+
+  expf_note <- function() {
+    f <- explore_filters()
+    if (!length(f)) NULL
+    else div(class = "chain", style = "color:#9a5000",
+             tags$b("Exploration filter active: "), filter_label(f),
+             tags$br(),
+             span(class = "note",
+                  "Figures only. Grouping and raising use the full table."))
+  }
+
   dmap <- function(p) {
     f <- input[[paste0(p, "_fleet")]]; a <- input[[paste0(p, "_area")]]
     c(Fleet = if (is.null(f)) "metier4" else f, Country = "Country",
@@ -3361,8 +3449,14 @@ server <- function(input, output, session) {
   }
   role <- function(p, r) col_of(p, input[[paste0(p, "_", r)]])
 
-  # strata at the tab's full resolution (all four dimensions)
+  # strata at the tab's full resolution (all four dimensions).
+  # ANALYSIS path: unfiltered, on purpose.
   strata_p <- function(p) build_strata(dat(), unname(dmap(p)[DIMS]))
+
+  # EXPLORATION path: the same thing on the filtered view. Every figure
+  # reads this one; recommend_raising() and the manual builder read the
+  # one above.
+  strata_x <- function(p) build_strata(explore_dat(), unname(dmap(p)[DIMS]))
 
   # strata aggregated to EXACTLY the columns used by the plot. Without this
   # the table still holds every dimension, so a heatmap cell or a bubble
@@ -3370,21 +3464,23 @@ server <- function(input, output, session) {
   strata_roles <- function(p, sels) {
     cols <- unique(unlist(lapply(sels, function(x) col_of(p, x))))
     validate(need(length(cols) >= 1, "Pick at least one variable."))
-    build_strata(dat(), cols)
+    build_strata(explore_dat(), cols)
   }
 
   # --- data tab summary ------------------------------------
 
   output$data_msg <- renderUI({ req(dat())
-    div(class = "note", style = "font-size:12px",
-        sprintf("%s rows | %s strata at the level of detail set bottom-right",
-                nrow(dat()), nrow(strata_p("dt")))) })
+    tagList(
+      div(class = "note", style = "font-size:12px",
+          sprintf("%s rows | %s strata at the level of detail set bottom-right",
+                  nrow(dat()), nrow(strata_p("dt")))),
+      expf_note()) })
 
 
 
   # --- plot sizing: the container is sized here, so nothing overlaps ----
   hgt <- function(p, facet_sel, n_y = 10) {
-    s <- try(strata_p(p), silent = TRUE)
+    s <- try(strata_x(p), silent = TRUE)
     if (inherits(s, "try-error")) return(460)
     plot_height(s, col_of(p, facet_sel), n_y)
   }
@@ -3403,7 +3499,7 @@ server <- function(input, output, session) {
 
 
   output$dr_tbl <- renderDT(datatable(
-    strata_p("dr") %>% filter(!is.na(discard_rate)) %>%
+    strata_x("dr") %>% filter(!is.na(discard_rate)) %>%
       mutate(discard_rate = round(discard_rate, 3), coverage = round(coverage, 1)),
     options = list(scrollX = TRUE, pageLength = 10), rownames = FALSE))
 
@@ -4331,13 +4427,13 @@ server <- function(input, output, session) {
   dr_plot_obj <- gated(dr_g, {
     if (identical(input$dr_type, "box")) {
       req(isTruthy(input$box_x))
-      plot_discard_rate(strata_p("dr"), type = "box",
+      plot_discard_rate(strata_x("dr"), type = "box",
                   x = col_of("dr", input$box_x),
                   fill = col_of("dr", input$box_fill),
                   facet = col_of("dr", input$box_facet),
                   show_points = input$box_points, show_pooled = input$box_pooled)
     } else
-      plot_discard_rate(strata_p("dr"), type = "raw",
+      plot_discard_rate(strata_x("dr"), type = "raw",
                   x = role("dr","x"), colour = role("dr","fill"),
                   shape = role("dr","shape"), facet = role("dr","facet"),
                   jitter = input$dr_jitter) },
@@ -4654,37 +4750,17 @@ server <- function(input, output, session) {
       out <- character(0)
       emitted <- character(0)
 
-      # (1) live auto cascade - always, so the exploration is reproducible
-      live_auto <- tryCatch({
-        code_auto_rule("live_auto", unname(dmap("ar")[DIMS]),
-                       hier_cols(), hier_thr(),
-                       self_thr_val(),
-                       input$hier_mode %||% "nested",
-                       ar_dr()[1], ar_dr()[2])
-      }, error = function(e) NULL)
-      if (!is.null(live_auto)) {
-        out <- c(out, "## ===== Live automatic allocation (as configured now) =====",
-                 live_auto,
-                 code_raise("live_auto", unname(dmap("ar")[DIMS]),
-                            input$nr_type %||% "discards",
-                            input$nr_origin %||% "WGEstimate",
-                            input$nr_vartype %||% "WeightLive",
-                            input$nr_log %||% "Log.txt"))
-        emitted <- c(emitted, "live_auto")
-      }
-
-      # (1b) live manual groups, if any are defined
-      if (length(rv$rules) >= 1) {
-        out <- c(out, "## ===== Live manual allocation (as configured now) =====",
-                 code_manual_rule("live_manual", unname(dmap("mg")[DIMS]),
-                                  rv$rules, rv$sets %||% list()),
-                 code_raise("live_manual", unname(dmap("mg")[DIMS]),
-                            input$nr_type %||% "discards",
-                            input$nr_origin %||% "WGEstimate",
-                            input$nr_vartype %||% "WeightLive",
-                            input$nr_log %||% "Log.txt"))
-        emitted <- c(emitted, "live_manual")
-      }
+      # Only SAVED allocations are written. The on-screen configuration
+      # used to be emitted too, as live_auto / live_manual, so that an
+      # unsaved exploration was still reproducible. In practice it meant
+      # every script opened with a full grouping and raising block that
+      # was usually a near-duplicate of the first saved one, and a reader
+      # could not tell which of the two had produced the numbers. Saving
+      # is one click; guessing which block is authoritative is not.
+      #
+      # The single exception is below: with nothing saved at all, the
+      # script would have no analysis in it, so the current auto cascade
+      # is written and labelled as unsaved.
 
       # (2) each SAVED allocation
       for (nm in names(rv$scenarios)) {
@@ -4701,6 +4777,31 @@ server <- function(input, output, session) {
                      input$nr_vartype %||% "WeightLive",
                      input$nr_log %||% "Log.txt"))
         emitted <- c(emitted, nm)
+      }
+
+      # Nothing saved: emit the live cascade rather than an empty script,
+      # clearly marked so it is never mistaken for a saved decision.
+      if (!length(emitted)) {
+        live_auto <- tryCatch(
+          code_auto_rule("unsaved_auto", unname(dmap("ar")[DIMS]),
+                         hier_cols(), hier_thr(), self_thr_val(),
+                         input$hier_mode %||% "nested",
+                         ar_dr()[1], ar_dr()[2]),
+          error = function(e) NULL)
+        if (!is.null(live_auto)) {
+          out <- c(out,
+            "## ===== UNSAVED - the cascade as configured on screen =====",
+            "## Nothing was saved in this session, so this is the current",
+            "## configuration, not a decision. Save it in the app to make",
+            "## it a named allocation.",
+            live_auto,
+            code_raise("unsaved_auto", unname(dmap("ar")[DIMS]),
+                       input$nr_type %||% "discards",
+                       input$nr_origin %||% "WGEstimate",
+                       input$nr_vartype %||% "WeightLive",
+                       input$nr_log %||% "Log.txt"))
+          emitted <- c(emitted, "unsaved_auto")
+        }
       }
 
       # (3) and (4) are returned SEPARATELY rather than glued onto `out`,
@@ -4899,8 +5000,9 @@ server <- function(input, output, session) {
       }, error = function(e) NULL))
     lg <- log_set(lg, "manual_groups", NULL)
     lg <- log_set(lg, "native_raising", NULL)
-    lg <- log_set(lg, "explore", tryCatch(code_plots(active_plots()),
-                                          error = function(e) NULL))
+    lg <- log_set(lg, "explore", tryCatch(
+      c(emit_explore_filter_code(explore_filters()),
+        code_plots(active_plots())), error = function(e) NULL))
     lg <- log_set(lg, "session", code_session(state_path()))
     rv$log <- lg
   })
