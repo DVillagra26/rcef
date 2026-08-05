@@ -4,7 +4,13 @@
 \alias{alloc_matched_cond}
 \title{A donor condition with named strata removed}
 \usage{
-alloc_matched_cond(clauses, excluded = character(0), dims = NULL)
+alloc_matched_cond(
+  clauses,
+  excluded = character(0),
+  dims = NULL,
+  cov_min = NA,
+  meas_min = NA
+)
 }
 \arguments{
 \item{clauses}{The clause list, as [alloc_cond_string()] takes.}

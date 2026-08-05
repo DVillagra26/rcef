@@ -662,7 +662,19 @@ emit_alloc_conditions <- function(groups) {
     paste0(nm, " <-\n    list(", sub("^     ", "",
                                      paste(body, collapse = ",\n")), ")")
   }
-  c("## allocStrataCond is a PARTITION: each group's condition excludes",
+  matched_txt <- vapply(names(groups), function(g)
+    fld(groups[[g]], "matched", fld(groups[[g]], "alloc", "TRUE")),
+    character(1))
+  needs_metrics <- any(grepl("coverage|discard_rate|n_measurements",
+                             matched_txt))
+  c(if (needs_metrics) c(
+      "## A bioMatchedCond below compares stratum metrics, which a CEF",
+      "## table does not carry - coverage is a property of a stratum, not",
+      "## of a row. Join them on once, and the conditions read as the",
+      "## thresholds they are rather than as a list of stratum keys.",
+      "catch_raised <- add_stratum_metrics(catch_raised, dims_biology)",
+      ""),
+    "## allocStrataCond is a PARTITION: each group's condition excludes",
     "## everything the groups above it already took. Written as plain",
     "## quo(TRUE) a catch-all matches records an earlier group has, and",
     "## catchAllocationAoL() rejects the run.",
@@ -1425,10 +1437,11 @@ stratum_sparkline_map <- function(linked, dims, keys) {
 #' @examples
 #' alloc_matched_cond(list(catchCategory = "Dis"), "TBB | 27.4.b",
 #'                    c("metier4", "ICESDivision"))
-alloc_matched_cond <- function(clauses, excluded = character(0), dims = NULL) {
+alloc_matched_cond <- function(clauses, excluded = character(0), dims = NULL,
+                               cov_min = NA, meas_min = NA) {
   base <- alloc_cond_string(clauses)
-  ex <- if (length(excluded) && !is.null(dims))
-    donor_exclusion_expr(excluded, dims) else NULL
+  ex <- exclusion_expr(cov_min = cov_min, meas_min = meas_min,
+                       named = excluded, dims = dims)
   txt <- if (is.null(ex)) base
          else if (identical(base, "TRUE")) ex
          else paste0("(", base, ") & ", ex)

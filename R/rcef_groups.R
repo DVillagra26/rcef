@@ -467,11 +467,18 @@ raising_groups <- function(rec) {
 #' @seealso [assign_rule_groups()], [conds_from_rules()]
 #' @export
 new_rule <- function(id, label = "", raise = list(), source = NULL,
-                     dr_min = NA, dr_max = NA, excluded = character(0)) {
+                     dr_min = NA, dr_max = NA, excluded = character(0),
+                     cov_min = NA, meas_min = NA) {
   list(id = id, label = label, raise = raise,
        source = if (is.null(source)) raise else source,
        dr_min = dr_min, dr_max = dr_max,
-       # named strata dropped from THIS group's donor pool
+       # The BARS, so the emitted condition can say `coverage >= 50`
+       # instead of naming the two hundred strata that happen to fail it
+       # today. A threshold survives a change in the data; a key list
+       # silently stops meaning what it meant.
+       cov_min = cov_min, meas_min = meas_min,
+       # only strata dropped BY HAND, which is a short list because a
+       # person typed it
        excluded = excluded)
 }
 
@@ -496,12 +503,18 @@ dr_clause_string <- function(r) {
 #' @export
 source_cond_string <- function(r, dims = NULL) {
   base <- cond_string(r$source)
-  dr <- dr_clause_string(r)
-  # a named-stratum exclusion is part of the donor clause too, so the
-  # printed condition and the emitted script both carry it
-  ex <- if (length(r$excluded %||% character(0)) && !is.null(dims))
-    donor_exclusion_expr(r$excluded, dims) else NULL
-  parts <- c(if (base != "TRUE") base, if (nzchar(dr)) dr, ex)
+  # One call for every bar the rule carries: the coverage and measurement
+  # thresholds come out as comparisons on the metric columns, and only
+  # hand-picked strata are named. add_stratum_metrics() puts `coverage`,
+  # `discard_rate` and `n_measurements` on the CEF rows, which is what
+  # makes this evaluable where catchRaising() evaluates it.
+  ex <- exclusion_expr(cov_min  = r$cov_min %||% NA,
+                       meas_min = r$meas_min %||% NA,
+                       dr_min   = r$dr_min %||% NA,
+                       dr_max   = r$dr_max %||% NA,
+                       named    = r$excluded %||% character(0),
+                       dims     = dims)
+  parts <- c(if (base != "TRUE") base, ex)
   if (!length(parts)) "TRUE" else paste(parts, collapse = " & ")
 }
 
@@ -723,11 +736,13 @@ conds_from_auto <- function(rec) {
 #'
 #' @param rules A list of rules from [new_rule()].
 #' @param sets Named value sets referenced by clauses.
+#' @param dims Stratum key columns, needed to write a hand-picked
+#'   exclusion. Without it those exclusions are silently dropped.
 #' @return A list with `strataCond` and `matchedDataCond`, named lists of
 #'   quosures, one per rule.
 #' @seealso [new_rule()], [define_raising_groups_manual()]
 #' @export
-conds_from_rules <- function(rules, sets = list()) {
+conds_from_rules <- function(rules, sets = list(), dims = NULL) {
   ids <- vapply(rules, `[[`, character(1), "id")
   mk <- function(txt) rlang::new_quosure(rlang::parse_expr(txt), env = globalenv())
   # first-match-wins is implicit in the app, but catchRaising treats the
@@ -742,7 +757,11 @@ conds_from_rules <- function(rules, sets = list()) {
     strata[[i]] <- mk(txt)
     seen <- c(seen, paste0("(", this, ")"))
   }
-  matched <- lapply(rules, function(r) mk(source_cond_string(r)))
+  # `dims` matters: without it source_cond_string() cannot write the
+  # hand-picked exclusion, and a stratum the user dropped by name would
+  # quietly stay in the donor pool - a silent no-op with no error and
+  # nothing on screen to show for it.
+  matched <- lapply(rules, function(r) mk(source_cond_string(r, dims)))
   names(strata) <- names(matched) <- ids
   list(strataCond = strata, matchedDataCond = matched)
 }

@@ -4,12 +4,15 @@
 \alias{conds_from_rules}
 \title{Raising conditions from a manual rule set}
 \usage{
-conds_from_rules(rules, sets = list())
+conds_from_rules(rules, sets = list(), dims = NULL)
 }
 \arguments{
 \item{rules}{A list of rules from [new_rule()].}
 
 \item{sets}{Named value sets referenced by clauses.}
+
+\item{dims}{Stratum key columns, needed to write a hand-picked
+exclusion. Without it those exclusions are silently dropped.}
 }
 \value{
 A list with `strataCond` and `matchedDataCond`, named lists of

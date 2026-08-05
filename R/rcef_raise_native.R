@@ -111,7 +111,12 @@ run_native_raising <- function(catch_data, dims, conds,
     stop("The CEF table is missing columns catchRaising() needs: ",
          paste(ck$missing, collapse = ", "))
 
-  cd <- cef_prepare(catch_data, dims)
+  # The donor conditions are written as arithmetic on stratum metrics -
+  # `coverage >= 50`, `discard_rate <= 0.9` - so those columns have to be
+  # ON the rows catchRaising() evaluates against. A CEF table has none of
+  # them: coverage is a property of a stratum, computed across many rows.
+  # Without this join the conditions are not merely wrong, they error.
+  cd <- cef_prepare(add_stratum_metrics(catch_data, dims), dims)
   catchRaising(catch_data = cd,
                condition_raising_st_list = conds$strataCond,
                condition_matched_data_list = conds$matchedDataCond,

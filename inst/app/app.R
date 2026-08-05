@@ -2279,7 +2279,11 @@ server <- function(input, output, session) {
       datatable(d, rownames = FALSE,
                 options = list(scrollX = TRUE, pageLength = 8)) })
 
-    list(keys = keys, expr = expr, report = report)
+    # `bars` is what a rule should STORE: the thresholds themselves plus
+    # only the hand-picked keys. `keys` is the resolved list, for the
+    # table on screen. Storing the resolved list on the rule is what put
+    # two hundred strata into the emitted condition.
+    list(keys = keys, expr = expr, report = report, bars = spec)
   }
 
 
@@ -3343,9 +3347,11 @@ server <- function(input, output, session) {
     x_keys  <- x_keys_srv$keys
     ca_keys <- ca_keys_srv$keys
 
-    save_group <- function(gid, label, a, m, excl) {
+    save_group <- function(gid, label, a, m, excl, bars = NULL) {
       g <- getrv("groups") %||% list()
-      mc <- alloc_matched_cond(m, excl, alloc_dims())
+      mc <- alloc_matched_cond(m, excl, alloc_dims(),
+                               cov_min  = bars$cov_min %||% NA,
+                               meas_min = bars$meas_min %||% NA)
       g[[gid]] <- list(
         label   = label,
         alloc   = alloc_cond_string(a),
@@ -3361,8 +3367,9 @@ server <- function(input, output, session) {
       req(nzchar(input[[ns("gid")]] %||% ""))
       a <- getrv("alloc_pend") %||% list()
       m <- getrv("match_pend") %||% a
+      b <- x_keys_srv$bars()
       g <- save_group(input[[ns("gid")]], input[[ns("glab")]] %||% "",
-                      a, m, x_keys())
+                      a, m, b$named, bars = b)
       setrv("alloc_pend", NULL); setrv("match_pend", NULL)
       updateTextInput(session, ns("gid"),
                       value = paste0("GA", length(g) + 1))
@@ -3371,13 +3378,14 @@ server <- function(input, output, session) {
     observeEvent(input[[ns("addcatchall")]], {
       g <- getrv("groups") %||% list()
       gid <- paste0("GA", length(g) + 1)
-      excl <- unique(c(ca_keys(),
-                       if (isTRUE(input[[ns("ca_keep")]])) x_keys()
+      cb <- ca_keys_srv$bars(); gb <- x_keys_srv$bars()
+      excl <- unique(c(cb$named,
+                       if (isTRUE(input[[ns("ca_keep")]])) gb$named
                        else character(0)))
       # no clause on either side: allocStrataCond is the complement of
       # everything above (assign_alloc_groups is first-match-wins), and
       # bioMatchedCond is every stratum less whatever the bars here drop
-      save_group(gid, "catch-all", list(), list(), excl)
+      save_group(gid, "catch-all", list(), list(), excl, bars = cb)
       updateTextInput(session, ns("gid"), value = paste0("GA", length(g) + 2))
       showNotification("Catch-all added at the end", duration = 2) })
 
@@ -3596,7 +3604,9 @@ server <- function(input, output, session) {
         showNotification("No catch data.", type = "error"); return() }
       res <- with_busy(sprintf("Allocating %s...", tolower(what)),
         suppressWarnings(run_allocation(
-          cd, dist_tbl(), a$groups, app_type,
+          cd, dist_tbl(), a$groups,
+          alloc_dims = a$dims %||% dims_of(),
+          app_type = app_type,
           originType_catch = input[[ns("origin")]] %||% "WGEstimate",
           variableType_catch = input[[ns("vartype")]] %||% "WeightLive",
           weighting = input[[ns("weighting")]] %||% "NumberAtAoL",
@@ -4561,7 +4571,10 @@ server <- function(input, output, session) {
 
   output$matched_txt_ui <- renderUI({
     src <- if (is.null(rv$pend_source)) rv$pend_raise else rv$pend_source
-    tmp <- new_rule("tmp", "", list(), src %||% list(), rule_dr()[1], rule_dr()[2])
+    b <- mg_excl$bars()
+    tmp <- new_rule("tmp", "", list(), src %||% list(), rule_dr()[1], rule_dr()[2],
+                    excluded = b$named, cov_min = b$cov_min,
+                    meas_min = b$meas_min)
     tags$span(paste0(source_cond_string(tmp),
       if (is.null(rv$pend_source)) "  (mirroring strataCond)" else "")) })
 
@@ -4572,9 +4585,13 @@ server <- function(input, output, session) {
 
   observeEvent(input$save_rule, {
     req(nzchar(input$rule_id))
+    b <- mg_excl$bars()
+    # the BARS, not the keys they resolve to today: the emitted
+    # matchedDataCond then reads `coverage >= 50`, which is checkable
     r <- new_rule(input$rule_id, input$rule_label, rv$pend_raise %||% list(),
                   rv$pend_source, rule_dr()[1], rule_dr()[2],
-                  excluded = mg_excl_keys())
+                  excluded = b$named, cov_min = b$cov_min,
+                  meas_min = b$meas_min)
     ids <- vapply(rv$rules, `[[`, character(1), "id")
     if (r$id %in% ids) {
       rv$rules[[which(ids == r$id)]] <- r
@@ -4598,14 +4615,18 @@ server <- function(input, output, session) {
 
   observeEvent(input$add_catchall, {
     dr <- ca_dr()
+    cb <- ca_excl$bars()
+    gb <- mg_excl$bars()
+    keep <- isTRUE(input$catchall_keep_excl)
     rv$rules <- c(rv$rules, list(new_rule(paste0("G", length(rv$rules) + 1),
       "catch-all", list(), NULL, dr[1], dr[2],
-      # by default the catch-all keeps every stratum: an exclusion made
-      # for one group is rarely meant to remove the stratum entirely
-      # the catch-all's own bars, plus the group exclusions only if asked
-      excluded = unique(c(ca_excl_keys(),
-        if (isTRUE(input$catchall_keep_excl)) mg_excl_keys()
-        else character(0))))))
+      # The catch-all's own bars. Hand-picked strata from the groups
+      # above are folded in only if asked: an exclusion made for one
+      # group is rarely meant to remove the stratum from the last resort
+      # as well.
+      cov_min  = cb$cov_min,
+      meas_min = cb$meas_min,
+      excluded = unique(c(cb$named, if (keep) gb$named else character(0))))))
     showNotification("Catch-all added at the end", duration = 2) })
 
   man_pal <- reactive(group_palette(vapply(rv$rules, `[[`, character(1), "id")))
@@ -5031,7 +5052,7 @@ server <- function(input, output, session) {
   nr_conds <- reactive({
     if (identical(input$nr_source, "manual")) {
       req(length(rv$rules) >= 1)
-      conds_from_rules(rv$rules, rv$sets)
+      conds_from_rules(rv$rules, rv$sets, unname(dmap("mg")[DIMS]))
     } else conds_from_auto(rec())
   })
 
@@ -5468,7 +5489,7 @@ server <- function(input, output, session) {
       conds_from_auto(recommend_raising(st, sc$hierarchy, sc$thresholds,
         self_threshold = sc$self_threshold %||% NA,
         mode = sc$mode %||% "nested", dims = sc$dims))
-    } else conds_from_rules(sc$rules, sc$sets %||% list())
+    } else conds_from_rules(sc$rules, sc$sets %||% list(), sc$dims)
     r <- with_busy(sprintf("Raising with '%s'...", input$final_alloc),
       tryCatch(run_native_raising(dat(), sc$dims, conds,
       type = input$nr_type %||% "discards",

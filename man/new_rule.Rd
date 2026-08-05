@@ -11,7 +11,9 @@ new_rule(
   source = NULL,
   dr_min = NA,
   dr_max = NA,
-  excluded = character(0)
+  excluded = character(0),
+  cov_min = NA,
+  meas_min = NA
 )
 }
 \arguments{

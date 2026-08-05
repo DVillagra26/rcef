@@ -285,7 +285,7 @@ emit_rules_code <- function(rules, sets, dims = NULL) {
   # app did. The donor side is deliberately NOT complemented: a stratum
   # that has already donated to one group may donate to another, and only
   # the raised side has to be exclusive.
-  cd <- conds_from_rules(rules, sets)
+  cd <- conds_from_rules(rules, sets, dims)
   mk <- function(side) {
     l <- if (side == "source") cd$matchedDataCond else cd$strataCond
     vapply(seq_along(rules), function(i) {

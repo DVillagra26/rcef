@@ -134,7 +134,11 @@ defined <- c(cap(sv, '\\n  ([A-Za-z_][A-Za-z0-9_.]*)\\s*<-\\s*(?:reactive|gated|
              ## every accessor as undefined, and five false names is how
              ## a real one gets skipped past.
              cap(sv, '\\n\\s*([A-Za-z_][A-Za-z0-9_.]*)\\s*<-\\s*[A-Za-z_][A-Za-z0-9_.]*\\$[A-Za-z_][A-Za-z0-9_.]*'),
-             cap(sv, '\\n\\s*([A-Za-z_][A-Za-z0-9_.]*)\\s*<-\\s*[a-z_]+_server\\('))
+             cap(sv, '\\n\\s*([A-Za-z_][A-Za-z0-9_.]*)\\s*<-\\s*[a-z_]+_server\\('),
+             ## and a reactive reached through the list itself -
+             ## `mg_excl$bars()` - where the name never appears on the
+             ## left of an assignment at all
+             cap(sv, '[A-Za-z_][A-Za-z0-9_.]*\\$([A-Za-z_][A-Za-z0-9_.]*)\\(\\)'))
 # scanned on the comment-free source, so a name mentioned in prose is not
 # mistaken for a call
 called  <- cap(code_only(sv), '\\b([a-z_][a-z0-9_.]*)\\(\\)')

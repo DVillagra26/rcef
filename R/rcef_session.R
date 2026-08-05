@@ -217,14 +217,24 @@ code_auto_rule <- function(name, dims, hierarchy, thresholds, self_threshold,
 #' @noRd
 #' @export
 code_manual_rule <- function(name, dims, rules, sets = list()) {
-  cd <- conds_from_rules(rules, sets)
+  cd <- conds_from_rules(rules, sets, dims)
   q <- function(l) vapply(seq_along(l), function(i)
     sprintf("    %s = quo(%s)%s", names(l)[i],
             wrap_lines(rlang::quo_text(l[[i]]), width = 64),
             if (i < length(l)) "," else ""), character(1))
+  needs_metrics <- any(vapply(rules, function(r)
+    any(!is.na(c(r$cov_min %||% NA, r$meas_min %||% NA,
+                 r$dr_min %||% NA, r$dr_max %||% NA))), logical(1)))
   c(sprintf("## ---- Allocation '%s' (manual groups) ---------------------", name),
     "## Here the grouping IS the decision, so it is written out in full.",
     sprintf("dims_%s <- %s", name, fmt_vals(dims)),
+    if (needs_metrics) c("",
+      "## A donor condition below is written as arithmetic on stratum",
+      "## metrics (coverage, discard_rate, n_measurements). Those are",
+      "## properties of a STRATUM, so a CEF table has none of them - this",
+      "## joins them onto the rows before the conditions are evaluated.",
+      "## Say it once here and the conditions stay readable.",
+      sprintf("catch_data <- add_stratum_metrics(catch_data, dims_%s)", name)),
     "",
     sprintf("conds_%s <- list(", name),
     "  strataCond = list(", q(cd$strataCond), "  ),",

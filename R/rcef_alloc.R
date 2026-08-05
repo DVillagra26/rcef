@@ -57,6 +57,7 @@ prep_for_alloc <- function(dist, app_type = "LengthTotal") {
 #' @noRd
 #' @export
 run_allocation <- function(catch_raised, dist, groups,
+                           alloc_dims = NULL,
                            app_type = "LengthTotal",
                            originType_catch = "WGEstimate",
                            variableType_catch = "WeightLive",
@@ -87,6 +88,11 @@ run_allocation <- function(catch_raised, dist, groups,
   # handed the raw import or an already-derived table, instead of only
   # working from the one place that happened to derive first.
   catch_raised <- derive_fields(as.data.frame(catch_raised))
+  # bioMatchedCond may say `coverage >= 50`; the columns behind that have
+  # to be present or the condition errors rather than filtering
+  if (!is.null(alloc_dims) && length(alloc_dims))
+    catch_raised <- tryCatch(add_stratum_metrics(catch_raised, alloc_dims),
+                             error = function(e) catch_raised)
 
   d <- prep_for_alloc(dist, app_type)
   if (!nrow(d))
