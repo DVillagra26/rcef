@@ -19,10 +19,11 @@ to `dev/tests/`.
 worth it: mutating one `output[[ns("ov")]]` to a typo makes it fail with
 the slot named, which is exactly what it exists for.
 
-`test_app_server.R` is the next one, but it needs more than a path fix -
+`test_app_server.R` HAS NOW BEEN MINED: its one still-valid assertion -
 it asserts on `Area1`, a dimension removed when the area levels became
 nested, and on a `test_census.csv` fixture that no longer ships. Its
 behavioural assertions have largely been absorbed into
 `dev/check_server.R`, which runs the server against a real CEF fixture
-from `inst/extdata`. What is left worth rescuing is the per-tab
-level-of-detail independence check.
+from `inst/extdata`. the per-tab level-of-detail independence check now lives in
+`dev/check_server.R`, run against a real fixture. The rest of the file
+(Area1, test_census.csv) is dead and can be deleted whenever.

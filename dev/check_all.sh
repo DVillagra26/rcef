@@ -19,7 +19,7 @@ run () {
   fi
 }
 
-for c in check_syntax check_exports check_sections check_app check_server; do
+for c in check_ascii check_syntax check_exports check_sections check_app check_server; do
   run "$c" "dev/$c.R"
 done
 for t in dev/tests/test_*.R; do

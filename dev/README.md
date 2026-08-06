@@ -5,10 +5,12 @@
 | file | what |
 |---|---|
 | `setup.R` | `pkgload::load_all(".")` — develop without installing |
+| `check_ascii.R` | every text file must be 7-bit ASCII. Non-ASCII (em-dashes, arrows, box-drawing) breaks `R CMD build` on a non-UTF-8 Windows locale with an opaque error |
 | `check_syntax.R` | `parse()` every `.R` file; must print `DONE ... 0 failure(s)` |
 | `check_exports.R` | every top-level object — functions **and constants** — must be exported; must print `NOT EXPORTED : 0` |
 | `check_app.R` | sources `inst/app/app.R` against the installed package and renders the UI |
 | `check_server.R` | **runs the server function** in a test session. `check_app.R` only builds tags, so it cannot see a helper defined after the module server that calls it |
+| | Also: filter Apply round-trips every plot panel; per-tab level of detail is independent; the code/status outputs render without error (the class of bug the `mg_excl` typo was) |
 | `check_sections.R` | the discard and biology manual builders must present the same 8 numbered steps |
 | `check_parity.R` | lists the panels and controls of the two manual builders side by side, so a drift is visible rather than found by a user. Informational — it reports, it does not fail |
 | `DOC_BACKLOG.txt` | the 94 functions exported with `@noRd` — no man page yet |

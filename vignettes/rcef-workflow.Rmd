@@ -30,33 +30,33 @@ library(rcef)
 
 ```
                      derive_fields()
-  input files  ──►  catch_data  ──┬──► build_strata() ──► classify_strata()
-                                  │           │
-                                  │           ▼                    explore,
-                                  │    define_raising_groups_*()   filter,
-                                  │           │                    decide
-                                  │           ▼
-                                  └──► catchRaising()  ──►  catch_raised
-                                                                │
-                              distributions ────────────────────┤
-                                                                ▼
+  input files  --> catch_data  --+--> build_strata() --> classify_strata()
+                                  |           |
+                                  |           v                    explore,
+                                  |    define_raising_groups_*()   filter,
+                                  |           |                    decide
+                                  |           v
+                                  +--> catchRaising()  --> catch_raised
+                                                                |
+                              distributions --------------------+
+                                                                v
                                                      catchAllocationAoL()
-                                                                │
-                                       catchAtAoLAggregation()  ▼
-                                    meanWoLatAoLAggregation() ──► results
+                                                                |
+                                       catchAtAoLAggregation()  v
+                                    meanWoLatAoLAggregation() --> results
 ```
 
 Two objects are worth separating in your head from the start:
 
-* **`catch_data`** — every row for the stock and year. This is what gets
+* **`catch_data`** -- every row for the stock and year. This is what gets
   grouped and raised.
-* **`explore_data`** — a subset you are *looking* at. This is what gets
+* **`explore_data`** -- a subset you are *looking* at. This is what gets
   plotted.
 
 They are different on purpose. Filtering to one metier to read a coverage
 figure is a normal, good thing to do; raising a stock on one metier
 because the filter was still on is not. The package never lets one become
-the other silently — see [Exploring](#exploring-with-a-filter).
+the other silently -- see [Exploring](#exploring-with-a-filter).
 
 ## 1. Loading the data
 
@@ -64,18 +64,18 @@ Three routes in, depending on what you have. All three end at the same
 place: a CEF (RDBES) long-format `catches` table, plus a `distributions`
 table if you want length or age work.
 
-### Route A — CEF files you already have
+### Route A -- CEF files you already have
 
 ```{r}
 catch_data <- read.csv("catches_CEF_v17.1.csv", stringsAsFactors = FALSE)
 dist_data  <- read.csv("distributions_CEF_v17.1.csv", stringsAsFactors = FALSE)
 ```
 
-### Route B — InterCatch exchange format
+### Route B -- InterCatch exchange format
 
 One file holding the HI, SI and SD records. `funIntercatchCEF()` reads
 *every* csv in the directory it is pointed at, binds them, and splits on
-the record-type column — so a single combined export is the normal input.
+the record-type column -- so a single combined export is the normal input.
 
 ```{r}
 funMakeRelation()          # builds stock_relation; needs icesVocab + icesSD
@@ -91,15 +91,15 @@ dist_data  <- ic$distributions
 
 | argument | what to put in it |
 |---|---|
-| `dat_path` | folder holding the exchange file(s). Not a file path — a folder. |
+| `dat_path` | folder holding the exchange file(s). Not a file path -- a folder. |
 | `stock_relation` | the lookup from `funMakeRelation()`. It also assigns `stock_relation` into the global environment, so passing it explicitly is belt and braces. |
 | `output_format` | `"to_list"` for use here. `"to_environment"` assigns into the global env, `"to_file"` writes CEF csvs with headers, `"to_upload"` writes headerless upload files. |
 | `out_path` | only meaningful for the two file formats. |
 
-### Route C — InterCatch output format
+### Route C -- InterCatch output format
 
 Three files: `StockOverview`, `NumbersAtAgeLength`, `MeanWeigthAtAgeLength`
-(the upstream spelling of the third is preserved — match it).
+(the upstream spelling of the third is preserved -- match it).
 
 ```{r}
 ic <- funICoutCEF(dat_path = "data/ic_output", output_format = "to_list")
@@ -125,7 +125,7 @@ nested ones everything downstream groups on:
 
 A code coarser than the level asked for **repeats** rather than becoming
 `NA`: `27.4` is its own division and subdivision as far as the data goes.
-That is deliberate — a stratum reported at coarse resolution is never
+That is deliberate -- a stratum reported at coarse resolution is never
 silently dropped out of a finer grouping.
 
 It needs `fleetValue`, `areaValue`, `vesselFlagCountry` and `seasonValue`
@@ -147,7 +147,7 @@ strata <- build_strata(catch_data, dims)
 
 `dims` is *the* decision of this step: it is the resolution at which you
 will look at coverage and, usually, the resolution at which you will
-raise. Four dimensions — fleet, country, area, season — is the habit, but
+raise. Four dimensions -- fleet, country, area, season -- is the habit, but
 any subset of the derived columns works.
 
 `build_strata()` returns one row per stratum with:
@@ -157,7 +157,7 @@ any subset of the derived columns works.
 | `landings` | total landings, tonnes |
 | `landings_with_discards` | landings in the part of the stratum that *has* a discard observation |
 | `discards` | total discards, tonnes |
-| `coverage` | `landings_with_discards / landings * 100` — the share of landings backed by a discard observation |
+| `coverage` | `landings_with_discards / landings * 100` -- the share of landings backed by a discard observation |
 | `discard_rate` | `discards / (landings_with_discards + discards)` |
 | `stratum_id` | the dims pasted with `" | "`. This is the key `catchRaising()` conditions are written against. |
 
@@ -199,12 +199,12 @@ plot_length_meanweight_box(mw_raw)  # how much did the strata averaged into it d
 The second takes [`length_meanweight_raw()`], the values *before* the
 collapse, and draws a box wherever more than one stratum contributes. Add
 enough facets that only one stratum lands in each cell and it draws
-points and says so — no fake boxes around single values.
+points and says so -- no fake boxes around single values.
 
 In the app the filter sits **beside the axis pickers on each figure tab**,
 so the loop is: put `metier4` on the Y axis, see the spread, pin
-`metier4` to `TBB`, look again. Each tab owns its filter — pinning the
-coverage figure leaves the discard-rate figure alone — and none of them
+`metier4` to `TBB`, look again. Each tab owns its filter -- pinning the
+coverage figure leaves the discard-rate figure alone -- and none of them
 touch the grouping or the raising.
 
 Here, subset the **catches**, not the strata, and rebuild:
@@ -217,7 +217,7 @@ plot_discard_rate(explore_strata, type = "box", x = "ICESDivision")
 ```
 
 `apply_filters()` combines columns with AND and values within a column
-with OR — "beam trawl, in either of these two divisions":
+with OR -- "beam trawl, in either of these two divisions":
 
 ```{r}
 apply_filters(catch_data,
@@ -236,7 +236,7 @@ filter_coverage(catch_data, list(metier4 = "TBB"))
 ```
 
 `explore_filter_levels()` offers only columns that are present and have
-more than one value — a filter that cannot change the figure is not worth
+more than one value -- a filter that cannot change the figure is not worth
 a dropdown. `filter_coverage()` reports rows kept **and weight kept**,
 because a filter can easily keep 40% of the rows and 2% of the landings,
 and a figure drawn on 2% of the landings is not a view of the fleet.
@@ -256,7 +256,7 @@ A "group" is a set of strata that will be raised together, plus the pool
 of strata whose data does the raising. Two ways to arrive at one. Both
 return the same object, so the raising step does not care which you used.
 
-### Automatic — a cascade
+### Automatic -- a cascade
 
 Each stratum gets the *first* donor pool that clears its threshold: its
 own data if that is covered enough, else the narrowest wider pool that
@@ -286,10 +286,10 @@ groups$summary                 # one row per group: level, condition, n strata
 plot_river(groups$strata)      # which strata resolved at which step
 ```
 
-### Manual — explicit rules
+### Manual -- explicit rules
 
-When the cascade cannot express the decision — "these three metiers raise
-together because the WG said so" — write the rules out.
+When the cascade cannot express the decision -- "these three metiers raise
+together because the WG said so" -- write the rules out.
 
 A **rule** is a list with an `id`, a `raise` side (which strata this rule
 raises) and a `donor` side (whose data does the raising). Each side is a
@@ -312,14 +312,14 @@ groups <- define_raising_groups_manual(strata, rules)
 **Rules are first-match-wins.** A rule with an empty `raise` claims every
 stratum, but only *receives* the ones no earlier rule took. The package
 writes the complements out explicitly when it builds the conditions, so
-what `catchRaising()` gets is a genuine partition — it rejects anything
+what `catchRaising()` gets is a genuine partition -- it rejects anything
 that double-assigns a stratum.
 
 ### Keeping strata out of a donor pool
 
 A stratum that is itself barely sampled is a poor donor: raising a
 neighbour on it lends the neighbour a rate resting on very little. Three
-routes, all reaching the same place — a set of stratum keys:
+routes, all reaching the same place -- a set of stratum keys:
 
 ```{r}
 exclusion_choices(strata, dims, order_by = "coverage")   # what to pick from
@@ -331,14 +331,14 @@ excluded_keys(strata, dims,
 exclusion_overview(strata, dims, cov_min = 40)  # and why each one is out
 ```
 
-`exclusion_choices()` labels carry the numbers the decision is made on —
-coverage, discard rate, measurements, weight — so the list can be read
+`exclusion_choices()` labels carry the numbers the decision is made on --
+coverage, discard rate, measurements, weight -- so the list can be read
 and acted on without a table beside it. Order it by `"coverage"` to put
 the thinnest strata, the likeliest candidates, at the top.
 
 Why the thresholds resolve to keys rather than staying as expressions:
 the condition handed to `catchRaising()` is evaluated against **CEF
-rows**, and those carry no `coverage` column — coverage is a property of
+rows**, and those carry no `coverage` column -- coverage is a property of
 a stratum, computed from many rows. So a bar is applied here, against the
 stratum table, and emitted as an explicit list. Whatever the route, the
 engine receives a plain `!paste(...) %in% c(...)`.
@@ -353,7 +353,7 @@ strata <- flag_donor_exclusion(strata, cov_min = 40,
 ```
 
 **Exclusion narrows the donor pool only.** It never removes a stratum
-from what is raised or allocated — a stratum too thin to lend its data is
+from what is raised or allocated -- a stratum too thin to lend its data is
 exactly the one that most needs to borrow.
 
 For the biology groups, the same keys fold into `bioMatchedCond`:
@@ -441,7 +441,7 @@ link <- link_dist_to_strata(catch_data, dist_data, dims,
 > call. `run_allocation()` does this for you; if you call
 > `catchAllocationAoL()` directly, do it yourself.
 
-Groups are defined the same way as for discards — same two conditions,
+Groups are defined the same way as for discards -- same two conditions,
 built on biology coverage rather than discard coverage:
 
 ```{r}
@@ -505,7 +505,7 @@ unallocatable rather than merely a bad donor:
 
 The rung thresholds are always read against the **donor pool**, never
 against the stratum being allocated to. A stratum with 0% coverage of its
-own is a perfectly good candidate to *receive* a distribution — it is
+own is a perfectly good candidate to *receive* a distribution -- it is
 exactly the one that needs one. Only the Landings/Discards bracket comes
 from the target, so a discard stratum keeps its looser standard even when
 the pool it draws on has been joined with landings.
@@ -529,7 +529,7 @@ it applies to every rung including the last.
 #### The last rung has no threshold
 
 Every rung above carries a bar, so a stratum thinner than all of them
-ends the ladder unallocated — and unallocated is not a neutral outcome.
+ends the ladder unallocated -- and unallocated is not a neutral outcome.
 The weight never reaches the numbers at length, and the totals quietly
 stop adding up.
 
@@ -539,7 +539,7 @@ reached only by the strata the bars did not resolve:
 | `keep_cc` | the last rung pools |
 |---|---|
 | `TRUE` | everything **in the same catch category**. Discards are allocated from all discard data there is, landings from all landings data; the two never mix. |
-| `FALSE` | everything, both categories — and only after the category-joined rungs above have also failed. |
+| `FALSE` | everything, both categories -- and only after the category-joined rungs above have also failed. |
 
 ```{r}
 steps <- alloc_steps("Country", thresholds = list(Lan = 60, Dis = 30),
@@ -555,13 +555,13 @@ vapply(steps, `[[`, "", "label")
 in it would pass a `-Inf` coverage bar and then allocate from a
 distribution that does not exist, so the last rung still requires the
 pool to contain something measured. A stratum that genuinely has no
-donor anywhere stays unallocated, which is the honest answer — and the
+donor anywhere stays unallocated, which is the honest answer -- and the
 report says **which** of the two reasons applies, because they need
 opposite fixes:
 
-* *no measured data anywhere in this catch category* — no threshold can
+* *no measured data anywhere in this catch category* -- no threshold can
   conjure data. Go and find some.
-* *the donor-pool bars left no eligible donor* — loosen the donor bars,
+* *the donor-pool bars left no eligible donor* -- loosen the donor bars,
   not the rung thresholds.
 
 If the last rung leaves anything unresolved while data exists, the donor
@@ -578,7 +578,7 @@ merely a bad donor.
 | **rung threshold** | is this pool good enough for the stratum to stop here? | `thresholds`, `min_meas` |
 | **donor bar** | may this stratum lend its distribution at all? | `donor_cov_min`, `donor_meas_min` |
 
-A stratum failing a donor bar is **still allocated** — it is dropped from
+A stratum failing a donor bar is **still allocated** -- it is dropped from
 the pool sums, not from the ladder. That is the whole point of it needing
 to borrow.
 
@@ -592,13 +592,13 @@ steps <- alloc_steps(
 ```
 
 If the bars leave a category with no eligible donor at all, the strata
-stay unallocated and `alloc_reason` says so — pointing at the bars rather
+stay unallocated and `alloc_reason` says so -- pointing at the bars rather
 than at the rung thresholds, which are not the problem in that case.
 
 #### Strata with no catch
 
 A stratum whose weight is zero has nothing to allocate. It can never clear
-a coverage test — the denominator is zero — so it is taken out **before**
+a coverage test -- the denominator is zero -- so it is taken out **before**
 the ladder runs, labelled `"no catch to allocate"`, and reported on its
 own row rather than in the unresolved list. Left in, it would send you
 loosening thresholds to chase strata that need nothing.
@@ -629,7 +629,7 @@ alloc <- run_allocation(
 
 ## 7. Aggregating the result
 
-`alloc` holds one row per allocated domain — far more rows than anyone
+`alloc` holds one row per allocated domain -- far more rows than anyone
 wants to read, and on the file's own class scale. Aggregation turns that
 into the two tables a stock assessment actually consumes: **numbers at
 class** and **mean weight at class**.
@@ -648,7 +648,7 @@ weights_at <- agg_meanweight(alloc,
                              unit     = "g")
 ```
 
-### `grouping` — the one that matters
+### `grouping` -- the one that matters
 
 Everything **not** named here is summed (numbers) or averaged (mean
 weights) away. So `grouping` is not cosmetic: it decides what the output
@@ -657,13 +657,13 @@ distinguishes and what it merges.
 | you put in `grouping` | the output has |
 |---|---|
 | `character(0)` | one number per class for the whole stock |
-| `"catchCategory"` | landings and discards kept apart — **almost always what you want** |
+| `"catchCategory"` | landings and discards kept apart -- **almost always what you want** |
 | `c("catchCategory", "sampledOrEstimated")` | plus a split between what was measured and what was allocated onto it |
 | `c("catchCategory", "metier4")` | plus one column per fleet |
 
 `sampledOrEstimated` is the diagnostic column. It tells you how much of
 each class came from real measurements and how much the allocation
-supplied — the honest answer to "how much of this distribution is
+supplied -- the honest answer to "how much of this distribution is
 actually observed". Drop it once you are past checking and want the
 delivery table.
 
@@ -677,7 +677,7 @@ trade-off the cascade thresholds are about, arriving one step later.
 |---|---|
 | `minAoL` | lowest class to keep. `0` keeps everything. |
 | `maxAoL` | highest class to keep. `NA` for no upper bound. |
-| `plusGroup` | `FALSE` discards everything above `maxAoL`. `TRUE` accumulates it into a single class AT `maxAoL` — the usual "8+" group of an age-structured assessment. **`maxAoL = NA` with `plusGroup = TRUE` does nothing**: there is no bound to accumulate at. |
+| `plusGroup` | `FALSE` discards everything above `maxAoL`. `TRUE` accumulates it into a single class AT `maxAoL` -- the usual "8+" group of an age-structured assessment. **`maxAoL = NA` with `plusGroup = TRUE` does nothing**: there is no bound to accumulate at. |
 
 So an age table ending in a 10+ group is `maxAoL = 10, plusGroup = TRUE`;
 a length table cut at 60 cm and everything above thrown away is
@@ -698,7 +698,7 @@ averaged.
 ### What comes back
 
 Both return **wide** tables, one column per class, with the class in the
-column name — `N_Length_2900` is the number at the 2900 (mm) length
+column name -- `N_Length_2900` is the number at the 2900 (mm) length
 class. That is the shape InterCatch expects, and the wrong shape for
 ggplot, so anything plotting it has to `pivot_longer` first. The two
 wrappers above do that for you; `catchAtAoLAggregation()` called directly
@@ -716,7 +716,7 @@ sum(numbers_at$N_total, na.rm = TRUE)   # against the raised catch
 ```
 
 If the numbers do not reconcile with what went in, the usual cause is a
-stratum the cascade left unallocated — its weight never reached the
+stratum the cascade left unallocated -- its weight never reached the
 distribution. `alloc_cascade_table()` shows that as its own row, and the
 last rung exists precisely so it stays empty.
 
@@ -727,7 +727,7 @@ or as an ICES TAF script set. Two things about what it writes are worth
 knowing:
 
 **Only saved allocations are written.** The on-screen configuration is
-not, unless nothing at all has been saved — in which case it is written
+not, unless nothing at all has been saved -- in which case it is written
 and clearly labelled as unsaved. This keeps a script from opening with a
 near-duplicate of the first saved block, which left a reader unable to
 tell which one produced the numbers.
@@ -747,7 +747,7 @@ emit_explore_filter_code(list(metier4 = "TBB"))
 |---|---|
 | the workbench functions | `R/rcef_*.R` |
 | plots and theme | `R/viz_*.R` |
-| `catchRaising()`, `catchAllocationAoL()`, the CEF readers | `R/RDBESStockCoord_*.R` — vendored ICES working-group code, not modified here |
+| `catchRaising()`, `catchAllocationAoL()`, the CEF readers | `R/RDBESStockCoord_*.R` -- vendored ICES working-group code, not modified here |
 | the app | `inst/app/`, launched by `run_app()` |
 
 The vendored files keep upstream's function names, argument lists and

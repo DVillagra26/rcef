@@ -151,6 +151,64 @@ if (!length(fx)) {
   say(is.character(bad) && length(bad) == 0,
       "a filter change makes every plot panel stale, and Apply redraws it",
       if (is.character(bad)) paste(bad, collapse = "; ") else bad)
+
+  ## ---------------------------------------------------------------
+  ##  Per-tab level of detail is independent.
+  ##
+  ##  Ported from the retired test_app_server.R. Each figure tab picks its
+  ##  own fleet and area resolution; changing one must not move another.
+  ##  The old test asserted this against Area1, a dimension since removed,
+  ##  so only the independence check survives - the mechanism (dmap reads
+  ##  <prefix>_fleet / <prefix>_area) is what matters, not the columns.
+  ## ---------------------------------------------------------------
+  lod <- tryCatch({
+    shiny::testServer(d, {
+      rv$cef_catches <- utils::read.csv(fx[1], stringsAsFactors = FALSE)
+      session$flushReact()
+      session$setInputs(cov_fleet = "metier5", cov_area = "ICESDivision",
+                        dr_fleet  = "metier4", dr_area  = "ICESSubArea")
+      session$flushReact()
+      a <- unname(dmap("cov")["Fleet"]); b <- unname(dmap("dr")["Fleet"])
+      c1 <- unname(dmap("cov")["Area"]); c2 <- unname(dmap("dr")["Area"])
+      if (!(a == "metier5" && b == "metier4"))
+        stop("fleet level bled across tabs: cov=", a, " dr=", b)
+      if (!(c1 == "ICESDivision" && c2 == "ICESSubArea"))
+        stop("area level bled across tabs: cov=", c1, " dr=", c2)
+      TRUE
+    })
+    TRUE
+  }, error = function(e) conditionMessage(e))
+  say(isTRUE(lod),
+      "each tab's fleet/area level of detail is independent of the others",
+      lod)
+
+  ## ---------------------------------------------------------------
+  ##  Force the code / status outputs to actually render.
+  ##
+  ##  These are the ones a wiring typo hides in - the mg_excl bug lived in
+  ##  a renderUI that never ran until the panel was opened. They take no
+  ##  inputs beyond loaded data, so rendering them here is cheap and
+  ##  cannot raise a false validate() failure. Top-level ids only;
+  ##  module-namespaced ones need the module session and are covered by
+  ##  the gate round-trip above.
+  outs <- c("auto_conds", "man_conds", "code_txt", "final_status")
+  rend <- tryCatch({
+    shiny::testServer(d, {
+      rv$cef_catches <- utils::read.csv(fx[1], stringsAsFactors = FALSE)
+      session$flushReact()
+      broke <- character(0)
+      for (o in outs) {
+        v <- tryCatch({ force(output[[o]]); NULL },
+                      error = function(e) conditionMessage(e))
+        if (!is.null(v)) broke <- c(broke, paste0(o, ": ", v))
+      }
+      outbox$broke <- broke
+    })
+    outbox$broke
+  }, error = function(e) conditionMessage(e))
+  say(is.character(rend) && length(rend) == 0,
+      "the code and status outputs render without error",
+      if (is.character(rend)) paste(rend, collapse = "; ") else rend)
 }
 
 cat(sprintf("\nDONE  %d failure(s)\n", fail))
