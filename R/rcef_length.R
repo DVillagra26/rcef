@@ -740,11 +740,13 @@ emit_alloc_conditions <- function(groups) {
       "## thresholds they are rather than as a list of stratum keys.",
       "catch_raised <- add_stratum_metrics(catch_raised, dims_biology)",
       ""),
-    "## allocStrataCond is a PARTITION: each group's condition excludes",
-    "## everything the groups above it already took. Written as plain",
-    "## quo(TRUE) a catch-all matches records an earlier group has, and",
-    "## catchAllocationAoL() rejects the run.",
-    one("allocStrataCond", cs$allocStrataText), "",
+    "## Groups are tested top to bottom, first match wins - so the strata",
+    "## clauses are written plainly (a catch-all is just quo(TRUE)).",
+    "## complement_conds() turns them into the partition",
+    "## catchAllocationAoL() needs; without it a catch-all would match",
+    "## records an earlier group already took and the run is rejected.",
+    one("allocStrataClauses", cs$allocStrataSimple),
+    "allocStrataCond <- complement_conds(allocStrataClauses)", "",
     "## bioMatchedCond is NOT a partition - donor pools may overlap, and",
     "## a well-sampled stratum usually feeds several groups.",
     one("bioMatchedCond",
@@ -1648,7 +1650,11 @@ alloc_conds_from_groups <- function(groups) {
   }
   matched <- lapply(groups, function(g)
     mk(fld(g, "matched", fld(g, "alloc", "TRUE"))))
+  simple <- stats::setNames(
+    vapply(groups, function(g) { t <- fld(g, "alloc", "TRUE"); if (nzchar(t)) t else "TRUE" },
+           character(1)), names(groups))
   names(alloc) <- names(matched) <- names(groups)
   list(allocStrataCond = alloc, bioMatchedCond = matched,
-       allocStrataText = stats::setNames(txts, names(groups)))
+       allocStrataText = stats::setNames(txts, names(groups)),
+       allocStrataSimple = simple)
 }

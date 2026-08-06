@@ -116,5 +116,29 @@ ok(all(c("coverage", "discard_rate", "stratum_weight") %in% names(dm)),
 ok(!is.null(rlang::eval_tidy(rlang::quo(coverage >= 50), data = dm)),
    "so `coverage >= 50` is evaluable where the engine evaluates it")
 
+## --- the simplified strataCond a human reads --------------------------
+##
+## First-match-wins means the "& !(everything above)" is redundant on
+## screen; complement_conds() supplies the partition the engine needs.
+## conds_from_rules() now returns both.
+rr <- list(
+  new_rule("G1", "", list(list(var = "metier4", values = "TBB"))),
+  new_rule("G2", "", list(list(var = "metier4", values = c("OTB", "SSC")))),
+  new_rule("G3", "catch-all", list()))
+cc <- conds_from_rules(rr, list(), "metier4")
+
+simple <- vapply(cc$strataCond_simple,
+                 function(q) paste(deparse(rlang::quo_get_expr(q)), collapse=" "),
+                 character(1))
+ok(!any(grepl("!", simple)), "the simple clauses carry no complement noise")
+ok(identical(simple[["G3"]], "TRUE"), "the catch-all is a bare TRUE on screen")
+
+## complement_conds turns them into a real partition
+part <- complement_conds(cc$strataCond_simple)
+d <- data.frame(metier4 = c("TBB", "OTB", "GNS"), stringsAsFactors = FALSE)
+hits <- vapply(part, function(q) sum(rlang::eval_tidy(q, data = d)), numeric(1))
+ok(sum(hits) == nrow(d), "the complemented clauses claim every row exactly once")
+ok(hits[["G3"]] == 1, "the catch-all picks up exactly the unclaimed GNS row")
+
 cat(sprintf("\nDONE  %d failure(s)\n", FAIL))
 if (FAIL) quit(status = 1L)

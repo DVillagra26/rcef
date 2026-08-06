@@ -85,4 +85,23 @@ sl <- grep("sliderInput", c(disc, bio), value = TRUE)
 cat("\nsliders still in the manual builders:", length(sl), "\n")
 if (length(sl)) cat(paste0("  ", trimws(sl), collapse = "\n"), "\n")
 
+## Every builder should offer the same output tabs, so a user who learns
+## one layout knows them all. This counts the tabPanel titles in each.
+cat("\n=== output tabs ===\n")
+tabs <- function(pat) {
+  hits <- grep(pat, src)
+  if (!length(hits)) return(character(0))
+  # tab titles are the first string arg of tabPanel() near the builder
+  m <- regmatches(src, regexpr('tabPanel\\("[^"]+"', src))
+  sub('tabPanel\\("', "", m)
+}
+alltabs <- sort(unique(sub('"$', "",
+  sub('tabPanel\\("', "",
+      regmatches(src, regexpr('tabPanel\\("[^"]+"', src))))))
+cat("tab titles in app.R:", paste(alltabs, collapse = ", "), "\n")
+want <- c("Code", "Overview", "Rivers")
+have <- all(want %in% alltabs)
+cat(if (have) "ok   " else "WARN ",
+    "Code / Overview / Rivers tabs present\n")
+
 cat("\nDONE  review the two 'only' lines above\n")

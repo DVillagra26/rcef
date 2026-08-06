@@ -762,8 +762,51 @@ conds_from_rules <- function(rules, sets = list(), dims = NULL) {
   # quietly stay in the donor pool - a silent no-op with no error and
   # nothing on screen to show for it.
   matched <- lapply(rules, function(r) mk(source_cond_string(r, dims)))
-  names(strata) <- names(matched) <- ids
-  list(strataCond = strata, matchedDataCond = matched)
+  # The SIMPLE strataCond a human reads: each group's own clause, and the
+  # catch-all as a bare TRUE. First-match-wins makes the complements
+  # redundant on screen - a reader does not need "& !(everything above)"
+  # spelled out to understand that G2 gets what G1 did not. The complements
+  # are still what the ENGINE runs (catchRaising bind_rows the per-clause
+  # results, so overlapping conditions double-count); complement_conds()
+  # turns the simple form into the executable one.
+  simple <- lapply(rules, function(r) {
+    this <- cond_string(r$raise)
+    mk(this)
+  })
+  names(strata) <- names(matched) <- names(simple) <- ids
+  list(strataCond = strata, matchedDataCond = matched,
+       strataCond_simple = simple)
+}
+
+#' Make a set of overlapping strata clauses into a partition
+#'
+#' First-match-wins on screen; a partition for the engine. Each clause
+#' becomes itself AND NOT every clause above it, and a bare `TRUE`
+#' (a catch-all) becomes NOT-everything-above. This is what
+#' [conds_from_rules()] applies internally; it is exported so an emitted
+#' script can show the simple clauses and complement them in one call
+#' rather than printing the noise inline.
+#'
+#' @param clauses A named list of condition strings or quosures, in order.
+#' @return A named list of quosures forming a partition.
+#' @seealso [conds_from_rules()]
+#' @export
+#' @examples
+#' complement_conds(list(G1 = "metier4 == \"TBB\"", G2 = "TRUE"))
+complement_conds <- function(clauses) {
+  txt <- vapply(clauses, function(c)
+    if (inherits(c, "quosure")) rlang::quo_text(c) else as.character(c),
+    character(1))
+  mk <- function(t) rlang::new_quosure(rlang::parse_expr(t), env = globalenv())
+  seen <- character(0); out <- vector("list", length(txt))
+  for (i in seq_along(txt)) {
+    this <- txt[[i]]
+    t <- if (!length(seen)) this
+         else if (this == "TRUE") paste0("!(", paste(seen, collapse = " | "), ")")
+         else paste0("(", this, ") & !(", paste(seen, collapse = " | "), ")")
+    out[[i]] <- mk(t); seen <- c(seen, paste0("(", this, ")"))
+  }
+  stats::setNames(out, names(clauses))
 }
 
 # ----------------------------------------------------------

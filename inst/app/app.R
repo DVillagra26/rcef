@@ -303,7 +303,10 @@ final_ui <- function() sidebarLayout(
                  class = "btn-success"),
     tags$hr(),
     h4("Aggregation"),
-    selectInput("fin_x", "Split by", c("(whole stock)" = "", DIMS), ""),
+    # split by Fleet by default: the first question of a final raising is
+    # almost always how the catch falls across the fleet, and an empty
+    # split opened on the whole-stock total, which looked like one bar
+    selectInput("fin_x", "Split by", c("(whole stock)" = "", DIMS), "Fleet"),
     selectInput("fin_facet", "Facet", c(NONE, DIMS), ""),
     tags$hr(),
     h4("Cross-tab"),
@@ -313,9 +316,16 @@ final_ui <- function() sidebarLayout(
     level_box("nr"), alloc_box()),
   mainPanel(width = 9,
     uiOutput("final_status"),
-    plot_slot("fin_plot", capture = TRUE),
-    h4("Imported and raised data overview"), tbl_slot("fin_overview"),
-    h4("Discards, landings and BMS (tonnes)"), tbl_slot("fin_crosstab")))
+    tabsetPanel(id = "fin_out", type = "tabs",
+      tabPanel("Plot",
+        plot_slot("fin_plot", capture = TRUE),
+        h4("Imported and raised data overview"), tbl_slot("fin_overview")),
+      tabPanel("Cross-tab",
+        h4("Discards, landings and BMS (tonnes)"),
+        span(class = "note",
+             "The raised catch by the row and column keys chosen on the ",
+             "left - the table that goes into the assessment."),
+        tbl_slot("fin_crosstab")))))
 
 fragments_ui <- function() fluidPage(fluidRow(
   column(3,
@@ -541,23 +551,35 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
           actionButton(ns("save"), "Save allocation", class = "btn-success")),
         mainPanel(width = 9,
           uiOutput(ns("status")),
-          h4("What each step resolves"),
-          span(class = "note",
-               "One row per rung in the order it is tested, with the running ",
-               "total. The last row is whatever the ladder never resolved."),
-          tbl_slot(ns("steps")),
-          h4("Strata the ladder never resolved"),
-          span(class = "note",
-               "Heaviest first. If this is not empty, either a threshold is ",
-               "too strict or the category must be allowed to drop."),
-          tbl_slot(ns("cmissing")),
-          h4("Strata and the group that raises them"),
-          plot_slot(ns("river")),
-          h4("One river per step"),
-          span(class = "note",
-               "What each rung claims and where it draws from, read the same ",
-               "way as the manual per-rule rivers."),
-          uiOutput(ns("step_rivers"))))),
+          tabsetPanel(id = ns("hier_out"), type = "tabs",
+            tabPanel("Code",
+              h4("allocStrataCond / bioMatchedCond"),
+              span(class = "note",
+                   "The grouping this cascade resolves to, as a script - ",
+                   "strata clauses written plainly, the partition applied ",
+                   "for you."),
+              verbatimTextOutput(ns("hier_conds"))),
+            tabPanel("Overview",
+              h4("What each step resolves"),
+              span(class = "note",
+                   "One row per rung in the order it is tested, with the ",
+                   "running total. The grouping column names what each rung ",
+                   "still distinguishes."),
+              tbl_slot(ns("steps")),
+              tags$hr(),
+              h4("Strata the ladder never resolved"),
+              span(class = "note",
+                   "Heaviest first. If this is not empty, either a threshold ",
+                   "is too strict or the category must be allowed to drop."),
+              tbl_slot(ns("cmissing"))),
+            tabPanel("Rivers",
+              h4("Strata and the group that raises them"),
+              plot_slot(ns("river")),
+              h4("One river per step"),
+              span(class = "note",
+                   "What each rung claims and where it draws from, read the ",
+                   "same way as the manual per-rule rivers."),
+              uiOutput(ns("step_rivers"))))))),
     conditionalPanel(sprintf("input.%s == 'manual'", ns("method")),
       sidebarLayout(
         sidebarPanel(width = 4,
@@ -668,54 +690,56 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
                        class = "btn-success")),
         mainPanel(width = 8,
           uiOutput(ns("bmsnote")),
-          h4("allocStrataCond / bioMatchedCond"),
-          span(class = "note",
-               "The two lists as they would be written in a script."),
-          verbatimTextOutput(ns("conds")),
-          h4("Groups"), tbl_slot(ns("rules")),
-          tags$hr(),
-          uiOutput(ns("check")),
-          h4("What each group actually allocates"),
-          span(class = "note",
-               "Read top to bottom, the way the groups are evaluated. Each ",
-               "card shows what its group TAKES - after the groups above it ",
-               "have taken theirs - and the running total of the catch ",
-               "resolved so far."),
-          uiOutput(ns("ladder")),
-          tags$hr(),
-          h4("What is assigned, and what is still missing"),
-          span(class = "note",
-               "One row per rule in the order it is tested, with the running ",
-               "total. The last row is whatever no rule has claimed yet - the ",
-               "gap to close."),
-          tbl_slot(ns("progress")),
-          h4("Strata still unassigned"),
-          span(class = "note", "Heaviest first, so the biggest hole is on top."),
-          tbl_slot(ns("missing")),
-
-          tags$hr(),
-          h4("Strata"),
-          span(class = "note",
-               "One row per stratum: the group that allocates it, and every ",
-               "group it lends its distribution to. The same table the ",
-               "discard builder shows."),
-          tbl_slot(ns("strata_tbl")),
-          tags$hr(),
-          h4("Overview: allocated vs donated per group"),
-          span(class = "note",
-               "Two numbers that are easy to conflate. A stratum is ",
-               "ALLOCATED by exactly one group; it can sit in the donor ",
-               "pool of several, so the second column can exceed the first ",
-               "and usually should."),
-          tbl_slot(ns("ov")),
-          tags$hr(),
-          h4("Strata and the data they are allocated from"),
-          plot_slot(ns("mriver")),
-          h4("One river per rule"),
-          span(class = "note",
-               "The same reading as the automated ladder: what each rule ",
-               "claims, and where it draws from."),
-          uiOutput(ns("rule_rivers"))))))
+          tabsetPanel(id = ns("man_out"), type = "tabs",
+            tabPanel("Code",
+              h4("allocStrataCond / bioMatchedCond"),
+              span(class = "note",
+                   "The two lists as they would be written in a script - ",
+                   "strata clauses written plainly (first match wins), the ",
+                   "partition applied for you; donor conditions as metric ",
+                   "thresholds, not stratum lists."),
+              verbatimTextOutput(ns("conds"))),
+            tabPanel("Overview",
+              uiOutput(ns("check")),
+              h4("What is assigned, and what is still missing"),
+              span(class = "note",
+                   "One row per group in the order it is tested, with the ",
+                   "running total. The last row is whatever no group has ",
+                   "claimed yet - the gap to close."),
+              tbl_slot(ns("progress")),
+              h4("Strata still unassigned"),
+              span(class = "note", "Heaviest first, so the biggest hole is on top."),
+              tbl_slot(ns("missing")),
+              tags$hr(),
+              h4("What each group actually allocates"),
+              span(class = "note",
+                   "Read top to bottom, the way the groups are evaluated. ",
+                   "Each card shows what its group TAKES - after the groups ",
+                   "above it have taken theirs - and the running total."),
+              uiOutput(ns("ladder")),
+              tags$hr(),
+              h4("Overview: allocated vs donated per group"),
+              span(class = "note",
+                   "A stratum is ALLOCATED by exactly one group; it can sit ",
+                   "in the donor pool of several, so the second column can ",
+                   "exceed the first and usually should."),
+              tbl_slot(ns("ov"))),
+            tabPanel("Rivers",
+              uiOutput(ns("check2")),
+              h4("Strata and the data they are allocated from"),
+              plot_slot(ns("mriver")),
+              h4("One river per rule"),
+              span(class = "note",
+                   "The same reading as the automated ladder: what each ",
+                   "rule claims, and where it draws from."),
+              uiOutput(ns("rule_rivers"))),
+            tabPanel("Strata",
+              h4("Groups"), tbl_slot(ns("rules")),
+              h4("Strata"),
+              span(class = "note",
+                   "One row per stratum: the group that allocates it, and ",
+                   "every group it lends its distribution to."),
+              tbl_slot(ns("strata_tbl"))))))))
 }
 
 # --- 2nd level: raising ------------------------------------------
@@ -1235,6 +1259,7 @@ ui <- navbarPage(
 .fltbox .form-group{margin-bottom:4px}
 .fltbox .control-label{font-size:11px;margin-bottom:1px}
     .setall-box{background:#eef2f7;border:1px solid #cbd7e3;border-radius:6px;padding:6px 8px;margin-bottom:6px}
+    .cascade-dir{background:#f4f7f4;border-left:4px solid #59A14F;border-radius:4px;padding:4px 8px;margin-bottom:6px;font-size:12px}
 .fltapplied{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
 .fltpill{display:inline-flex;align-items:center;gap:5px;font-size:11px;
   background:#fff;border:1px solid #d9a441;border-radius:10px;
@@ -1690,6 +1715,10 @@ ui <- navbarPage(
                        column(5, br(), actionButton("apply_all", "Apply",
                                                     class = "btn-sm btn-primary"))),
               uiOutput("hier_keys"),
+              div(style = "margin:6px 0",
+                  actionButton("ar_apply", "Apply settings",
+                               class = "btn-sm btn-primary"),
+                  uiOutput("ar_hier_stale", inline = TRUE)),
               uiOutput("hier_chain"),
               tags$hr(), h4("3. Exclude donors"),
               span(class = "note",
@@ -1710,16 +1739,32 @@ ui <- navbarPage(
               actionButton("save_auto", "Save as scenario", class = "btn-success btn-sm"),
               level_box("ar"), alloc_box()),
             mainPanel(width = 9,
-              h4("Decision process"),
+          tabsetPanel(id = "auto_out", type = "tabs",
+            tabPanel("Code",
+              h4("Raising conditions"),
+              span(class = "note",
+                   "strataCond and matchedDataCond as they would be written ",
+                   "in a script."),
+              verbatimTextOutput("auto_conds")),
+            tabPanel("Overview",
+              h4("What each step resolves"),
+              span(class = "note",
+                   "One row per rung in the order it is tested, with the ",
+                   "running total. The grouping column names what each rung ",
+                   "still distinguishes."),
               uiOutput("tree_check"),
-              uiOutput("tree_ui"),
               tbl_slot("tree_tbl"),
               tags$hr(),
-              h4("Diagnosis with recommended raising strata"), tbl_slot("diag_tbl"),
-              tags$hr(), h4("Groups"), tbl_slot("grp_tbl"),
-                    tags$hr(), h4("Which strata are raised from where"),
+              h4("Diagnosis with recommended raising strata"),
+              tbl_slot("diag_tbl"),
+              tags$hr(), h4("Groups"), tbl_slot("grp_tbl")),
+            tabPanel("Rivers",
+              h4("Decision process"),
+              uiOutput("tree_ui"),
+              tags$hr(),
+              h4("Which strata are raised from where"),
               selectInput("river_left", "Left-hand grouping", DIMS, "Fleet"),
-              plot_slot("auto_river")))),
+              plot_slot("auto_river")))))),
           conditionalPanel("input.grp_method == 'manual'", 
           sidebarLayout(
             sidebarPanel(width = 4,
@@ -1834,50 +1879,48 @@ ui <- navbarPage(
               actionButton("save_manual", "Save as scenario", class = "btn-success btn-sm"),
               level_box("mg"), alloc_box()),
             mainPanel(width = 8,
+          tabsetPanel(id = "man_out", type = "tabs",
+            tabPanel("Code",
               h4("strataCond / matchedDataCond"),
               span(class = "note",
                    "The two lists as they would be written in a script - ",
                    "paste them straight into the raising call. strataCond ",
-                   "carries the complements that make the rules a partition; ",
-                   "matchedDataCond does not, because donors are reusable."),
-              verbatimTextOutput("man_conds"),
-
-              tags$hr(),
-              h4("What each rule actually raises"),
-              span(class = "note",
-                   "Read top to bottom, the way the rules are evaluated. ",
-                   "Each card shows what its rule TAKES - after the rules ",
-                   "above it have taken theirs - and the running total of ",
-                   "the stock resolved so far. The river beside it shows ",
-                   "which strata those are and where they are raised from."),
-              uiOutput("man_check"),
-              uiOutput("man_ladder"),
-
-              tags$hr(),
+                   "is written as plain clauses (first match wins); the ",
+                   "partition is applied for you. matchedDataCond is not ",
+                   "complemented, because donors are reusable."),
+              verbatimTextOutput("man_conds")),
+            tabPanel("Overview",
               h4("What is assigned, and what is still missing"),
               span(class = "note",
                    "One row per rule in the order it is tested, with the ",
                    "running total. The last row is whatever no rule has ",
-                   "claimed yet - the gap to close. The same table the ",
-                   "length and age builders show."),
+                   "claimed yet - the gap to close."),
+              uiOutput("man_check"),
               tbl_slot("man_progress"),
               h4("Strata still unassigned"),
               span(class = "note", "Heaviest first, so the biggest hole is on top."),
               tbl_slot("man_missing"),
-
               tags$hr(),
-              h4("Groups"), tbl_slot("rules_tbl"),
-              h4("Strata"), tbl_slot("rules_strata_tbl"),
-              tags$hr(), h4("Overview: raised vs donated per group"), tbl_slot("man_ov"),
-                    tags$hr(), h4("Which strata are raised from where"),
+              h4("Overview: raised vs donated per group"), tbl_slot("man_ov")),
+            tabPanel("Rivers",
+              uiOutput("man_check2"),
+              h4("What each rule actually raises"),
+              uiOutput("man_ladder"),
+              h4("Which strata are raised from where"),
               plot_slot("man_river"),
               h4("One river per rule"),
               span(class = "note",
-                   "The same reading as the length and age builders: what ",
-                   "each rule claims, and where it draws from. The combined ",
-                   "river above can hide a rule whose strata are few but ",
-                   "whose donor pool is wide."),
-              uiOutput("man_rule_rivers")))))),
+                   "What each rule claims and where it draws from. The ",
+                   "combined river above can hide a rule whose strata are ",
+                   "few but whose donor pool is wide."),
+              uiOutput("man_rule_rivers")),
+            tabPanel("Strata",
+              h4("Groups"), tbl_slot("rules_tbl"),
+              h4("Strata and the group that raises them"),
+              span(class = "note",
+                   "Each stratum, the group whose strataCond claims it, and ",
+                   "the groups whose matchedDataCond can donate to it."),
+              tbl_slot("rules_strata_tbl")))))))),
 
       conditionalPanel("input.sec3 == 'stgraise'",
         div(style = "padding:8px 4px",
@@ -3170,6 +3213,17 @@ server <- function(input, output, session) {
             "count are usually the right settings on the right. Both apply ",
             "whether or not catchCategory is droppable."),
         setall, tags$hr(style = "margin:6px 0"),
+        # A banner making the reading direction explicit. The boxes run
+        # own -> catchCategory -> Fleet -> ... -> Area, top to bottom, and
+        # that IS the order the cascade tries: the stratum's own data
+        # first, then progressively coarser pools. Each threshold is the
+        # bar the pool at that level must clear.
+        div(class = "cascade-dir",
+            HTML("&darr;"), tags$b(" tries own data first, widens downward"),
+            tags$br(),
+            tags$span(class = "note",
+                      "each row's bar is the coverage the pool at that ",
+                      "level must reach before it is used")),
         k1, cc, tags$hr(style = "margin:6px 0"), rows) })
 
     # The live settings, and the ones the panel is currently drawn from.
@@ -3507,9 +3561,9 @@ server <- function(input, output, session) {
       validate(need(!is.null(bl) && nrow(bl), "No catch rows."))
       assign_alloc_groups(bl, g, bms_on()) })
 
-    # The same green/red verdict the discard builder shows. A table with a
-    # STILL MISSING row states the fact; this says what to do about it.
-    output[[ns("check")]] <- renderUI({
+    # The same green/red verdict the discard builder shows, on both the
+    # Overview and Rivers tabs so either landing point shows it.
+    check_ui <- reactive({
       g <- getrv("groups") %||% list()
       if (!length(g)) return(NULL)
       d <- tryCatch(manual_progress(man_assigned(), g), error = function(e) NULL)
@@ -3529,6 +3583,8 @@ server <- function(input, output, session) {
           miss$n_strata[1], fmt_t3(miss$weight[1]))),
           " They will reach catchAllocationAoL() in no group. Add a ",
           "catch-all as the last group, or widen one above.")) })
+    output[[ns("check")]]  <- renderUI(check_ui())
+    output[[ns("check2")]] <- renderUI(check_ui())
 
     output[[ns("ladder")]] <- renderUI({
       g <- getrv("groups") %||% list()
@@ -3586,6 +3642,15 @@ server <- function(input, output, session) {
 
     output[[ns("conds")]] <- renderText(
       paste(emit_alloc_conditions(getrv("groups") %||% list()), collapse = "\n"))
+
+    # the hierarchical Code tab: the cascade resolved to explicit groups,
+    # emitted the same way the manual ones are, so the two read alike
+    output[[ns("hier_conds")]] <- renderText({
+      g <- tryCatch(cascade_to_groups(cascade_assigned(), alloc_cols()),
+                    error = function(e) NULL)
+      if (is.null(g) || !length(g))
+        return("Apply settings to see the resolved grouping.")
+      paste(emit_alloc_conditions(g), collapse = "\n") })
 
     output[[ns("rules")]] <- renderDT({
       g <- getrv("groups") %||% list()
@@ -4383,7 +4448,13 @@ server <- function(input, output, session) {
         column(6, sliderInput(paste0("thr_", i), "threshold %", 0, 100,
                               c(input$threshold %||% 50, 100), 5)))
     })
-    tagList(key1, tags$hr(style = "margin:6px 0"), krows) })
+    dir <- div(class = "cascade-dir",
+               HTML("&darr;"), tags$b(" tries own data first, widens downward"),
+               tags$br(),
+               tags$span(class = "note",
+                         "each key's threshold is the coverage the pool at ",
+                         "that level must reach before it is used"))
+    tagList(dir, key1, tags$hr(style = "margin:6px 0"), krows) })
 
   output$hier_chain <- renderUI({
     st <- raising_steps(hier_cols(), hier_thr(),
@@ -4452,6 +4523,15 @@ server <- function(input, output, session) {
     }) })
 
   # every stratum must leave at exactly one step
+  # the raising conditions alone, for the Code tab of the hierarchical
+  # builder - the full script with headers stays in the R-script section
+  output$auto_conds <- renderText({
+    r <- tryCatch(rec(), error = function(e) NULL)
+    if (is.null(r)) return("Apply settings to see the conditions.")
+    paste(emit_hier_code(r, hier_cols(), hier_thr(),
+                         "fine_to_coarse", unname(dmap("ar")[DIMS])),
+          collapse = "\n") })
+
   output$tree_check <- renderUI({
     ck <- check_partition(rec(), tree_tbl_r())
     good <- ck$n_ok && ck$l_ok && ck$unassigned == 0
@@ -4566,13 +4646,34 @@ server <- function(input, output, session) {
     top <- dr_top("ar")
     c(if (v[1] > 0) v[1] else NA, if (v[2] < top) v[2] else NA) })
 
+  # The discard cascade has the same slow problem the biology one did:
+  # every threshold slider re-walked recommend_raising() on release, and
+  # with the exclusion bars and the donor pool that is a real pause. The
+  # settings are frozen and only Apply (or first load) refreshes them.
+  ar_hier_sig <- reactive(list(input$threshold, hier_cols(), hier_thr(),
+                               self_thr_val(), ar_dr(), ar_excl_keys()))
+  ar_hier_applied <- reactiveVal(NULL)
+  observe({ if (is.null(ar_hier_applied())) {
+    sg <- tryCatch(ar_hier_sig(), error = function(e) NULL)
+    if (!is.null(sg)) ar_hier_applied(sg) } })
+  observeEvent(input$ar_apply, ar_hier_applied(ar_hier_sig()))
+  observeEvent(input$save_auto, ar_hier_applied(ar_hier_sig()))
+  output$ar_hier_stale <- renderUI({
+    a <- ar_hier_applied()
+    if (is.null(a) || identical(a, ar_hier_sig())) return(NULL)
+    tags$span(class = "note", style = "color:#9a5000;margin-left:8px",
+              "settings changed - press Apply") })
+
   rec <- reactive({
-    s <- classify_strata(strata_p("ar"), input$threshold)
-    s <- flag_donor_exclusion(s, ar_dr()[1], ar_dr()[2],
-                              excluded = ar_excl_keys(),
+    a <- ar_hier_applied(); req(!is.null(a))
+    thr0 <- a[[1]]; cols <- a[[2]]; thr <- a[[3]]; self <- a[[4]]
+    dr <- a[[5]]; excl <- a[[6]]
+    s <- classify_strata(strata_p("ar"), thr0)
+    s <- flag_donor_exclusion(s, dr[1], dr[2],
+                              excluded = excl,
                               dims = unname(dmap("ar")[DIMS]))
-    recommend_raising(s, hier_cols(), hier_thr(),
-                      self_threshold = self_thr_val(),
+    recommend_raising(s, cols, thr,
+                      self_threshold = self,
                       mode = input$hier_mode %||% "nested",
                       dims = unname(dmap("ar")[DIMS])) })
 
@@ -4830,7 +4931,9 @@ server <- function(input, output, session) {
 
   # Does the rule set partition the stock? The one thing a reader cannot
   # check by eye, and the one that silently loses landings when it fails.
-  output$man_check <- renderUI({
+  # one verdict banner, shown on both the Overview and Rivers tabs, so a
+  # user who lands on either sees whether the stock is fully covered
+  man_check_ui <- reactive({
     tr <- man_decision(); req(!is.null(tr))
     miss <- tr[tr$rule == "(unassigned)", , drop = FALSE]
     ok <- !nrow(miss)
@@ -4847,6 +4950,8 @@ server <- function(input, output, session) {
         miss$n_strata, fmt_t3(miss$landings))),
         " They will reach catchRaising() in no group. Add a catch-all as ",
         "the last rule, or widen one above.")) })
+  output$man_check  <- renderUI(man_check_ui())
+  output$man_check2 <- renderUI(man_check_ui())
 
   output$rules_tbl <- renderDT({
     validate(need(length(rv$rules) >= 1, "No groups yet."))
