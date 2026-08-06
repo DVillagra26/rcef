@@ -1234,6 +1234,7 @@ ui <- navbarPage(
   letter-spacing:.4px;margin-bottom:4px}
 .fltbox .form-group{margin-bottom:4px}
 .fltbox .control-label{font-size:11px;margin-bottom:1px}
+    .setall-box{background:#eef2f7;border:1px solid #cbd7e3;border-radius:6px;padding:6px 8px;margin-bottom:6px}
 .fltapplied{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
 .fltpill{display:inline-flex;align-items:center;gap:5px;font-size:11px;
   background:#fff;border:1px solid #d9a441;border-radius:10px;
@@ -3083,13 +3084,21 @@ server <- function(input, output, session) {
       if (is.null(x) || !length(x) || all(is.na(x))) default
       else as.numeric(x)[1] }
 
+    # t1 is the OWN-STRATUM bar; t2..t5 are the four key boxes (Fleet,
+    # Country, Season, Area), already fine-to-coarse and already aligned
+    # to alloc_keys(). Returning them per key, plus own separately, means
+    # alloc_steps() never has to reconstruct which box drove which key -
+    # the misalignment that put the Area box on the catchCategory rung.
+    nk <- reactive(length(alloc_keys()))
     alloc_thr <- reactive(list(
-      Lan = vapply(1:5, function(i) num_in(paste0("t", i, "_lan"), 50), numeric(1)),
-      Dis = vapply(1:5, function(i) num_in(paste0("t", i, "_dis"), 30), numeric(1))))
+      own = c(Lan = num_in("t1_lan", 50), Dis = num_in("t1_dis", 30)),
+      Lan = vapply(seq_len(nk()), function(i) num_in(paste0("t", i+1, "_lan"), 50), numeric(1)),
+      Dis = vapply(seq_len(nk()), function(i) num_in(paste0("t", i+1, "_dis"), 30), numeric(1))))
 
     alloc_meas <- reactive(list(
-      Lan = vapply(1:5, function(i) num_in(paste0("m", i, "_lan"), 0), numeric(1)),
-      Dis = vapply(1:5, function(i) num_in(paste0("m", i, "_dis"), 0), numeric(1))))
+      own = c(Lan = num_in("m1_lan", 0), Dis = num_in("m1_dis", 0)),
+      Lan = vapply(seq_len(nk()), function(i) num_in(paste0("m", i+1, "_lan"), 0), numeric(1)),
+      Dis = vapply(seq_len(nk()), function(i) num_in(paste0("m", i+1, "_dis"), 0), numeric(1))))
 
     # One narrow key column, then a Landings pane and a Discards pane.
     # The coverage control is a number box rather than the old range
@@ -3111,7 +3120,32 @@ server <- function(input, output, session) {
         column(4, cc_pane(rung, "lan", 50, 0)),
         column(4, cc_pane(rung, "dis", 30, 0)))
 
+    # Set-all controls: type a coverage and a measurement count once, then
+    # push them to every key box - to both brackets, or to just one. Five
+    # keys times two brackets times two metrics is twenty boxes, and a
+    # sweep like "everything to 0/0 to force the last resort" was twenty
+    # edits.
+    set_all <- function(side) {
+      cv <- num_in("setall_cov", NA); mm <- num_in("setall_meas", NA)
+      for (i in 1:6) {
+        if (!is.na(cv)) updateNumericInput(session, ns(sprintf("t%d_%s", i, side)), value = cv)
+        if (!is.na(mm)) updateNumericInput(session, ns(sprintf("m%d_%s", i, side)), value = mm)
+      }
+    }
+    observeEvent(input[[ns("setall_both")]], { set_all("lan"); set_all("dis") })
+    observeEvent(input[[ns("setall_lan")]],  set_all("lan"))
+    observeEvent(input[[ns("setall_dis")]],  set_all("dis"))
+
     output[[ns("keys")]] <- renderUI({
+      setall <- div(class = "setall-box",
+        div(class = "note", tags$b("Set all thresholds to")),
+        fluidRow(
+          column(6, numericInput(ns("setall_cov"), "% coverage", NA, 0, 100, 5, width="100%")),
+          column(6, numericInput(ns("setall_meas"), "min meas.", NA, 0, 100000, 10, width="100%"))),
+        div(style="display:flex;gap:4px",
+          actionButton(ns("setall_both"), "Apply to all", class="btn-xs btn-primary"),
+          actionButton(ns("setall_lan"),  "To landings",  class="btn-xs"),
+          actionButton(ns("setall_dis"),  "To discards",  class="btn-xs")))
       k1 <- key_row(1, div(class = "hier-key-fixed", tags$b("Key 1"),
                            tags$br(), "Own stratum"))
       cc <- fluidRow(class = "hier-key-row",
@@ -3135,6 +3169,7 @@ server <- function(input, output, session) {
             "sampled less, so a lower coverage and a smaller measurement ",
             "count are usually the right settings on the right. Both apply ",
             "whether or not catchCategory is droppable."),
+        setall, tags$hr(style = "margin:6px 0"),
         k1, cc, tags$hr(style = "margin:6px 0"), rows) })
 
     # The live settings, and the ones the panel is currently drawn from.
@@ -3163,6 +3198,8 @@ server <- function(input, output, session) {
     steps <- reactive({
       a <- hier_applied()
       req(!is.null(a))
+      # a[[2]] and a[[4]] each carry $own plus the per-key vectors, so the
+      # own-stratum bar reaches its own rung and the key bars stay aligned
       alloc_steps(a[[1]], a[[2]], a[[3]], min_meas = a[[4]],
                   donor_cov_min  = a[[5]]$cov,
                   donor_meas_min = a[[5]]$meas)
@@ -3188,10 +3225,11 @@ server <- function(input, output, session) {
         step = seq_along(st),
         scope = vapply(st, alloc_step_scope, character(1)),
         pool = vapply(st, `[[`, character(1), "label"),
-        threshold = vapply(st, function(x)
-          if (is.na(x$threshold)) NA_real_ else x$threshold, numeric(1)),
+        grouping = vapply(st, alloc_step_grouping, character(1),
+                          allkeys = alloc_cols()),
+        threshold = vapply(st, function(x) unname(x$threshold["Lan"]), numeric(1)),
         stringsAsFactors = FALSE)
-      else alloc_cascade_table(a, st)
+      else alloc_cascade_table(a, st, keys = alloc_cols())
       datatable(d, rownames = FALSE, options = list(dom = "t", scrollX = TRUE)) })
 
     output[[ns("status")]] <- renderUI({

@@ -168,5 +168,46 @@ tbl <- alloc_cascade_table(ad, sd)
 ok(all(c("donor_cov_min", "donor_meas_min") %in% names(tbl)),
    "the cascade table shows the donor bars beside the thresholds")
 
+## --- the threshold follows the FINEST KEY STILL POOLED --------------
+##
+## This was reversed: rev(keys) drops from the coarse end but thr(i+1)
+## read forward, so the Area box drove the catchCategory rung and the
+## Fleet box drove the own rung. A user setting Area = 80 saw it applied
+## to the wrong level entirely.
+kk <- c("Fleet", "Country", "Season", "Area")   # fine -> coarse
+st <- alloc_steps(kk, thresholds = list(Lan = c(50, 60, 70, 80),
+                                        Dis = c(50, 60, 70, 80)),
+                  keep_cc = TRUE)
+lbl <- vapply(st, `[[`, "", "label")
+thr <- vapply(st, function(x) unname(x$threshold["Lan"]), numeric(1))
+own <- which(vapply(st, function(x) identical(x$id, "own"), logical(1)))
+ok(thr[own] == 80,
+   "own stratum (every key kept) takes the finest key Area's bar")
+w1 <- which(grepl("Fleet \\+ Country \\+ Season", lbl))[1]
+ok(thr[w1] == 70, "the pool keeping down to Season takes Season's bar")
+w_fleet <- which(grepl("\\+ Fleet$", lbl))
+ok(all(thr[w_fleet] == 50), "the pool keeping only Fleet takes Fleet's bar")
+
+## an explicit own bar overrides the finest-key default
+st2 <- alloc_steps(kk, thresholds = list(own = c(Lan = 55, Dis = 55),
+                                         Lan = c(50, 60, 70, 80),
+                                         Dis = c(50, 60, 70, 80)),
+                   keep_cc = TRUE)
+ok(unname(st2[[own]]$threshold["Lan"]) == 55,
+   "a spec carrying $own puts that bar on the own rung, not Area's")
+
+## the grouping column names what each rung keeps
+bl <- data.frame(catchCategory = "Lan", Fleet = "TBB", Country = "BE",
+                 Season = 1, Area = "27.4", weight = 100,
+                 weight_measured = 90, n_measurements = 500,
+                 stringsAsFactors = FALSE)
+a <- assign_alloc_cascade(bl, kk, st)
+tb <- alloc_cascade_table(a, st, keys = kk)
+ok("grouping" %in% names(tb), "the cascade table has a grouping column")
+ok(tb$grouping[tb$step == 1] == "the stratum itself",
+   "the own rung groups by the stratum itself")
+ok(any(grepl("Fleet \\+ Country \\+ Season", tb$grouping)),
+   "a widened rung names the keys it still distinguishes")
+
 cat(sprintf("\nDONE  %d failure(s)\n", FAIL))
 if (FAIL) quit(status = 1L)

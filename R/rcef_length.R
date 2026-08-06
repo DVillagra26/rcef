@@ -522,11 +522,26 @@ fmt_cc_spec <- function(x) {
   } else num(as.numeric(x))
 }
 
+#' Coerce a value to a Landings / Discards pair
+#' @param x A number or a named c(Lan=, Dis=) vector.
+#' @return A c(Lan=, Dis=) numeric.
+#' @noRd
+#' @export
+as_cc_pair <- function(x) {
+  if (is.null(x)) return(c(Lan = NA_real_, Dis = NA_real_))
+  if (!is.null(names(x)) && all(c("Lan","Dis") %in% names(x)))
+    return(c(Lan = as.numeric(x[["Lan"]]), Dis = as.numeric(x[["Dis"]])))
+  v <- as.numeric(x)[1]; c(Lan = v, Dis = v)
+}
+
+#' @noRd
+#' @export
 #' @noRd
 #' @export
 alloc_steps <- function(keys, thresholds, keep_cc = TRUE, min_meas = 0,
                         donor_cov_min = NA, donor_meas_min = NA,
-                        donor_excluded = character(0)) {
+                        donor_excluded = character(0),
+                        own_threshold = NULL, own_min_meas = NULL) {
   keys <- keys[nzchar(keys)]
   thr <- function(i) cc_step_value(thresholds, i, NA_real_)
   mm  <- function(i) cc_step_value(min_meas, i, 0)
@@ -550,17 +565,44 @@ alloc_steps <- function(keys, thresholds, keep_cc = TRUE, min_meas = 0,
                                     donor_meas_min = donor_meas_min,
                                     donor_excluded = donor_excluded)
 
-  # step 1 is always the stratum's own sampled data
-  add("own", "own stratum", character(0), FALSE, thr(1), mm(1))
+  # A threshold spec may carry its own-stratum bar separately under $own,
+  # with the per-key vector under $Lan / $Dis. When it does, that is the
+  # authoritative own bar: the caller measured which box drives the own
+  # rung so the cascade never has to guess.
+  if (is.list(thresholds) && !is.null(thresholds$own) && is.null(own_threshold))
+    own_threshold <- thresholds$own
+  if (is.list(min_meas) && !is.null(min_meas$own) && is.null(own_min_meas))
+    own_min_meas <- min_meas$own
+
+  n <- length(keys)
+
+  # The threshold and the measurement bar belong to the FINEST KEY STILL
+  # IN THE POOL at a rung, not to the rung's position in the ladder. This
+  # was the bug: rung w1 drops the coarsest key (Area) and keeps
+  # metier4..Season, so its threshold is Season's - thr(n) - but the old
+  # code read thr(2), which is the SECOND key's. The mapping ran backwards,
+  # so the Area box drove the catchCategory rung and vice versa. `tk()`
+  # and `tm()` take a KEY INDEX and are the single place that mapping lives.
+  tk <- function(ki) cc_step_value(thresholds, ki, NA_real_)
+  tm <- function(ki) cc_step_value(min_meas,   ki, 0)
+
+  # step 1 is always the stratum's own sampled data. Its bar is the
+  # explicit own bar when the caller supplied one, else the finest key's.
+  own_thr <- if (!is.null(own_threshold)) as_cc_pair(own_threshold) else tk(n)
+  own_mm  <- if (!is.null(own_min_meas))  as_cc_pair(own_min_meas)  else tm(n)
+  add("own", "own stratum", character(0), FALSE, own_thr, own_mm)
 
   # --- pass 1: stay inside the catch category, widen one key at a time
   for (i in seq_along(keys)) {
-    dropped <- rev(keys)[seq_len(i)]
+    dropped <- rev(keys)[seq_len(i)]        # drop the i coarsest keys
     kept <- setdiff(keys, dropped)
+    # finest key still pooled is keys[n-i]; when nothing is left the pool
+    # is the whole category, which takes the coarsest bar, key 1
+    ki <- if (length(kept)) n - i else 1L
     add(paste0("w", i),
         if (length(kept)) paste(c("catchCategory", kept), collapse = " + ")
         else "catchCategory (all other data in the same category)",
-        dropped, FALSE, thr(i + 1), mm(i + 1))
+        dropped, FALSE, tk(ki), tm(ki))
   }
 
   # --- pass 2: only when dropping the category is allowed.
@@ -575,16 +617,16 @@ alloc_steps <- function(keys, thresholds, keep_cc = TRUE, min_meas = 0,
     for (j in seq_along(c(0, keys)) - 1) {   # j = 0 .. length(keys)
       dropped <- if (j == 0) character(0) else rev(keys)[seq_len(j)]
       kept <- setdiff(keys, dropped)
+      ki <- if (length(kept)) n - j else 1L
       add(paste0("x", j),
           if (length(kept))
             paste0(paste(kept, collapse = " + "), "  (categories joined)")
           else "ALL data, both categories pooled",
           dropped, TRUE,
-          # Same key precision as pass 1, so the same pair applies. The
-          # bracket is read from the stratum BEING allocated, not from the
-          # pool: a discard stratum keeps its own, looser standard even
-          # when the pool it draws on now holds landings too.
-          thr(j + 1), mm(j + 1))
+          # Same finest-key rule as pass 1. The bracket is read from the
+          # stratum BEING allocated, not from the pool: a discard stratum
+          # keeps its looser standard even when the pool now holds landings.
+          tk(ki), tm(ki))
     }
   }
 
@@ -622,6 +664,9 @@ alloc_steps <- function(keys, thresholds, keep_cc = TRUE, min_meas = 0,
         keys, TRUE, c(Lan = -Inf, Dis = -Inf), c(Lan = 0, Dis = 0),
         drop_all = TRUE)
 
+  # carry the key set so alloc_cascade_table() can name what each rung
+  # groups by without the caller having to pass the keys a second time
+  attr(out, "keys") <- keys
   out
 }
 
@@ -1136,8 +1181,32 @@ assign_alloc_cascade <- function(bl, keys, steps, bms_as_dis = TRUE) {
 # What each rung of the cascade actually resolved.
 #' @noRd
 #' @export
-alloc_cascade_table <- function(assigned, steps) {
+#' A one-line summary of what a rung groups by
+#'
+#' The readable form of the `pool` column: the keys still distinguished
+#' at that rung. The own rung is the stratum itself; the last resort is
+#' everything pooled.
+#'
+#' @param step One step from [alloc_steps()].
+#' @return A length-one character vector.
+#' @noRd
+#' @export
+alloc_step_grouping <- function(step, allkeys = NULL) {
+  if (identical(step$id, "own")) return("the stratum itself")
+  if (identical(step$id, "last") || isTRUE(step$drop_all))
+    return("everything pooled")
+  kept <- if (!is.null(allkeys)) setdiff(allkeys, step$drop) else NULL
+  if (length(kept)) paste(kept, collapse = " + ")
+  else "all data in the category"
+}
+
+# What each rung of the cascade actually resolved.
+#' @noRd
+#' @export
+alloc_cascade_table <- function(assigned, steps, keys = NULL) {
   if (is.null(assigned) || !nrow(assigned)) return(NULL)
+  # the full key set, so the grouping column can name what each rung keeps
+  allkeys <- keys %||% attr(steps, "keys")
   tot_w <- sum(assigned$weight, na.rm = TRUE)
   tot_n <- nrow(assigned)
   rows <- lapply(seq_along(steps), function(i) {
@@ -1146,9 +1215,12 @@ alloc_cascade_table <- function(assigned, steps) {
     mmp <- steps[[i]]$min_meas
     dcv <- steps[[i]]$donor_cov_min
     dms <- steps[[i]]$donor_meas_min
+    st <- steps[[i]]
+    grouping <- alloc_step_grouping(st, allkeys)
     data.frame(step = i,
-               scope = alloc_step_scope(steps[[i]]),
-               pool = steps[[i]]$label,
+               scope = alloc_step_scope(st),
+               pool = st$label,
+               grouping = grouping,
                threshold = unname(thp["Lan"]),
                threshold_Dis = unname(thp["Dis"]),
                min_meas = unname(if (is.null(mmp)) NA_real_ else mmp["Lan"]),
@@ -1165,13 +1237,13 @@ alloc_cascade_table <- function(assigned, steps) {
   un <- setdiff(which(is.na(assigned$alloc_step)), empty)
   if (length(un))
     out <- rbind(out, data.frame(step = NA_integer_, scope = "-",
-      pool = "not allocated", threshold = NA_real_, threshold_Dis = NA_real_,
+      pool = "not allocated", grouping = "-", threshold = NA_real_, threshold_Dis = NA_real_,
       min_meas = NA_real_, min_meas_Dis = NA_real_, donor_cov_min = NA_real_, donor_meas_min = NA_real_, n_strata = length(un),
       weight = sum(assigned$weight[un], na.rm = TRUE),
       stringsAsFactors = FALSE))
   if (length(empty))
     out <- rbind(out, data.frame(step = NA_integer_, scope = "-",
-      pool = "no catch to allocate (weight 0)", threshold = NA_real_,
+      pool = "no catch to allocate (weight 0)", grouping = "-", threshold = NA_real_,
       threshold_Dis = NA_real_, min_meas = NA_real_, min_meas_Dis = NA_real_,
       donor_cov_min = NA_real_, donor_meas_min = NA_real_, n_strata = length(empty),
       weight = sum(assigned$weight[empty], na.rm = TRUE),
