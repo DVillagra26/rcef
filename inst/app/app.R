@@ -4615,7 +4615,7 @@ server <- function(input, output, session) {
 
   output$matched_txt_ui <- renderUI({
     src <- if (is.null(rv$pend_source)) rv$pend_raise else rv$pend_source
-    b <- mg_excl$bars()
+    b <- mg_excl_keys_srv$bars()
     tmp <- new_rule("tmp", "", list(), src %||% list(), rule_dr()[1], rule_dr()[2],
                     excluded = b$named, cov_min = b$cov_min,
                     meas_min = b$meas_min)
@@ -4629,7 +4629,7 @@ server <- function(input, output, session) {
 
   observeEvent(input$save_rule, {
     req(nzchar(input$rule_id))
-    b <- mg_excl$bars()
+    b <- mg_excl_keys_srv$bars()
     # the BARS, not the keys they resolve to today: the emitted
     # matchedDataCond then reads `coverage >= 50`, which is checkable
     r <- new_rule(input$rule_id, input$rule_label, rv$pend_raise %||% list(),
@@ -4659,8 +4659,8 @@ server <- function(input, output, session) {
 
   observeEvent(input$add_catchall, {
     dr <- ca_dr()
-    cb <- ca_excl$bars()
-    gb <- mg_excl$bars()
+    cb <- ca_excl_keys_srv$bars()
+    gb <- mg_excl_keys_srv$bars()
     keep <- isTRUE(input$catchall_keep_excl)
     rv$rules <- c(rv$rules, list(new_rule(paste0("G", length(rv$rules) + 1),
       "catch-all", list(), NULL, dr[1], dr[2],

@@ -157,6 +157,34 @@ undef <- undef[vapply(undef, function(f) !exists(f), logical(1))]
 ok("no reactive called before it exists", length(undef) == 0, undef)
 cat("   reactives/functions defined in server:", length(defined), "\n")
 
+## `mg_excl$bars()` calls a member of an object. The audit above only
+## looks for `name(`, so the OBJECT name was never checked - and a typo
+## in it (mg_excl for mg_excl_keys_srv) sailed through into a release,
+## failing only when the user opened the panel that rendered it.
+obj_used <- unique(cap(sv, '[^A-Za-z0-9_.$]([A-Za-z_][A-Za-z0-9_.]*)\\$[A-Za-z_][A-Za-z0-9_.]*\\('))
+
+## Anything assigned ANYWHERE in the server counts, not just the
+## reactives: module-local helpers and loop variables are real
+## definitions too. Function arguments count as well.
+assigned_any <- unique(cap(sv, '\\n\\s*([A-Za-z_][A-Java-z0-9_.]*)\\s*<-'))
+assigned_any <- unique(c(assigned_any,
+                         cap(sv, '\\n\\s*([A-Za-z_][A-Za-z0-9_.]*)\\s*<-')))
+args_any <- unique(unlist(strsplit(
+  gsub("[^A-Za-z0-9_., ]", "", cap(sv, 'function\\(([^)]*)\\)')), "\\s*,\\s*")))
+args_any <- trimws(sub("=.*$", "", args_any))
+
+## `tags` is shiny's, and `gate` is a formal of a helper whose signature
+## spans two lines, which the argument regex above does not reach.
+## Listed rather than loosened: a broader regex would start swallowing
+## the typos this check exists to find.
+known <- unique(c(defined, assigned_any, args_any,
+                  "rv", "cfg", "input", "output", "session",
+                  "tags", "gate"))
+obj_missing <- setdiff(obj_used, known)
+obj_missing <- obj_missing[!vapply(obj_missing, exists, logical(1))]
+ok("objects reached with $ are defined in the server", length(obj_missing) == 0,
+   obj_missing)
+
 cat("\n=== 5. inputs referenced by the server exist in the UI ===\n")
 # comment-free, for the same reason as the call scan above: prose that
 # says "reads input$... as before" is not a reference to a control
