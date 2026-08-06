@@ -94,5 +94,64 @@ if (!length(fx)) {
       res2)
 }
 
+## ---------------------------------------------------------------
+##  Apply must redraw EVERY filtered panel, not just the two that
+##  happened to be written first.
+##
+##  This is the check that was missing. Every panel builds its gate in
+##  module-local scope, so the only way to test "does Apply redraw this
+##  one" was to open the app and look - and the coverage and discard-rate
+##  panels worked while all six biology panels did not, because their
+##  signature wrapped the filter in reactive(). A fresh reactive object
+##  was built on every evaluation and thrown away, so a filter change
+##  invalidated something nothing held, the signature stayed cached, and
+##  the panel never went stale. gate_of() registers its gate now, which
+##  is what makes this testable at all.
+## ---------------------------------------------------------------
+if (!length(fx)) {
+  cat("skip   no CEF fixture installed; Apply round-trip not run\n")
+} else {
+  dxf <- list.files(system.file("extdata", package = "rcef"),
+                    pattern = "distributions_CEF.*\\.csv$",
+                    recursive = TRUE, full.names = TRUE)
+  # testServer() does not return the value of its expression, so the
+  # result is carried out in an environment rather than by return value.
+  outbox <- new.env(parent = emptyenv())
+  bad <- tryCatch({
+    shiny::testServer(d, {
+      rv$cef_catches <- utils::read.csv(fx[1], stringsAsFactors = FALSE)
+      if (length(dxf)) rv$dist <- utils::read.csv(dxf[1], stringsAsFactors = FALSE)
+      session$flushReact()
+      lv <- expf_levels()
+      if (!length(lv)) stop("no filterable columns in the fixture")
+      v <- names(lv)[1]; one <- lv[[v]][1]
+      broken <- character(0)
+      for (pfx in c("cov", "dr", "len_cov", "len_n", "len_w",
+                    "age_cov", "age_n", "age_w")) {
+        g <- gate_reg[[pfx]]
+        if (is.null(g)) { broken <- c(broken, paste0(pfx, " (no gate)")); next }
+        rv$flt[[pfx]] <- list(); session$flushReact()
+        s0 <- g$sig(); before <- g$now()
+        rv$flt[[pfx]] <- stats::setNames(list(one), v); session$flushReact()
+        if (identical(g$sig(), s0)) {
+          broken <- c(broken, paste0(pfx, " (signature never moves)"))
+        } else {
+          do.call(session$setInputs,
+                  stats::setNames(list(1), paste0(pfx, "_apply")))
+          session$flushReact()
+          if (identical(g$now(), before))
+            broken <- c(broken, paste0(pfx, " (Apply does not redraw)"))
+        }
+        rv$flt[[pfx]] <- list(); session$flushReact()
+      }
+      outbox$broken <- broken
+    })
+    outbox$broken
+  }, error = function(e) conditionMessage(e))
+  say(is.character(bad) && length(bad) == 0,
+      "a filter change makes every plot panel stale, and Apply redraws it",
+      if (is.character(bad)) paste(bad, collapse = "; ") else bad)
+}
+
 cat(sprintf("\nDONE  %d failure(s)\n", fail))
 if (fail) quit(status = 1L)

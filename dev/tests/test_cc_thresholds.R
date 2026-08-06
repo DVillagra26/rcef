@@ -124,5 +124,49 @@ a3 <- assign_alloc_cascade(bl3, "Country", lt)
 ok(is.na(a3$alloc_step[1]),
    "a pool with nothing measured in it does NOT pass the last rung")
 
+## --- the drop must be positional -------------------------------------
+##
+## alloc_steps() is called with the ROLE names the user picked ("Fleet"),
+## assign_alloc_cascade() with the COLUMN names those map to
+## ("metier4"). Matching the drop by NAME therefore dropped nothing
+## whenever the two differed, so every rung silently stayed at full
+## precision - and a last rung with no threshold could still leave
+## strata unresolved, which is what gave it away.
+roles <- c("Fleet", "Country"); cols <- c("metier4", "Country")
+sp <- alloc_steps(roles, thresholds = list(Lan = 50, Dis = 20), keep_cc = TRUE)
+ok(isTRUE(sp[[length(sp)]]$drop_all),
+   "the last rung is flagged drop_all, not given a list of names")
+ok(sp[[2]]$drop_n == 1, "each rung records HOW MANY keys it drops")
+
+set.seed(2)
+b <- expand.grid(catchCategory = c("Lan", "Dis"),
+                 metier4 = c("TBB", "OTB", "GNS"),
+                 Country = c("BE", "NL", "DE"), stringsAsFactors = FALSE)
+b$weight <- runif(nrow(b), 5, 200)
+b$weight_measured <- ifelse(b$catchCategory == "Lan", b$weight * .8,
+                            b$weight * .02)
+b$n_measurements <- ifelse(b$catchCategory == "Lan", 500, 5)
+ac <- assign_alloc_cascade(b, cols, sp)
+ok(sum(is.na(ac$alloc_step) & !ac$alloc_empty) == 0,
+   "with role names differing from column names, the last rung still resolves everything")
+
+## --- donor bars are a DIFFERENT question from rung thresholds --------
+sd <- alloc_steps(roles, thresholds = list(Lan = 50, Dis = 20), keep_cc = TRUE,
+                  donor_cov_min = 50, donor_meas_min = 100)
+ok(!is.na(sd[[1]]$donor_cov_min), "the bars are carried on every rung")
+ad <- assign_alloc_cascade(b, cols, sd)
+ok(sum(is.na(ad$alloc_step) & !ad$alloc_empty) > 0,
+   "excluding every discard donor does leave discards unresolved - honest, not fudged")
+ok(any(grepl("donor-pool bars", na.omit(ad$alloc_reason))),
+   "and the reason says it was the donor bars, not the rung thresholds")
+
+## a stratum failing the donor bars is still ALLOCATED, just not used
+lan <- ac$catchCategory == "Lan"
+ok(all(!is.na(ac$alloc_step[lan])), "landings all resolve")
+
+tbl <- alloc_cascade_table(ad, sd)
+ok(all(c("donor_cov_min", "donor_meas_min") %in% names(tbl)),
+   "the cascade table shows the donor bars beside the thresholds")
+
 cat(sprintf("\nDONE  %d failure(s)\n", FAIL))
 if (FAIL) quit(status = 1L)

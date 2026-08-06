@@ -492,6 +492,40 @@ A pool must clear *both* bars: enough coverage **and** enough measured
 fish. A pool can easily reach 80% coverage on eleven fish, and that is not
 a distribution anyone should allocate from.
 
+#### Three different thresholds, and what each measures
+
+Easy to conflate, and conflating them is what makes a thin stratum look
+unallocatable rather than merely a bad donor:
+
+| setting | asks | measured against |
+|---|---|---|
+| rung 1 threshold | can this stratum use **its own** data? | the stratum itself |
+| rungs 2+ thresholds | is this **pool** good enough to draw on? | the pooled donor set |
+| `donor_cov_min` / `donor_meas_min` / `donor_excluded` | may this stratum **donate** at all? | each candidate donor, individually |
+
+The rung thresholds are always read against the **donor pool**, never
+against the stratum being allocated to. A stratum with 0% coverage of its
+own is a perfectly good candidate to *receive* a distribution — it is
+exactly the one that needs one. Only the Landings/Discards bracket comes
+from the target, so a discard stratum keeps its looser standard even when
+the pool it draws on has been joined with landings.
+
+The donor bars are the third, separate question. A stratum failing them
+is dropped from the pool **sums**; it still gets a distribution allocated
+to it from whatever is left. That is what makes "use everything except
+the strata under 50% coverage and 100 measurements" expressible:
+
+```{r}
+steps <- alloc_steps(alloc_cols, thresholds = list(Lan = 50, Dis = 20),
+                     keep_cc = TRUE,
+                     donor_cov_min  = 50,    # a donor must be this well covered
+                     donor_meas_min = 100,   # and have this many measurements
+                     donor_excluded = "TBB | Germany | 27.4 | 2")
+```
+
+This is the same "catch-all, minus these" the discard builder offers, and
+it applies to every rung including the last.
+
 #### The last rung has no threshold
 
 Every rung above carries a bar, so a stratum thinner than all of them
@@ -521,7 +555,45 @@ vapply(steps, `[[`, "", "label")
 in it would pass a `-Inf` coverage bar and then allocate from a
 distribution that does not exist, so the last rung still requires the
 pool to contain something measured. A stratum that genuinely has no
-donor anywhere stays unallocated, which is the honest answer.
+donor anywhere stays unallocated, which is the honest answer — and the
+report says **which** of the two reasons applies, because they need
+opposite fixes:
+
+* *no measured data anywhere in this catch category* — no threshold can
+  conjure data. Go and find some.
+* *the donor-pool bars left no eligible donor* — loosen the donor bars,
+  not the rung thresholds.
+
+If the last rung leaves anything unresolved while data exists, the donor
+bars are almost always the cause.
+
+#### Two different thresholds
+
+The rung thresholds and the donor bars answer different questions, and
+conflating them is what makes a thin stratum *unallocatable* rather than
+merely a bad donor.
+
+| | question | argument |
+|---|---|---|
+| **rung threshold** | is this pool good enough for the stratum to stop here? | `thresholds`, `min_meas` |
+| **donor bar** | may this stratum lend its distribution at all? | `donor_cov_min`, `donor_meas_min` |
+
+A stratum failing a donor bar is **still allocated** — it is dropped from
+the pool sums, not from the ladder. That is the whole point of it needing
+to borrow.
+
+```{r}
+steps <- alloc_steps(
+  keys           = c("Fleet", "Country"),
+  thresholds     = list(Lan = c(60, 50), Dis = c(30, 25)),
+  keep_cc        = TRUE,
+  donor_cov_min  = 50,    # "use everything except strata under 50% coverage
+  donor_meas_min = 100)   #  and under 100 measurements"
+```
+
+If the bars leave a category with no eligible donor at all, the strata
+stay unallocated and `alloc_reason` says so — pointing at the bars rather
+than at the rung thresholds, which are not the problem in that case.
 
 #### Strata with no catch
 

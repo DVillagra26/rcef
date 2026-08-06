@@ -524,16 +524,31 @@ fmt_cc_spec <- function(x) {
 
 #' @noRd
 #' @export
-alloc_steps <- function(keys, thresholds, keep_cc = TRUE, min_meas = 0) {
+alloc_steps <- function(keys, thresholds, keep_cc = TRUE, min_meas = 0,
+                        donor_cov_min = NA, donor_meas_min = NA,
+                        donor_excluded = character(0)) {
   keys <- keys[nzchar(keys)]
   thr <- function(i) cc_step_value(thresholds, i, NA_real_)
   mm  <- function(i) cc_step_value(min_meas, i, 0)
   out <- list()
 
-  add <- function(id, label, drop, drop_cc, threshold, minmeas = c(Lan = 0, Dis = 0))
+  # `drop_n` counts how many keys are dropped from the coarse end;
+  # `drop` keeps the names for the label. The count is what the cascade
+  # uses, because alloc_steps() is called with the ROLE names the user
+  # picked ("Fleet", "Area") while assign_alloc_cascade() is called with
+  # the COLUMN names those map to ("metier4", "ICESDivision"). Matching
+  # by name therefore dropped nothing whenever the two differed, and
+  # every rung silently stayed at full precision - which is why a
+  # no-threshold last rung could still leave strata unresolved.
+  add <- function(id, label, drop, drop_cc, threshold,
+                  minmeas = c(Lan = 0, Dis = 0), drop_all = FALSE)
     out[[length(out) + 1]] <<- list(id = id, label = label, drop = drop,
+                                    drop_n = length(drop), drop_all = drop_all,
                                     drop_cc = drop_cc, threshold = threshold,
-                                    min_meas = minmeas)
+                                    min_meas = minmeas,
+                                    donor_cov_min = donor_cov_min,
+                                    donor_meas_min = donor_meas_min,
+                                    donor_excluded = donor_excluded)
 
   # step 1 is always the stratum's own sampled data
   add("own", "own stratum", character(0), FALSE, thr(1), mm(1))
@@ -594,12 +609,18 @@ alloc_steps <- function(keys, thresholds, keep_cc = TRUE, min_meas = 0) {
   #
   # It is reached ONLY by strata the bars did not resolve, so nothing that
   # met a real threshold is affected.
+  # drop_all, not `keys`: this rung pools EVERYTHING, and saying so as a
+  # flag cannot be defeated by a naming mismatch the way a list of names
+  # can. It is the biology equivalent of the discard catch-all - every
+  # stratum left over is allocated, from every distribution there is.
   if (isTRUE(keep_cc))
     add("last", "ALL data in the same catchCategory  (no threshold)",
-        keys, FALSE, c(Lan = -Inf, Dis = -Inf), c(Lan = 0, Dis = 0))
+        keys, FALSE, c(Lan = -Inf, Dis = -Inf), c(Lan = 0, Dis = 0),
+        drop_all = TRUE)
   else
     add("last", "ALL data, both categories pooled  (no threshold)",
-        keys, TRUE, c(Lan = -Inf, Dis = -Inf), c(Lan = 0, Dis = 0))
+        keys, TRUE, c(Lan = -Inf, Dis = -Inf), c(Lan = 0, Dis = 0),
+        drop_all = TRUE)
 
   out
 }
@@ -751,8 +772,20 @@ emit_alloc_grouping_code <- function(spec, method = "hierarchical",
     "## resolve on too little or pushes discards to the bottom rung.",
     sprintf("alloc_thresholds <- %s", fmt_cc_spec(spec$thresholds)),
     sprintf("alloc_min_meas   <- %s", fmt_cc_spec(spec$min_meas)),
+    "## Donor bars are a SEPARATE question from the rung thresholds: the",
+    "## thresholds decide which strata a rung resolves, these decide which",
+    "## strata may lend a distribution. A stratum failing them is still",
+    "## allocated - it just does not donate.",
+    sprintf("alloc_donor_cov  <- %s",
+            if (is.null(spec$donor_cov_min) || is.na(spec$donor_cov_min))
+              "NA" else format(spec$donor_cov_min)),
+    sprintf("alloc_donor_meas <- %s",
+            if (is.null(spec$donor_meas_min) || is.na(spec$donor_meas_min))
+              "NA" else format(spec$donor_meas_min)),
     sprintf(paste("steps <- alloc_steps(alloc_keys, alloc_thresholds,",
-                  "keep_cc = %s, min_meas = alloc_min_meas)"),
+                  "keep_cc = %s, min_meas = alloc_min_meas,",
+                  "donor_cov_min = alloc_donor_cov,",
+                  "donor_meas_min = alloc_donor_meas)"),
             if (isTRUE(spec$keep_cc)) "TRUE" else "FALSE"),
     sprintf("assigned <- assign_alloc_cascade(bio_link, alloc_cols, steps, bms = %s)",
             if (isTRUE(spec$bms)) "TRUE" else "FALSE"),
@@ -961,6 +994,9 @@ plot_alloc_river <- function(assigned, dims, groups, pal = NULL) {
 #' @noRd
 #' @export
 assign_alloc_cascade <- function(bl, keys, steps, bms_as_dis = TRUE) {
+  step_num <- function(x) {
+    if (is.null(x) || !length(x) || all(is.na(x))) NA_real_ else as.numeric(x)[1]
+  }
   if (is.null(bl) || !nrow(bl)) return(NULL)
   d <- as.data.frame(bl)
   cc <- if ("catchCategory" %in% names(d)) as.character(d$catchCategory)
@@ -976,6 +1012,7 @@ assign_alloc_cascade <- function(bl, keys, steps, bms_as_dis = TRUE) {
   d$alloc_pool  <- NA_character_
   d$alloc_group <- NA_character_
   d$alloc_bracket <- brk
+  d$alloc_donor_pool <- NA_character_
 
   # A stratum with no catch has nothing to allocate, so it is taken out
   # BEFORE the ladder runs rather than after. Left in, it would either sit
@@ -987,7 +1024,13 @@ assign_alloc_cascade <- function(bl, keys, steps, bms_as_dis = TRUE) {
   d$alloc_group[d$alloc_empty] <- "none"
 
   pool_id <- function(step, i) {
-    kept <- setdiff(keys, step$drop)
+    # Positional, so a role name that differs from its column name cannot
+    # quietly leave a key in the pool.
+    kept <- if (isTRUE(step$drop_all)) character(0)
+            else if (!is.null(step$drop_n)) {
+              n <- length(keys) - step$drop_n
+              if (n <= 0) character(0) else keys[seq_len(n)]
+            } else setdiff(keys, step$drop)
     kept <- intersect(kept, names(d))
     parts <- if (length(kept))
       do.call(paste, c(lapply(kept, function(k) as.character(d[[k]])), sep = "|"))
@@ -1002,10 +1045,32 @@ assign_alloc_cascade <- function(bl, keys, steps, bms_as_dis = TRUE) {
     pid <- pool_id(st, si)
     # step 1 is the stratum on its own data
     if (identical(st$id, "own")) pid <- paste0("own::", seq_len(nrow(d)))
-    agg <- tapply(seq_len(nrow(d)), pid, function(ix)
-      c(w = sum(d$weight[ix], na.rm = TRUE),
-        m = sum(d$weight_measured[ix], na.rm = TRUE),
-        n = if (has_meas) sum(d$n_measurements[ix], na.rm = TRUE) else NA_real_))
+    # Which strata may DONATE. This is a different question from which
+    # strata may be allocated, and conflating the two is what made a thin
+    # stratum unallocatable rather than merely a bad donor. A stratum
+    # failing these bars is dropped from the pool sums; it still gets a
+    # distribution allocated to it from whatever is left.
+    donor <- rep(TRUE, nrow(d))
+    dcov <- step_num(st$donor_cov_min)
+    dmes <- step_num(st$donor_meas_min)
+    if (!is.na(dcov) && "coverage" %in% names(d))
+      donor <- donor & (!is.na(d$coverage) & d$coverage >= dcov)
+    else if (!is.na(dcov))
+      donor <- donor & (!is.na(d$weight) & d$weight > 0 &
+                        d$weight_measured / d$weight * 100 >= dcov)
+    if (!is.na(dmes) && has_meas)
+      donor <- donor & (!is.na(d$n_measurements) & d$n_measurements >= dmes)
+    # and strata named by hand, for the cases no bar expresses - the same
+    # "use everything except these" the discard catch-all offers
+    dex <- st$donor_excluded %||% character(0)
+    if (length(dex)) donor <- donor & !(stratum_keys(d, keys) %in% dex)
+
+    agg <- tapply(seq_len(nrow(d)), pid, function(ix) {
+      jx <- ix[donor[ix]]
+      c(w = sum(d$weight[jx], na.rm = TRUE),
+        m = sum(d$weight_measured[jx], na.rm = TRUE),
+        n = if (has_meas) sum(d$n_measurements[jx], na.rm = TRUE) else NA_real_)
+    })
     cov <- vapply(agg, function(z)
       if (is.na(z["w"]) || z["w"] <= 0) NA_real_ else z["m"] / z["w"] * 100,
       numeric(1))
@@ -1034,16 +1099,37 @@ assign_alloc_cascade <- function(bl, keys, steps, bms_as_dis = TRUE) {
     if (identical(st$id, "last")) {
       meas <- vapply(agg, function(z) unname(z["m"]), numeric(1))
       ok <- ok & !is.na(meas[pid]) & meas[pid] > 0
+      d$alloc_donor_pool[ok] <- pid[ok]
     }
     d$alloc_step[ok]  <- si
     d$alloc_level[ok] <- st$label
     d$alloc_pool[ok]  <- pid[ok]
     d$alloc_group[ok] <- paste0("S", si)
   }
-  # anything still unresolved fell off the end of the ladder
+  # Anything still unresolved fell off the end of the ladder - but WHY
+  # matters, and the two reasons need different fixes. Reporting both as
+  # "not allocated" sends a user to loosen thresholds that are not the
+  # problem.
   un <- is.na(d$alloc_step) & !d$alloc_empty
+  last <- steps[[length(steps)]]
+  bars_set <- !is.na(step_num(last$donor_cov_min)) ||
+              !is.na(step_num(last$donor_meas_min)) ||
+              length(last$donor_excluded %||% character(0)) > 0
   d$alloc_level[un] <- "not allocated"
   d$alloc_group[un] <- "none"
+  d$alloc_reason <- NA_character_
+  if (any(un)) {
+    # Was there anything measured in the category at all, ignoring the
+    # donor bars? If yes, the bars emptied the pool; if no, there is
+    # simply no data and no threshold can conjure any.
+    tot_m <- tapply(d$weight_measured, cc_pool, sum, na.rm = TRUE)
+    has_any <- !is.na(tot_m[cc_pool]) & tot_m[cc_pool] > 0
+    d$alloc_reason[un & !has_any] <-
+      "no measured data anywhere in this catch category"
+    d$alloc_reason[un & has_any] <- if (bars_set)
+      "the donor-pool bars left no eligible donor - loosen them, not the rung thresholds"
+      else "no donor pool with measured data"
+  }
   d
 }
 
@@ -1058,6 +1144,8 @@ alloc_cascade_table <- function(assigned, steps) {
     sel <- which(assigned$alloc_step == i)
     thp <- steps[[i]]$threshold
     mmp <- steps[[i]]$min_meas
+    dcv <- steps[[i]]$donor_cov_min
+    dms <- steps[[i]]$donor_meas_min
     data.frame(step = i,
                scope = alloc_step_scope(steps[[i]]),
                pool = steps[[i]]$label,
@@ -1065,6 +1153,8 @@ alloc_cascade_table <- function(assigned, steps) {
                threshold_Dis = unname(thp["Dis"]),
                min_meas = unname(if (is.null(mmp)) NA_real_ else mmp["Lan"]),
                min_meas_Dis = unname(if (is.null(mmp)) NA_real_ else mmp["Dis"]),
+               donor_cov_min = if (is.null(dcv)) NA_real_ else as.numeric(dcv)[1],
+               donor_meas_min = if (is.null(dms)) NA_real_ else as.numeric(dms)[1],
                n_strata = length(sel),
                weight = sum(assigned$weight[sel], na.rm = TRUE),
                stringsAsFactors = FALSE)
@@ -1076,14 +1166,14 @@ alloc_cascade_table <- function(assigned, steps) {
   if (length(un))
     out <- rbind(out, data.frame(step = NA_integer_, scope = "-",
       pool = "not allocated", threshold = NA_real_, threshold_Dis = NA_real_,
-      min_meas = NA_real_, min_meas_Dis = NA_real_, n_strata = length(un),
+      min_meas = NA_real_, min_meas_Dis = NA_real_, donor_cov_min = NA_real_, donor_meas_min = NA_real_, n_strata = length(un),
       weight = sum(assigned$weight[un], na.rm = TRUE),
       stringsAsFactors = FALSE))
   if (length(empty))
     out <- rbind(out, data.frame(step = NA_integer_, scope = "-",
       pool = "no catch to allocate (weight 0)", threshold = NA_real_,
       threshold_Dis = NA_real_, min_meas = NA_real_, min_meas_Dis = NA_real_,
-      n_strata = length(empty),
+      donor_cov_min = NA_real_, donor_meas_min = NA_real_, n_strata = length(empty),
       weight = sum(assigned$weight[empty], na.rm = TRUE),
       stringsAsFactors = FALSE))
   out$pct_strata <- round(out$n_strata / tot_n * 100, 1)

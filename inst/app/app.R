@@ -506,6 +506,27 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
                "other keys are exhausted the category is dropped too and ",
                "landings and discards pool together."),
           uiOutput(ns("keys")),
+
+          tags$hr(),
+          h4("Donor pool", style = "font-size:13px"),
+          span(class = "note",
+               "A separate question from the thresholds above. Those decide ",
+               "WHICH STRATA a rung will resolve; these decide WHICH STRATA ",
+               "MAY LEND their distribution. A stratum failing these bars is ",
+               "still allocated - it is just not used as a donor, which is ",
+               "the whole point of it needing to borrow."),
+          fluidRow(
+            column(6, numericInput(ns("dcov"), "donor % coverage above",
+                                   NA, 0, 100, 5, width = "100%")),
+            column(6, numericInput(ns("dmeas"), "donor measurements above",
+                                   NA, 0, 100000, 10, width = "100%"))),
+          span(class = "note",
+               "Blank switches a bar off. These apply to every rung, ",
+               "including the last-resort pool: 'use everything except the ",
+               "strata with under 50% coverage and under 100 measurements' ",
+               "is 50 and 100 here."),
+
+          tags$hr(),
           # Nothing below recomputes until this is pressed. Five keys,
           # each with four numbers, means twenty controls that each used
           # to re-walk the whole cascade on every keystroke - setting up
@@ -2523,6 +2544,8 @@ server <- function(input, output, session) {
   # what the gate is for. The gate exists to stop a half-configured redraw
   # firing on every keystroke of a CONFIGURATION - axes, thresholds, level of
   # detail - not to slow down a toggle.
+  gate_reg <- list()
+
   gate_of <- function(p, sig, refresh = NULL, live = NULL) {
     applied <- reactiveVal(NULL)
     observe({ if (is.null(applied())) applied(sig()) })
@@ -2546,6 +2569,12 @@ server <- function(input, output, session) {
             "press Apply to redraw")
       else div(class = "applyok", "Up to date"))
 
+    # Registered so a gate inside a module can be reached from a test.
+    # Every panel builds its gate in module-local scope, which meant the
+    # only way to check "does Apply actually redraw this one" was to open
+    # the app and look - and the coverage panel worked while a biology
+    # panel did not, for a whole release, because nothing could see it.
+    gate_reg[[p]] <<- list(now = applied, stale = stale, sig = sig)
     list(now = applied, stale = stale)
   }
 
@@ -2686,21 +2715,28 @@ server <- function(input, output, session) {
     # the plot TYPE is deliberately absent from both signatures - switching
     # heatmap/bubbles/bars, or histogram/density, is a different view of the
     # same configuration and should be immediate
-    flt_sig <- function(view) reactive(flt_inputs(paste0(p, "_", view)))
+    # NOT `reactive(flt_inputs(...))`. Wrapping it made a brand-new
+    # reactive object on every evaluation of the signature, which was then
+    # thrown away - so a change to rv$flt invalidated an object nothing
+    # held any more, the signature stayed cached at its old value, the
+    # panel never went stale and Apply had nothing to apply. The coverage
+    # and discard-rate gates read flt_inputs() directly, which is exactly
+    # why those two worked and all six biology panels did not.
+    flt_sig <- function(view) flt_inputs(paste0(p, "_", view))
     cov_sig <- reactive(c(list(i_("cov_cc"), i_("thr_cov"),
                                i_("thr_meas"), i_("cov_r_y"), i_("cov_r_fill"),
-                               i_("cov_r_facet"), flt_sig("cov")()), lv_sig()))
+                               i_("cov_r_facet"), flt_sig("cov")), lv_sig()))
     cov_live <- reactive(i_("cov_type"))
     n_sig <- reactive(c(list(i_("n_cc"), i_("n_r_fill"),
                              i_("n_r_facet"), i_("n_r_shape"), i_("n_stack"),
                              i_("n_smooth"), i_("n_freex"), i_("n_freey"),
-                             flt_sig("n")()),
+                             flt_sig("n")),
                         lv_sig()))
     n_live <- reactive(i_("n_type"))
     w_sig <- reactive(c(list(i_("w_cc"), i_("w_r_fill"), i_("w_r_facet"),
                              i_("w_r_shape"), i_("w_pt"), i_("w_points"),
                              i_("w_freex"), i_("w_freey"), i_("w_type"),
-                             flt_sig("w")()),
+                             flt_sig("w")),
                         lv_sig()))
     dist_ref <- reactive(rv$dist)
     cov_gate <- gate_of(paste0(p, "_cov"), cov_sig, refresh = dist_ref,
@@ -3044,7 +3080,8 @@ server <- function(input, output, session) {
     # allocated, not of the pool it draws on.
     num_in <- function(id, default) {
       x <- input[[ns(id)]]
-      if (is.null(x) || all(is.na(x))) default else as.numeric(x)[1] }
+      if (is.null(x) || !length(x) || all(is.na(x))) default
+      else as.numeric(x)[1] }
 
     alloc_thr <- reactive(list(
       Lan = vapply(1:5, function(i) num_in(paste0("t", i, "_lan"), 50), numeric(1)),
@@ -3101,8 +3138,11 @@ server <- function(input, output, session) {
         k1, cc, tags$hr(style = "margin:6px 0"), rows) })
 
     # The live settings, and the ones the panel is currently drawn from.
+    donor_bars <- reactive(list(cov = num_in("dcov", NA),
+                                meas = num_in("dmeas", NA)))
+
     hier_sig <- reactive(list(alloc_keys(), alloc_thr(), keep_cc(),
-                              alloc_meas()))
+                              alloc_meas(), donor_bars()))
     hier_applied <- reactiveVal(NULL)
 
     # first pass: draw something rather than an empty panel
@@ -3123,7 +3163,9 @@ server <- function(input, output, session) {
     steps <- reactive({
       a <- hier_applied()
       req(!is.null(a))
-      alloc_steps(a[[1]], a[[2]], a[[3]], min_meas = a[[4]])
+      alloc_steps(a[[1]], a[[2]], a[[3]], min_meas = a[[4]],
+                  donor_cov_min  = a[[5]]$cov,
+                  donor_meas_min = a[[5]]$meas)
     })
 
     output[[ns("chain")]] <- renderUI({
@@ -3245,6 +3287,8 @@ server <- function(input, output, session) {
                       # reproduce it rather than only its resolved conditions
                       spec = list(keys = alloc_keys(), thresholds = alloc_thr(),
                                   min_meas = alloc_meas(), keep_cc = keep_cc(),
+                                  donor_cov_min = donor_bars()$cov,
+                                  donor_meas_min = donor_bars()$meas,
                                   cols = alloc_cols(), bms = bms_on(),
                                   dims = dims_of()))
       setrv("allocs", a)
