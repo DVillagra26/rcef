@@ -294,3 +294,104 @@ class_axis_label <- function(type = "LengthTotal")
 DIMS_ALL_CANDIDATES <- c("metier4", "metier5", "metier6", "Country",
                          "ICESSubArea", "ICESDivision", "ICESSubdivision",
                          "Season", "FleetType", "target", "mesh")
+
+# =====================================================================
+#  Custom derived variables
+#
+#  The ICES scripts routinely add a column by hand - a "TR1" fleet type
+#  from a set of metier/mesh conditions, an aggregated area, a
+#  country grouping. In a script that is a few lines of dplyr; in the
+#  workbench it had no home, so the app could only ever group by columns
+#  the file already carried.
+#
+#  A custom variable is a NEW column, built from rules. Each rule is a
+#  condition (arbitrary R evaluated against the row) and the value to
+#  assign where it holds; rules are tried top to bottom, first match
+#  wins, and an "otherwise" value fills the rest. Once built the column
+#  is indistinguishable from a native one: it can be a key, a filter, a
+#  plot axis, anywhere.
+# =====================================================================
+
+#' Apply one custom-variable specification to a data frame
+#'
+#' Adds a single new column, `spec$name`, whose value is decided rule by
+#' rule. Each rule is `list(cond = "<R expression>", value = "<label>")`;
+#' the first rule whose condition is TRUE for a row sets that row's value,
+#' and rows matching no rule take `spec$otherwise`.
+#'
+#' The condition is evaluated with the data frame as its scope, so it can
+#' name any existing column - `mesh > 120 & vesselFlagCountry == "BEL"` -
+#' exactly as a hand-written `dplyr::mutate(case_when(...))` would. A
+#' condition that errors (a typo, a missing column) is treated as FALSE
+#' for every row rather than aborting the whole build, so one bad rule
+#' cannot blank the dataset.
+#'
+#' @param data A data frame.
+#' @param spec A list with `name` (the new column), `rules` (a list of
+#'   `list(cond, value)`), and `otherwise` (default label, may be `NA`).
+#' @return `data` with the new column added or overwritten.
+#' @seealso [apply_custom_vars()]
+#' @export
+#' @examples
+#' spec <- list(name = "POPO", otherwise = "other",
+#'   rules = list(list(cond = 'mesh > 120 & Country == "BEL"',
+#'                     value = "CHACHACHA")))
+#' \dontrun{apply_custom_var(catch_data, spec)}
+apply_custom_var <- function(data, spec) {
+  if (is.null(spec) || is.null(spec$name) || !nzchar(spec$name)) return(data)
+  n <- nrow(data)
+  out <- rep(spec$otherwise %||% NA_character_, n)
+  assigned <- rep(FALSE, n)
+  for (r in spec$rules %||% list()) {
+    cond <- r$cond %||% "FALSE"
+    hit <- tryCatch(
+      eval(parse(text = cond), envir = data, enclos = baseenv()),
+      error = function(e) rep(FALSE, n))
+    if (length(hit) == 1L) hit <- rep(hit, n)
+    hit <- !is.na(hit) & hit & !assigned
+    out[hit] <- r$value %||% NA_character_
+    assigned <- assigned | hit
+  }
+  data[[spec$name]] <- out
+  data
+}
+
+#' Apply a list of custom-variable specifications, in order
+#'
+#' Later specs see the columns earlier ones added, so a variable may be
+#' built on top of another.
+#'
+#' @param data A data frame.
+#' @param specs A list of specs, each as [apply_custom_var()] takes.
+#' @return `data` with every custom column added.
+#' @seealso [apply_custom_var()], [custom_var_code()]
+#' @export
+apply_custom_vars <- function(data, specs) {
+  for (sp in specs %||% list()) data <- apply_custom_var(data, sp)
+  data
+}
+
+#' Emit the dplyr that builds a custom variable, for the script
+#'
+#' So the workbench and a hand-written script produce the same column.
+#' Rendered as a `mutate(case_when(...))`, the idiom an ICES analyst
+#' already writes by hand.
+#'
+#' @param spec A custom-variable spec.
+#' @return A character vector of R source lines.
+#' @seealso [apply_custom_var()]
+#' @export
+#' @examples
+#' custom_var_code(list(name = "POPO", otherwise = "other",
+#'   rules = list(list(cond = 'mesh > 120', value = "big"))))
+custom_var_code <- function(spec) {
+  if (is.null(spec) || !nzchar(spec$name %||% "")) return(character(0))
+  arms <- vapply(spec$rules %||% list(), function(r)
+    sprintf('    %s ~ "%s"', r$cond %||% "FALSE", r$value %||% NA),
+    character(1))
+  oth <- spec$otherwise %||% NA_character_
+  oth_txt <- if (is.na(oth)) "NA_character_" else sprintf('"%s"', oth)
+  c(sprintf("catch_data <- catch_data %%>%% mutate(%s = case_when(", spec$name),
+    paste0(arms, ","),
+    sprintf("    TRUE ~ %s))", oth_txt))
+}

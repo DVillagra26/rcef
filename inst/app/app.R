@@ -1657,7 +1657,61 @@ ui <- navbarPage(
         conditionalPanel("input.db_step == 'stepres'", cef_result_ui("db"))))),
 
   # =========================================================
-  tabPanel("2. Discards",
+  tabPanel("2. Data setup",
+    div(style = "padding:8px 4px",
+      sidebarLayout(
+        sidebarPanel(width = 4,
+          h4("Column roles"),
+          span(class = "note",
+               "Which column plays each role, set ONCE here for the whole ",
+               "workbench instead of per tab. Everything downstream - keys, ",
+               "filters, plots - reads these."),
+          uiOutput("role_fleet_ui"),
+          uiOutput("role_country_ui"),
+          uiOutput("role_area_ui"),
+          uiOutput("role_season_ui"),
+          tags$hr(),
+          h4("Custom variables"),
+          span(class = "note",
+               "Build a NEW column from rules, the way the ICES scripts add ",
+               "a TR1 fleet by hand. Each rule is a condition and the value ",
+               "to assign where it holds; rules are tried top to bottom, ",
+               "first match wins. Once built the column is usable anywhere - ",
+               "as a key, a filter or a plot axis."),
+          textInput("cv_name", "New column name", placeholder = "POPO"),
+          textInput("cv_otherwise", "Value when no rule matches",
+                    value = "other"),
+          tags$b("Rules"),
+          uiOutput("cv_rules_ui"),
+          div(style = "margin:6px 0",
+            actionButton("cv_add_rule", "+ rule", class = "btn-xs"),
+            actionButton("cv_save", "Save variable",
+                         class = "btn-sm btn-success")),
+          tags$hr(),
+          uiOutput("cv_list_ui")),
+        mainPanel(width = 8,
+          tabsetPanel(type = "tabs",
+            tabPanel("Preview",
+              h4("The rule being built"),
+              span(class = "note",
+                   "How many rows each rule would claim, on the loaded data, ",
+                   "before you save it."),
+              uiOutput("cv_preview"),
+              tags$hr(),
+              h4("Data with custom columns"),
+              span(class = "note",
+                   "A sample of the catch table after the saved custom ",
+                   "variables are applied."),
+              tbl_slot("cv_data_preview")),
+            tabPanel("Code",
+              h4("The columns these rules add"),
+              span(class = "note",
+                   "The dplyr that reproduces every saved custom variable, ",
+                   "so a script and the workbench build the same columns."),
+              verbatimTextOutput("cv_code"))))))),
+
+  # =========================================================
+  tabPanel("3. Discards",
     div(style = "padding:8px 4px",
       pick_bar("sec3", list(stgexpl = "Data exploration",
                             stggrp = "Allocation groups",
@@ -1987,7 +2041,7 @@ ui <- navbarPage(
           conditionalPanel("input.raise_mode == 'final'", final_ui()))))),
 
   # =========================================================
-  tabPanel("3. Length",
+  tabPanel("4. Length",
     div(style = "padding:8px 4px",
       pick_bar("sec4", list(stgexpl = "Exploration",
                             stggrp = "Allocation groups",
@@ -2006,7 +2060,7 @@ ui <- navbarPage(
                        len_raise_ui("len", "Length")))),
 
   # =========================================================
-  tabPanel("4. Age",
+  tabPanel("5. Age",
     div(style = "padding:8px 4px",
       pick_bar("sec5", list(stgexpl = "Exploration",
                             stggrp = "Allocation groups",
@@ -2030,7 +2084,7 @@ ui <- navbarPage(
   # raising and the length/age allocation are separate decisions taken at
   # separate times, and in each case the exploration that justifies a
   # grouping is worth keeping apart from the grouping itself.
-  tabPanel("5. R script",
+  tabPanel("6. R script",
     tabsetPanel(id = "sec6",
       tabPanel("Live script (full)", log_ui()),
       tabPanel("data", taf_ui("data")),
@@ -2482,6 +2536,11 @@ server <- function(input, output, session) {
   rv <- reactiveValues(sets = list(), rules = list(), clause = list(),
                        # per-figure-tab exploration filters, keyed by prefix
                        flt = list(),
+                       # user-built columns, applied in derived(); and the
+                       # rules of the variable currently being edited
+                       custom_vars = list(), cv_rules = list(list(cond = "", value = "")),
+                       # column -> role overrides set on the Data setup tab
+                       role_map = list(),
                        pend_raise = NULL, pend_source = NULL, scenarios = list(),
                        ic = NULL, native = NULL, log = log_new(),
                        dist = NULL, eff = NULL, final = NULL, restore = NULL,
@@ -4335,9 +4394,188 @@ server <- function(input, output, session) {
     if (!"domainCatchDis" %in% names(d)) d$domainCatchDis <- NA_character_
     if (!"stock" %in% names(d)) d$stock <- "(unknown)"
     if (!"year"  %in% names(d)) d$year  <- NA
-    derive_fields(d)
+    d <- derive_fields(d)
+    # user-built columns are indistinguishable from native ones once here,
+    # so every downstream key / filter / plot can use them
+    apply_custom_vars(d, rv$custom_vars)
   })
 
+
+  # =========================================================
+  #  DATA SETUP tab: column roles + custom variables
+  # =========================================================
+
+  # every column the loaded data offers, for the role and rule pickers
+  all_cols <- reactive({
+    d <- tryCatch(derived(), error = function(e) NULL)
+    if (is.null(d)) character(0) else sort(names(d))
+  })
+
+  # Role selectors. The default is the canonical column, but the user can
+  # point a role at any column - including a custom one they just built,
+  # which is the whole point of letting them make a "TR1" fleet.
+  role_select <- function(role, default, choices_fun) {
+    renderUI({
+      ch <- choices_fun()
+      sel <- rv$role_map[[role]] %||% default
+      if (!sel %in% ch) sel <- if (default %in% ch) default else ch[1]
+      selectInput(paste0("role_", tolower(role)), role, ch, sel, width = "100%")
+    })
+  }
+  output$role_fleet_ui   <- role_select("Fleet", "metier4",
+    function() unique(c(unname(FLEET_LEVELS), all_cols())))
+  output$role_country_ui <- role_select("Country", "Country",
+    function() unique(c("Country", "vesselFlagCountry", all_cols())))
+  output$role_area_ui    <- role_select("Area", "ICESDivision",
+    function() unique(c(unname(AREA_LEVELS), all_cols())))
+  output$role_season_ui  <- role_select("Season", "Season",
+    function() unique(c("Season", all_cols())))
+
+  for (r in c("fleet", "country", "area", "season")) local({
+    role <- r
+    observeEvent(input[[paste0("role_", role)]], {
+      rv$role_map[[c(fleet="Fleet",country="Country",area="Area",season="Season")[[role]]]] <-
+        input[[paste0("role_", role)]]
+    })
+  })
+
+  # --- the rule editor for the variable being built ---------
+  output$cv_rules_ui <- renderUI({
+    cols <- all_cols()
+    rules <- rv$cv_rules
+    do.call(tagList, lapply(seq_along(rules), function(i) {
+      fluidRow(style = "margin-bottom:4px",
+        column(7, textInput(paste0("cv_cond_", i), if (i == 1) "Condition" else NULL,
+                            value = rules[[i]]$cond,
+                            placeholder = 'mesh > 120 & Country == "BEL"')),
+        column(4, textInput(paste0("cv_val_", i), if (i == 1) "Value" else NULL,
+                            value = rules[[i]]$value, placeholder = "CHACHACHA")),
+        column(1, if (length(rules) > 1)
+          actionButton(paste0("cv_del_", i), "x", class = "btn-xs")))
+    }))
+  })
+
+  # keep rv$cv_rules synced with the inputs as they change
+  observe({
+    n <- length(rv$cv_rules)
+    isolate({
+      for (i in seq_len(n)) {
+        rv$cv_rules[[i]]$cond  <- input[[paste0("cv_cond_", i)]] %||% rv$cv_rules[[i]]$cond
+        rv$cv_rules[[i]]$value <- input[[paste0("cv_val_", i)]]  %||% rv$cv_rules[[i]]$value
+      }
+    })
+  })
+
+  observeEvent(input$cv_add_rule,
+    rv$cv_rules <- c(rv$cv_rules, list(list(cond = "", value = ""))))
+
+  # per-row delete buttons
+  observe({
+    for (i in seq_along(rv$cv_rules)) local({
+      j <- i
+      observeEvent(input[[paste0("cv_del_", j)]], {
+        rv$cv_rules <- rv$cv_rules[-j]
+        if (!length(rv$cv_rules)) rv$cv_rules <- list(list(cond = "", value = ""))
+      }, ignoreInit = TRUE, once = TRUE)
+    })
+  })
+
+  # the spec being edited, read from the live inputs
+  cv_current_spec <- reactive({
+    rules <- lapply(seq_along(rv$cv_rules), function(i) {
+      list(cond = input[[paste0("cv_cond_", i)]] %||% "",
+           value = input[[paste0("cv_val_", i)]] %||% "")
+    })
+    rules <- Filter(function(r) nzchar(r$cond) && nzchar(r$value), rules)
+    list(name = input$cv_name %||% "", otherwise = input$cv_otherwise %||% NA,
+         rules = rules)
+  })
+
+  # how many rows each rule would claim, first-match-wins, on real data
+  output$cv_preview <- renderUI({
+    d <- tryCatch(derived(), error = function(e) NULL)
+    validate(need(!is.null(d), "Load data first."))
+    sp <- cv_current_spec()
+    validate(need(length(sp$rules) >= 1, "Add at least one rule with a condition and a value."))
+    n <- nrow(d); claimed <- rep(FALSE, n)
+    rows <- lapply(seq_along(sp$rules), function(i) {
+      r <- sp$rules[[i]]
+      hit <- tryCatch(eval(parse(text = r$cond), envir = d, enclos = baseenv()),
+                      error = function(e) structure(rep(FALSE, n), err = conditionMessage(e)))
+      err <- attr(hit, "err")
+      if (length(hit) == 1L) hit <- rep(hit, n)
+      hit <- !is.na(hit) & hit
+      new <- hit & !claimed
+      claimed <<- claimed | new
+      div(style = "padding:4px 8px;margin:3px 0;border-left:4px solid #59A14F;background:#f4f7f4;font-size:12px",
+          tags$b(sprintf('%s -> "%s"', r$cond, r$value)), tags$br(),
+          if (!is.null(err))
+            tags$span(style = "color:#c0392b", "condition error: ", err)
+          else sprintf("%d rows match, %d newly claimed (%.1f%%)",
+                       sum(hit), sum(new), 100 * sum(new) / n))
+    })
+    oth <- sum(!claimed)
+    tagList(rows,
+      div(style = "padding:4px 8px;margin:3px 0;font-size:12px;color:#666",
+          sprintf('otherwise -> "%s": %d rows (%.1f%%)',
+                  sp$otherwise, oth, 100 * oth / n)))
+  })
+
+  output$cv_data_preview <- renderDT({
+    d <- tryCatch(derived(), error = function(e) NULL)
+    validate(need(!is.null(d), "Load data first."))
+    show <- intersect(c("catchCategory", "metier4", "Country", "ICESDivision",
+                        "Season", "mesh", names(rv$custom_vars %||% list()),
+                        vapply(rv$custom_vars %||% list(), `[[`, "", "name")),
+                      names(d))
+    datatable(utils::head(unique(d[, show, drop = FALSE]), 50),
+              options = list(scrollX = TRUE, pageLength = 10), rownames = FALSE)
+  })
+
+  observeEvent(input$cv_save, {
+    sp <- cv_current_spec()
+    if (!nzchar(sp$name)) {
+      showNotification("Give the variable a name first.", type = "error"); return() }
+    if (!length(sp$rules)) {
+      showNotification("Add at least one complete rule.", type = "error"); return() }
+    # replace an existing variable of the same name, else append
+    nm <- vapply(rv$custom_vars, `[[`, "", "name")
+    if (sp$name %in% nm) rv$custom_vars[[which(nm == sp$name)]] <- sp
+    else rv$custom_vars <- c(rv$custom_vars, list(sp))
+    showNotification(sprintf('Saved custom variable "%s"', sp$name),
+                     type = "message", duration = 2)
+    # reset the editor for the next one
+    rv$cv_rules <- list(list(cond = "", value = ""))
+    updateTextInput(session, "cv_name", value = "")
+  })
+
+  output$cv_list_ui <- renderUI({
+    if (!length(rv$custom_vars)) return(span(class = "note", "No custom variables yet."))
+    tagList(tags$b("Saved variables"),
+      do.call(tagList, lapply(seq_along(rv$custom_vars), function(i) {
+        sp <- rv$custom_vars[[i]]
+        div(style = "padding:3px 6px;margin:2px 0;background:#eef2f7;border-radius:4px;font-size:12px",
+            tags$b(sp$name), sprintf(" (%d rule%s)", length(sp$rules),
+                                     if (length(sp$rules) == 1) "" else "s"),
+            actionButton(paste0("cv_remove_", i), "remove",
+                         class = "btn-xs", style = "margin-left:8px"))
+      })))
+  })
+
+  observe({
+    for (i in seq_along(rv$custom_vars)) local({
+      j <- i
+      observeEvent(input[[paste0("cv_remove_", j)]], {
+        rv$custom_vars <- rv$custom_vars[-j]
+      }, ignoreInit = TRUE, once = TRUE)
+    })
+  })
+
+  output$cv_code <- renderText({
+    if (!length(rv$custom_vars))
+      return("# No custom variables defined.")
+    paste(unlist(lapply(rv$custom_vars, custom_var_code)), collapse = "\n")
+  })
 
   output$stock_ui <- renderUI({ req(derived())
     selectInput("stock", "Stock", sort(unique(derived()$stock))) })
@@ -4354,9 +4592,17 @@ server <- function(input, output, session) {
   })
 
   dmap <- function(p) {
-    f <- input[[paste0(p, "_fleet")]]; a <- input[[paste0(p, "_area")]]
-    c(Fleet = if (is.null(f)) "metier4" else f, Country = "Country",
-      Area = if (is.null(a)) "ICESDivision" else a, Season = "Season")
+    # Global roles set on the Data setup tab win. The old per-tab Fleet /
+    # Area selectors still work as an override where they exist, but the
+    # role_map is the single source so a custom column chosen as, say,
+    # Fleet is used as the Fleet key on every tab at once.
+    rm <- rv$role_map
+    f <- input[[paste0(p, "_fleet")]] %||% rm$Fleet
+    a <- input[[paste0(p, "_area")]]  %||% rm$Area
+    c(Fleet   = f %||% "metier4",
+      Country = rm$Country %||% "Country",
+      Area    = a %||% "ICESDivision",
+      Season  = rm$Season %||% "Season")
   }
   col_of <- function(p, sel) {
     if (is.null(sel) || !nzchar(sel)) return(NULL)
@@ -5168,6 +5414,11 @@ server <- function(input, output, session) {
         emit_load_code(if (is.null(input$file)) "catch_data.csv" else input$file$name,
                        input$sep),
         c(emit_area_helper(), emit_derive_code()),
+        # custom columns, right after derive_fields() and before anything
+        # that might key on them - the same order derived() applies them
+        if (length(rv$custom_vars))
+          c("", "## Custom variables (Data setup tab):",
+            unlist(lapply(rv$custom_vars, custom_var_code))),
         emit_filter_code(input$stock, input$year, unname(dmap("ar")[DIMS]),
                          ar_dr()[1], ar_dr()[2]))
     if ("auto" %in% input$code_parts)
