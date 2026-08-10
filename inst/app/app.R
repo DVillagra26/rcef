@@ -3801,7 +3801,13 @@ server <- function(input, output, session) {
       if (is.null(cd)) {
         showNotification("No catch data.", type = "error"); return() }
       runs <- with_busy(sprintf("Running %s allocation(s)...", length(allocs)),
+        # Same call as the single/final allocation, alloc_dims included -
+        # otherwise the comparison infers dims from column names while the
+        # final run uses the explicit set, and the two can silently
+        # diverge. They must be the same function with the same arguments,
+        # or "compare works but final fails" is inevitable.
         run_allocation_set(allocs, cd, dist_tbl(), app_type,
+          alloc_dims = dims_of(),
           originType_catch = input[[ns("origin")]] %||% "WGEstimate",
           variableType_catch = input[[ns("vartype")]] %||% "WeightLive",
           weighting = input[[ns("weighting")]] %||% "NumberAtAoL",

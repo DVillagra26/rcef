@@ -1,0 +1,18 @@
+
+
+##------ Mon Aug 10 11:55:02 2026 ------##
+
+## ############################################################
+## Condition diagnostics: 
+## conditionType = "strata"
+## domain = "domainBiology"; variableType = "WeightLive"
+
+
+
+##------ Mon Aug 10 11:55:02 2026 ------##
+
+## ############################################################
+## Condition diagnostics: 
+## conditionType = "matched_data"
+## domain = "domainBiology"; variableType = "WeightLive"
+

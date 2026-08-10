@@ -405,8 +405,14 @@ run_allocation_set <- function(allocs, catch_raised, dist, app_type,
   if (!length(allocs)) return(list())
   out <- list()
   for (nm in names(allocs)) {
+    # app_type NAMED, not positional. run_allocation()'s 4th argument is
+    # alloc_dims, so passing app_type positionally handed it to the wrong
+    # parameter - the comparison ran with the wrong app_type and no dims
+    # while the final run was correct, which is precisely "compare works
+    # but final does not" seen from the other side.
     r <- suppressWarnings(run_allocation(catch_raised, dist,
-                                         allocs[[nm]]$groups, app_type, ...))
+                                         allocs[[nm]]$groups,
+                                         app_type = app_type, ...))
     out[[nm]] <- r
   }
   out
