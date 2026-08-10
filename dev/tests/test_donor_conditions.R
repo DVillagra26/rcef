@@ -75,5 +75,27 @@ em2 <- code_manual_rule("manual_1", dims, list(r3))
 ok(!any(grepl("add_stratum_metrics", em2)),
    "a rule with no bars does not drag the join in for nothing")
 
+## --- the metric columns must survive cef_prepare() -------------------
+##
+## A matchedDataCond of `coverage >= 50 & n_measurements >= 100` errored
+## with "object 'coverage' not found" because cef_prepare() joined the
+## stratum table a SECOND time, colliding coverage into coverage.x /
+## coverage.y so no plain `coverage` existed. This is the exact failing
+## condition from the field.
+ex <- system.file("extdata", package = "rcef")
+fx <- list.files(ex, "catches_CEF.*\\.csv$", recursive = TRUE, full.names = TRUE)
+if (length(fx)) {
+  cd <- rcef:::derive_fields(utils::read.csv(fx[1], stringsAsFactors = FALSE))
+  prep <- rcef:::cef_prepare(cd, c("metier4", "Country", "ICESDivision", "Season"))
+  ok("coverage" %in% names(prep), "cef_prepare keeps a plain coverage column")
+  ok("n_measurements" %in% names(prep), "and a plain n_measurements column")
+  ok(!any(grepl("coverage\\.|discard_rate\\.", names(prep))),
+     "no coverage.x / coverage.y collision")
+  r <- tryCatch(dplyr::filter(prep, coverage >= 50 & n_measurements >= 100),
+                error = function(e) e)
+  ok(is.data.frame(r),
+     "the exact failing condition now evaluates instead of erroring")
+}
+
 cat(sprintf("\nDONE  %d failure(s)\n", FAIL))
 if (FAIL) quit(status = 1L)

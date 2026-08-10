@@ -4,7 +4,7 @@
 \alias{add_stratum_metrics}
 \title{Attach stratum-level metrics to a CEF table}
 \usage{
-add_stratum_metrics(data, dims, strata = NULL)
+add_stratum_metrics(data, dims, strata = NULL, dist = NULL)
 }
 \arguments{
 \item{data}{A CEF long-format table.}

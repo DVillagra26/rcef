@@ -225,31 +225,28 @@ code_manual_rule <- function(name, dims, rules, sets = list()) {
   needs_metrics <- any(vapply(rules, function(r)
     any(!is.na(c(r$cov_min %||% NA, r$meas_min %||% NA,
                  r$dr_min %||% NA, r$dr_max %||% NA))), logical(1)))
-  # Show the SIMPLE clauses - each group's own condition, the catch-all
-  # as TRUE - and complement them at runtime. First-match-wins means the
-  # "& !(everything above)" is redundant to a reader; complement_conds()
-  # supplies it for the engine, which does need the partition.
-  qs <- function(l) vapply(seq_along(l), function(i)
+  # Plain clauses, exactly the ICES style: each group its own condition,
+  # the catch-all as quo(TRUE). No programmatic complement in the printed
+  # code - a reader wants to SEE the rule, not "& !(everything above)".
+  # The app resolves overlaps first-match-wins at runtime; the script is
+  # the readable statement of the same grouping.
+  qc <- function(l) vapply(seq_along(l), function(i)
     sprintf("    %s = quo(%s)%s", names(l)[i],
             wrap_lines(rlang::quo_text(l[[i]]), width = 64),
             if (i < length(l)) "," else ""), character(1))
   c(sprintf("## ---- Allocation '%s' (manual groups) ---------------------", name),
-    "## Groups are tested top to bottom, first match wins. The strata",
-    "## clauses are written in that plain form; complement_conds() turns",
-    "## them into the partition catchRaising() needs (it sums the",
-    "## per-clause results, so overlapping clauses would double-count).",
+    "## Groups are tested top to bottom; the first whose strataCond a",
+    "## stratum matches raises it, so nothing is raised twice.",
     sprintf("dims_%s <- %s", name, fmt_vals(dims)),
     if (needs_metrics) c("",
-      "## A donor condition below is written as arithmetic on stratum",
-      "## metrics (coverage, discard_rate, n_measurements). Those are",
-      "## properties of a STRATUM, so a CEF table has none of them - this",
-      "## joins them onto the rows before the conditions are evaluated.",
+      "## A matchedDataCond below names stratum metrics (coverage,",
+      "## discard_rate, n_measurements). Those are properties of a",
+      "## STRATUM, absent from a raw CEF table, so join them on once.",
       sprintf("catch_data <- add_stratum_metrics(catch_data, dims_%s)", name)),
     "",
-    sprintf("strataClauses_%s <- list(", name), qs(cd$strataCond_simple), ")",
-    "",
     sprintf("conds_%s <- list(", name),
-    sprintf("  strataCond = complement_conds(strataClauses_%s),", name),
+    "  strataCond = list(", sub("^    ", "    ", paste(qc(cd$strataCond_simple), collapse="\n")),
+    "  ),",
     "  matchedDataCond = list(", q(cd$matchedDataCond), "  ))",
     "")
 }

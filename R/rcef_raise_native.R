@@ -84,11 +84,20 @@ cef_prepare <- function(catch_data, dims) {
   for (f in num_fields)
     if (!is.numeric(d[[f]]))
       d[[f]] <- suppressWarnings(as.numeric(gsub("[, ]", "", as.character(d[[f]]))))
-  d$stratum_id <- do.call(paste, c(lapply(dims, function(k)
-    as.character(d[[k]])), sep = " | "))
+  # add_stratum_metrics() is the single source of the stratum-level
+  # columns a donor condition can name (coverage, discard_rate,
+  # n_measurements, stratum_weight) plus stratum_id. It was previously
+  # joined a SECOND time here via build_strata(), which collided with the
+  # already-present coverage/discard_rate into coverage.x / coverage.y -
+  # so a condition saying `coverage >= 50` found no plain `coverage` and
+  # errored with "object 'coverage' not found". One join, once.
+  d <- add_stratum_metrics(d, dims)
+  # landings / discards are wanted alongside for the overview tables
   st <- build_strata(d, dims) %>%
-    select(stratum_id, landings, landings_with_discards, discards,
-           coverage, discard_rate)
+    select(stratum_id, landings, landings_with_discards, discards)
+  # drop any landings/discards already present so the join cannot collide
+  d <- d[, setdiff(names(d), c("landings", "landings_with_discards",
+                               "discards")), drop = FALSE]
   cef_reorder(d %>% left_join(st, by = "stratum_id"))
 }
 

@@ -217,7 +217,7 @@ group_palette <- function(ids) {
   cols <- if (n <= length(base)) base[seq_len(n)]
           else grDevices::hcl.colors(n, "Dark 3")
   # the fallback pool is always grey
-  cols[ids %in% c("ALL", "no raising needed", "(none)")] <- "#BFBFBF"
+  cols[ids %in% c("ALL", "Catch All by All", "no raising needed", "(none)")] <- "#BFBFBF"
   setNames(cols, ids)
 }
 

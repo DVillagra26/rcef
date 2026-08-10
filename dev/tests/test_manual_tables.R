@@ -140,5 +140,39 @@ hits <- vapply(part, function(q) sum(rlang::eval_tidy(q, data = d)), numeric(1))
 ok(sum(hits) == nrow(d), "the complemented clauses claim every row exactly once")
 ok(hits[["G3"]] == 1, "the catch-all picks up exactly the unclaimed GNS row")
 
+## --- the two focused strata tables -----------------------------------
+##
+## The old single diagnosis table answered two questions at once - what
+## is being raised, and what raises it - so it did neither cleanly. These
+## split them, and a TRUE / fallback level reads as "Catch All by All",
+## never the bare word TRUE.
+ex <- system.file("extdata", package = "rcef")
+fx <- list.files(ex, "catches_CEF.*\\.csv$", recursive = TRUE, full.names = TRUE)
+if (length(fx)) {
+  cd <- rcef:::derive_fields(utils::read.csv(fx[1], stringsAsFactors = FALSE))
+  dm <- c("metier4", "Country", "ICESDivision", "Season")
+  st <- classify_strata(build_strata(cd, dm), 50)
+  rec <- recommend_raising(st, dm, rep(50, 4), 50, "nested", "Catch All by All", dm)
+
+  rt <- strata_raise_table(rec, dm)
+  ok(!is.null(rt) && "raised_by" %in% names(rt),
+     "strata_raise_table has a raised_by column")
+  ok(!"raise_condition" %in% names(rt),
+     "and drops the raw condition - it is the donor tab's concern")
+  ok(!any(rt$raised_by == "TRUE", na.rm = TRUE),
+     "no bare TRUE - a fallback reads as Catch All by All")
+  ok(any(rt$raised_by == "Catch All by All"),
+     "the fallback level is named in full")
+  ok(all(diff(rt$landings) <= 1e-9, na.rm = TRUE) || is.unsorted(-rt$landings) == FALSE,
+     "sorted heaviest first")
+
+  dt <- strata_donor_table(rec, dm)
+  ok(!is.null(dt) && "usable_donor" %in% names(dt),
+     "strata_donor_table flags which strata may donate")
+  ok("donor_group" %in% names(dt), "and names the donor group")
+  ok(!"raised_by" %in% names(dt),
+     "the donor table does not carry the raised-by column")
+}
+
 cat(sprintf("\nDONE  %d failure(s)\n", FAIL))
 if (FAIL) quit(status = 1L)

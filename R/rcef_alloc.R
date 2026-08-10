@@ -88,11 +88,20 @@ run_allocation <- function(catch_raised, dist, groups,
   # handed the raw import or an already-derived table, instead of only
   # working from the one place that happened to derive first.
   catch_raised <- derive_fields(as.data.frame(catch_raised))
-  # bioMatchedCond may say `coverage >= 50`; the columns behind that have
-  # to be present or the condition errors rather than filtering
-  if (!is.null(alloc_dims) && length(alloc_dims))
-    catch_raised <- tryCatch(add_stratum_metrics(catch_raised, alloc_dims),
-                             error = function(e) catch_raised)
+  # bioMatchedCond may say `coverage >= 50 & n_measurements >= 100`. Those
+  # columns have to be present on the RAISED catch table or the condition
+  # errors with "object 'coverage' not found" rather than filtering. The
+  # metrics are computed from the distributions where present, so
+  # n_measurements reflects what is actually measured; add_stratum_metrics
+  # guarantees the column exists (0 where nothing is measured) so a
+  # condition naming it never errors. If the dims are unknown we fall back
+  # to the catch dims rather than skipping the join, because skipping it
+  # is exactly the failure mode.
+  jdims <- if (!is.null(alloc_dims) && length(alloc_dims)) alloc_dims
+           else intersect(c("catchCategory", "metier4", "Country",
+                            "ICESDivision", "Season"), names(catch_raised))
+  if (length(jdims))
+    catch_raised <- add_stratum_metrics(catch_raised, jdims, dist = dist)
 
   d <- prep_for_alloc(dist, app_type)
   if (!nrow(d))

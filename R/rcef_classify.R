@@ -163,7 +163,7 @@ status_palette <- function(threshold, what = "discard", min_meas = 0) {
 #'   covered at all.
 #' @seealso [classify_strata()]
 #' @export
-build_strata <- function(catch_data, dims) {
+build_strata <- function(catch_data, dims, dist = NULL) {
   stopifnot(length(dims) >= 1, all(dims %in% names(catch_data)))
 
   u <- if ("variableUnit" %in% names(catch_data)) catch_data$variableUnit else NULL
@@ -209,7 +209,50 @@ build_strata <- function(catch_data, dims) {
       stratum_id = do.call(paste, c(lapply(dims, function(k)
         as.character(get(k))), sep = " | "))
     ) %>%
-    as.data.frame()
+    as.data.frame() -> st
+
+  # Measurement counts per stratum, when a distributions table is given.
+  # A donor condition may say `n_measurements >= 100`; this is where that
+  # number comes from. Without dist the column is 0 everywhere - present,
+  # so the condition evaluates, but never satisfied, which is the honest
+  # answer when no distributions were supplied.
+  st$n_measurements <- 0
+  if (!is.null(dist) && nrow(dist)) {
+    dd <- as.data.frame(dist)
+    key_col <- intersect(c("domainBiology"), names(dd))
+    cc <- tryCatch(count_measurements_by_stratum(catch_data, dd, dims),
+                   error = function(e) NULL)
+    if (!is.null(cc)) {
+      i <- match(st$stratum_id, cc$stratum_id)
+      st$n_measurements <- ifelse(is.na(cc$n[i]), 0, cc$n[i])
+    }
+  }
+  st
+}
+
+# Count distribution records per catch stratum, via domainBiology. A
+# stratum's measurement count is how many distribution rows carry a
+# domainBiology that the stratum's catch rows also carry - the same link
+# biology_link() uses, reduced to a count.
+#' @noRd
+#' @export
+count_measurements_by_stratum <- function(catch_data, dist, dims) {
+  d <- as.data.frame(catch_data)
+  if (!"domainBiology" %in% names(d) || !"domainBiology" %in% names(dist))
+    return(NULL)
+  d$stratum_id <- do.call(paste, c(lapply(dims, function(k)
+    as.character(d[[k]])), sep = " | "))
+  # rows of dist per domainBiology
+  tab <- as.data.frame(table(domainBiology = as.character(dist$domainBiology)),
+                       stringsAsFactors = FALSE)
+  names(tab)[2] <- "nrec"
+  key <- unique(d[, c("stratum_id", "domainBiology")])
+  key$domainBiology <- as.character(key$domainBiology)
+  key <- merge(key, tab, by = "domainBiology", all.x = TRUE)
+  key$nrec[is.na(key$nrec)] <- 0
+  agg <- stats::aggregate(nrec ~ stratum_id, data = key, FUN = sum)
+  names(agg)[2] <- "n"
+  agg
 }
 
 #' Classify strata against a coverage (and measurement) threshold

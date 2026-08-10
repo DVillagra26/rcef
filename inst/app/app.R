@@ -572,13 +572,26 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
                    "Heaviest first. If this is not empty, either a threshold ",
                    "is too strict or the category must be allowed to drop."),
               tbl_slot(ns("cmissing"))),
-            tabPanel("Rivers",
-              h4("Strata and the group that raises them"),
-              plot_slot(ns("river")),
-              h4("One river per step"),
+            tabPanel("Strata to allocate",
+              h4("The data being allocated a distribution"),
               span(class = "note",
-                   "What each rung claims and where it draws from, read the ",
-                   "same way as the manual per-rule rivers."),
+                   "One row per stratum: the columns that define it, its ",
+                   "catch weight and coverage, and which step of the cascade ",
+                   "supplies its length/age distribution."),
+              tbl_slot(ns("alloc_raise_tbl"))),
+            tabPanel("Data used to allocate",
+              h4("The donor pools (bioMatchedCond)"),
+              span(class = "note",
+                   "The same strata, grouped by how they SUPPLY the ",
+                   "distributions. usable_donor is FALSE where a coverage or ",
+                   "measurement bar excluded the stratum from the pool."),
+              tbl_slot(ns("alloc_donor_tbl"))),
+            tabPanel("Rivers",
+              h4("Where each step draws its data from"),
+              span(class = "note",
+                   "One river per rung of the cascade: the strata resolved at ",
+                   "that step on the left, the donor pool they drew from on ",
+                   "the right."),
               uiOutput(ns("step_rivers"))))))),
     conditionalPanel(sprintf("input.%s == 'manual'", ns("method")),
       sidebarLayout(
@@ -710,36 +723,28 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
               h4("Strata still unassigned"),
               span(class = "note", "Heaviest first, so the biggest hole is on top."),
               tbl_slot(ns("missing")),
-              tags$hr(),
-              h4("What each group actually allocates"),
+),
+            tabPanel("Strata to allocate",
+              h4("The data being allocated a distribution"),
               span(class = "note",
-                   "Read top to bottom, the way the groups are evaluated. ",
-                   "Each card shows what its group TAKES - after the groups ",
-                   "above it have taken theirs - and the running total."),
-              uiOutput(ns("ladder")),
-              tags$hr(),
-              h4("Overview: allocated vs donated per group"),
+                   "One row per stratum: the columns that define it, its ",
+                   "catch weight and coverage, and which group allocates its ",
+                   "length/age distribution. Heaviest first."),
+              tbl_slot(ns("man_raise_tbl"))),
+            tabPanel("Data used to allocate",
+              h4("The donor pools (bioMatchedCond)"),
               span(class = "note",
-                   "A stratum is ALLOCATED by exactly one group; it can sit ",
-                   "in the donor pool of several, so the second column can ",
-                   "exceed the first and usually should."),
-              tbl_slot(ns("ov"))),
+                   "The same strata, grouped by how they SUPPLY the ",
+                   "distributions rather than whether they were allocated. ",
+                   "Each stratum can feed several groups."),
+              tbl_slot(ns("man_donor_tbl"))),
             tabPanel("Rivers",
               uiOutput(ns("check2")),
-              h4("Strata and the data they are allocated from"),
-              plot_slot(ns("mriver")),
-              h4("One river per rule"),
+              h4("Where each rule draws its data from"),
               span(class = "note",
-                   "The same reading as the automated ladder: what each ",
-                   "rule claims, and where it draws from."),
-              uiOutput(ns("rule_rivers"))),
-            tabPanel("Strata",
-              h4("Groups"), tbl_slot(ns("rules")),
-              h4("Strata"),
-              span(class = "note",
-                   "One row per stratum: the group that allocates it, and ",
-                   "every group it lends its distribution to."),
-              tbl_slot(ns("strata_tbl"))))))))
+                   "One river per rule: the strata it allocates on the left, ",
+                   "the donor pool it draws from on the right."),
+              uiOutput(ns("rule_rivers"))))))))
 }
 
 # --- 2nd level: raising ------------------------------------------
@@ -1693,11 +1698,7 @@ ui <- navbarPage(
                 "country pooled across all areas and seasons; then same gear ",
                 "pooled across all countries, areas and seasons; and finally ALL, ",
                 "which pools every stratum regardless of gear.", tags$br(),
-                tags$br(),
-                tags$b("Why only this one:"), " using each key on its own was ",
-                "removed. It builds pools that ignore the keys above them - ",
-                "raising a Belgian TBB stratum from every Belgian stratum ",
-                "regardless of gear - which is not a defensible donor."),
+),
               tags$hr(),
               h4("2. Select keys to group"),
               span(class = "note",
@@ -1741,10 +1742,12 @@ ui <- navbarPage(
             mainPanel(width = 9,
           tabsetPanel(id = "auto_out", type = "tabs",
             tabPanel("Code",
-              h4("Raising conditions"),
+              h4("The functions that build the raising"),
               span(class = "note",
-                   "strataCond and matchedDataCond as they would be written ",
-                   "in a script."),
+                   "The hierarchy, thresholds and any donor exclusions - the ",
+                   "recipe - then the strataCond / matchedDataCond it produces. ",
+                   "For the automated method the recipe is the point; the ",
+                   "groups are what it resolves to."),
               verbatimTextOutput("auto_conds")),
             tabPanel("Overview",
               h4("What each step resolves"),
@@ -1755,16 +1758,30 @@ ui <- navbarPage(
               uiOutput("tree_check"),
               tbl_slot("tree_tbl"),
               tags$hr(),
-              h4("Diagnosis with recommended raising strata"),
-              tbl_slot("diag_tbl"),
-              tags$hr(), h4("Groups"), tbl_slot("grp_tbl")),
+              h4("What is assigned, and what is still missing"),
+              tbl_slot("grp_tbl")),
+            tabPanel("Strata to raise",
+              h4("The data being raised"),
+              span(class = "note",
+                   "One row per stratum: the columns that define it, its ",
+                   "landings, discards, rate and coverage, its sampling status, ",
+                   "and which rule raises it. Heaviest first."),
+              tbl_slot("diag_tbl")),
+            tabPanel("Data used to raise",
+              h4("The donor pools (matchedDataCond)"),
+              span(class = "note",
+                   "The same strata, grouped by how they SUPPLY the raising ",
+                   "rather than whether they were raised. usable_donor is ",
+                   "FALSE where a donor bar (coverage, measurements, rate) ",
+                   "excluded the stratum from the pool."),
+              tbl_slot("diag_donor_tbl")),
             tabPanel("Rivers",
-              h4("Decision process"),
-              uiOutput("tree_ui"),
-              tags$hr(),
-              h4("Which strata are raised from where"),
-              selectInput("river_left", "Left-hand grouping", DIMS, "Fleet"),
-              plot_slot("auto_river")))))),
+              h4("Where each step draws its data from"),
+              span(class = "note",
+                   "One river per rung of the cascade, read the same way as ",
+                   "the step table: the strata resolved at that step on the ",
+                   "left, the donor pool they were raised from on the right."),
+              uiOutput("tree_ui")))))),
           conditionalPanel("input.grp_method == 'manual'", 
           sidebarLayout(
             sidebarPanel(width = 4,
@@ -1789,8 +1806,15 @@ ui <- navbarPage(
                    "Both of these narrow matchedDataCond only - never the ",
                    "strata being raised. Same controls as the hierarchical ",
                    "tab, so the two read the same way."),
-              checkboxInput("dr_on", "Exclude on discard rate", FALSE),
-              conditionalPanel("input.dr_on == true", uiOutput("rule_dr_ui")),
+              # Always visible, no tick to activate: a single discard-rate
+              # window over all areas. Left at its full range it excludes
+              # nothing, so there is nothing to switch on - moving either
+              # handle IS switching it on.
+              tags$b("Exclude on discard rate"),
+              span(class = "note",
+                   "Leave at full range to keep every donor; narrow it to ",
+                   "drop strata whose rate falls outside the window."),
+              uiOutput("rule_dr_ui"),
               exclude_box("mg", metrics = c("coverage", "rate"), title = NULL,
                           note = paste("Applies to THIS group's donor pool",
                                        "only. The stratum stays available to",
@@ -1900,27 +1924,27 @@ ui <- navbarPage(
               h4("Strata still unassigned"),
               span(class = "note", "Heaviest first, so the biggest hole is on top."),
               tbl_slot("man_missing"),
-              tags$hr(),
-              h4("Overview: raised vs donated per group"), tbl_slot("man_ov")),
+),
+            tabPanel("Strata to raise",
+              h4("The data being raised"),
+              span(class = "note",
+                   "One row per stratum: the columns that define it, its ",
+                   "landings, discards, rate and coverage, its status, and ",
+                   "which rule raises it. Heaviest first."),
+              tbl_slot("man_raise_tbl")),
+            tabPanel("Data used to raise",
+              h4("The donor pools (matchedDataCond)"),
+              span(class = "note",
+                   "The same strata, grouped by how they SUPPLY the raising. ",
+                   "usable_donor is FALSE where a donor bar excluded it."),
+              tbl_slot("man_donor_tbl")),
             tabPanel("Rivers",
               uiOutput("man_check2"),
-              h4("What each rule actually raises"),
-              uiOutput("man_ladder"),
-              h4("Which strata are raised from where"),
-              plot_slot("man_river"),
-              h4("One river per rule"),
+              h4("Where each rule draws its data from"),
               span(class = "note",
-                   "What each rule claims and where it draws from. The ",
-                   "combined river above can hide a rule whose strata are ",
-                   "few but whose donor pool is wide."),
-              uiOutput("man_rule_rivers")),
-            tabPanel("Strata",
-              h4("Groups"), tbl_slot("rules_tbl"),
-              h4("Strata and the group that raises them"),
-              span(class = "note",
-                   "Each stratum, the group whose strataCond claims it, and ",
-                   "the groups whose matchedDataCond can donate to it."),
-              tbl_slot("rules_strata_tbl")))))))),
+                   "One river per rule: the strata it raises on the left, the ",
+                   "donor pool it draws from on the right."),
+              uiOutput("man_rule_rivers")))))))),
 
       conditionalPanel("input.sec3 == 'stgraise'",
         div(style = "padding:8px 4px",
@@ -3357,12 +3381,38 @@ server <- function(input, output, session) {
     output[[ns("river_ui")]] <- renderUI(
       plotOutput(ns("river"), height = "620px"))
 
-    output[[ns("river")]] <- renderPlot({
+    # the data BEING allocated a distribution
+    output[[ns("alloc_raise_tbl")]] <- renderDT({
       a <- cascade_assigned()
-      g <- cascade_to_groups(a, alloc_cols())
-      validate(need(length(g), "Nothing resolved yet."))
-      pl <- plot_alloc_river(a, dims_of(), g, group_palette(names(g)))
-      validate(need(!is.null(pl), "Nothing to plot.")); pl })
+      validate(need(!is.null(a) && nrow(a), "Apply settings first."))
+      keep <- intersect(c("catchCategory", dims_of()), names(a))
+      num <- function(v) if (v %in% names(a)) round(a[[v]], 3) else NA
+      lvl <- if ("alloc_level" %in% names(a)) a$alloc_level else NA
+      d <- data.frame(a[, keep, drop = FALSE],
+        weight       = num("weight"),
+        coverage     = if ("coverage" %in% names(a)) round(a$coverage, 1) else NA,
+        allocated_by = lvl,
+        check.names = FALSE, stringsAsFactors = FALSE)
+      d <- d[order(-(d$weight %||% rep(0, nrow(d)))), , drop = FALSE]
+      datatable(d, options = list(scrollX = TRUE, pageLength = 15),
+                rownames = FALSE) })
+
+    # the data USED to allocate (bioMatchedCond donor pools)
+    output[[ns("alloc_donor_tbl")]] <- renderDT({
+      a <- cascade_assigned()
+      validate(need(!is.null(a) && nrow(a), "Apply settings first."))
+      keep <- intersect(c("catchCategory", dims_of()), names(a))
+      dok <- if ("donor_ok" %in% names(a)) a$donor_ok else rep(TRUE, nrow(a))
+      d <- data.frame(a[, keep, drop = FALSE],
+        weight         = if ("weight" %in% names(a)) round(a$weight, 3) else NA,
+        coverage       = if ("coverage" %in% names(a)) round(a$coverage, 1) else NA,
+        n_measurements = if ("n_measurements" %in% names(a)) a$n_measurements else NA,
+        usable_donor   = dok,
+        donor_group    = if ("alloc_level" %in% names(a)) a$alloc_level else NA,
+        check.names = FALSE, stringsAsFactors = FALSE)
+      d <- d[order(-(d$weight %||% rep(0, nrow(d)))), , drop = FALSE]
+      datatable(d, options = list(scrollX = TRUE, pageLength = 15),
+                rownames = FALSE) })
 
     # saving an allocation: both methods land in the same store, so the
     # raising tab can pick either
@@ -3586,59 +3636,39 @@ server <- function(input, output, session) {
     output[[ns("check")]]  <- renderUI(check_ui())
     output[[ns("check2")]] <- renderUI(check_ui())
 
-    output[[ns("ladder")]] <- renderUI({
-      g <- getrv("groups") %||% list()
-      if (!length(g)) return(div(class = "note", "No groups yet."))
-      d <- tryCatch(manual_progress(man_assigned(), g), error = function(e) NULL)
-      if (is.null(d)) return(div(class = "note", "Nothing to show."))
-      pal <- group_palette(names(g))
-      tagList(lapply(seq_len(nrow(d)), function(i) {
-        r <- d[i, ]
-        miss <- identical(r$group, "STILL MISSING")
-        col <- if (miss) "#7a1f1f" else (pal[[r$group]] %||% "#12324f")
-        div(style = sprintf(
-          "border-left:6px solid %s;background:%s;border:1px solid #e2e2e8;
-           border-radius:7px;padding:7px 10px;font-size:12px;margin-bottom:8px",
-          col, if (miss) "#fff3f3" else "#fbfbfd"),
-          tags$b(if (miss) "Not covered by any group"
-                 else sprintf("%s: %s", r$group,
-                              if (nzchar(r$label)) r$label else r$condition)),
-          tags$br(),
-          sprintf("%s stratum/strata, %s t (%s%% of the catch)",
-                  r$n_strata, fmt_t3(r$weight),
-                  ifelse(is.na(r$pct_weight), "-", r$pct_weight)),
-          if (!miss && !is.na(r$cum_pct_weight))
-            tagList(tags$br(),
-                    tags$span(class = "note",
-                              sprintf("running total: %s%% of the catch",
-                                      r$cum_pct_weight))))
-      })) })
-
-    output[[ns("strata_tbl")]] <- renderDT({
+    # the data BEING allocated a distribution
+    output[[ns("man_raise_tbl")]] <- renderDT({
       g <- getrv("groups") %||% list()
       validate(need(length(g), "No groups yet."))
       a <- man_assigned()
-      keep <- intersect(c(dims_of(), "weight", "weight_measured", "coverage",
-                          "n_measurements", "alloc_group",
-                          "usedToAllocGroups_txt", "n_donates_to"), names(a))
-      d <- a[, keep, drop = FALSE]
-      names(d)[names(d) == "usedToAllocGroups_txt"] <- "donates_to"
-      num <- vapply(d, is.numeric, logical(1))
-      d[num] <- lapply(d[num], function(x) round(x, 3))
+      keep <- intersect(c("catchCategory", dims_of()), names(a))
+      num <- function(v) if (v %in% names(a)) round(a[[v]], 3) else NA
+      d <- data.frame(a[, keep, drop = FALSE],
+        weight       = num("weight"),
+        coverage     = if ("coverage" %in% names(a)) round(a$coverage, 1) else NA,
+        allocated_by = a$alloc_group,
+        check.names = FALSE, stringsAsFactors = FALSE)
+      d <- d[order(-(d$weight %||% rep(0, nrow(d)))), , drop = FALSE]
       dt_group_colours(
         datatable(d, rownames = FALSE,
                   options = list(scrollX = TRUE, pageLength = 15)),
-        "alloc_group", group_palette(names(g))) })
+        "allocated_by", group_palette(names(g))) })
 
-    output[[ns("ov")]] <- renderDT({
+    # the data USED to allocate (bioMatchedCond donor pools)
+    output[[ns("man_donor_tbl")]] <- renderDT({
       g <- getrv("groups") %||% list()
       validate(need(length(g), "No groups yet."))
-      d <- alloc_overview(man_assigned(), g)
-      validate(need(!is.null(d), "Nothing to summarise."))
-      dt_group_colours(
-        datatable(d, rownames = FALSE,
-                  options = list(scrollX = TRUE, dom = "t")),
-        "group", group_palette(names(g))) })
+      a <- man_assigned()
+      keep <- intersect(c("catchCategory", dims_of()), names(a))
+      d <- data.frame(a[, keep, drop = FALSE],
+        weight         = if ("weight" %in% names(a)) round(a$weight, 3) else NA,
+        coverage       = if ("coverage" %in% names(a)) round(a$coverage, 1) else NA,
+        n_measurements = if ("n_measurements" %in% names(a)) a$n_measurements else NA,
+        donates_to     = a$usedToAllocGroups_txt,
+        check.names = FALSE, stringsAsFactors = FALSE)
+      d <- d[order(-(d$weight %||% rep(0, nrow(d)))), , drop = FALSE]
+      datatable(d, rownames = FALSE,
+                options = list(scrollX = TRUE, pageLength = 15)) })
 
     output[[ns("conds")]] <- renderText(
       paste(emit_alloc_conditions(getrv("groups") %||% list()), collapse = "\n"))
@@ -3651,13 +3681,6 @@ server <- function(input, output, session) {
       if (is.null(g) || !length(g))
         return("Apply settings to see the resolved grouping.")
       paste(emit_alloc_conditions(g), collapse = "\n") })
-
-    output[[ns("rules")]] <- renderDT({
-      g <- getrv("groups") %||% list()
-      validate(need(length(g), "No groups yet."))
-      d <- alloc_group_table(man_assigned(), g, dims_of())
-      validate(need(!is.null(d), "Nothing to summarise."))
-      datatable(d, rownames = FALSE, options = list(scrollX = TRUE, dom = "t")) })
 
     # what each rule claims, and what nothing has claimed yet
     output[[ns("progress")]] <- renderDT({
@@ -3714,12 +3737,6 @@ server <- function(input, output, session) {
 
     output[[ns("mriver_ui")]] <- renderUI(
       plotOutput(ns("mriver"), height = "560px"))
-    output[[ns("mriver")]] <- renderPlot({
-      g <- getrv("groups") %||% list()
-      validate(need(length(g), "No groups yet."))
-      pl <- plot_alloc_river(man_assigned(), dims_of(), g,
-                             group_palette(names(g)))
-      validate(need(!is.null(pl), "Nothing to plot.")); pl })
   }
   length_alloc_server("len", "LengthTotal")
   length_alloc_server("age", "Age")
@@ -4385,8 +4402,6 @@ server <- function(input, output, session) {
   }
   slot_ui <- function(id, h) renderUI(plotOutput(id, height = paste0(h, "px")))
 
-  output$auto_river_ui <- renderUI(plotOutput("auto_river", height = "580px"))
-  output$man_river_ui  <- renderUI(plotOutput("man_river",  height = "580px"))
   output$cmp_plot_ui <- renderUI({
     fc <- cmp_col(input$cmp_facet)
     n <- if (!is.null(fc) && length(rv$scenarios))
@@ -4407,7 +4422,7 @@ server <- function(input, output, session) {
   tree_tbl_r <- reactive(decision_tree(
     rec(), hier_cols(), hier_thr(),
     self_thr_val(),
-    input$hier_mode %||% "nested", unname(dmap("ar")[DIMS])))
+    "nested", unname(dmap("ar")[DIMS])))
 
   # Key 1 is always the stratum's own data; keys 2..5 are the widening
   # dimensions the user picks. Each key row carries its own threshold
@@ -4459,7 +4474,7 @@ server <- function(input, output, session) {
   output$hier_chain <- renderUI({
     st <- raising_steps(hier_cols(), hier_thr(),
                         self_thr_val(),
-                        input$hier_mode %||% "nested", unname(dmap("ar")[DIMS]))
+                        "nested", unname(dmap("ar")[DIMS]))
     div(class = "chain", tags$b("Order actually tested:"), tags$br(),
         HTML(paste(c(vapply(st, `[[`, character(1), "label"), "ALL"),
                    collapse = " &rarr; "))) })
@@ -4501,7 +4516,7 @@ server <- function(input, output, session) {
   tree_tbl_r2 <- reactive(decision_tree2(
     rec(), hier_cols(), hier_thr(),
     self_thr_val(),
-    input$hier_mode %||% "nested", unname(dmap("ar")[DIMS])))
+    "nested", unname(dmap("ar")[DIMS])))
 
   output$tree_tbl <- renderDT(datatable(
     tree_tbl_r2(), rownames = FALSE, options = list(dom = "t", scrollX = TRUE)))
@@ -4512,7 +4527,7 @@ server <- function(input, output, session) {
     ids <- c("0", vapply(raising_steps(
       hier_cols(), hier_thr(),
       self_thr_val(),
-      input$hier_mode %||% "nested", unname(dmap("ar")[DIMS])),
+      "nested", unname(dmap("ar")[DIMS])),
       `[[`, character(1), "id"), "fallback")
     rg <- rec_g(); pal <- auto_pal(); dd <- unname(dmap("ar")[DIMS])
     for (i in seq_along(ids)) local({
@@ -4528,8 +4543,12 @@ server <- function(input, output, session) {
   output$auto_conds <- renderText({
     r <- tryCatch(rec(), error = function(e) NULL)
     if (is.null(r)) return("Apply settings to see the conditions.")
+    b <- ar_excl_keys_srv$bars()
     paste(emit_hier_code(r, hier_cols(), hier_thr(),
-                         "fine_to_coarse", unname(dmap("ar")[DIMS])),
+                         "fine_to_coarse", unname(dmap("ar")[DIMS]),
+                         self_threshold = self_thr_val(),
+                         donor_cov_min = b$cov_min, donor_meas_min = b$meas_min,
+                         donor_excluded = b$named),
           collapse = "\n") })
 
   output$tree_check <- renderUI({
@@ -4588,7 +4607,7 @@ server <- function(input, output, session) {
     strata_of = function() strata_p("mg"),
     dims_of   = function() unname(dmap("mg")[DIMS]),
     metrics   = c("coverage", "rate"),
-    dr_of     = function() if (isTRUE(input$dr_on)) rule_dr() else c(NA, NA))
+    dr_of     = function() rule_dr())
 
   ca_excl_keys_srv <- exclusion_server("ca",
     strata_of = function() strata_p("mg"),
@@ -4674,7 +4693,7 @@ server <- function(input, output, session) {
                               dims = unname(dmap("ar")[DIMS]))
     recommend_raising(s, cols, thr,
                       self_threshold = self,
-                      mode = input$hier_mode %||% "nested",
+                      mode = "nested",
                       dims = unname(dmap("ar")[DIMS])) })
 
   auto_groups <- reactive(raising_groups(rec()))
@@ -4685,31 +4704,23 @@ server <- function(input, output, session) {
     g <- auto_groups()
     rec() %>% mutate(group_id = g$group_id[match(raise_condition, g$raise_condition)]) })
 
+  # the data BEING raised - focused columns, TRUE shown as "Catch All by All"
   output$diag_tbl <- renderDT({
-    d <- rec_g() %>%
-      mutate(coverage = round(coverage, 1), discard_rate = round(discard_rate, 3)) %>%
-      select(all_of(unname(dmap("ar")[DIMS])), landings, landings_with_discards,
-             discards, coverage, discard_rate, donor_ok, Status, group_id,
-             raise_level, raise_coverage, raise_n_strata, raise_condition) %>%
-      rename(`recommended raising strata` = raise_condition)
+    d <- strata_raise_table(rec_g(), unname(dmap("ar")[DIMS]))
+    validate(need(!is.null(d), "Apply settings first."))
     dt_group_colours(
       datatable(d, options = list(scrollX = TRUE, pageLength = 15), rownames = FALSE),
       "group_id", auto_pal()) })
 
+  # the data USED to raise - the donor-pool view of the same strata
+  output$diag_donor_tbl <- renderDT({
+    d <- strata_donor_table(rec_g(), unname(dmap("ar")[DIMS]))
+    validate(need(!is.null(d), "Apply settings first."))
+    datatable(d, options = list(scrollX = TRUE, pageLength = 15), rownames = FALSE) })
+
   output$grp_tbl <- renderDT(dt_group_colours(
     datatable(auto_groups(), options = list(scrollX = TRUE), rownames = FALSE),
     "group_id", auto_pal()))
-
-  output$auto_river <- renderPlot({
-    d <- rec_g() %>% filter(raise_level != "no raising needed")
-    validate(need(nrow(d) > 0, "Nothing needs raising."))
-    dd <- unname(dmap("ar")[DIMS])
-    p <- plot_river(d, left_var = NULL, right_var = "group_id",
-                    value_var = "landings", pal = auto_pal(),
-                    left_label = stratum_label(d, dd),
-                    right_label = rule_label(d),
-                    stratum_axis = stratum_axis_label(hier_cols()))
-    validate(need(!is.null(p), "Nothing to plot.")); p })
 
   # --- 7. manual -------------------------------------------
   # relevant variables first, everything else behind a disclosure
@@ -4859,66 +4870,6 @@ server <- function(input, output, session) {
     req(length(rv$rules) >= 1)
     rule_river_data(man_strata(), rv$rules, rv$sets) })
 
-  output$man_ladder <- renderUI({
-    validate(need(length(rv$rules) >= 1, "No groups yet."))
-    tr <- man_decision(); validate(need(!is.null(tr), "Nothing to show."))
-    pal <- man_pal()
-    rows <- lapply(seq_len(nrow(tr)), function(i) {
-      r <- tr[i, ]
-      unass <- identical(r$rule, "(unassigned)")
-      col <- if (unass) "#7a1f1f" else (pal[[r$rule]] %||% "#12324f")
-      fluidRow(style = "margin-bottom:10px",
-        column(4,
-          div(style = sprintf(
-            "border-left:6px solid %s;background:%s;border:1px solid #e2e2e8;
-             border-radius:7px;padding:7px 10px;font-size:12px", col,
-            if (unass) "#fff3f3" else "#fbfbfd"),
-            tags$b(if (unass) "Not covered by any rule"
-                   else sprintf("%s: %s", r$rule, r$label)),
-            tags$br(),
-            # the rule itself, so the card explains the number beside it
-            if (!unass) tagList(
-              tags$span(style = "color:#666", "raises "),
-              tags$span(style = "font-family:monospace;font-size:10.5px;color:#333",
-                        r$raises), tags$br(),
-              tags$span(style = "color:#666", "from "),
-              tags$span(style = "font-family:monospace;font-size:10.5px;color:#333",
-                        r$donors), tags$br())
-            else tagList(
-              tags$span(style = "color:#7a1f1f",
-                "These strata reach catchRaising() in no group at all. Add a ",
-                "catch-all, or widen a rule."), tags$br()),
-            tags$span(style = sprintf("color:%s;font-weight:700", col),
-              sprintf("%s strata | %s t (%s%% of landings)",
-                      r$n_strata, fmt_t3(r$landings), r$pct_landings)),
-            # A rule that claims more than it takes is not a bug: the rules
-            # above it got there first. Saying so on the card is what stops
-            # a catch-all looking like it double-raises.
-            if (!unass && !is.na(r$n_claimed) && r$n_claimed > r$n_strata)
-              tagList(tags$br(), tags$span(style = "color:#9a5000;font-size:11px",
-                sprintf("clause matches %s, but %s were already taken above",
-                        r$n_claimed, r$n_claimed - r$n_strata)))
-            else NULL,
-            tags$br(),
-            tags$span(style = "color:#777;font-size:11px",
-              sprintf("cumulative: %s%% of strata, %s%% of landings resolved",
-                      r$cum_pct_strata, r$cum_pct_landings)),
-            if (!unass && !is.na(r$n_donors)) tagList(tags$br(),
-              tags$span(style = "color:#777;font-size:11px",
-                sprintf("donor pool: %s strata, %s%% coverage, DR %s",
-                        r$n_donors,
-                        if (is.na(r$donor_coverage)) "-" else r$donor_coverage,
-                        if (is.na(r$donor_DR)) "-" else r$donor_DR)))
-            else NULL)),
-        column(8,
-          if (r$n_strata > 0)
-            plotOutput(paste0("man_river_", i),
-                       height = paste0(max(240, 60 + r$n_strata * 26), "px"))
-          else div(class = "note", style = "padding-top:24px",
-                   "nothing left for this rule to raise")))
-    })
-    do.call(tagList, rows) })
-
   observe({
     tr <- man_decision(); req(!is.null(tr))
     d <- man_river_d(); pal <- man_pal(); dd <- unname(dmap("mg")[DIMS])
@@ -4953,29 +4904,49 @@ server <- function(input, output, session) {
   output$man_check  <- renderUI(man_check_ui())
   output$man_check2 <- renderUI(man_check_ui())
 
-  output$rules_tbl <- renderDT({
-    validate(need(length(rv$rules) >= 1, "No groups yet."))
-    dt_group_colours(datatable(rule_group_summary(man_strata(), rv$rules, rv$sets),
-                               options = list(scrollX = TRUE), rownames = FALSE),
-                     "group_id", man_pal()) })
-
   man_assigned <- reactive({
     req(length(rv$rules) >= 1)
     assign_rule_groups(man_strata(), rv$rules, rv$sets) })
 
-  output$rules_strata_tbl <- renderDT({
+  # the data BEING raised: stratum columns, metrics, status, the rule
+  # that raises it. usedToRaise columns dropped - they belong on the
+  # donor tab.
+  output$man_raise_tbl <- renderDT({
     validate(need(length(rv$rules) >= 1, "No groups yet."))
-    d <- man_assigned() %>%
-      mutate(coverage = round(coverage, 1), discard_rate = round(discard_rate, 3)) %>%
-      select(-usedToRaiseGroup) %>% rename(donates_to = usedToRaiseGroups_txt)
+    dd <- unname(dmap("mg")[DIMS])
+    a <- man_assigned()
+    keep <- intersect(dd, names(a))
+    num <- function(v) if (v %in% names(a)) round(a[[v]], 3) else NA
+    d <- data.frame(a[, keep, drop = FALSE],
+      landings     = num("landings"),
+      discards     = num("discards"),
+      discard_rate = if ("discard_rate" %in% names(a)) round(a$discard_rate, 3) else NA,
+      coverage     = if ("coverage" %in% names(a)) round(a$coverage, 1) else NA,
+      Status       = if ("Status" %in% names(a)) as.character(a$Status) else NA,
+      raised_by    = a$toBeRaisedGroup,
+      check.names = FALSE, stringsAsFactors = FALSE)
+    if (all(is.na(d$discards)) || all(d$discards == 0, na.rm = TRUE)) d$discards <- NULL
+    d <- d[order(-(d$landings %||% rep(0, nrow(d)))), , drop = FALSE]
     dt_group_colours(datatable(d, options = list(scrollX = TRUE, pageLength = 15),
-                               rownames = FALSE), "toBeRaisedGroup", man_pal()) })
+                               rownames = FALSE), "raised_by", man_pal()) })
 
-  output$man_ov <- renderDT({
+  # the data USED to raise: which groups each stratum donates to
+  output$man_donor_tbl <- renderDT({
     validate(need(length(rv$rules) >= 1, "No groups yet."))
-    dt_group_colours(datatable(manual_overview(man_assigned(), rv$rules),
-                               options = list(scrollX = TRUE, dom = "t"),
-                               rownames = FALSE), "group", man_pal()) })
+    dd <- unname(dmap("mg")[DIMS])
+    a <- man_assigned()
+    keep <- intersect(dd, names(a))
+    d <- data.frame(a[, keep, drop = FALSE],
+      landings     = if ("landings" %in% names(a)) round(a$landings, 3) else NA,
+      discards     = if ("discards" %in% names(a)) round(a$discards, 3) else NA,
+      discard_rate = if ("discard_rate" %in% names(a)) round(a$discard_rate, 3) else NA,
+      coverage     = if ("coverage" %in% names(a)) round(a$coverage, 1) else NA,
+      donates_to   = a$usedToRaiseGroups_txt,
+      check.names = FALSE, stringsAsFactors = FALSE)
+    if (all(is.na(d$discards)) || all(d$discards == 0, na.rm = TRUE)) d$discards <- NULL
+    d <- d[order(-(d$landings %||% rep(0, nrow(d)))), , drop = FALSE]
+    datatable(d, options = list(scrollX = TRUE, pageLength = 15),
+              rownames = FALSE) })
 
   # One river per rule, the same view the length and age builders have
   # had. The combined river below can hide a rule whose strata are few
@@ -5027,27 +4998,6 @@ server <- function(input, output, session) {
         validate(need(!is.null(pl), "Nothing to plot.")); pl })
     }) })
 
-  output$man_river <- renderPlot({
-    validate(need(length(rv$rules) >= 1, "No groups yet."))
-    a <- man_assigned()
-    dd <- unname(dmap("mg")[DIMS])
-    # map each group id to its rule meaning: the label plus the clause
-    rl <- setNames(vapply(rv$rules, function(r) {
-      cl <- cond_string(r$raise)
-      base <- if (nzchar(r$label %||% "")) r$label else r$id
-      if (identical(cl, "TRUE")) paste0(base, ": all remaining strata  [", r$id, "]")
-      else paste0(cl, "  [", r$id, "]")
-    }, character(1)), vapply(rv$rules, `[[`, character(1), "id"))
-    right <- unname(rl[as.character(a$toBeRaisedGroup)])
-    right[is.na(right)] <- as.character(a$toBeRaisedGroup)[is.na(right)]
-    p <- plot_river(a, left_var = NULL, right_var = "toBeRaisedGroup",
-                    value_var = "landings", pal = man_pal(),
-                    title = "Strata and the group that raises them",
-                    left_label = stratum_label(a, dd),
-                    right_label = right,
-                    stratum_axis = stratum_axis_label(dd))
-    validate(need(!is.null(p), "Nothing to plot.")); p })
-
   # ---- group allocations (saved setups) ----
   save_sc <- function(name, sc) {
     dup <- name %in% names(rv$scenarios)
@@ -5064,7 +5014,7 @@ server <- function(input, output, session) {
       input$auto_name, unname(dmap("ar")[DIMS]), hier_cols(), hier_thr(),
       input$ar_fleet, input$ar_area,
       self_threshold = self_thr_val(),
-      mode = input$hier_mode %||% "nested",
+      mode = "nested",
       dr_min = ar_dr()[1], dr_max = ar_dr()[2])) })
 
   observeEvent(input$save_manual, {
@@ -5137,9 +5087,9 @@ server <- function(input, output, session) {
     sliderInput("rule_dr", NULL, 0, top, c(0, top), 0.01) })
 
   rule_dr <- reactive({
-    if (!isTRUE(input$dr_on)) return(c(NA, NA))
     v <- input$rule_dr; if (is.null(v)) return(c(NA, NA))
     top <- dr_top("mg")
+    # a handle still at its extreme means "no bound on that side"
     c(if (v[1] > 0) v[1] else NA, if (v[2] < top) v[2] else NA) })
 
   # the comparison chips speak in DIM labels (Fleet, Area, ...); the runs
@@ -5215,8 +5165,13 @@ server <- function(input, output, session) {
         emit_filter_code(input$stock, input$year, unname(dmap("ar")[DIMS]),
                          ar_dr()[1], ar_dr()[2]))
     if ("auto" %in% input$code_parts)
-      out <- c(out, emit_hier_code(rec(), hier_cols(), hier_thr(),
-                                   "fine_to_coarse", unname(dmap("ar")[DIMS])))
+      out <- c(out, {
+        b <- ar_excl_keys_srv$bars()
+        emit_hier_code(rec(), hier_cols(), hier_thr(),
+                       "fine_to_coarse", unname(dmap("ar")[DIMS]),
+                       self_threshold = self_thr_val(),
+                       donor_cov_min = b$cov_min, donor_meas_min = b$meas_min,
+                       donor_excluded = b$named) })
     if ("manual" %in% input$code_parts && length(rv$rules) >= 1)
       out <- c(out, emit_rules_code(rv$rules, rv$sets,
                                     unname(dmap("mg")[DIMS])))
@@ -5787,7 +5742,7 @@ server <- function(input, output, session) {
         live_auto <- tryCatch(
           code_auto_rule("unsaved_auto", unname(dmap("ar")[DIMS]),
                          hier_cols(), hier_thr(), self_thr_val(),
-                         input$hier_mode %||% "nested",
+                         "nested",
                          ar_dr()[1], ar_dr()[2]),
           error = function(e) NULL)
         if (!is.null(live_auto)) {

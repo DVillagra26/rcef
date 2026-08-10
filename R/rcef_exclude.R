@@ -302,9 +302,9 @@ exclusion_label <- function(cov_min = NA, meas_min = NA, dr_min = NA,
 #' @return `data` with the metric columns added, plus `stratum_id`.
 #' @seealso [exclusion_expr()], [build_strata()]
 #' @export
-add_stratum_metrics <- function(data, dims, strata = NULL) {
+add_stratum_metrics <- function(data, dims, strata = NULL, dist = NULL) {
   if (is.null(data) || !nrow(data)) return(data)
-  if (is.null(strata)) strata <- build_strata(data, dims)
+  if (is.null(strata)) strata <- build_strata(data, dims, dist = dist)
   key <- stratum_keys(data, dims)
   m <- stratum_metrics(strata, dims)
   if (is.null(m)) return(data)
@@ -313,7 +313,11 @@ add_stratum_metrics <- function(data, dims, strata = NULL) {
   data$stratum_weight <- m$weight[i]
   data$coverage       <- m$coverage[i]
   data$discard_rate   <- m$discard_rate[i]
-  if (any(!is.na(m$n_measurements))) data$n_measurements <- m$n_measurements[i]
+  # Always present, 0 where no distributions were supplied. A condition
+  # naming n_measurements must find the column even when it is all zero,
+  # or it errors the same way a missing coverage column does.
+  data$n_measurements <- if ("n_measurements" %in% names(m))
+    ifelse(is.na(m$n_measurements[i]), 0, m$n_measurements[i]) else 0
   data
 }
 

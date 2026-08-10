@@ -70,6 +70,17 @@ fmt_vals <- function(v) {
   else paste0('c(', paste0('"', v, '"', collapse = ", "), ')')
 }
 
+# Numeric vector as R source: c(50, 40, 30). Unlike fmt_vals it does NOT
+# deduplicate - four keys with the same threshold must print four values,
+# or the emitted call no longer matches the number of keys.
+#' @noRd
+#' @export
+fmt_num <- function(v) {
+  v <- as.numeric(v)
+  if (length(v) == 1) as.character(v)
+  else paste0("c(", paste(v, collapse = ", "), ")")
+}
+
 #' Render one clause (a dimension restricted to a value set) as text
 #' @param cl A clause: list(var, values or set, negate).
 #' @return A string such as `metier4 %in% c("OTB", "TBB")`.
@@ -388,12 +399,18 @@ decision_tree <- function(rec, hierarchy, thresholds, self_threshold,
                           mode = "nested", dims = NULL) {
   steps <- raising_steps(hierarchy, thresholds, self_threshold, mode, dims)
   ids  <- c("0", vapply(steps, `[[`, character(1), "id"), "fallback")
-  labs <- c("no raising needed", vapply(steps, `[[`, character(1), "label"), "ALL")
-  thr  <- c(NA, vapply(steps, `[[`, numeric(1), "threshold"), NA)
+  labs <- c("no raising needed",
+            vapply(steps, `[[`, character(1), "label"), "Catch All by All")
+  # The two ends carry explicit thresholds so the meaning is visible: no
+  # raising happens only when 100% of landings already have sampled
+  # discards, and the fallback pool accepts anything (threshold 0). The
+  # user reads them as the boundary conditions of the cascade, not blanks.
+  thr  <- c(100, vapply(steps, `[[`, numeric(1), "threshold"), 0)
   note <- c("already 100% sampled, nothing to raise",
             vapply(steps, `[[`, character(1), "note"),
             paste0("every stratum in the data, pooled across all ",
-                   paste(dims %||% hierarchy, collapse = ", ")))
+                   paste(dims %||% hierarchy, collapse = ", "),
+                   " - the last resort, so nothing is left unraised"))
   cnt <- vapply(ids, function(i) sum(rec$raise_step == i, na.rm = TRUE), integer(1))
   lan <- vapply(ids, function(i)
     sum(rec$landings[rec$raise_step == i], na.rm = TRUE), numeric(1))
@@ -1151,4 +1168,87 @@ rules_unassigned <- function(strata, rules, sets = list(), dims = NULL,
   out[num] <- lapply(out[num], function(x) round(x, 3))
   rownames(out) <- NULL
   out
+}
+
+# =====================================================================
+#  Two focused views of the raising, one per tab.
+#
+#  The old single "diagnosis" table had eighteen columns and answered two
+#  questions at once - which strata are being raised, and which data
+#  raises them - so it did neither cleanly. These split them.
+# =====================================================================
+
+#' Strata to raise: what is being raised and by which rule
+#'
+#' The data BEING raised. One row per stratum, the columns that define it,
+#' then its landings / discards / rates / coverage, its sampling status,
+#' the group that claims it, and which recommended-raising level applies.
+#' A fallback (`TRUE`) level is shown as "Catch All by All", never as the
+#' bare word TRUE, so the table reads without decoding.
+#'
+#' @param rec Output of [recommend_raising()].
+#' @param dims The stratum key columns to show.
+#' @return A data frame, one row per stratum, sorted heaviest first.
+#' @seealso [strata_donor_table()], [recommend_raising()]
+#' @export
+strata_raise_table <- function(rec, dims) {
+  if (is.null(rec) || !nrow(rec)) return(NULL)
+  keep <- intersect(dims, names(rec))
+  num <- function(v) if (v %in% names(rec)) round(rec[[v]], 3) else NA_real_
+  lvl <- rec$raise_level
+  # a TRUE / fallback condition reads as the catch-all pool, not "TRUE"
+  lvl[rec$raise_condition %in% "TRUE" | lvl %in% c("ALL", "Catch All by All")] <-
+    "Catch All by All"
+  out <- data.frame(rec[, keep, drop = FALSE],
+    landings      = num("landings"),
+    discards      = num("discards"),
+    discard_rate  = if ("discard_rate" %in% names(rec))
+                      round(rec$discard_rate, 3) else NA_real_,
+    coverage      = if ("coverage" %in% names(rec))
+                      round(rec$coverage, 1) else NA_real_,
+    Status        = if ("Status" %in% names(rec)) as.character(rec$Status) else NA,
+    group_id      = if ("group_id" %in% names(rec)) rec$group_id else NA,
+    raised_by     = lvl,
+    check.names = FALSE, stringsAsFactors = FALSE)
+  # discards column only when there is any discard data at all
+  if (all(is.na(out$discards)) || all(out$discards == 0, na.rm = TRUE))
+    out$discards <- NULL
+  o <- order(-(out$landings %||% rep(0, nrow(out))))
+  out[o, , drop = FALSE]
+}
+
+#' Data used to raise: how strata are grouped as donors
+#'
+#' The matchedDataCond side. Same stratum columns and metrics, but the
+#' focus is how strata are grouped to SUPPLY the raising, not whether they
+#' were themselves raised. One row per donor stratum with the group whose
+#' matchedDataCond can draw on it.
+#'
+#' @param rec Output of [recommend_raising()].
+#' @param dims The stratum key columns to show.
+#' @return A data frame, one row per stratum, sorted heaviest first.
+#' @seealso [strata_raise_table()]
+#' @export
+strata_donor_table <- function(rec, dims) {
+  if (is.null(rec) || !nrow(rec)) return(NULL)
+  keep <- intersect(dims, names(rec))
+  dok <- if ("donor_ok" %in% names(rec)) rec$donor_ok else rep(TRUE, nrow(rec))
+  lvl <- rec$raise_level
+  lvl[rec$raise_condition %in% "TRUE" | lvl %in% c("ALL", "Catch All by All")] <-
+    "Catch All by All"
+  out <- data.frame(rec[, keep, drop = FALSE],
+    landings       = if ("landings" %in% names(rec)) round(rec$landings, 3) else NA,
+    discards       = if ("discards" %in% names(rec)) round(rec$discards, 3) else NA,
+    discard_rate   = if ("discard_rate" %in% names(rec))
+                       round(rec$discard_rate, 3) else NA,
+    coverage       = if ("coverage" %in% names(rec)) round(rec$coverage, 1) else NA,
+    n_measurements = if ("n_measurements" %in% names(rec))
+                       rec$n_measurements else NA,
+    usable_donor   = dok,
+    donor_group    = lvl,
+    check.names = FALSE, stringsAsFactors = FALSE)
+  if (all(is.na(out$discards)) || all(out$discards == 0, na.rm = TRUE))
+    out$discards <- NULL
+  o <- order(-(out$landings %||% rep(0, nrow(out))))
+  out[o, , drop = FALSE]
 }

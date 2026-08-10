@@ -220,7 +220,9 @@ emit_sets_code <- function(sets) {
 #' @return A character vector of R code.
 #' @seealso [recommend_raising()], [emit_rules_code()]
 #' @export
-emit_hier_code <- function(rec, hierarchy, thresholds, direction, dims) {
+emit_hier_code <- function(rec, hierarchy, thresholds, direction, dims,
+                           self_threshold = NA, donor_cov_min = NA,
+                           donor_meas_min = NA, donor_excluded = character(0)) {
   grp <- raising_groups(rec)
   # map each group back to the strata it covers
   sid <- split(rec$stratum_id, match(rec$raise_condition, grp$raise_condition))
@@ -241,15 +243,54 @@ emit_hier_code <- function(rec, hierarchy, thresholds, direction, dims) {
     else wrap_lines(cn, width = 68)
   }, character(1))
 
+  # The RECIPE the app ran, not just the groups it produced. For the
+  # automated method the hierarchy, the per-level thresholds (own stratum
+  # included) and any donor exclusion ARE the decision; recommend_raising()
+  # turns them into strataCond / matchedDataCond. Showing the call means a
+  # reviewer can re-run it, change one threshold and see the effect -
+  # which a frozen list of resolved groups does not allow.
+  excl_arg <- if (length(donor_excluded))
+    sprintf(",\n                donor_excluded = %s", fmt_vals(donor_excluded)) else ""
+  cov_arg  <- if (!is.na(donor_cov_min))
+    sprintf(",\n                donor_cov_min = %s", donor_cov_min) else ""
+  meas_arg <- if (!is.na(donor_meas_min))
+    sprintf(",\n                donor_meas_min = %s", donor_meas_min) else ""
+  self_arg <- if (!is.na(self_threshold))
+    sprintf("%s", self_threshold) else "NA"
+
   c("## ===========================================================",
     "## Approach A - hierarchical recommendation",
+    "##",
+    "## The recipe is the decision: the hierarchy, the threshold each",
+    "## pool must clear (own-stratum threshold first, then one per key),",
+    "## and any donor excluded by coverage, measurements or discard rate.",
+    "## recommend_raising() turns this into the two condition lists below.",
     sprintf("## Strata defined by : %s", paste(dims, collapse = ", ")),
     sprintf("## Hierarchy         : %s", paste(hierarchy, collapse = " > ")),
-    sprintf("## Thresholds (%%)    : %s", paste(thresholds, collapse = ", ")),
-    sprintf("## Search            : %s", direction),
-    "## stratum_id = the stratum key columns pasted with ' | '",
+    sprintf("## Own-stratum bar   : %s%%", self_arg),
+    sprintf("## Pool thresholds   : %s%%", paste(thresholds, collapse = ", ")),
+    if (!is.na(donor_cov_min))
+      sprintf("## Donor coverage min: %s%%", donor_cov_min),
+    if (!is.na(donor_meas_min))
+      sprintf("## Donor measurements: %s", donor_meas_min),
+    if (length(donor_excluded))
+      sprintf("## Donors excluded   : %d stratum/strata by hand",
+              length(donor_excluded)),
     "## ===========================================================",
     "",
+    "## Build the strata table, classify it, and recommend the raising:",
+    sprintf("strata <- classify_strata(build_strata(catch_data, %s), threshold = %s)",
+            fmt_vals(dims), self_arg),
+    "rec <- recommend_raising(",
+    sprintf("  strata, hierarchy = %s,", fmt_vals(hierarchy)),
+    sprintf("  thresholds = %s,", fmt_num(thresholds)),
+    sprintf("  self_threshold = %s%s%s%s,", self_arg, cov_arg, meas_arg, excl_arg),
+    sprintf("  dims = %s)", fmt_vals(dims)),
+    "",
+    "## recommend_raising() resolves the recipe into these two lists:",
+    "conds <- conds_from_auto(rec)   # $strataCond and $matchedDataCond",
+    "",
+    "## For reference, the groups it resolved to:",
     "## Strata to be raised, by group:",
     "strataCond <- list(", mk(strata_txt), ")",
     "",

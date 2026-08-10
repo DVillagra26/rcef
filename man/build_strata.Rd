@@ -4,7 +4,7 @@
 \alias{build_strata}
 \title{Build the stratum table from CEF catch data}
 \usage{
-build_strata(catch_data, dims)
+build_strata(catch_data, dims, dist = NULL)
 }
 \arguments{
 \item{catch_data}{A long CEF catch table. Must contain `catchCategory`,

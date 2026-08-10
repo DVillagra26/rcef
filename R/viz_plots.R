@@ -1159,8 +1159,15 @@ plot_river_level <- function(rec_g, step_id, dims, pal,
                              value_var = "landings") {
   d <- rec_g[rec_g$raise_step == step_id, , drop = FALSE]
   if (!nrow(d) || sum(d[[value_var]], na.rm = TRUE) <= 0) return(NULL)
+  # a title that says what the reader is looking at: the strata resolved
+  # at this step on the left, the donor pool they were raised from on the
+  # right, ribbon width = landings
+  lvl <- unique(d$raise_level)
+  ttl <- if (length(lvl) == 1)
+    sprintf("Step: %s -- strata raised here, and the data raising them", lvl)
+  else "Strata raised at this step, and the data raising them"
   plot_river(d, left_var = NULL, right_var = "group_id",
-             value_var = value_var, pal = pal, title = NULL,
+             value_var = value_var, pal = pal, title = ttl,
              left_label = stratum_label(d, dims),
              right_label = rule_label(d),
              stratum_axis = stratum_axis_label(dims))

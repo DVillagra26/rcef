@@ -4,7 +4,17 @@
 \alias{emit_hier_code}
 \title{Emit the automatic grouping as a reusable rule}
 \usage{
-emit_hier_code(rec, hierarchy, thresholds, direction, dims)
+emit_hier_code(
+  rec,
+  hierarchy,
+  thresholds,
+  direction,
+  dims,
+  self_threshold = NA,
+  donor_cov_min = NA,
+  donor_meas_min = NA,
+  donor_excluded = character(0)
+)
 }
 \arguments{
 \item{rec}{Output of [recommend_raising()].}
