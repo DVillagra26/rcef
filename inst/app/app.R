@@ -5567,7 +5567,7 @@ server <- function(input, output, session) {
 
   output$nr_tbl <- renderDT({
     validate(need(!is.null(rv$native), "Run the raising to see the result."))
-    datatable(head(rv$native, 500), options = list(scrollX = TRUE, pageLength = 10),
+    datatable(rv$native, options = list(scrollX = TRUE, pageLength = 10),
               rownames = FALSE) })
 
   output$nr_grp <- renderDT({
@@ -5857,7 +5857,7 @@ server <- function(input, output, session) {
       output[[ns("cat_prev")]] <- renderDT({
         t <- cef_tables(sc)$catches
         validate(need(!is.null(t) && nrow(t), "No catches table yet."))
-        datatable(head(t, 200), rownames = FALSE,
+        datatable(t, rownames = FALSE,
                   options = list(scrollX = TRUE, pageLength = 8)) })
 
       output[[ns("dist_sum")]] <- renderDT({
@@ -5881,7 +5881,7 @@ server <- function(input, output, session) {
       output[[ns("dist_prev")]] <- renderDT({
         t <- cef_tables(sc)$distributions
         validate(need(!is.null(t) && nrow(t), "No distributions table loaded."))
-        datatable(head(t, 200), rownames = FALSE,
+        datatable(t, rownames = FALSE,
                   options = list(scrollX = TRUE, pageLength = 8)) })
 
       output[[ns("eff_sum")]] <- renderDT({
@@ -5891,7 +5891,7 @@ server <- function(input, output, session) {
       output[[ns("eff_prev")]] <- renderDT({
         t <- cef_tables(sc)$effort
         validate(need(!is.null(t) && nrow(t), "No effort table loaded."))
-        datatable(head(t, 200), rownames = FALSE,
+        datatable(t, rownames = FALSE,
                   options = list(scrollX = TRUE, pageLength = 8)) })
     })
   })
