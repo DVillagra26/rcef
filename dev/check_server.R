@@ -211,5 +211,45 @@ if (!length(fx)) {
       if (is.character(rend)) paste(rend, collapse = "; ") else rend)
 }
 
+## ---------------------------------------------------------------
+##  Changing the aggregation level must not crash recommend_raising().
+##
+##  The strata were built from the LIVE dmap while the hierarchy came from
+##  the FROZEN applied signature, so a level change moved the strata
+##  columns instantly while the hierarchy stayed frozen - and
+##  recommend_raising() aborted with "hierarchy %in% names(strata) is not
+##  TRUE". Both must come from the same (applied) dims.
+## ---------------------------------------------------------------
+if (length(fx)) {
+  box <- new.env(parent = emptyenv())
+  crash <- tryCatch({
+    shiny::testServer(d, {
+      rv$cef_catches <- utils::read.csv(fx[1], stringsAsFactors = FALSE)
+      session$flushReact()
+      session$setInputs(hier_2 = "Country", hier_3 = "Season", threshold = 50,
+                        ar_fleet = "metier4", ar_area = "ICESDivision")
+      session$flushReact()
+      session$setInputs(ar_apply = 1); session$flushReact()
+      box$n1 <- tryCatch(nrow(rec()), error = function(e) NA)
+      session$setInputs(ar_fleet = "metier6", ar_area = "ICESSubArea")
+      session$flushReact()
+      box$before <- tryCatch(nrow(rec()), error = function(e) conditionMessage(e))
+      session$setInputs(ar_apply = 2); session$flushReact()
+      box$after <- tryCatch(nrow(rec()), error = function(e) conditionMessage(e))
+    })
+    list(n1 = box$n1, before = box$before, after = box$after)
+  }, error = function(e) conditionMessage(e))
+  if (is.list(crash)) {
+    say(is.numeric(crash$before),
+        "a level change before Apply does not crash recommend_raising",
+        crash$before)
+    say(is.numeric(crash$after),
+        "and Apply at the new level recomputes cleanly",
+        crash$after)
+  } else {
+    say(FALSE, "level-change round trip runs without error", crash)
+  }
+}
+
 cat(sprintf("\nDONE  %d failure(s)\n", fail))
 if (fail) quit(status = 1L)

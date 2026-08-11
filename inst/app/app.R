@@ -518,23 +518,24 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
           uiOutput(ns("keys")),
 
           tags$hr(),
-          h4("Donor pool", style = "font-size:13px"),
+          h4("Exclude donors", style = "font-size:13px"),
           span(class = "note",
                "A separate question from the thresholds above. Those decide ",
                "WHICH STRATA a rung will resolve; these decide WHICH STRATA ",
                "MAY LEND their distribution. A stratum failing these bars is ",
                "still allocated - it is just not used as a donor, which is ",
                "the whole point of it needing to borrow."),
-          fluidRow(
-            column(6, numericInput(ns("dcov"), "donor % coverage above",
-                                   NA, 0, 100, 5, width = "100%")),
-            column(6, numericInput(ns("dmeas"), "donor measurements above",
-                                   NA, 0, 100000, 10, width = "100%"))),
+          tags$b("% Sampling coverage", style = "font-size:12px"),
+          sliderInput(ns("dcov"), "donor % coverage above", 0, 100,
+                      c(0, 100), 5, width = "100%"),
+          tags$b("Measurements", style = "font-size:12px"),
+          numericInput(ns("dmeas"), "donor measurements above",
+                       NA, 0, 100000, 10, width = "100%"),
           span(class = "note",
-               "Blank switches a bar off. These apply to every rung, ",
-               "including the last-resort pool: 'use everything except the ",
-               "strata with under 50% coverage and under 100 measurements' ",
-               "is 50 and 100 here."),
+               "Coverage floor 0 switches that bar off. These apply to ",
+               "every rung, including the last-resort pool: 'use everything ",
+               "except the strata with under 50% coverage and under 100 ",
+               "measurements' is 50 and 100 here."),
 
           tags$hr(),
           # Nothing below recomputes until this is pressed. Five keys,
@@ -548,7 +549,8 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
           uiOutput(ns("chain")),
           tags$hr(),
           textInput(ns("name"), "Save as", "alloc_1"),
-          actionButton(ns("save"), "Save allocation", class = "btn-success")),
+          actionButton(ns("save"), "Save allocation", class = "btn-success"),
+          level_box(paste0(p, "_lv"))),
         mainPanel(width = 9,
           uiOutput(ns("status")),
           tabsetPanel(id = ns("hier_out"), type = "tabs",
@@ -700,7 +702,8 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
           h4("8. Save allocation"),
           textInput(ns("mname"), "Save this set as", "manual_1"),
           actionButton(ns("savemanual"), "Save allocation",
-                       class = "btn-success")),
+                       class = "btn-success"),
+          level_box(paste0(p, "_lv"))),
         mainPanel(width = 8,
           uiOutput(ns("bmsnote")),
           tabsetPanel(id = ns("man_out"), type = "tabs",
@@ -1094,15 +1097,20 @@ exclude_box <- function(p, metrics = c("coverage", "measurements", "rate"),
                         cov_default = NA, meas_default = NA,
                         title = "Exclude donors", note = NULL) {
   n <- function(x) paste0(p, "_x", x)
-  cols <- list()
-  if ("coverage" %in% metrics)
-    cols <- c(cols, list(column(6,
-      numericInput(n("cov"), "% coverage below", cov_default, 0, 100, 5,
-                   width = "100%"))))
-  if ("measurements" %in% metrics)
-    cols <- c(cols, list(column(6,
-      numericInput(n("meas"), "measurements below", meas_default, 0, 100000,
-                   10, width = "100%"))))
+  covdef <- if (is.na(cov_default)) 0 else cov_default
+  cov_ui <- if ("coverage" %in% metrics)
+    # min-only: the handle is the coverage floor, blue runs up to 100. A
+    # stratum below the handle is dropped from the donor pool.
+    tagList(tags$b("% Sampling coverage", style = "font-size:12px"),
+            sliderInput(n("cov"), "% coverage below", 0, 100,
+                        c(covdef, 100), 5, width = "100%"))
+  meas_ui <- if ("measurements" %in% metrics)
+    # measurements stay a number box - there is no 0-100 ceiling to pin a
+    # slider to, and a slider to 100000 by 10 is undraggable
+    tagList(tags$b("Measurements", style = "font-size:12px"),
+            numericInput(n("meas"), "measurements below",
+                         if (is.na(meas_default)) NA else meas_default,
+                         0, 100000, 10, width = "100%"))
   ord <- c("Weight" = "weight",
            if ("coverage" %in% metrics) c("Coverage" = "coverage"),
            if ("rate" %in% metrics) c("Discard rate" = "rate"),
@@ -1114,7 +1122,7 @@ exclude_box <- function(p, metrics = c("coverage", "measurements", "rate"),
          "Blank switches a test off. A stratum kept out of a donor pool ",
          "is still raised or allocated itself - being too thin to lend is ",
          "exactly the reason to borrow."),
-    if (length(cols)) do.call(fluidRow, cols),
+    cov_ui, meas_ui,
     span(class = "note",
          "Or drop named strata out by expert judgement. The list carries ",
          "the numbers the decision is made on."),
@@ -1278,13 +1286,13 @@ ui <- navbarPage(
 .ccpane-lan{background:#eef6ee;border:1px solid #cfe3cf}
 .ccpane-dis{background:#fdf1e7;border:1px solid #f0d3b6}
 .ccpane-title{font-size:11px;font-weight:600;letter-spacing:.3px}
-.lodbox{position:fixed;bottom:14px;right:14px;z-index:1030;width:250px;
+.lodbox{position:static;width:auto;margin-top:10px;
             background:#fff6e5;border:2px solid #F28E2B;border-radius:9px;
-            padding:9px 11px;box-shadow:0 3px 12px rgba(0,0,0,.22)}
+            padding:9px 11px}
     .lodbox .form-group{margin-bottom:5px}
     .lodtitle{color:#9a5000;font-weight:700;font-size:12px;
               text-transform:uppercase;letter-spacing:.4px}
-    .container-fluid{padding-bottom:190px}
+    .container-fluid{padding-bottom:20px}
     /* --- top bar: keep it to its natural height (no tall blue gap) --- */
     .navbar{margin-bottom:0!important;position:sticky;top:0;z-index:1040;
             min-height:46px;box-shadow:0 1px 4px rgba(0,0,0,.12)}
@@ -1657,61 +1665,7 @@ ui <- navbarPage(
         conditionalPanel("input.db_step == 'stepres'", cef_result_ui("db"))))),
 
   # =========================================================
-  tabPanel("2. Data setup",
-    div(style = "padding:8px 4px",
-      sidebarLayout(
-        sidebarPanel(width = 4,
-          h4("Column roles"),
-          span(class = "note",
-               "Which column plays each role, set ONCE here for the whole ",
-               "workbench instead of per tab. Everything downstream - keys, ",
-               "filters, plots - reads these."),
-          uiOutput("role_fleet_ui"),
-          uiOutput("role_country_ui"),
-          uiOutput("role_area_ui"),
-          uiOutput("role_season_ui"),
-          tags$hr(),
-          h4("Custom variables"),
-          span(class = "note",
-               "Build a NEW column from rules, the way the ICES scripts add ",
-               "a TR1 fleet by hand. Each rule is a condition and the value ",
-               "to assign where it holds; rules are tried top to bottom, ",
-               "first match wins. Once built the column is usable anywhere - ",
-               "as a key, a filter or a plot axis."),
-          textInput("cv_name", "New column name", placeholder = "POPO"),
-          textInput("cv_otherwise", "Value when no rule matches",
-                    value = "other"),
-          tags$b("Rules"),
-          uiOutput("cv_rules_ui"),
-          div(style = "margin:6px 0",
-            actionButton("cv_add_rule", "+ rule", class = "btn-xs"),
-            actionButton("cv_save", "Save variable",
-                         class = "btn-sm btn-success")),
-          tags$hr(),
-          uiOutput("cv_list_ui")),
-        mainPanel(width = 8,
-          tabsetPanel(type = "tabs",
-            tabPanel("Preview",
-              h4("The rule being built"),
-              span(class = "note",
-                   "How many rows each rule would claim, on the loaded data, ",
-                   "before you save it."),
-              uiOutput("cv_preview"),
-              tags$hr(),
-              h4("Data with custom columns"),
-              span(class = "note",
-                   "A sample of the catch table after the saved custom ",
-                   "variables are applied."),
-              tbl_slot("cv_data_preview")),
-            tabPanel("Code",
-              h4("The columns these rules add"),
-              span(class = "note",
-                   "The dplyr that reproduces every saved custom variable, ",
-                   "so a script and the workbench build the same columns."),
-              verbatimTextOutput("cv_code"))))))),
-
-  # =========================================================
-  tabPanel("3. Discards",
+  tabPanel("2. Discards",
     div(style = "padding:8px 4px",
       pick_bar("sec3", list(stgexpl = "Data exploration",
                             stggrp = "Allocation groups",
@@ -1737,22 +1691,9 @@ ui <- navbarPage(
               span(class = "note",
                    "The donor pool is widened one key at a time. Each step ",
                    "keeps the keys above it and releases the one below, so a ",
-                   "pool is always a relaxation of the one before it."),
-              div(class = "chain", style = "font-size:11.5px;line-height:1.45",
-                tags$b("How this works"), tags$br(),
-                "You list keys from broadest to narrowest. The search then runs the ",
-                "other way round, from the narrowest donor pool to the widest:",
-                "A stratum starts as narrowly as possible and the donor pool is ",
-                "widened one step at a time until it holds enough sampling. The ",
-                "first pool that clears its threshold wins, so every stratum ends ",
-                "up with the narrowest pool that is well enough sampled.", tags$br(),
-                tags$b("Widen one key at a time"), " with keys Fleet, Country, ",
-                "Area, Season: first the stratum on its own; then same gear, ",
-                "country and area pooled across all seasons; then same gear and ",
-                "country pooled across all areas and seasons; then same gear ",
-                "pooled across all countries, areas and seasons; and finally ALL, ",
-                "which pools every stratum regardless of gear.", tags$br(),
-),
+                   "pool is always a relaxation of the one before it. A ",
+                   "stratum takes the narrowest pool that clears its ",
+                   "threshold."),
               tags$hr(),
               h4("2. Select keys to group"),
               span(class = "note",
@@ -1765,9 +1706,13 @@ ui <- navbarPage(
                 "a stratum has to look further for a well-sampled donor; set it ",
                 "low and it settles for a thinly sampled one nearby. The ",
                 "cascade stops at the first pool that clears its own threshold."),
-              fluidRow(column(7, numericInput("thr_all", "Set all thresholds to",
-                                              50, 0, 100, 5)),
-                       column(5, br(), actionButton("apply_all", "Apply",
+              # a min-only slider: the blue reaches from the handle up to
+              # 100, the handle is the threshold. Range c(value, 100) with
+              # the right end pinned paints the qualifying side; the reader
+              # takes element [1].
+              fluidRow(column(8, sliderInput("thr_all", "Set all thresholds to",
+                                             0, 100, c(50, 100), 5)),
+                       column(4, br(), actionButton("apply_all", "Apply",
                                                     class = "btn-sm btn-primary"))),
               uiOutput("hier_keys"),
               div(style = "margin:6px 0",
@@ -1776,13 +1721,14 @@ ui <- navbarPage(
                   uiOutput("ar_hier_stale", inline = TRUE)),
               uiOutput("hier_chain"),
               tags$hr(), h4("3. Exclude donors"),
+              tags$b("Discard rates", style = "font-size:12px"),
               span(class = "note",
-                   "Strata whose own discard rate falls outside this range stay in ",
-                   "the diagnosis but never feed a donor pool. Applies to every ",
-                   "step of the cascade."),
+                   "Max only - a stratum is only excluded for too HIGH a ",
+                   "discard rate. Applies to every step of the cascade; the ",
+                   "stratum stays in the diagnosis but never feeds a pool."),
               uiOutput("ar_dr_ui"),
               tags$hr(),
-              exclude_box("ar", metrics = c("coverage", "rate"),
+              exclude_box("ar", metrics = c("coverage"),
                           title = NULL,
                           note = paste("A stratum whose own coverage is low",
                                        "lends a discard rate that rests on",
@@ -1860,16 +1806,13 @@ ui <- navbarPage(
                    "Both of these narrow matchedDataCond only - never the ",
                    "strata being raised. Same controls as the hierarchical ",
                    "tab, so the two read the same way."),
-              # Always visible, no tick to activate: a single discard-rate
-              # window over all areas. Left at its full range it excludes
-              # nothing, so there is nothing to switch on - moving either
-              # handle IS switching it on.
-              tags$b("Exclude on discard rate"),
+              tags$b("Discard rates", style = "font-size:12px"),
               span(class = "note",
-                   "Leave at full range to keep every donor; narrow it to ",
-                   "drop strata whose rate falls outside the window."),
+                   "Max only - the minimum makes no sense, a stratum is only ",
+                   "excluded for having too HIGH a discard rate. Leave at the ",
+                   "top to keep every donor."),
               uiOutput("rule_dr_ui"),
-              exclude_box("mg", metrics = c("coverage", "rate"), title = NULL,
+              exclude_box("mg", metrics = c("coverage"), title = NULL,
                           note = paste("Applies to THIS group's donor pool",
                                        "only. The stratum stays available to",
                                        "later groups and to the catch-all.")),
@@ -2041,7 +1984,7 @@ ui <- navbarPage(
           conditionalPanel("input.raise_mode == 'final'", final_ui()))))),
 
   # =========================================================
-  tabPanel("4. Length",
+  tabPanel("3. Length",
     div(style = "padding:8px 4px",
       pick_bar("sec4", list(stgexpl = "Exploration",
                             stggrp = "Allocation groups",
@@ -2060,7 +2003,7 @@ ui <- navbarPage(
                        len_raise_ui("len", "Length")))),
 
   # =========================================================
-  tabPanel("5. Age",
+  tabPanel("4. Age",
     div(style = "padding:8px 4px",
       pick_bar("sec5", list(stgexpl = "Exploration",
                             stggrp = "Allocation groups",
@@ -2084,7 +2027,7 @@ ui <- navbarPage(
   # raising and the length/age allocation are separate decisions taken at
   # separate times, and in each case the exploration that justifies a
   # grouping is worth keeping apart from the grouping itself.
-  tabPanel("6. R script",
+  tabPanel("5. R script",
     tabsetPanel(id = "sec6",
       tabPanel("Live script (full)", log_ui()),
       tabPanel("data", taf_ui("data")),
@@ -2342,7 +2285,10 @@ server <- function(input, output, session) {
   # biology blocks are built on a biology link, not on build_strata().
   excl_num <- function(p, which) {
     x <- input[[paste0(p, "_x", which)]]
-    if (is.null(x) || !length(x) || all(is.na(x))) NA_real_ else as.numeric(x)[1]
+    if (is.null(x) || !length(x) || all(is.na(x))) return(NA_real_)
+    v <- as.numeric(x)[1]
+    # the slider's floor (0) means "no bar" - the same as a blank box did
+    if (isTRUE(v <= 0)) NA_real_ else v
   }
 
   exclusion_server <- function(p, strata_of, dims_of,
@@ -2536,11 +2482,6 @@ server <- function(input, output, session) {
   rv <- reactiveValues(sets = list(), rules = list(), clause = list(),
                        # per-figure-tab exploration filters, keyed by prefix
                        flt = list(),
-                       # user-built columns, applied in derived(); and the
-                       # rules of the variable currently being edited
-                       custom_vars = list(), cv_rules = list(list(cond = "", value = "")),
-                       # column -> role overrides set on the Data setup tab
-                       role_map = list(),
                        pend_raise = NULL, pend_source = NULL, scenarios = list(),
                        ic = NULL, native = NULL, log = log_new(),
                        dist = NULL, eff = NULL, final = NULL, restore = NULL,
@@ -3232,11 +3173,14 @@ server <- function(input, output, session) {
     # control that did nothing, and two of them per row would not fit.
     cc_pane <- function(rung, side, cov_default, meas_default) {
       lab <- if (side == "lan") "Landings" else "Discards"
+      # coverage as a min-only slider (blue up to 100, the handle is the
+      # threshold), to read the same way as the discard tab. Measurements
+      # stay a number box: there is no 0-100 ceiling to pin a slider to.
       div(class = paste0("ccpane ccpane-", side),
         div(class = "ccpane-title",
             style = if (side == "lan") "color:#3d6b3d" else "color:#9a5000", lab),
-        numericInput(ns(sprintf("t%d_%s", rung, side)), "% coverage",
-                     cov_default, 0, 100, 5, width = "100%"),
+        sliderInput(ns(sprintf("t%d_%s", rung, side)), "% coverage",
+                    0, 100, c(cov_default, 100), 5, width = "100%"),
         numericInput(ns(sprintf("m%d_%s", rung, side)), "min meas.",
                      meas_default, 0, 100000, 10, width = "100%"))
     }
@@ -3254,8 +3198,11 @@ server <- function(input, output, session) {
     set_all <- function(side) {
       cv <- num_in("setall_cov", NA); mm <- num_in("setall_meas", NA)
       for (i in 1:6) {
-        if (!is.na(cv)) updateNumericInput(session, ns(sprintf("t%d_%s", i, side)), value = cv)
-        if (!is.na(mm)) updateNumericInput(session, ns(sprintf("m%d_%s", i, side)), value = mm)
+        if (!is.na(cv))
+          updateSliderInput(session, ns(sprintf("t%d_%s", i, side)),
+                            value = c(cv, 100))
+        if (!is.na(mm))
+          updateNumericInput(session, ns(sprintf("m%d_%s", i, side)), value = mm)
       }
     }
     observeEvent(input[[ns("setall_both")]], { set_all("lan"); set_all("dis") })
@@ -3265,9 +3212,10 @@ server <- function(input, output, session) {
     output[[ns("keys")]] <- renderUI({
       setall <- div(class = "setall-box",
         div(class = "note", tags$b("Set all thresholds to")),
-        fluidRow(
-          column(6, numericInput(ns("setall_cov"), "% coverage", NA, 0, 100, 5, width="100%")),
-          column(6, numericInput(ns("setall_meas"), "min meas.", NA, 0, 100000, 10, width="100%"))),
+        sliderInput(ns("setall_cov"), "% coverage", 0, 100, c(0, 100), 5,
+                    width = "100%"),
+        numericInput(ns("setall_meas"), "min meas.", NA, 0, 100000, 10,
+                     width = "100%"),
         div(style="display:flex;gap:4px",
           actionButton(ns("setall_both"), "Apply to all", class="btn-xs btn-primary"),
           actionButton(ns("setall_lan"),  "To landings",  class="btn-xs"),
@@ -3310,11 +3258,17 @@ server <- function(input, output, session) {
         k1, cc, tags$hr(style = "margin:6px 0"), rows) })
 
     # The live settings, and the ones the panel is currently drawn from.
-    donor_bars <- reactive(list(cov = num_in("dcov", NA),
-                                meas = num_in("dmeas", NA)))
+    donor_bars <- reactive({
+      cv <- num_in("dcov", NA)        # slider floor 0 means "no bar"
+      list(cov = if (isTRUE(cv <= 0)) NA_real_ else cv,
+           meas = num_in("dmeas", NA))
+    })
 
+    # dims_of() in the signature so a level-of-detail change marks the
+    # panel stale: alloc_cols() resolves the same key labels to different
+    # columns at a new level, and the cascade must be re-run to match.
     hier_sig <- reactive(list(alloc_keys(), alloc_thr(), keep_cc(),
-                              alloc_meas(), donor_bars()))
+                              alloc_meas(), donor_bars(), dims_of()))
     hier_applied <- reactiveVal(NULL)
 
     # first pass: draw something rather than an empty panel
@@ -4394,188 +4348,9 @@ server <- function(input, output, session) {
     if (!"domainCatchDis" %in% names(d)) d$domainCatchDis <- NA_character_
     if (!"stock" %in% names(d)) d$stock <- "(unknown)"
     if (!"year"  %in% names(d)) d$year  <- NA
-    d <- derive_fields(d)
-    # user-built columns are indistinguishable from native ones once here,
-    # so every downstream key / filter / plot can use them
-    apply_custom_vars(d, rv$custom_vars)
+    derive_fields(d)
   })
 
-
-  # =========================================================
-  #  DATA SETUP tab: column roles + custom variables
-  # =========================================================
-
-  # every column the loaded data offers, for the role and rule pickers
-  all_cols <- reactive({
-    d <- tryCatch(derived(), error = function(e) NULL)
-    if (is.null(d)) character(0) else sort(names(d))
-  })
-
-  # Role selectors. The default is the canonical column, but the user can
-  # point a role at any column - including a custom one they just built,
-  # which is the whole point of letting them make a "TR1" fleet.
-  role_select <- function(role, default, choices_fun) {
-    renderUI({
-      ch <- choices_fun()
-      sel <- rv$role_map[[role]] %||% default
-      if (!sel %in% ch) sel <- if (default %in% ch) default else ch[1]
-      selectInput(paste0("role_", tolower(role)), role, ch, sel, width = "100%")
-    })
-  }
-  output$role_fleet_ui   <- role_select("Fleet", "metier4",
-    function() unique(c(unname(FLEET_LEVELS), all_cols())))
-  output$role_country_ui <- role_select("Country", "Country",
-    function() unique(c("Country", "vesselFlagCountry", all_cols())))
-  output$role_area_ui    <- role_select("Area", "ICESDivision",
-    function() unique(c(unname(AREA_LEVELS), all_cols())))
-  output$role_season_ui  <- role_select("Season", "Season",
-    function() unique(c("Season", all_cols())))
-
-  for (r in c("fleet", "country", "area", "season")) local({
-    role <- r
-    observeEvent(input[[paste0("role_", role)]], {
-      rv$role_map[[c(fleet="Fleet",country="Country",area="Area",season="Season")[[role]]]] <-
-        input[[paste0("role_", role)]]
-    })
-  })
-
-  # --- the rule editor for the variable being built ---------
-  output$cv_rules_ui <- renderUI({
-    cols <- all_cols()
-    rules <- rv$cv_rules
-    do.call(tagList, lapply(seq_along(rules), function(i) {
-      fluidRow(style = "margin-bottom:4px",
-        column(7, textInput(paste0("cv_cond_", i), if (i == 1) "Condition" else NULL,
-                            value = rules[[i]]$cond,
-                            placeholder = 'mesh > 120 & Country == "BEL"')),
-        column(4, textInput(paste0("cv_val_", i), if (i == 1) "Value" else NULL,
-                            value = rules[[i]]$value, placeholder = "CHACHACHA")),
-        column(1, if (length(rules) > 1)
-          actionButton(paste0("cv_del_", i), "x", class = "btn-xs")))
-    }))
-  })
-
-  # keep rv$cv_rules synced with the inputs as they change
-  observe({
-    n <- length(rv$cv_rules)
-    isolate({
-      for (i in seq_len(n)) {
-        rv$cv_rules[[i]]$cond  <- input[[paste0("cv_cond_", i)]] %||% rv$cv_rules[[i]]$cond
-        rv$cv_rules[[i]]$value <- input[[paste0("cv_val_", i)]]  %||% rv$cv_rules[[i]]$value
-      }
-    })
-  })
-
-  observeEvent(input$cv_add_rule,
-    rv$cv_rules <- c(rv$cv_rules, list(list(cond = "", value = ""))))
-
-  # per-row delete buttons
-  observe({
-    for (i in seq_along(rv$cv_rules)) local({
-      j <- i
-      observeEvent(input[[paste0("cv_del_", j)]], {
-        rv$cv_rules <- rv$cv_rules[-j]
-        if (!length(rv$cv_rules)) rv$cv_rules <- list(list(cond = "", value = ""))
-      }, ignoreInit = TRUE, once = TRUE)
-    })
-  })
-
-  # the spec being edited, read from the live inputs
-  cv_current_spec <- reactive({
-    rules <- lapply(seq_along(rv$cv_rules), function(i) {
-      list(cond = input[[paste0("cv_cond_", i)]] %||% "",
-           value = input[[paste0("cv_val_", i)]] %||% "")
-    })
-    rules <- Filter(function(r) nzchar(r$cond) && nzchar(r$value), rules)
-    list(name = input$cv_name %||% "", otherwise = input$cv_otherwise %||% NA,
-         rules = rules)
-  })
-
-  # how many rows each rule would claim, first-match-wins, on real data
-  output$cv_preview <- renderUI({
-    d <- tryCatch(derived(), error = function(e) NULL)
-    validate(need(!is.null(d), "Load data first."))
-    sp <- cv_current_spec()
-    validate(need(length(sp$rules) >= 1, "Add at least one rule with a condition and a value."))
-    n <- nrow(d); claimed <- rep(FALSE, n)
-    rows <- lapply(seq_along(sp$rules), function(i) {
-      r <- sp$rules[[i]]
-      hit <- tryCatch(eval(parse(text = r$cond), envir = d, enclos = baseenv()),
-                      error = function(e) structure(rep(FALSE, n), err = conditionMessage(e)))
-      err <- attr(hit, "err")
-      if (length(hit) == 1L) hit <- rep(hit, n)
-      hit <- !is.na(hit) & hit
-      new <- hit & !claimed
-      claimed <<- claimed | new
-      div(style = "padding:4px 8px;margin:3px 0;border-left:4px solid #59A14F;background:#f4f7f4;font-size:12px",
-          tags$b(sprintf('%s -> "%s"', r$cond, r$value)), tags$br(),
-          if (!is.null(err))
-            tags$span(style = "color:#c0392b", "condition error: ", err)
-          else sprintf("%d rows match, %d newly claimed (%.1f%%)",
-                       sum(hit), sum(new), 100 * sum(new) / n))
-    })
-    oth <- sum(!claimed)
-    tagList(rows,
-      div(style = "padding:4px 8px;margin:3px 0;font-size:12px;color:#666",
-          sprintf('otherwise -> "%s": %d rows (%.1f%%)',
-                  sp$otherwise, oth, 100 * oth / n)))
-  })
-
-  output$cv_data_preview <- renderDT({
-    d <- tryCatch(derived(), error = function(e) NULL)
-    validate(need(!is.null(d), "Load data first."))
-    show <- intersect(c("catchCategory", "metier4", "Country", "ICESDivision",
-                        "Season", "mesh", names(rv$custom_vars %||% list()),
-                        vapply(rv$custom_vars %||% list(), `[[`, "", "name")),
-                      names(d))
-    datatable(utils::head(unique(d[, show, drop = FALSE]), 50),
-              options = list(scrollX = TRUE, pageLength = 10), rownames = FALSE)
-  })
-
-  observeEvent(input$cv_save, {
-    sp <- cv_current_spec()
-    if (!nzchar(sp$name)) {
-      showNotification("Give the variable a name first.", type = "error"); return() }
-    if (!length(sp$rules)) {
-      showNotification("Add at least one complete rule.", type = "error"); return() }
-    # replace an existing variable of the same name, else append
-    nm <- vapply(rv$custom_vars, `[[`, "", "name")
-    if (sp$name %in% nm) rv$custom_vars[[which(nm == sp$name)]] <- sp
-    else rv$custom_vars <- c(rv$custom_vars, list(sp))
-    showNotification(sprintf('Saved custom variable "%s"', sp$name),
-                     type = "message", duration = 2)
-    # reset the editor for the next one
-    rv$cv_rules <- list(list(cond = "", value = ""))
-    updateTextInput(session, "cv_name", value = "")
-  })
-
-  output$cv_list_ui <- renderUI({
-    if (!length(rv$custom_vars)) return(span(class = "note", "No custom variables yet."))
-    tagList(tags$b("Saved variables"),
-      do.call(tagList, lapply(seq_along(rv$custom_vars), function(i) {
-        sp <- rv$custom_vars[[i]]
-        div(style = "padding:3px 6px;margin:2px 0;background:#eef2f7;border-radius:4px;font-size:12px",
-            tags$b(sp$name), sprintf(" (%d rule%s)", length(sp$rules),
-                                     if (length(sp$rules) == 1) "" else "s"),
-            actionButton(paste0("cv_remove_", i), "remove",
-                         class = "btn-xs", style = "margin-left:8px"))
-      })))
-  })
-
-  observe({
-    for (i in seq_along(rv$custom_vars)) local({
-      j <- i
-      observeEvent(input[[paste0("cv_remove_", j)]], {
-        rv$custom_vars <- rv$custom_vars[-j]
-      }, ignoreInit = TRUE, once = TRUE)
-    })
-  })
-
-  output$cv_code <- renderText({
-    if (!length(rv$custom_vars))
-      return("# No custom variables defined.")
-    paste(unlist(lapply(rv$custom_vars, custom_var_code)), collapse = "\n")
-  })
 
   output$stock_ui <- renderUI({ req(derived())
     selectInput("stock", "Stock", sort(unique(derived()$stock))) })
@@ -4592,17 +4367,9 @@ server <- function(input, output, session) {
   })
 
   dmap <- function(p) {
-    # Global roles set on the Data setup tab win. The old per-tab Fleet /
-    # Area selectors still work as an override where they exist, but the
-    # role_map is the single source so a custom column chosen as, say,
-    # Fleet is used as the Fleet key on every tab at once.
-    rm <- rv$role_map
-    f <- input[[paste0(p, "_fleet")]] %||% rm$Fleet
-    a <- input[[paste0(p, "_area")]]  %||% rm$Area
-    c(Fleet   = f %||% "metier4",
-      Country = rm$Country %||% "Country",
-      Area    = a %||% "ICESDivision",
-      Season  = rm$Season %||% "Season")
+    f <- input[[paste0(p, "_fleet")]]; a <- input[[paste0(p, "_area")]]
+    c(Fleet = if (is.null(f)) "metier4" else f, Country = "Country",
+      Area = if (is.null(a)) "ICESDivision" else a, Season = "Season")
   }
   col_of <- function(p, sel) {
     if (is.null(sel) || !nzchar(sel)) return(NULL)
@@ -4826,11 +4593,11 @@ server <- function(input, output, session) {
   # that fails. Using a range pinned at 100 paints the qualifying side
   # instead, which is what the threshold actually means.
   observeEvent(input$apply_all, {
-    updateSliderInput(session, "thr_1", value = c(input$thr_all, 100))
+    v <- as.numeric(input$thr_all)[1]   # min side of the range slider
+    updateSliderInput(session, "thr_1", value = c(v, 100))
     for (i in 2:5)
-      updateSliderInput(session, paste0("thr_", i),
-                        value = c(input$thr_all, 100))
-    showNotification(paste("All thresholds set to", input$thr_all, "%"),
+      updateSliderInput(session, paste0("thr_", i), value = c(v, 100))
+    showNotification(paste("All thresholds set to", v, "%"),
                      type = "message", duration = 2) })
 
   # thresholds for the widening keys (2..5), in the order they are tested
@@ -4908,21 +4675,28 @@ server <- function(input, output, session) {
                   error = function(e) list())
     if (length(m)) session$sendCustomMessage("stratSvg", list(map = m)) })
 
+  # max-only: only an upper bound on discard rate is meaningful
   output$ar_dr_ui <- renderUI({
     top <- dr_top("ar")
-    sliderInput("ar_dr", "Allowed discard rate", 0, top, c(0, top), 0.01) })
+    sliderInput("ar_dr", "Allowed discard rate (max)", 0, top, top, 0.01) })
 
   ar_dr <- reactive({
     v <- input$ar_dr; if (is.null(v)) return(c(NA, NA))
     top <- dr_top("ar")
-    c(if (v[1] > 0) v[1] else NA, if (v[2] < top) v[2] else NA) })
+    c(NA, if (as.numeric(v)[1] < top) as.numeric(v)[1] else NA) })
 
   # The discard cascade has the same slow problem the biology one did:
   # every threshold slider re-walked recommend_raising() on release, and
   # with the exclusion bars and the donor pool that is a real pause. The
   # settings are frozen and only Apply (or first load) refreshes them.
+  # the level-of-detail columns are part of the signature: changing the
+  # Fleet or Area resolution changes hier_cols() AND the strata columns,
+  # and both must move together or recommend_raising() is handed a
+  # hierarchy naming columns the freshly-built strata do not have.
+  ar_dims <- reactive(unname(dmap("ar")[DIMS]))
   ar_hier_sig <- reactive(list(input$threshold, hier_cols(), hier_thr(),
-                               self_thr_val(), ar_dr(), ar_excl_keys()))
+                               self_thr_val(), ar_dr(), ar_excl_keys(),
+                               ar_dims()))
   ar_hier_applied <- reactiveVal(NULL)
   observe({ if (is.null(ar_hier_applied())) {
     sg <- tryCatch(ar_hier_sig(), error = function(e) NULL)
@@ -4938,15 +4712,18 @@ server <- function(input, output, session) {
   rec <- reactive({
     a <- ar_hier_applied(); req(!is.null(a))
     thr0 <- a[[1]]; cols <- a[[2]]; thr <- a[[3]]; self <- a[[4]]
-    dr <- a[[5]]; excl <- a[[6]]
-    s <- classify_strata(strata_p("ar"), thr0)
+    dr <- a[[5]]; excl <- a[[6]]; dms <- a[[7]]
+    # strata built from the APPLIED dims, so the hierarchy (also frozen in
+    # this signature) always names columns the strata actually have. Using
+    # the live dmap here was the bug: a level change moved the strata
+    # columns instantly while cols stayed frozen, and they disagreed.
+    s <- classify_strata(build_strata(dat(), dms), thr0)
     s <- flag_donor_exclusion(s, dr[1], dr[2],
-                              excluded = excl,
-                              dims = unname(dmap("ar")[DIMS]))
+                              excluded = excl, dims = dms)
     recommend_raising(s, cols, thr,
                       self_threshold = self,
                       mode = "nested",
-                      dims = unname(dmap("ar")[DIMS])) })
+                      dims = dms) })
 
   auto_groups <- reactive(raising_groups(rec()))
   auto_pal <- reactive(group_palette(auto_groups()$group_id))
@@ -5334,15 +5111,19 @@ server <- function(input, output, session) {
           "Allocations use different levels of detail, so only the keys ",
           "they share can be compared.") else NULL })
 
+  # max-only: a single handle at the ceiling, blue from 0 up to it. Only
+  # an upper bound on discard rate is meaningful - you exclude a donor for
+  # having too HIGH a rate, never too low. A single-value slider paints
+  # the left (kept) side; the handle IS the max.
   output$rule_dr_ui <- renderUI({
     top <- dr_top("mg")
-    sliderInput("rule_dr", NULL, 0, top, c(0, top), 0.01) })
+    sliderInput("rule_dr", NULL, 0, top, top, 0.01) })
 
   rule_dr <- reactive({
     v <- input$rule_dr; if (is.null(v)) return(c(NA, NA))
     top <- dr_top("mg")
-    # a handle still at its extreme means "no bound on that side"
-    c(if (v[1] > 0) v[1] else NA, if (v[2] < top) v[2] else NA) })
+    # no minimum bound; the handle at the ceiling means "no maximum either"
+    c(NA, if (as.numeric(v)[1] < top) as.numeric(v)[1] else NA) })
 
   # the comparison chips speak in DIM labels (Fleet, Area, ...); the runs
   # are keyed by the resolved columns. Translate through the level actually
@@ -5414,11 +5195,6 @@ server <- function(input, output, session) {
         emit_load_code(if (is.null(input$file)) "catch_data.csv" else input$file$name,
                        input$sep),
         c(emit_area_helper(), emit_derive_code()),
-        # custom columns, right after derive_fields() and before anything
-        # that might key on them - the same order derived() applies them
-        if (length(rv$custom_vars))
-          c("", "## Custom variables (Data setup tab):",
-            unlist(lapply(rv$custom_vars, custom_var_code))),
         emit_filter_code(input$stock, input$year, unname(dmap("ar")[DIMS]),
                          ar_dr()[1], ar_dr()[2]))
     if ("auto" %in% input$code_parts)
