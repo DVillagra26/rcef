@@ -82,14 +82,36 @@ emit_header <- function(file_name, stock, n_rows) {
 #' @param stock,year Optional stock and year filters.
 #' @param dims The stratum dimensions.
 #' @param dr_min,dr_max Donor discard-rate window.
+#' @param dir The folder the tables were read from, emitted as `cef_dir`
+#'   so the script runs from anywhere. `NA` for an upload, where there is
+#'   no path worth recording.
+#' @param dist_file,eff_file The companion tables, when they were loaded.
 #' @return A character vector of R code.
 #' @export
 emit_load_code <- function(file_name, sep = ",", stock = NULL, year = NULL,
-                          dims = NULL, dr_min = NA, dr_max = NA) {
+                          dims = NULL, dr_min = NA, dr_max = NA,
+                          dir = NA_character_, dist_file = NA_character_,
+                          eff_file = NA_character_) {
   sep_txt <- switch(sep, "," = '","', ";" = '";"', "\t" = '"\\t"', '","')
+  # The folder the tables were pointed at is part of the analysis. Without
+  # it the script says read.csv("catches_CEF_v17.1.csv") and only runs if
+  # the reader happens to have set the same working directory - which is
+  # exactly the thing a reproducible script is supposed to remove.
+  # file.path(cef_dir, ...) makes the location one line to change.
+  has_dir <- !is.na(dir) && nzchar(dir)
+  rd <- function(obj, fn) sprintf(
+    '%s <- read.csv(%s, sep = %s, stringsAsFactors = FALSE)', obj,
+    if (has_dir) sprintf('file.path(cef_dir, "%s")', fn) else sprintf('"%s"', fn),
+    sep_txt)
   c("## ---- Load ------------------------------------------------",
-    sprintf('catch_data <- read.csv("%s", sep = %s, stringsAsFactors = FALSE)',
-            file_name, sep_txt),
+    if (has_dir) c(
+      "## The folder the CEF tables were read from. Change this one line",
+      "## to re-run the analysis against another copy of the data.",
+      sprintf('cef_dir <- "%s"', gsub("\\\\", "/", dir)),
+      ""),
+    rd("catch_data", file_name),
+    if (!is.na(dist_file) && nzchar(dist_file)) rd("distributions", dist_file),
+    if (!is.na(eff_file) && nzchar(eff_file)) rd("effort", eff_file),
     "")
 }
 

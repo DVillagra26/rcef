@@ -213,9 +213,21 @@ cef_load_ui <- function() sidebarLayout(
     radioButtons("cef_mode", NULL,
       c("Upload files" = "upload", "Point at a folder" = "dir"), "upload"),
     conditionalPanel("input.cef_mode == 'upload'",
+      load_owner_ui(4),
       fileInput("file", "catches", accept = c(".csv", ".txt")),
       uiOutput("cef_dist_input"),
-      fileInput("file_eff", "effort (optional)", accept = c(".csv", ".txt"))),
+      fileInput("file_eff", "effort (optional)", accept = c(".csv", ".txt")),
+      # Selecting a file used to BE the load: raw() read input$file
+      # directly, so picking a catches file replaced whatever was already
+      # loaded - an InterCatch conversion included - with no warning and
+      # no way back. Every other route asks first. This button is what
+      # makes the upload route a load rather than a side effect, and it
+      # is what the replace-confirmation hangs off.
+      span(class = "note",
+           "Nothing is read until this is pressed, so all three files can ",
+           "be chosen first."),
+      actionButton("cef_load_upl", "Load these files",
+                   class = "btn-sm btn-primary")),
     conditionalPanel("input.cef_mode == 'dir'",
       load_owner_ui(2),
       dir_picker("cef_dir", "."),
@@ -241,52 +253,46 @@ cef_load_ui <- function() sidebarLayout(
 # ---------------------------------------------------------
 #  Section 3: merged plot tabs
 # ---------------------------------------------------------
-coverage_ui <- function() sidebarLayout(
-  sidebarPanel(width = 3,
-    h4("Plot"),
+coverage_ui <- function() tagList(
+  control_deck("cov", label = "Sampling coverage controls",
+    settings = tagList(
+      role_chips("cov", c(y = "Y axis", fill = "X / Fill", facet = "Facet"),
+                 c("Fleet", "Season", "Country"), stacked = TRUE),
+      # The threshold belongs with the axis pickers because it is what the
+      # colours in the heatmap and bubbles MEAN. The bars view splits
+      # weight into sampled and unsampled and never consults a threshold,
+      # so showing the control there invites the reader to move it and
+      # wonder why nothing happened. The condition mirrors cov_type_eff():
+      # with no X / Fill the heatmap and bubbles are unavailable and bars
+      # is what is drawn.
+      conditionalPanel("input.cov_type != 'bars' && input.cov_fill != ''",
+        threshold_box("threshold", NULL, "% coverage"))),
+    level = level_fields("cov")),
+  deck_page(
     # rendered server-side: the heatmap and bubbles need both axes, so they
     # grey out when X / Fill is set to (none)
-    uiOutput("cov_type_bar"),
-    # The threshold sits directly under the plot icons because it is what
-    # the colours in those two plots MEAN. The bars view splits weight into
-    # sampled and unsampled and never consults a threshold, so showing the
-    # control there invites the reader to move it and wonder why nothing
-    # happened. The condition mirrors cov_type_eff(): with no X / Fill the
-    # heatmap and bubbles are unavailable and bars is what is drawn.
-    conditionalPanel("input.cov_type != 'bars' && input.cov_fill != ''",
-      threshold_box("threshold", NULL, "% coverage")),
-    tags$hr(),
-    role_chips("cov", c(y = "Y axis", fill = "X / Fill", facet = "Facet"),
-               c("Fleet", "Season", "Country"), stacked = TRUE),
-    filter_box("cov"),
-    apply_bar("cov"),
-    tags$hr(),
-    level_box("cov")),
-  mainPanel(width = 9,
+    picker = tagList(h4("Plot"), uiOutput("cov_type_bar")),
     div(class = "legend-strip", plotOutput("cov_legend", height = "150px")),
     filter_banner("cov"),
     plot_slot("cov_plot", capture = TRUE)))
 
-drates_ui <- function() sidebarLayout(
-  sidebarPanel(width = 3,
-    h4("Plot"),
-    pick_bar("dr_type", list(raw = "Raw strata", box = "Boxplot"), "raw"),
-    tags$hr(),
-    conditionalPanel("input.dr_type != 'box'",
-      role_chips("dr", c(x = "X axis", fill = "Colour", shape = "Shape",
-                         facet = "Facet"),
-                 c("Fleet", "Area", "Season", "Country"), stacked = TRUE),
-      checkboxInput("dr_jitter", "Jitter", TRUE)),
-    conditionalPanel("input.dr_type == 'box'",
-      role_chips("box", c(x = "X axis", fill = "Fill", facet = "Facet"),
-                 c("Country", "Area", ""), stacked = TRUE),
-      checkboxInput("box_points", "Show individual strata", TRUE),
-      checkboxInput("box_pooled", "Show catch-weighted pooled rate", TRUE)),
-    filter_box("dr"),
-    apply_bar("dr"),
-    tags$hr(),
-    level_box("dr")),
-  mainPanel(width = 9,
+drates_ui <- function() tagList(
+  control_deck("dr", label = "Discard rate controls",
+    settings = tagList(
+      conditionalPanel("input.dr_type != 'box'",
+        role_chips("dr", c(x = "X axis", fill = "Colour", shape = "Shape",
+                           facet = "Facet"),
+                   c("Fleet", "Area", "Season", "Country"), stacked = TRUE),
+        checkboxInput("dr_jitter", "Jitter", TRUE)),
+      conditionalPanel("input.dr_type == 'box'",
+        role_chips("box", c(x = "X axis", fill = "Fill", facet = "Facet"),
+                   c("Country", "Area", ""), stacked = TRUE),
+        checkboxInput("box_points", "Show individual strata", TRUE),
+        checkboxInput("box_pooled", "Show catch-weighted pooled rate", TRUE))),
+    level = level_fields("dr")),
+  deck_page(
+    picker = tagList(h4("Plot"),
+      pick_bar("dr_type", list(raw = "Raw strata", box = "Boxplot"), "raw")),
     div(class = "legend-strip", plotOutput("dr_legend", height = "120px")),
     filter_banner("dr"),
     plot_slot("dr_plot", capture = TRUE),
@@ -313,7 +319,7 @@ final_ui <- function() sidebarLayout(
     selectInput("fin_row", "Rows", DIMS, "Country"),
     selectInput("fin_col", "Columns", DIMS, "Area"),
     apply_bar("fin"),
-    level_box("nr"), alloc_box()),
+    uiOutput("fin_lvl_note"), alloc_box()),
   mainPanel(width = 9,
     uiOutput("final_status"),
     tabsetPanel(id = "fin_out", type = "tabs",
@@ -381,25 +387,24 @@ threshold_box <- function(id_cov, id_meas = NULL, cov_label = "% coverage",
 # --- 3rd level 1: sampling coverage (same shapes as the discards) ---
 len_coverage_ui <- function(p, type = "LengthTotal") {
   ns <- function(x) paste0(p, "_cov_", x)
-  sidebarLayout(
-    sidebarPanel(width = 3,
-      len_cc_filter(ns),
-      tags$hr(),
-      h4("Plot"),
-      pick_bar(ns("type"),
-               list(heatmap = "Heatmap", bubbles = "Bubbles", bars = "Bars"),
-               "heatmap"),
-      # same reasoning as the discard coverage tab: the two thresholds are
-      # what the heatmap and bubble colours mean, and mean nothing to bars
-      conditionalPanel(sprintf("input.%s != 'bars'", ns("type")),
-        threshold_box(paste0(p, "_thr_cov"), paste0(p, "_thr_meas"))),
-      tags$hr(),
-      role_chips(ns("r"), c(y = "Y axis", fill = "X / Fill", facet = "Facet"),
-                 c("Fleet", "Country", "Area"), stacked = TRUE),
-      filter_box(paste0(p, "_cov")),
-      apply_bar(paste0(p, "_cov")),
-      tags$hr(), level_box(paste0(p, "_lv"))),
-    mainPanel(width = 9,
+  tagList(
+    control_deck(paste0(p, "_cov"), label = "Sampling coverage controls",
+      settings = tagList(
+        role_chips(ns("r"), c(y = "Y axis", fill = "X / Fill", facet = "Facet"),
+                   c("Fleet", "Country", "Area"), stacked = TRUE),
+        # same reasoning as the discard coverage tab: the two thresholds
+        # are what the heatmap and bubble colours mean, nothing to bars
+        conditionalPanel(sprintf("input.%s != 'bars'", ns("type")),
+          threshold_box(paste0(p, "_thr_cov"), paste0(p, "_thr_meas")))),
+      level = level_fields(paste0(p, "_lv"))),
+    deck_page(
+      picker = tagList(
+        len_cc_filter(ns),
+        tags$hr(),
+        h4("Plot"),
+        pick_bar(ns("type"),
+                 list(heatmap = "Heatmap", bubbles = "Bubbles", bars = "Bars"),
+                 "heatmap")),
       uiOutput(paste0(p, "_status")),
       div(class = "legend-strip", plotOutput(ns("legend"), height = "150px")),
       filter_banner(ns("")),
@@ -418,28 +423,27 @@ free_scale_ticks <- function(ns)
 # --- 3rd level 2: numbers at length -------------------------------
 len_numbers_ui <- function(p, type = "LengthTotal") {
   ns <- function(x) paste0(p, "_n_", x)
-  sidebarLayout(
-    sidebarPanel(width = 3,
-      len_cc_filter(ns),
-      tags$hr(),
-      h4("Plot"),
-      pick_bar(ns("type"), list(hist = "Histogram", ridge = "Density"), "hist"),
-      tags$hr(),
-      role_chips(ns("r"), c(fill = "Stack / colour", facet = "Facet",
-                            shape = "Facet 2"),
-                 c("Country", "Fleet", ""), stacked = TRUE),
-      free_scale_ticks(ns),
-      conditionalPanel(sprintf("input.%s != 'ridge'", ns("type")),
-        checkboxInput(ns("stack"), "Stack the bars", TRUE)),
-      conditionalPanel(sprintf("input.%s == 'ridge'", ns("type")),
-        sliderInput(ns("smooth"), "Smoothing", 0.2, 3, 1, 0.1),
-        span(class = "note",
-             "Turn it down for a well-sampled stratum to keep the detail, ",
-             "up for a sparse or noisy one so the shape stays readable.")),
-      filter_box(paste0(p, "_n")),
-      apply_bar(paste0(p, "_n")),
-      tags$hr(), level_box(paste0(p, "_lv"))),
-    mainPanel(width = 9,
+  tagList(
+    control_deck(paste0(p, "_n"), label = "Numbers at class controls",
+      settings = tagList(
+        role_chips(ns("r"), c(fill = "Stack / colour", facet = "Facet",
+                              shape = "Facet 2"),
+                   c("Country", "Fleet", ""), stacked = TRUE),
+        free_scale_ticks(ns),
+        conditionalPanel(sprintf("input.%s != 'ridge'", ns("type")),
+          checkboxInput(ns("stack"), "Stack the bars", TRUE)),
+        conditionalPanel(sprintf("input.%s == 'ridge'", ns("type")),
+          sliderInput(ns("smooth"), "Smoothing", 0.2, 3, 1, 0.1),
+          span(class = "note",
+               "Turn it down for a well-sampled stratum to keep the detail, ",
+               "up for a sparse or noisy one so the shape stays readable."))),
+      level = level_fields(paste0(p, "_lv"))),
+    deck_page(
+      picker = tagList(
+        len_cc_filter(ns),
+        tags$hr(),
+        h4("Plot"),
+        pick_bar(ns("type"), list(hist = "Histogram", ridge = "Density"), "hist")),
       uiOutput(paste0(p, "_status")),
       div(class = "legend-strip", plotOutput(ns("legend"), height = "120px")),
       filter_banner(ns("")),
@@ -449,8 +453,36 @@ len_numbers_ui <- function(p, type = "LengthTotal") {
 # --- 3rd level 3: mean weight at length ---------------------------
 len_meanw_ui <- function(p, type = "LengthTotal") {
   ns <- function(x) paste0(p, "_w_", x)
-  sidebarLayout(
-    sidebarPanel(width = 3,
+  tagList(
+    control_deck(paste0(p, "_w"), label = "Mean weight controls",
+      settings = tagList(
+        role_chips(ns("r"), c(fill = "Colour", facet = "Facet",
+                              shape = "Facet 2"),
+                   c("Fleet", "Country", ""), stacked = TRUE),
+        free_scale_ticks(ns),
+        selectInput(ns("pt"), "Shape",
+                    c("-- none (average the rest) --" = "",
+                      setNames(DIMS, DIMS)), ""),
+        checkboxInput(ns("points"), "Show points", TRUE)),
+      level = level_fields(paste0(p, "_lv"))),
+    deck_page(
+      picker = tagList(
+        len_cc_filter(ns),
+        tags$hr(),
+        # Two plots, not one plot with a switch: the line answers "what is
+        # the mean weight at this class", the boxes answer "how much did
+        # the strata averaged into it disagree". Swapping one for the other
+        # silently would be swapping the question.
+        h4("Plot"), pick_bar(ns("type"),
+                             list(linedot = "Line + dots", box = "Boxplot"),
+                             "linedot"),
+        span(class = "note",
+             "Boxplot draws the values BEFORE they are averaged: one box ",
+             "per class wherever more than one stratum contributes, a point ",
+             "where only one does. Add a Shape and the dots over the boxes ",
+             "carry it, so the season or country behind each value stays ",
+             "readable.")),
+      uiOutput(paste0(p, "_status")),
       div(class = "chain", style = "font-size:11.5px;line-height:1.5",
           tags$b("How the points are built"), tags$br(),
           "Whatever is not given a Colour, Facet or Shape is averaged ",
@@ -460,36 +492,6 @@ len_meanw_ui <- function(p, type = "LengthTotal") {
           "grouping stays visible. Give Shape a variable and those ",
           "strata are drawn separately instead, and the band disappears ",
           "because nothing is being averaged."),
-      tags$hr(),
-      len_cc_filter(ns),
-      tags$hr(),
-      # Two plots, not one plot with a switch: the line answers "what is
-      # the mean weight at this class", the boxes answer "how much did
-      # the strata averaged into it disagree". Swapping one for the other
-      # silently would be swapping the question.
-      h4("Plot"), pick_bar(ns("type"),
-                           list(linedot = "Line + dots", box = "Boxplot"),
-                           "linedot"),
-      span(class = "note",
-           "Boxplot draws the values BEFORE they are averaged: one box ",
-           "per class wherever more than one stratum contributes, a point ",
-           "where only one does. Add a Shape and the dots over the boxes ",
-           "carry it, so the season or country behind each value stays ",
-           "readable."),
-      tags$hr(),
-      role_chips(ns("r"), c(fill = "Colour", facet = "Facet",
-                            shape = "Facet 2"),
-                 c("Fleet", "Country", ""), stacked = TRUE),
-      free_scale_ticks(ns),
-      selectInput(ns("pt"), "Shape",
-                  c("-- none (average the rest) --" = "",
-                    setNames(DIMS, DIMS)), ""),
-      checkboxInput(ns("points"), "Show points", TRUE),
-      filter_box(paste0(p, "_w")),
-      apply_bar(paste0(p, "_w")),
-      tags$hr(), level_box(paste0(p, "_lv"))),
-    mainPanel(width = 9,
-      uiOutput(paste0(p, "_status")),
       div(class = "legend-strip", plotOutput(ns("legend"), height = "120px")),
       filter_banner(ns("")),
       plot_slot(ns("plot"), capture = TRUE)))
@@ -506,6 +508,7 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
          "BMS is a landing in the exchange format but behaves like a ",
          "discard. With this on, any clause naming Dis also picks up BMS."),
     conditionalPanel(sprintf("input.%s != 'manual'", ns("method")),
+      level_deck(paste0(p, "_lv"), "Cascade - level of detail"),
       sidebarLayout(
         sidebarPanel(width = 3,
           h4("Nesting order"),
@@ -549,8 +552,7 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
           uiOutput(ns("chain")),
           tags$hr(),
           textInput(ns("name"), "Save as", "alloc_1"),
-          actionButton(ns("save"), "Save allocation", class = "btn-success"),
-          level_box(paste0(p, "_lv"))),
+          actionButton(ns("save"), "Save allocation", class = "btn-success")),
         mainPanel(width = 9,
           uiOutput(ns("status")),
           tabsetPanel(id = ns("hier_out"), type = "tabs",
@@ -596,6 +598,7 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
                    "the right."),
               uiOutput(ns("step_rivers"))))))),
     conditionalPanel(sprintf("input.%s == 'manual'", ns("method")),
+      level_deck(paste0(p, "_lv"), "Manual groups - level of detail"),
       sidebarLayout(
         sidebarPanel(width = 4,
           # Numbered the same as the discard manual builder, step for
@@ -702,8 +705,7 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
           h4("8. Save allocation"),
           textInput(ns("mname"), "Save this set as", "manual_1"),
           actionButton(ns("savemanual"), "Save allocation",
-                       class = "btn-success"),
-          level_box(paste0(p, "_lv"))),
+                       class = "btn-success")),
         mainPanel(width = 8,
           uiOutput(ns("bmsnote")),
           tabsetPanel(id = ns("man_out"), type = "tabs",
@@ -759,34 +761,41 @@ len_raise_ui <- function(p, what = "Length") {
                               stgraise = "Final allocation"), "stgraise"),
     tags$hr(),
     conditionalPanel(sprintf("input.%s == 'stgexpl'", ns("mode")),
-      sidebarLayout(
-        sidebarPanel(width = 3,
+      # The three views are not alternatives. Numbers, stock weight and
+      # mean weight are the three things an allocation can change, and the
+      # question "did this grouping matter" is only answerable by seeing
+      # all three: two groupings routinely agree on numbers and still put
+      # different weights on the same classes. Making them a radio meant
+      # the second and third were, in practice, never looked at.
+      control_deck(ns("cmp"), label = "Comparison controls",
+        settings = tagList(
+          role_chips(ns("cmpr"), c(facet = "Facet", shape = "Facet 2"),
+                     c("catchCategory", ""),
+                     choices = c(NONE, "Catch category" = "catchCategory",
+                                 setNames(DIMS, DIMS))),
+          free_scale_ticks(ns),
+          numericInput(ns("cmpncol"), "Facet columns", 2, 1, 6, 1)),
+        level = level_fields(paste0(p, "_lv"))),
+      deck_page(
+        picker = tagList(
           h4("Compare"),
           span(class = "note",
                "Every saved allocation is re-run against the data currently ",
                "loaded, so the comparison is like-for-like."),
           actionButton(ns("runall"), "Run all allocations",
-                       class = "btn-success"),
-          tags$hr(),
-          radioButtons(ns("cmpval"), "Show",
-                       c("Numbers" = "numbers",
-                         "Stock weight (t)" = "tonnes",
-                         "Mean weight (g)" = "meanweight"), "numbers"),
-          span(class = "note",
-               "Mean weight is the third thing an allocation can change, ",
-               "and the one a stock assessment notices: two groupings can ",
-               "agree on numbers and still put different weights on the ",
-               "same classes. It is derived as tonnes / numbers, so it ",
-               "cannot disagree with the other two views."),
-          selectInput(ns("cmpfacet"), "Facet",
-                      c(NONE, "Catch category" = "catchCategory"),
-                      "catchCategory"),
-          apply_bar(ns("cmp"))),
-        mainPanel(width = 9,
-          uiOutput(ns("cmpstatus")),
-          h4("Totals by allocation"), tbl_slot(ns("cmptot")),
-          div(class = "legend-strip", plotOutput(ns("cmplegend"), height = "90px")),
-          plot_slot(ns("cmpplot"))))),
+                       class = "btn-success")),
+        uiOutput(ns("cmpstatus")),
+        h4("Totals by allocation"), tbl_slot(ns("cmptot")),
+        div(class = "legend-strip", plotOutput(ns("cmplegend"), height = "90px")),
+        h4("Numbers at class"),
+        plot_slot(ns("cmpplot"), capture = TRUE),
+        h4("Stock weight (tonnes)"),
+        plot_slot(ns("cmpplotw"), capture = TRUE),
+        h4("Mean weight (g)"),
+        span(class = "note",
+             "Derived as tonnes / numbers and re-weighted by the numbers ",
+             "behind each class, so it cannot disagree with the two above."),
+        plot_slot(ns("cmpplotmw"), capture = TRUE))),
     conditionalPanel(sprintf("input.%s == 'stgraise'", ns("mode")),
   sidebarLayout(
     sidebarPanel(width = 3,
@@ -964,7 +973,11 @@ nr_ui <- function() {
       textInput("nr_log", "logFile", "Log.txt"),
       tags$hr(),
       actionButton("run_native", "Run raising", class = "btn-success"),
-      level_box("nr"), alloc_box()),
+      # No level-of-detail box: this tab inherits the resolution the
+      # allocation groups were built at (see DMAP_ALIAS). Showing a
+      # second one invited it to be set to something the saved groups
+      # were never resolved against.
+      uiOutput("nr_lvl_note"), alloc_box()),
     mainPanel(width = 9,
       uiOutput("nr_status"),
       h4("Conditions that will be used"),
@@ -1059,6 +1072,120 @@ log_ui <- function() {
       uiOutput("state_status")),
     column(9, copy_btn("log_txt"), verbatimTextOutput("log_txt"))))
 }
+
+# ------------------------------------------------------------
+#  The control deck: four boxes across the top of a plot tab
+# ------------------------------------------------------------
+#
+# The sidebar was losing the argument. Every figure tab carried the axis
+# pickers, the figure filter, the level of detail and the Apply gate in a
+# 3-wide column, which left the plot 9 columns wide and pushed the level
+# of detail so far down the page that it was routinely scrolled past -
+# and it is the one control that silently changes what everything else on
+# the tab MEANS.
+#
+# So the four move to a strip across the top, in the order they are
+# reasoned about: what am I plotting (settings), on what subset (filter),
+# at what resolution (level), go (apply). The strip is sticky, so it
+# stays put while the plots scroll underneath it, and it collapses to a
+# one-line bar when it is in the way of a tall figure.
+#
+# Only the plot-type picker stays on the left, because it is a choice of
+# WHICH figure rather than a setting OF the figure, and it is three
+# icons wide.
+#
+# The ids are unchanged. filter_box(p), apply_bar(p) and level_box(p_lv)
+# are the same calls in the same places they always were, just re-parented,
+# so every observer, gate and renderer behind them is untouched.
+
+# Collapse is pure client-side. A Shiny input round-trip to hide a div
+# would invalidate the panel's reactives and redraw the plot underneath,
+# which is the opposite of what "get this out of my way" means.
+deck_js <- "
+function rcefDeck(id){
+  var d = document.getElementById(id);
+  if (!d) return;
+  d.classList.toggle('mini');
+  var b = d.querySelector('.deckbtn');
+  if (b) b.innerHTML = d.classList.contains('mini') ? '&#9660;' : '&#9650;';
+}"
+
+deck_box <- function(title, ..., cls = "") div(class = paste("deckbox", cls),
+  div(class = "decktitle", title), div(class = "deckbody", ...))
+
+#' One sticky strip of controls above a figure.
+#'
+#' @param p        The panel prefix. filter_box(p) / apply_bar(p) hang off it.
+#' @param settings What goes in box 1: the axis chips, and the threshold
+#'                 where the figure has one.
+#' @param level    The level-of-detail box, already built - the prefix
+#'                 differs from `p` on the length and age tabs, where one
+#'                 box serves three figures.
+#' @param label    Shown on the collapsed bar, so a minimised deck still
+#'                 says which panel it belongs to.
+control_deck <- function(p, settings, level = NULL, label = "Plot controls") {
+  id <- paste0(p, "_deck")
+  div(class = "deckwrap", id = id,
+    div(class = "deckbar",
+      tags$span(class = "decklabel", label),
+      tags$button(class = "deckbtn", HTML("&#9650;"), title = "Minimise / expand",
+                  onclick = sprintf("rcefDeck('%s')", id))),
+    div(class = "deckgrid",
+      deck_box("Plot settings", settings, cls = "deck-set"),
+      deck_box("Filter this figure", uiOutput(paste0(p, "_flt_chips")),
+               uiOutput(paste0(p, "_flt_vals")),
+               div(style = "display:flex;gap:4px;margin-top:4px",
+                   actionButton(paste0(p, "_flt_add"), "Add filter",
+                                class = "btn-xs btn-primary"),
+                   actionButton(paste0(p, "_flt_clear"), "Clear all",
+                                class = "btn-xs")),
+               uiOutput(paste0(p, "_flt_list")),
+               uiOutput(paste0(p, "_flt_note")), cls = "deck-flt"),
+      if (!is.null(level)) deck_box("Level of detail", level, cls = "deck-lod"),
+      div(class = "deckbox deck-go",
+        div(class = "decktitle", "Apply"),
+        div(class = "deckbody",
+          actionButton(paste0(p, "_apply"), "Apply",
+                       class = "btn btn-apply btn-block"),
+          uiOutput(paste0(p, "_apply_note"))))))
+}
+
+# The body of a deck-topped tab: a narrow plot-type rail on the left and
+# everything else given over to the figure.
+deck_page <- function(picker, ...) fluidRow(
+  column(2, class = "plotrail", picker),
+  column(10, class = "plotarea", ...))
+
+# The level of detail alone, pinned to the top of a builder tab.
+#
+# The grouping builders have no axis pickers and no figure filter, so a
+# four-box deck would be three empty boxes. They DO have the one control
+# that has to stay in view: change the level of detail half way through
+# defining groups and every clause already written refers to a column the
+# strata table no longer has.
+#
+# Same sticky strip, same collapse, one box wide.
+level_deck <- function(p, label = "Level of detail",
+                       fleet = "metier4", area = "ICESDivision") {
+  id <- paste0(p, "_lvdeck")
+  div(class = "deckwrap lvdeck", id = id,
+    div(class = "deckbar",
+      tags$span(class = "decklabel", label),
+      tags$button(class = "deckbtn", HTML("&#9650;"), title = "Minimise / expand",
+                  onclick = sprintf("rcefDeck('%s')", id))),
+    div(class = "deckgrid",
+      deck_box("Level of detail", level_fields(p, fleet, area),
+               cls = "deck-lod")))
+}
+
+# The level-of-detail box, stripped of the framing control_deck() supplies
+# (it draws its own title and border). Same input ids as level_box().
+level_fields <- function(p, fleet = "metier4", area = "ICESDivision")
+  tagList(
+    selectInput(paste0(p, "_fleet"), "Fleet", FLEET_LEVELS, fleet, width = "100%"),
+    selectInput(paste0(p, "_area"),  "Area",  AREA_LEVELS,  area,  width = "100%"),
+    tags$span(class = "note", style = "color:#9a5000;margin:2px 0 0 0",
+              "Re-aggregates everything on this tab."))
 
 DIMS <- c("Fleet", "Country", "Area", "Season")
 # catchCategory is a stratum key in the length/age sections
@@ -1192,7 +1319,7 @@ plot_slot <- function(id, capture = FALSE)
 # The "which route owns the data" banner. Shiny binds one output id once,
 # so each place that shows it needs its own id; the server fills them all
 # from the same renderer.
-LOAD_OWNER_SLOTS <- 1:3
+LOAD_OWNER_SLOTS <- 1:4
 load_owner_ui <- function(k) uiOutput(paste0("load_owner_", k))
 
 # Apply gate for a plot panel.
@@ -1289,6 +1416,53 @@ ui <- navbarPage(
 .lodbox{position:static;width:auto;margin-top:10px;
             background:#fff6e5;border:2px solid #F28E2B;border-radius:9px;
             padding:9px 11px}
+    /* ---- the sticky control deck above each figure ---- */
+    /* 46px is the navbar; the deck sits directly under it and stays there
+       while the plots scroll. z-index below the navbar, above the plots. */
+    .deckwrap{position:sticky;top:46px;z-index:1024;background:#f2f5f8;
+              border:1px solid #cfd8e0;border-radius:0 0 9px 9px;
+              box-shadow:0 3px 10px rgba(0,0,0,.13);margin:0 0 14px 0;
+              padding:0 8px 8px 8px}
+    .deckbar{display:flex;align-items:center;justify-content:space-between;
+             padding:3px 2px 2px 2px}
+    .decklabel{font-size:10.5px;font-weight:700;color:#5b7186;
+               text-transform:uppercase;letter-spacing:.5px}
+    .deckbtn{border:1px solid #cfd8e0;background:#fff;border-radius:5px;
+             color:#12324f;font-size:11px;line-height:1;padding:2px 9px;
+             cursor:pointer}
+    .deckbtn:hover{background:#e6eef5}
+    .deckgrid{display:grid;gap:8px;align-items:start;
+              grid-template-columns:minmax(210px,1.15fr) minmax(210px,1.15fr)
+                                    minmax(170px,.9fr) 108px}
+    /* below ~1250px the four boxes stop fitting; wrap to two rows rather
+       than squeezing the selects down to unreadable slivers */
+    @media (max-width:1250px){.deckgrid{grid-template-columns:1fr 1fr}}
+    .deckbox{background:#fff;border:1px solid #d3dae1;border-radius:7px;
+             padding:5px 7px 6px 7px;max-height:272px;overflow:auto}
+    .deckbox.deck-flt{border-color:#d9a441;background:#fffaf0}
+    .deckbox.deck-lod{border:2px solid #F28E2B;background:#fff6e5}
+    .deckbox.deck-go{background:#eef3f8;border-color:#cfd8e0;overflow:visible}
+    .decktitle{font-size:10.5px;font-weight:700;color:#5b7186;
+               text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
+    .deck-flt .decktitle,.deck-lod .decktitle{color:#9a5000}
+    .deckbox .form-group{margin-bottom:4px}
+    .deckbox .control-label{font-size:11px;margin-bottom:1px}
+    .deckbox .note{margin:2px 0 4px 0}
+    .deckbox .rolechips-stacked{gap:5px;margin:0}
+    .deckbox h4{margin:2px 0 3px 0;font-size:12px}
+    .deckbox .picker{margin:0 0 4px 0}
+    .deck-go .btn-apply{background:#12324f;border-color:#12324f;color:#fff;
+                        font-weight:700;width:100%;margin:0 0 4px 0}
+    .deck-go .btn-apply:hover{background:#1d4b73;border-color:#1d4b73}
+    /* collapsed: the bar stays, so it can always be opened again */
+    .deckwrap.mini{padding-bottom:2px;box-shadow:0 2px 6px rgba(0,0,0,.10)}
+    .deckwrap.mini .deckgrid{display:none}
+    .deckwrap.mini .decklabel:after{content:' - minimised';font-weight:400;
+                                    text-transform:none;letter-spacing:0}
+    .lvdeck .deckgrid{grid-template-columns:minmax(210px,300px)}
+    .plotrail{padding-right:4px}
+    .plotrail .picker{flex-direction:column}
+    .plotrail .pick{width:100%}
     .lodbox .form-group{margin-bottom:5px}
     .lodtitle{color:#9a5000;font-weight:700;font-size:12px;
               text-transform:uppercase;letter-spacing:.4px}
@@ -1476,6 +1650,7 @@ ui <- navbarPage(
     #work_pill i:nth-child(3){animation-delay:.15s}
     #work_pill i:nth-child(4){animation-delay:.3s}
   ")),
+  tags$script(HTML(deck_js)),
   tags$script(HTML(
     "// A picker only sent its value on click, so on first load every
      // conditionalPanel keyed on one was hidden and the section looked
@@ -1685,6 +1860,7 @@ ui <- navbarPage(
                    list(ladder = "Hierarchical", manual = "Manual groups"),
                    "ladder"),
           conditionalPanel("input.grp_method != 'manual'", 
+          level_deck("ar", "Raising cascade - level of detail"),
           sidebarLayout(
             sidebarPanel(width = 3,
               h4("1. Select hierarchical method"),
@@ -1738,7 +1914,7 @@ ui <- navbarPage(
               h4("4. Save scenario"),
               textInput("auto_name", "Scenario name", "auto_1"),
               actionButton("save_auto", "Save as scenario", class = "btn-success btn-sm"),
-              level_box("ar"), alloc_box()),
+              alloc_box()),
             mainPanel(width = 9,
           tabsetPanel(id = "auto_out", type = "tabs",
             tabPanel("Code",
@@ -1783,6 +1959,7 @@ ui <- navbarPage(
                    "left, the donor pool they were raised from on the right."),
               uiOutput("tree_ui")))))),
           conditionalPanel("input.grp_method == 'manual'", 
+          level_deck("mg", "Manual groups - level of detail"),
           sidebarLayout(
             sidebarPanel(width = 4,
               h4("1. Group"),
@@ -1898,7 +2075,7 @@ ui <- navbarPage(
               h4("8. Save scenario"),
               textInput("man_name", "Scenario name", "manual_1"),
               actionButton("save_manual", "Save as scenario", class = "btn-success btn-sm"),
-              level_box("mg"), alloc_box()),
+              alloc_box()),
             mainPanel(width = 8,
           tabsetPanel(id = "man_out", type = "tabs",
             tabPanel("Code",
@@ -3764,6 +3941,15 @@ server <- function(input, output, session) {
       else if (!is.null(rv$ic$distributions)) as.data.frame(rv$ic$distributions)
       else NULL })
 
+    # The SAME definition length_alloc_server() uses. It was missing here,
+    # so `a$dims %||% dims_of()` and the compare run both died with
+    # "could not find function dims_of" the moment an allocation was run
+    # from this tab. Duplicated deliberately rather than hoisted: the two
+    # servers are called with the same `p`, so both resolve to the same
+    # level-of-detail box, and a stored allocation still overrides it.
+    dims_of <- function()
+      unique(c("catchCategory", unname(dmap(paste0(p, "_lv"))[DIMS])))
+
     observe(updateSelectInput(session, ns("alloc"),
                               choices = names(rv[[store]] %||% list())))
 
@@ -3834,11 +4020,18 @@ server <- function(input, output, session) {
 
     cmp_runs <- reactive(rv[[paste0(out, "_runs")]])
 
+    # Both facet variables have to be carried into the comparison table,
+    # or faceting on one of them silently collapses to a single panel:
+    # compare_allocations() aggregates to its `grouping` and a column that
+    # was never grouped is simply not there afterwards. catchCategory is
+    # always kept - it is the split the assessment reads.
+    cmp_facets <- reactive(unique(c("catchCategory",
+      Filter(nzchar, c(input[[ns("cmpr_facet")]] %||% "",
+                       input[[ns("cmpr_shape")]] %||% "")))))
+
     cmp_data <- reactive({
       r <- cmp_runs(); req(!is.null(r), length(r))
-      g <- if (isTruthy(input[[ns("cmpfacet")]])) input[[ns("cmpfacet")]]
-           else "catchCategory"
-      compare_allocations(r, g) })
+      compare_allocations(r, cmp_facets()) })
 
     output[[ns("cmpstatus")]] <- renderUI({
       r <- cmp_runs()
@@ -3860,21 +4053,69 @@ server <- function(input, output, session) {
       validate(need(!is.null(d), "Nothing to compare."))
       datatable(d, rownames = FALSE, options = list(dom = "t", scrollX = TRUE)) })
 
-    cmp_sig <- reactive(list(input[[ns("cmpval")]], input[[ns("cmpfacet")]]))
+    cmp_sig <- reactive(list(input[[ns("cmpr_facet")]], input[[ns("cmpr_shape")]],
+                             input[[ns("cmpncol")]], input[[ns("freex")]],
+                             input[[ns("freey")]]))
     cmp_gate <- gate_of(ns("cmp"), cmp_sig,
                         refresh = reactive(rv[[paste0(p, "_groups")]]))
-    cmp_obj <- gated(cmp_gate, {
+
+    # One builder, three values. Written as a function of `value` rather
+    # than three near-identical blocks so a change to the faceting cannot
+    # reach one plot and miss the others - which is exactly how the old
+    # single-plot version drifted from the tables beside it.
+    cmp_plot_of <- function(value) gated(cmp_gate, {
       d <- cmp_data()
       validate(need(!is.null(d) && nrow(d), "Nothing to compare."))
-      plot_allocation_comparison(d, input[[ns("cmpval")]] %||% "numbers",
-        if (isTruthy(input[[ns("cmpfacet")]])) input[[ns("cmpfacet")]] else NULL,
-        what) })
+      f  <- input[[ns("cmpr_facet")]] %||% ""
+      f2 <- input[[ns("cmpr_shape")]] %||% ""
+      plot_allocation_comparison(d, value,
+        facet_var = if (nzchar(f)) f else NULL,
+        what = what,
+        ncol = input[[ns("cmpncol")]] %||% 2,
+        facet2 = if (nzchar(f2)) f2 else NULL,
+        free_x = isTRUE(input[[ns("freex")]]),
+        free_y = !isFALSE(input[[ns("freey")]])) })
+
+    cmp_obj   <- cmp_plot_of("numbers")
+    cmp_obj_w <- cmp_plot_of("tonnes")
+    cmp_obj_m <- cmp_plot_of("meanweight")
+
+    # Height follows the facet count, or a grid of eight panels is drawn
+    # in the same 460px as a single one and every panel is a smear.
+    cmp_h <- function() {
+      d <- tryCatch(cmp_data(), error = function(e) NULL)
+      f <- input[[ns("cmpr_facet")]] %||% ""
+      if (is.null(d) || !nzchar(f) || !f %in% names(d)) return(460)
+      n <- length(unique(as.character(d[[f]])))
+      f2 <- input[[ns("cmpr_shape")]] %||% ""
+      rows <- if (nzchar(f2) && f2 %in% names(d)) n
+              else ceiling(n / max(1, input[[ns("cmpncol")]] %||% 2))
+      max(360, min(1600, 200 + rows * 200))
+    }
+
+    # Written out three times rather than registered in a loop, on
+    # purpose. check_server / test_wiring scan for a literal
+    # output[[ns("x")]] to prove every UI slot is filled; a slot bound
+    # through a loop variable is invisible to that scan, so a typo in a
+    # plot id would go back to being something only a human clicking the
+    # tab could find. The shared logic is in cmp_plot_of() above, so
+    # there is nothing here to drift.
+    cmp_panel <- function(obj) renderPlot({
+      pl <- obj(); validate(need(!is.null(pl), ""))
+      pl + theme(legend.position = "none") })
 
     output[[ns("cmpplot_ui")]] <- renderUI(
-      plotOutput(ns("cmpplot"), height = "460px"))
-    output[[ns("cmpplot")]] <- renderPlot({
-      pl <- cmp_obj(); validate(need(!is.null(pl), ""))
-      pl + theme(legend.position = "none") })
+      plotOutput(ns("cmpplot"), height = sprintf("%dpx", cmp_h())))
+    output[[ns("cmpplot")]] <- cmp_panel(cmp_obj)
+
+    output[[ns("cmpplotw_ui")]] <- renderUI(
+      plotOutput(ns("cmpplotw"), height = sprintf("%dpx", cmp_h())))
+    output[[ns("cmpplotw")]] <- cmp_panel(cmp_obj_w)
+
+    output[[ns("cmpplotmw_ui")]] <- renderUI(
+      plotOutput(ns("cmpplotmw"), height = sprintf("%dpx", cmp_h())))
+    output[[ns("cmpplotmw")]] <- cmp_panel(cmp_obj_m)
+
     output[[ns("cmplegend")]] <- renderPlot({
       pl <- cmp_obj(); validate(need(!is.null(pl), "")); draw_legend(pl) },
       bg = "transparent")
@@ -4280,11 +4521,15 @@ server <- function(input, output, session) {
 
   # --- data ------------------------------------------------
   # CEF either uploaded here or handed over from the InterCatch section
+  # rv$cef_catches only - never input$file. Reading the upload here made
+  # SELECTING a file the load: the reactive fired on the file-chooser, the
+  # whole app re-derived, and whatever was loaded before was gone before
+  # any guard could ask about it. Both CEF routes now fill rv$cef_catches
+  # from a button, and both go through with_load_guard() to get there.
   raw <- reactive({
     if (!is.null(rv$ic$catches)) return(as.data.frame(rv$ic$catches))
-    if (!is.null(rv$cef_catches)) return(rv$cef_catches)
-    req(input$file)
-    read.csv(input$file$datapath, sep = input$sep, stringsAsFactors = FALSE)
+    req(!is.null(rv$cef_catches))
+    rv$cef_catches
   })
 
   # load the three CEF tables from a folder, matched by name
@@ -4366,11 +4611,46 @@ server <- function(input, output, session) {
     d
   })
 
+  # A level of detail belongs to the panel that CHOSE it. The raising
+  # tabs choose nothing - they run whichever grouping the allocation
+  # builder produced, and that grouping is already fixed at its own
+  # resolution. A second box there could disagree with the one the
+  # groups were built at, and then the conditions reference columns the
+  # strata table no longer has.
+  #
+  # So "nr" (Raise groups) and "fin" (the adopted raising) are aliases:
+  # they follow the builder that is actually feeding them.
+  DMAP_ALIAS <- function(p) {
+    if (!p %in% c("nr", "fin")) return(p)
+    src <- input$nr_source %||% "auto"
+    if (identical(src, "manual")) "mg" else "ar"
+  }
   dmap <- function(p) {
+    p <- DMAP_ALIAS(p)
     f <- input[[paste0(p, "_fleet")]]; a <- input[[paste0(p, "_area")]]
     c(Fleet = if (is.null(f)) "metier4" else f, Country = "Country",
       Area = if (is.null(a)) "ICESDivision" else a, Season = "Season")
   }
+  # Say, on the raising tabs, WHICH box the resolution came from. An
+  # inherited setting that is merely absent reads as "not set"; named, it
+  # reads as "decided upstream, go there to change it".
+  lvl_note <- function() {
+    src <- input$nr_source %||% "auto"
+    who <- if (identical(src, "manual")) "Manual groups" else "Raising cascade"
+    m <- dmap("nr")
+    div(class = "lodbox", style = "margin-top:10px",
+        div(class = "lodtitle", "Level of detail (inherited)"),
+        div(style = "font-size:11.5px;color:#7a4a00;line-height:1.5",
+            "Fleet ", tags$b(unname(m["Fleet"])), tags$br(),
+            "Area ", tags$b(unname(m["Area"]))),
+        tags$span(class = "note", style = "color:#9a5000",
+                  "Set on Allocation groups > ", who,
+                  ". The saved groups were resolved at this level, so it ",
+                  "is not editable here."))
+  }
+  output$nr_lvl_note  <- renderUI(lvl_note())
+  output$fin_lvl_note <- renderUI(lvl_note())
+
   col_of <- function(p, sel) {
     if (is.null(sel) || !nzchar(sel)) return(NULL)
     unname(dmap(p)[sel])
@@ -5184,16 +5464,26 @@ server <- function(input, output, session) {
     datatable(comparison_table(cmp(), keys),
               options = list(scrollX = TRUE, pageLength = 15), rownames = FALSE) })
 
+  # One description of where the data came from, so the header, the live
+  # script and the TAF set cannot disagree about it. rv$cef_files is set
+  # by whichever CEF route ran; the InterCatch routes leave it NULL.
+  cef_src <- reactive({
+    f <- rv$cef_files
+    list(catches = f$catches %||% "catch_data.csv",
+         dir     = f$dir %||% NA_character_,
+         dist    = f$distributions %||% NA_character_,
+         eff     = f$effort %||% NA_character_)
+  })
+
   # --- 9. code ---------------------------------------------
   code_lines <- reactive({
     out <- character(0)
     if ("head" %in% input$code_parts)
-      out <- c(out, emit_header(if (is.null(input$file)) "(none)" else input$file$name,
-                                input$stock, nrow(dat())))
+      out <- c(out, emit_header(cef_src()$catches, input$stock, nrow(dat())))
     if ("derive" %in% input$code_parts)
       out <- c(out,
-        emit_load_code(if (is.null(input$file)) "catch_data.csv" else input$file$name,
-                       input$sep),
+        emit_load_code(cef_src()$catches, input$sep, dir = cef_src()$dir,
+                       dist_file = cef_src()$dist, eff_file = cef_src()$eff),
         c(emit_area_helper(), emit_derive_code()),
         emit_filter_code(input$stock, input$year, unname(dmap("ar")[DIMS]),
                          ar_dr()[1], ar_dr()[2]))
@@ -5622,22 +5912,40 @@ server <- function(input, output, session) {
     read.csv(f$datapath, sep = input$sep %||% ",", stringsAsFactors = FALSE)
 
   # Uploading CEF tables by hand is the CEF route by another door, so it
-  # claims ownership the same way the folder loader does. The catches file
-  # is what defines the dataset, so that is the upload that triggers the
-  # guard; the two companions just fill their slots.
-  observeEvent(input$file, with_load_guard("cef", function() {
-    rv$cef_files <- list(dir = ".", catches = input$file$name,
-                         distributions = NA_character_, effort = NA_character_)
-    invisible(NULL) }), ignoreInit = TRUE)
-
-  observe({
+  # claims ownership the same way the folder loader does - and, since this
+  # release, at the same moment: on a button, not on a file-chooser.
+  #
+  # All three files are read in ONE action. The old pair of bare
+  # observe()s on file_dist / file_eff wrote straight into rv$dist and
+  # rv$eff with no guard at all, so an InterCatch conversion could have
+  # its distributions swapped underneath it by a stray upload.
+  do_cef_upload <- function() {
+    if (is.null(input$file)) {
+      showNotification("Choose a catches file first.", type = "error")
+      return(invisible(NULL))
+    }
+    set_busy(TRUE, "Reading the uploaded CEF tables...")
+    on.exit(set_busy(FALSE), add = TRUE)
+    rv$cef_catches <- read.csv(input$file$datapath, sep = input$sep %||% ",",
+                               stringsAsFactors = FALSE)
     rv$dist <- rv_read(input$file_dist)
-    if (!is.null(input$file_dist) && !is.null(rv$cef_files))
-      rv$cef_files$distributions <- input$file_dist$name })
-  observe({
-    rv$eff <- rv_read(input$file_eff)
-    if (!is.null(input$file_eff) && !is.null(rv$cef_files))
-      rv$cef_files$effort <- input$file_eff$name })
+    rv$eff  <- rv_read(input$file_eff)
+    # The uploads land in a per-session temp directory whose name means
+    # nothing to a reader, so the script gets the names the user chose.
+    rv$cef_files <- list(
+      dir = NA_character_, catches = input$file$name,
+      distributions = if (is.null(input$file_dist)) NA_character_
+                      else input$file_dist$name,
+      effort = if (is.null(input$file_eff)) NA_character_
+               else input$file_eff$name)
+    showNotification(sprintf("Loaded catches%s%s",
+                             if (!is.null(input$file_dist)) ", distributions" else "",
+                             if (!is.null(input$file_eff)) ", effort" else ""),
+                     type = "message", duration = 5)
+    invisible(NULL)
+  }
+
+  observeEvent(input$cef_load_upl, with_load_guard("cef", do_cef_upload))
 
   output$cef_file_check <- renderUI({
     row <- function(lbl, ok, req) div(style = sprintf("color:%s;font-size:12px",
@@ -5646,7 +5954,7 @@ server <- function(input, output, session) {
         "&#10007;", lbl)))
     needBio <- any(c("lengths","ages") %in% cfg$need)
     div(class = "chain",
-        row("catches", !is.null(input$file) || !is.null(rv$ic$catches), TRUE),
+        row("catches", !is.null(rv$cef_catches) || !is.null(rv$ic$catches), TRUE),
         row("distributions", !is.null(rv$dist), needBio),
         row("effort (optional)", !is.null(rv$eff), FALSE)) })
 
@@ -5965,8 +6273,9 @@ server <- function(input, output, session) {
     lg <- log_set(lg, "setup", code_setup(EXT$dir))
     lg <- log_set(lg, "intercatch", tryCatch(ic_code(ic_inputs()), error = function(e) NULL))
     lg <- log_set(lg, "load_cef", tryCatch(c(
-      emit_load_code(if (is.null(input$file)) "catch_data.csv" else input$file$name,
-                     input$sep %||% ","),
+      emit_load_code(cef_src()$catches, input$sep %||% ",",
+                     dir = cef_src()$dir, dist_file = cef_src()$dist,
+                     eff_file = cef_src()$eff),
       emit_derive_code()), error = function(e) NULL))
     lg <- log_set(lg, "strata", tryCatch(
       emit_filter_code(input$stock, input$year, unname(dmap("ar")[DIMS]),

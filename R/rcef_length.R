@@ -738,7 +738,13 @@ emit_alloc_conditions <- function(groups) {
       "## table does not carry - coverage is a property of a stratum, not",
       "## of a row. Join them on once, and the conditions read as the",
       "## thresholds they are rather than as a list of stratum keys.",
-      "catch_raised <- add_stratum_metrics(catch_raised, dims_biology)",
+      "##",
+      "## `dist =` is not optional here. n_measurements is counted FROM the",
+      "## distributions; without them the column is created but is 0",
+      "## everywhere, so `n_measurements >= 100` matches nothing and the",
+      "## donor pool comes back empty instead of erroring.",
+      "catch_raised <- add_stratum_metrics(catch_raised, dims_biology,",
+      "                                    dist = distributions)",
       ""),
     "## Groups are tested top to bottom; the first whose allocStrataCond a",
     "## stratum matches allocates it, so nothing is allocated twice.",
@@ -1646,9 +1652,12 @@ alloc_conds_from_groups <- function(groups) {
   }
   matched <- lapply(groups, function(g)
     mk(fld(g, "matched", fld(g, "alloc", "TRUE"))))
-  simple <- stats::setNames(
+  # The readable form: own clause per group, but the catch-all closed
+  # against everything above it. quo(TRUE) in last position is what makes
+  # catchAllocationAoL() report "assigned to more than one stratum".
+  simple <- close_catch_all(stats::setNames(
     vapply(groups, function(g) { t <- fld(g, "alloc", "TRUE"); if (nzchar(t)) t else "TRUE" },
-           character(1)), names(groups))
+           character(1)), names(groups)), as_quo = FALSE)
   names(alloc) <- names(matched) <- names(groups)
   list(allocStrataCond = alloc, bioMatchedCond = matched,
        allocStrataText = stats::setNames(txts, names(groups)),

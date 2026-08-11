@@ -118,9 +118,12 @@ ok(!is.null(rlang::eval_tidy(rlang::quo(coverage >= 50), data = dm)),
 
 ## --- the simplified strataCond a human reads --------------------------
 ##
-## First-match-wins means the "& !(everything above)" is redundant on
-## screen; complement_conds() supplies the partition the engine needs.
-## conds_from_rules() now returns both.
+## Non-catch-all clauses stay exactly as written: first-match-wins makes
+## "& !(everything above)" redundant on screen for them. The CATCH-ALL is
+## the exception and must be closed, because catchRaising() applies the
+## conditions independently rather than in order - a bare TRUE there
+## re-claims every stratum the rules above already took and the run dies
+## with "N records assigned to more than one stratum".
 rr <- list(
   new_rule("G1", "", list(list(var = "metier4", values = "TBB"))),
   new_rule("G2", "", list(list(var = "metier4", values = c("OTB", "SSC")))),
@@ -130,15 +133,35 @@ cc <- conds_from_rules(rr, list(), "metier4")
 simple <- vapply(cc$strataCond_simple,
                  function(q) paste(deparse(rlang::quo_get_expr(q)), collapse=" "),
                  character(1))
-ok(!any(grepl("!", simple)), "the simple clauses carry no complement noise")
-ok(identical(simple[["G3"]], "TRUE"), "the catch-all is a bare TRUE on screen")
+ok(!any(grepl("!", simple[c("G1", "G2")])),
+   "the named clauses carry no complement noise")
+ok(!identical(simple[["G3"]], "TRUE"),
+   "the catch-all is NOT a bare TRUE - that is the double-assignment bug")
+ok(grepl("metier4", simple[["G3"]]) && grepl("^!\\(", simple[["G3"]]),
+   "the catch-all is the negation of the clauses above it")
 
-## complement_conds turns them into a real partition
-part <- complement_conds(cc$strataCond_simple)
+## and the readable form is ALREADY a partition - no second call needed
 d <- data.frame(metier4 = c("TBB", "OTB", "GNS"), stringsAsFactors = FALSE)
+hs <- vapply(cc$strataCond_simple,
+             function(q) sum(rlang::eval_tidy(q, data = d)), numeric(1))
+ok(sum(hs) == nrow(d), "the emitted clauses claim every row exactly once")
+ok(hs[["G3"]] == 1, "the catch-all picks up exactly the unclaimed GNS row")
+
+## a TRUE with nothing above it really does mean everything
+ok(identical(unname(close_catch_all(list(G1 = "TRUE"), as_quo = FALSE)), "TRUE"),
+   "a lone catch-all stays TRUE")
+## and the donor side is never closed
+mtxt <- vapply(cc$matchedDataCond,
+               function(q) paste(deparse(rlang::quo_get_expr(q)), collapse=" "),
+               character(1))
+ok(identical(mtxt[["G3"]], "TRUE"),
+   "matchedDataCond keeps its TRUE - donors may be reused")
+
+## complement_conds still turns overlapping clauses into a partition
+part <- complement_conds(cc$strataCond_simple)
 hits <- vapply(part, function(q) sum(rlang::eval_tidy(q, data = d)), numeric(1))
 ok(sum(hits) == nrow(d), "the complemented clauses claim every row exactly once")
-ok(hits[["G3"]] == 1, "the catch-all picks up exactly the unclaimed GNS row")
+ok(hits[["G3"]] == 1, "complement_conds agrees on the unclaimed GNS row")
 
 ## --- the two focused strata tables -----------------------------------
 ##

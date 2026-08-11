@@ -480,19 +480,28 @@ plot_allocation_comparison <- function(cmp,
                                        value = c("numbers", "tonnes",
                                                  "meanweight"),
                                        facet_var = NULL, what = "Length",
-                                       ncol = 2) {
+                                       ncol = 2, facet2 = NULL,
+                                       free_x = FALSE, free_y = TRUE) {
   value <- match.arg(value)
   if (is.null(cmp) || !nrow(cmp)) return(NULL)
-  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+  # A facet naming a column the comparison does not carry used to reach
+  # facet_wrap() and error inside ggplot at draw time, which surfaces as
+  # an empty panel with no explanation. Unknown facets are dropped.
+  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) &&
+    nzchar(v) && v %in% names(cmp)
+  if (!has(facet_var)) facet_var <- NULL
+  if (!has(facet2))    facet2    <- NULL
+  if (!is.null(facet_var) && identical(facet_var, facet2)) facet2 <- NULL
+  scl <- facet_scales(free_x, free_y)
   col <- if (value == "meanweight") "mean_weight" else value
   if (!col %in% names(cmp)) return(NULL)
   # Numbers and tonnes are extensive - they add across whatever the
   # grouping collapsed. A mean weight is not: summing it would produce a
   # number with no meaning, so it is re-weighted by the numbers behind it.
+  keys <- c(".cls", "allocation", facet_var, facet2)
   d <- if (value == "meanweight")
     cmp %>%
-      group_by(across(all_of(c(".cls", "allocation",
-                               if (has(facet_var)) facet_var)))) %>%
+      group_by(across(all_of(keys))) %>%
       summarise(v = {
         w <- .data$numbers; x <- .data$mean_weight
         ok <- is.finite(w) & is.finite(x) & w > 0
@@ -500,8 +509,7 @@ plot_allocation_comparison <- function(cmp,
       }, .groups = "drop") %>%
       filter(is.finite(v))
   else cmp %>%
-    group_by(across(all_of(c(".cls", "allocation",
-                             if (has(facet_var)) facet_var)))) %>%
+    group_by(across(all_of(keys))) %>%
     summarise(v = sum(.data[[col]], na.rm = TRUE), .groups = "drop") %>%
     filter(is.finite(v))
   if (!nrow(d)) return(NULL)
@@ -512,8 +520,16 @@ plot_allocation_comparison <- function(cmp,
     scale_colour_var("allocation", d$allocation, name = "Allocation") +
     scale_fill_var("allocation", d$allocation, name = "Allocation") +
     scale_y_continuous(labels = scales::comma) +
-    (if (has(facet_var)) facet_wrap(vars(.data[[facet_var]]), ncol = ncol,
-                                    scales = "free_y") else NULL) +
+    # One facet wraps; two go on a grid, rows x columns, because that is
+    # the only layout in which both stay readable - wrapping an
+    # interaction gives panel strips like "Dis, BE, 1" and no axis for
+    # either variable.
+    (if (!is.null(facet_var) && !is.null(facet2))
+       facet_grid(rows = vars(.data[[facet_var]]),
+                  cols = vars(.data[[facet2]]), scales = scl)
+     else if (!is.null(facet_var))
+       facet_wrap(vars(.data[[facet_var]]), ncol = ncol, scales = scl)
+     else NULL) +
     labs(title = sprintf("%s at %s by allocation",
                          switch(value, tonnes = "Stock weight",
                                 meanweight = "Mean weight", "Numbers"),

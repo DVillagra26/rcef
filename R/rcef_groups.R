@@ -779,20 +779,67 @@ conds_from_rules <- function(rules, sets = list(), dims = NULL) {
   # quietly stay in the donor pool - a silent no-op with no error and
   # nothing on screen to show for it.
   matched <- lapply(rules, function(r) mk(source_cond_string(r, dims)))
-  # The SIMPLE strataCond a human reads: each group's own clause, and the
-  # catch-all as a bare TRUE. First-match-wins makes the complements
-  # redundant on screen - a reader does not need "& !(everything above)"
-  # spelled out to understand that G2 gets what G1 did not. The complements
-  # are still what the ENGINE runs (catchRaising bind_rows the per-clause
-  # results, so overlapping conditions double-count); complement_conds()
-  # turns the simple form into the executable one.
-  simple <- lapply(rules, function(r) {
-    this <- cond_string(r$raise)
-    mk(this)
-  })
+  # The READABLE strataCond: each group's own clause, unadorned, EXCEPT
+  # the catch-all, which is closed against everything above it. See
+  # close_catch_all() for why the bare TRUE cannot be shipped.
+  simple <- close_catch_all(
+    stats::setNames(lapply(rules, function(r) cond_string(r$raise)), ids))
   names(strata) <- names(matched) <- names(simple) <- ids
   list(strataCond = strata, matchedDataCond = matched,
        strataCond_simple = simple)
+}
+
+#' Close a catch-all clause against the groups above it
+#'
+#' The last group of a manual set is almost always a catch-all - "everything
+#' the rules above did not claim". Written the obvious way that clause is
+#' `TRUE`, and `TRUE` is wrong: `catchRaising()` and `catchAllocationAoL()`
+#' do not evaluate the conditions in order, they apply each independently
+#' and then check that no record was claimed twice. A bare `TRUE` claims the
+#' whole table, every stratum an earlier group already took is claimed a
+#' second time, and the run stops with
+#' "N records assigned to more than one stratum".
+#'
+#' So a catch-all is written as the negation of everything above it. Only
+#' the catch-all is touched: the other clauses are left exactly as the user
+#' wrote them, which is what makes the emitted script readable. This is the
+#' difference from [complement_conds()], which complements every clause and
+#' produces the `& !(...)` noise on lines that never needed it.
+#'
+#' Strata conditions only. A donor pool (`matchedDataCond` /
+#' `bioMatchedCond`) may legitimately be reused by several groups, and
+#' closing those would starve later groups of the data they were pointed at.
+#'
+#' @param clauses A named list or character vector of condition strings, in
+#'   evaluation order. Quosures are accepted and deparsed.
+#' @param as_quo Return quosures (the default) or plain strings.
+#' @return The same names, with any bare `TRUE` replaced by
+#'   `!( (clause1) | (clause2) | ... )`. A `TRUE` in first position stays
+#'   `TRUE`: with nothing above it, it really does mean everything.
+#' @seealso [conds_from_rules()], [complement_conds()]
+#' @export
+#' @examples
+#' close_catch_all(list(G1 = "metier4 == \"TBB\"", G2 = "TRUE"), as_quo = FALSE)
+close_catch_all <- function(clauses, as_quo = TRUE) {
+  if (!length(clauses)) return(clauses)
+  txt <- vapply(clauses, function(c)
+    if (inherits(c, "quosure")) rlang::quo_text(c) else as.character(c),
+    character(1))
+  txt[!nzchar(txt)] <- "TRUE"
+  out <- character(length(txt))
+  for (i in seq_along(txt)) {
+    prev <- txt[seq_len(i - 1)]
+    out[i] <- if (identical(txt[[i]], "TRUE") && i > 1)
+      # one clause above needs no inner brackets; several do, or the `|`
+      # would bind loosely against an `&` inside one of them
+      paste0("!(", if (length(prev) == 1) prev
+                   else paste(sprintf("(%s)", prev), collapse = " | "), ")")
+    else txt[[i]]
+  }
+  names(out) <- names(clauses)
+  if (!as_quo) return(out)
+  lapply(stats::setNames(out, names(clauses)), function(t)
+    rlang::new_quosure(rlang::parse_expr(t), env = globalenv()))
 }
 
 #' Make a set of overlapping strata clauses into a partition
