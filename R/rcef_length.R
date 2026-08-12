@@ -842,13 +842,97 @@ emit_alloc_grouping_code <- function(spec, method = "hierarchical",
     "alloc_groups <- cascade_to_groups(assigned, alloc_cols)")
 }
 
+#' The length/age grouping as a recipe, then as conditions
+#'
+#' What a reviewer needs from the hierarchical builder is the DECISION,
+#' not its output. The Code tab used to print the resolved
+#' `allocStrataCond` / `bioMatchedCond` and nothing else - a wall of
+#' explicit clauses that says which strata ended up together but not the
+#' rule that put them there, and which cannot be re-run against next
+#' year's data because it has the answer baked in.
+#'
+#' This is the biology twin of [emit_hier_code()] on the discard side, and
+#' deliberately reads the same way: a banner stating the keys, the
+#' per-rung thresholds and any donor bar, then the calls that reproduce
+#' them, then the conditions those calls resolve to, kept for reference.
+#'
+#' @param spec The grouping spec stored with the allocation (`keys`,
+#'   `thresholds`, `min_meas`, `keep_cc`, `cols`, `bms`, `dims`, and the
+#'   donor bars). `NULL` falls back to the conditions alone.
+#' @param groups The resolved allocation groups.
+#' @param tag "Length" or "Age".
+#' @param method "hierarchical" or "manual".
+#' @return A character vector of R code.
+#' @seealso [emit_hier_code()], [emit_alloc_grouping_code()],
+#'   [emit_alloc_conditions()]
+#' @export
+emit_alloc_recipe_code <- function(spec, groups, tag = "Length",
+                                   method = "hierarchical") {
+  conds <- emit_alloc_conditions(groups)
+  if (is.null(spec)) return(conds)
+
+  cls <- if (identical(tag, "Age")) "age" else "length"
+  one <- function(x, cc) {
+    v <- tryCatch(cc_step_value(x, 1)[[cc]], error = function(e) NA_real_)
+    if (is.null(v) || !is.finite(v)) "-" else format(v)
+  }
+  bar <- function(x) if (is.null(x) || !is.finite(suppressWarnings(as.numeric(x))))
+    NULL else format(x)
+
+  # Landings and discards carry separate bars, so the banner shows both
+  # rather than one number that is only true for half the data.
+  head <- c(
+    "## ===========================================================",
+    sprintf("## Approach A - hierarchical %s allocation", cls),
+    "##",
+    "## The recipe is the decision: the keys the cascade walks, the",
+    "## coverage and measurement bar each rung must clear (landings and",
+    "## discards separately), and any donor excluded by coverage or",
+    "## measurements. alloc_steps() + assign_alloc_cascade() turn this",
+    "## into the two condition lists below.",
+    sprintf("## Strata defined by : %s",
+            paste(spec$cols %||% spec$dims %||% character(0), collapse = ", ")),
+    sprintf("## Hierarchy         : %s",
+            paste(spec$keys %||% character(0), collapse = " > ")),
+    sprintf("## Coverage bars     : landings %s%%, discards %s%%",
+            one(spec$thresholds, "Lan"), one(spec$thresholds, "Dis")),
+    sprintf("## Measurement bars  : landings %s, discards %s",
+            one(spec$min_meas, "Lan"), one(spec$min_meas, "Dis")),
+    sprintf("## Catch category    : %s",
+            if (isTRUE(spec$keep_cc)) "never dropped - landings only match landings"
+            else "dropped at the last rung; landings and discards may pool"),
+    if (!is.null(bar(spec$donor_cov_min)))
+      sprintf("## Donor coverage min: %s%%", bar(spec$donor_cov_min)),
+    if (!is.null(bar(spec$donor_meas_min)))
+      sprintf("## Donor measurements: %s", bar(spec$donor_meas_min)),
+    sprintf("## BMS               : %s",
+            if (isTRUE(spec$bms)) "treated as discards" else "treated as landed"),
+    "## ===========================================================",
+    "")
+
+  c(head,
+    emit_alloc_grouping_code(spec, method, tag),
+    "",
+    "## For reference, the conditions the cascade resolved to. They are",
+    "## the OUTPUT of the recipe above, not a second place to edit it:",
+    "## change a threshold and re-run, do not hand-edit these lists.",
+    conds)
+}
+
 #' @noRd
 #' @export
 emit_alloc_code <- function(groups, distributionType = "LengthTotal",
                             originType = "WGEstimate",
                             variableType = "WeightLive",
-                            variableType_mean = "WeightLive") {
-  c(emit_alloc_conditions(groups), "",
+                            variableType_mean = "WeightLive",
+                            with_conditions = TRUE) {
+  # with_conditions = FALSE when the caller has already printed them -
+  # emit_alloc_recipe_code() ends with the resolved lists, and emitting
+  # them again here put two identical allocStrataCond blocks in the
+  # script, the second silently overwriting the first. Harmless as R,
+  # baffling to read, and it invites someone to edit the copy that is
+  # not the one in force.
+  c(if (isTRUE(with_conditions)) c(emit_alloc_conditions(groups), "") else NULL,
     "## check the conditions resolve before allocating",
     "cond_bio_test <- check_group_conditions(",
     "    catch_data = catch_data_raised, condition_list = allocStrataCond,",

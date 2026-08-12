@@ -153,13 +153,28 @@ opt_lab <- function(name, desc) HTML(sprintf(
 
 #' Text path input with a browse button
 #'
+#' Damian's note was that finding a folder outside the project was
+#' painful, and that the file-upload dialog is easier. It is - but a
+#' browser will not hand back an absolute path from that dialog, for
+#' security reasons that are not going away, and an absolute path is
+#' exactly what the emitted script needs in order to run on someone
+#' else's machine. A native picker would buy convenience here and cost
+#' reproducibility there.
+#'
+#' So the explorer stays server-side, where the real filesystem is
+#' visible, and the navigability problem is fixed directly: shortcuts to
+#' the roots and the home/working directories, a clickable breadcrumb, a
+#' list of recently used folders, and a preview of the data files in the
+#' folder so it can be confirmed before loading rather than after.
+#'
 #' @param id Input id.
 #' @param value Initial path.
+#' @param pattern Files to preview, as a regular expression.
 #' @return A shiny tag.
 #' @seealso [dir_picker_server()]
 #' @keywords internal
 #' @noRd
-dir_picker <- function(id, value = ".") {
+dir_picker <- function(id, value = ".", pattern = "\\.(csv|txt)$") {
   tagList(
     fluidRow(
       column(9, textInput(id, NULL, value, width = "100%")),
@@ -173,14 +188,19 @@ dir_picker <- function(id, value = ".") {
 #'
 #' @param id Input id used by [dir_picker()].
 #' @param input,output,session The module's shiny objects.
+#' @param start Folder to open on first use.
+#' @param pattern Files to preview in each folder.
 #' @param ... Further arguments.
 #' @return Called for its side effects.
 #' @seealso [dir_picker()]
 #' @keywords internal
 #' @noRd
 dir_picker_server <- function(id, input, output, session,
-                              start = getOption("rcef.root", getwd())) {
+                              start = getOption("rcef.root", getwd()),
+                              pattern = "\\.(csv|txt)$", ...) {
   open_flag <- reactiveVal(FALSE)
+  # Recent folders are per session and shared across every picker, so a
+  # path found once on the CEF tab is one click away on the config tab.
   observeEvent(input[[paste0(id, "_browse")]], open_flag(!open_flag()))
 
   observeEvent(input[[paste0(id, "_cd")]], {
@@ -188,7 +208,9 @@ dir_picker_server <- function(id, input, output, session,
   }, ignoreInit = TRUE)
 
   observeEvent(input[[paste0(id, "_pick")]], {
-    updateTextInput(session, id, value = input[[paste0(id, "_pick")]])
+    pth <- input[[paste0(id, "_pick")]]
+    updateTextInput(session, id, value = pth)
+    dir_picker_recent(pth)
     open_flag(FALSE)
   }, ignoreInit = TRUE)
 
@@ -199,25 +221,146 @@ dir_picker_server <- function(id, input, output, session,
     cur <- normalizePath(cur, mustWork = FALSE)
     subs <- tryCatch(list.dirs(cur, recursive = FALSE, full.names = TRUE),
                      error = function(e) character(0))
+    files <- tryCatch(list.files(cur, pattern = pattern, ignore.case = TRUE),
+                      error = function(e) character(0))
     parent <- dirname(cur)
-    cd_btn <- function(path, label, ic) tags$button(
-      class = "btn btn-xs btn-default", style = "margin:1px;text-align:left",
-      icon(ic), label,
-      onclick = sprintf("Shiny.setInputValue('%s_cd', %s, {priority:'event'})",
-                        id, jsonlite::toJSON(path, auto_unbox = TRUE)))
+
+    go <- function(path) sprintf(
+      "Shiny.setInputValue('%s_cd', %s, {priority:'event'})",
+      id, jsonlite::toJSON(path, auto_unbox = TRUE))
+    cd_btn <- function(path, label, ic, cls = "btn-xs btn-default") tags$button(
+      class = paste("btn", cls), style = "margin:1px;text-align:left",
+      icon(ic), label, onclick = go(path))
+
+    # A breadcrumb, so getting from a deep folder back to a sibling near
+    # the top is one click instead of six presses of "up one level".
+    crumbs <- dir_picker_crumbs(cur)
+    quick <- dir_picker_shortcuts()
+    recent <- setdiff(dir_picker_recent(), cur)
+
     div(style = "border:1px solid #cfd8e0;border-radius:6px;padding:8px;
-                 margin-top:6px;background:#fbfcfd;max-height:230px;overflow:auto",
-      div(class = "note", style = "font-family:monospace;margin-bottom:4px", cur),
-      if (parent != cur) cd_btn(parent, ".. (up one level)", "level-up-alt"),
-      if (length(subs))
-        div(lapply(subs, function(s) div(cd_btn(s, basename(s), "folder"))))
-      else div(class = "note", "no subfolders"),
+                 margin-top:6px;background:#fbfcfd",
+      # --- shortcuts: roots, home, working directory ---
+      div(style = "margin-bottom:5px",
+        tags$span(class = "note", style = "display:inline;margin-right:4px",
+                  "Go to:"),
+        lapply(seq_along(quick), function(i)
+          cd_btn(quick[[i]], names(quick)[i], "hdd-o", "btn-xs btn-info"))),
+      if (length(recent))
+        div(style = "margin-bottom:5px",
+          tags$span(class = "note", style = "display:inline;margin-right:4px",
+                    "Recent:"),
+          lapply(recent, function(r)
+            cd_btn(r, basename(r), "clock-o", "btn-xs btn-default"))),
+      # --- breadcrumb ---
+      div(style = "font-family:monospace;font-size:11px;margin-bottom:4px;
+                   padding-bottom:4px;border-bottom:1px solid #e2e8ee",
+        lapply(seq_along(crumbs), function(i) tagList(
+          tags$a(href = "#", style = "color:#12324f", names(crumbs)[i],
+                 onclick = paste0(go(crumbs[[i]]), "; return false;")),
+          if (i < length(crumbs)) tags$span(style = "color:#aaa", " / ")))),
+      div(style = "display:flex;gap:10px",
+        # --- folders ---
+        div(style = "flex:1;max-height:210px;overflow:auto",
+          if (parent != cur) div(cd_btn(parent, ".. (up one level)", "level-up-alt")),
+          if (length(subs))
+            div(lapply(subs, function(x) div(cd_btn(x, basename(x), "folder"))))
+          else div(class = "note", "no subfolders")),
+        # --- what is actually in it ---
+        # Without this the folder was chosen blind and the mismatch only
+        # showed up as "No catches file found in that folder" after the
+        # load button, one screen away from the control that caused it.
+        div(style = "flex:1;max-height:210px;overflow:auto;border-left:1px solid #e2e8ee;padding-left:8px",
+          tags$b(style = "font-size:11px;color:#5b7186",
+                 sprintf("Data files here (%d)", length(files))),
+          if (length(files))
+            div(style = "font-family:monospace;font-size:10.5px;color:#39536b",
+                lapply(utils::head(files, 40), function(f) div(f)),
+                if (length(files) > 40)
+                  div(class = "note", sprintf("... and %d more",
+                                              length(files) - 40)))
+          else div(class = "note", "none - this is probably not the folder"))),
       tags$button(class = "btn btn-sm btn-success", style = "margin-top:6px",
         icon("check"), "Use this folder",
         onclick = sprintf("Shiny.setInputValue('%s_pick', %s, {priority:'event'})",
                           id, jsonlite::toJSON(cur, auto_unbox = TRUE))))
   })
 }
+
+# Where a person plausibly wants to jump to. On Windows the drive letters
+# are the whole point of the request - a data folder on a network share is
+# not reachable by walking down from the project directory.
+#' @keywords internal
+#' @noRd
+dir_picker_shortcuts <- function() {
+  out <- list()
+  wd <- tryCatch(normalizePath(getwd(), mustWork = FALSE), error = function(e) NULL)
+  hm <- tryCatch(normalizePath("~", mustWork = FALSE), error = function(e) NULL)
+  if (!is.null(wd)) out[["Project"]] <- wd
+  if (!is.null(hm) && !identical(hm, wd)) out[["Home"]] <- hm
+  if (.Platform$OS.type == "windows") {
+    drives <- paste0(LETTERS, ":/")
+    ok <- drives[vapply(drives, function(d)
+      isTRUE(tryCatch(dir.exists(d), error = function(e) FALSE)), logical(1))]
+    for (d in ok) out[[sub("/$", "", d)]] <- d
+  } else out[["/"]] <- "/"
+  out
+}
+
+# The path split into cumulative prefixes, for the breadcrumb.
+#' @keywords internal
+#' @noRd
+dir_picker_crumbs <- function(path) {
+  path <- gsub("\\\\", "/", path)
+  # The root is whatever cannot be walked above, and it is not the same
+  # thing on every platform:
+  #   //server/share  a UNC share - the first TWO components are the root
+  #                   together, and "/server" alone is not a place
+  #   C:/             a drive root; the bare "C:" is NOT it, that means
+  #                   the current directory on C:
+  #   /               the unix root
+  # Getting this wrong gives a breadcrumb whose top entries lead nowhere.
+  if (grepl("^//[^/]", path)) {
+    rest <- sub("^//", "", path)
+    parts <- strsplit(rest, "/", fixed = TRUE)[[1]]
+    parts <- parts[nzchar(parts)]
+    if (length(parts) < 2) return(stats::setNames(list(path), path))
+    root <- paste0("//", parts[1], "/", parts[2])
+    out <- stats::setNames(list(root), root)
+    acc <- root
+    for (p in parts[-(1:2)]) { acc <- paste0(acc, "/", p); out[[p]] <- acc }
+    return(out)
+  }
+  parts <- strsplit(path, "/", fixed = TRUE)[[1]]
+  parts <- parts[nzchar(parts)]
+  if (grepl("^[A-Za-z]:", path) && length(parts)) {
+    root <- paste0(parts[1], "/")
+    out <- stats::setNames(list(root), root)
+    acc <- parts[1]
+    for (p in parts[-1]) { acc <- paste0(acc, "/", p); out[[p]] <- acc }
+    return(out)
+  }
+  out <- list(); acc <- ""
+  if (startsWith(path, "/")) { out[["/"]] <- "/"; acc <- "" }
+  for (p in parts) {
+    acc <- if (startsWith(path, "/") || nzchar(acc)) paste0(acc, "/", p) else p
+    out[[p]] <- acc
+  }
+  if (!length(out)) out[["."]] <- path
+  out
+}
+
+# Session-scoped list of folders that were actually chosen.
+#' @keywords internal
+#' @noRd
+dir_picker_recent <- local({
+  seen <- character(0)
+  function(add = NULL) {
+    if (!is.null(add) && nzchar(add))
+      seen <<- utils::head(unique(c(add, seen)), 6)
+    seen
+  }
+})
 
 # ----------------------------------------------------------
 #  How tall a plot panel must be

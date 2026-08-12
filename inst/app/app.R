@@ -3863,14 +3863,28 @@ server <- function(input, output, session) {
     output[[ns("conds")]] <- renderText(
       paste(emit_alloc_conditions(getrv("groups") %||% list()), collapse = "\n"))
 
-    # the hierarchical Code tab: the cascade resolved to explicit groups,
-    # emitted the same way the manual ones are, so the two read alike
+    # The hierarchical Code tab shows the RECIPE first - keys, per-rung
+    # bars, donor exclusions - and only then the conditions it resolves
+    # to, exactly as the discard cascade does. Printing the resolved
+    # lists alone said which strata ended up together but not the rule
+    # that put them there, and could not be re-run on next year's data
+    # because the answer was baked into it.
+    live_spec <- reactive(list(
+      keys = alloc_keys(), thresholds = alloc_thr(), min_meas = alloc_meas(),
+      keep_cc = keep_cc(), donor_cov_min = donor_bars()$cov,
+      donor_meas_min = donor_bars()$meas, cols = alloc_cols(),
+      bms = bms_on(), dims = dims_of()))
+
     output[[ns("hier_conds")]] <- renderText({
       g <- tryCatch(cascade_to_groups(cascade_assigned(), alloc_cols()),
                     error = function(e) NULL)
       if (is.null(g) || !length(g))
         return("Apply settings to see the resolved grouping.")
-      paste(emit_alloc_conditions(g), collapse = "\n") })
+      sp <- tryCatch(live_spec(), error = function(e) NULL)
+      paste(emit_alloc_recipe_code(sp, g, tag = if (identical(type, "Age"))
+                                   "Age" else "Length",
+                                   method = "hierarchical"),
+            collapse = "\n") })
 
     # what each rule claims, and what nothing has claimed yet
     output[[ns("progress")]] <- renderDT({
@@ -4718,10 +4732,7 @@ server <- function(input, output, session) {
 
   # --- 3/4/5: aggregate to the plotted roles only ----------
 
-  tree_tbl_r <- reactive(decision_tree(
-    rec(), hier_cols(), hier_thr(),
-    self_thr_val(),
-    "nested", unname(dmap("ar")[DIMS])))
+
 
   # Key 1 is always the stratum's own data; keys 2..5 are the widening
   # dimensions the user picks. Each key row carries its own threshold
@@ -4780,7 +4791,7 @@ server <- function(input, output, session) {
 
   # the ladder: a step card on the left, its own river on the right
   output$tree_ui <- renderUI({
-    tr <- tree_tbl_r2()
+    tr <- tree_tbl_r()
     pal <- c("#00441B","#41AE76","#7FCDBB","#FFD92F","#E66101","#BFBFBF")
     rows <- lapply(seq_len(nrow(tr)), function(i) {
       r <- tr[i, ]; col <- pal[min(i, length(pal))]
@@ -4812,17 +4823,22 @@ server <- function(input, output, session) {
     })
     do.call(tagList, rows) })
 
-  tree_tbl_r2 <- reactive(decision_tree2(
+  # One walk of the cascade, not two. This used to be a pair of reactives
+  # calling decision_tree() and decision_tree2() with identical arguments,
+  # so every threshold change resolved the whole cascade twice to build
+  # one table that was a prefix of the other. check_partition() reads only
+  # n_strata and landings, both present here.
+  tree_tbl_r <- reactive(decision_tree(
     rec(), hier_cols(), hier_thr(),
     self_thr_val(),
-    "nested", unname(dmap("ar")[DIMS])))
+    "nested", unname(dmap("ar")[DIMS]), cumulative = TRUE))
 
   output$tree_tbl <- renderDT(datatable(
-    tree_tbl_r2(), rownames = FALSE, options = list(dom = "t", scrollX = TRUE)))
+    tree_tbl_r(), rownames = FALSE, options = list(dom = "t", scrollX = TRUE)))
 
 
   observe({
-    tr <- tree_tbl_r2()
+    tr <- tree_tbl_r()
     ids <- c("0", vapply(raising_steps(
       hier_cols(), hier_thr(),
       self_thr_val(),
@@ -5567,7 +5583,7 @@ server <- function(input, output, session) {
 
   output$nr_tbl <- renderDT({
     validate(need(!is.null(rv$native), "Run the raising to see the result."))
-    datatable(rv$native, options = list(scrollX = TRUE, pageLength = 10),
+    datatable(head(rv$native, 500), options = list(scrollX = TRUE, pageLength = 10),
               rownames = FALSE) })
 
   output$nr_grp <- renderDT({
@@ -5857,7 +5873,7 @@ server <- function(input, output, session) {
       output[[ns("cat_prev")]] <- renderDT({
         t <- cef_tables(sc)$catches
         validate(need(!is.null(t) && nrow(t), "No catches table yet."))
-        datatable(t, rownames = FALSE,
+        datatable(head(t, 200), rownames = FALSE,
                   options = list(scrollX = TRUE, pageLength = 8)) })
 
       output[[ns("dist_sum")]] <- renderDT({
@@ -5881,7 +5897,7 @@ server <- function(input, output, session) {
       output[[ns("dist_prev")]] <- renderDT({
         t <- cef_tables(sc)$distributions
         validate(need(!is.null(t) && nrow(t), "No distributions table loaded."))
-        datatable(t, rownames = FALSE,
+        datatable(head(t, 200), rownames = FALSE,
                   options = list(scrollX = TRUE, pageLength = 8)) })
 
       output[[ns("eff_sum")]] <- renderDT({
@@ -5891,7 +5907,7 @@ server <- function(input, output, session) {
       output[[ns("eff_prev")]] <- renderDT({
         t <- cef_tables(sc)$effort
         validate(need(!is.null(t) && nrow(t), "No effort table loaded."))
-        datatable(t, rownames = FALSE,
+        datatable(head(t, 200), rownames = FALSE,
                   options = list(scrollX = TRUE, pageLength = 8)) })
     })
   })
@@ -6130,12 +6146,16 @@ server <- function(input, output, session) {
     unlist(lapply(names(allocs), function(nm) c(
       sprintf("## --- allocation '%s' (%s) ---", nm,
               allocs[[nm]]$method %||% "hierarchical"),
-      emit_alloc_grouping_code(allocs[[nm]]$spec,
-                               allocs[[nm]]$method %||% "hierarchical", tag),
+      # recipe, then the conditions it resolves to - the same block the
+      # Code tab shows, so the script and the screen cannot diverge
+      emit_alloc_recipe_code(allocs[[nm]]$spec, allocs[[nm]]$groups, tag,
+                             allocs[[nm]]$method %||% "hierarchical"),
       "",
+      # conditions already printed by the recipe block above
       emit_alloc_code(allocs[[nm]]$groups, type,
                       input[[paste0(pfx, "_rz_origin")]] %||% "WGEstimate",
-                      input[[paste0(pfx, "_rz_vartype")]] %||% "WeightLive"),
+                      input[[paste0(pfx, "_rz_vartype")]] %||% "WeightLive",
+                      with_conditions = FALSE),
       "",
       emit_alloc_agg_code(tag),
       "",

@@ -392,11 +392,14 @@ recommend_raising <- function(strata, hierarchy, thresholds,
 #' @param rec Output of [recommend_raising()].
 #' @param hierarchy,thresholds,self_threshold,mode,dims As passed to
 #'   [recommend_raising()].
+#' @param cumulative Add the running totals (`pct_strata`, `cum_pct_strata`,
+#'   `cum_pct_landings`), so it is visible how much of the stock is settled
+#'   by the time the cascade reaches the fallback.
 #' @return A data frame, one row per step (including step 0 and the fallback).
 #' @seealso [recommend_raising()], [check_partition()]
 #' @export
 decision_tree <- function(rec, hierarchy, thresholds, self_threshold,
-                          mode = "nested", dims = NULL) {
+                          mode = "nested", dims = NULL, cumulative = FALSE) {
   steps <- raising_steps(hierarchy, thresholds, self_threshold, mode, dims)
   ids  <- c("0", vapply(steps, `[[`, character(1), "id"), "fallback")
   labs <- c("no raising needed",
@@ -414,12 +417,17 @@ decision_tree <- function(rec, hierarchy, thresholds, self_threshold,
   cnt <- vapply(ids, function(i) sum(rec$raise_step == i, na.rm = TRUE), integer(1))
   lan <- vapply(ids, function(i)
     sum(rec$landings[rec$raise_step == i], na.rm = TRUE), numeric(1))
-  data.frame(step = ifelse(ids == "fallback", "Fallback",
+  out <- data.frame(step = ifelse(ids == "fallback", "Fallback",
                            ifelse(ids == "0", "0", ids)),
              pool = labs, threshold = thr, what_it_pools = note,
              n_strata = unname(cnt), landings = round(unname(lan), 3),
              pct_landings = round(unname(lan) / sum(rec$landings, na.rm = TRUE) * 100, 1),
              stringsAsFactors = FALSE)
+  # The cumulative columns are the same walk with running totals added, so
+  # they are an argument rather than a second function. Everything here is
+  # a superset of the plain form, and check_partition() reads only
+  # n_strata and landings, so one table serves both callers.
+  if (isTRUE(cumulative)) add_tree_totals(out) else out
 }
 
 #' Check the cascade partitions the data exactly
@@ -949,9 +957,12 @@ define_raising_groups_manual <- function(strata, rules, sets = list()) {
 
 #' Cascade step table with running totals
 #'
-#' [decision_tree()] plus the share of landings each step resolved and the
-#' running totals, so it is obvious how much of the stock is settled by the
-#' time the cascade reaches the fallback.
+#' Deprecated. `decision_tree(..., cumulative = TRUE)` returns exactly this
+#' table; the two were a strict superset of one another, and the app called
+#' both with identical arguments, walking the cascade twice on every
+#' invalidation to produce one table that was a prefix of the other.
+#'
+#' Kept so saved scripts that name it keep running.
 #'
 #' @param rec Output of [recommend_raising()].
 #' @param hierarchy,thresholds,self_threshold,mode,dims As passed to
@@ -960,8 +971,16 @@ define_raising_groups_manual <- function(strata, rules, sets = list()) {
 #' @seealso [decision_tree()], [check_partition()]
 #' @export
 decision_tree2 <- function(rec, hierarchy, thresholds, self_threshold,
-                           mode = "nested", dims = NULL) {
-  tr <- decision_tree(rec, hierarchy, thresholds, self_threshold, mode, dims)
+                           mode = "nested", dims = NULL)
+  decision_tree(rec, hierarchy, thresholds, self_threshold, mode, dims,
+                cumulative = TRUE)
+
+# The running totals, split out so decision_tree() can add them itself.
+#' @param tr A decision tree table.
+#' @return The same table with the running totals added.
+#' @noRd
+#' @export
+add_tree_totals <- function(tr) {
   tot_n <- sum(tr$n_strata); tot_l <- sum(tr$landings)
   # NOTE: ifelse() with a scalar test returns a length-1 answer, which
   # then recycles the first row over every row. Use plain if/else here.

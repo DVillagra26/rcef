@@ -23,6 +23,7 @@ Verified unreferenced two ways before removal:
 | `sop.R` | `sop()` | unused |
 | `utils.R` | `unpack_list()` | unused |
 | `discard_coverage_explorer.Rmd`, `discard_raising_app.Rmd` | — | superseded by the app |
+| — (from `rcef_utils.R`) | `apply_custom_var()`, `apply_custom_vars()`, `custom_var_code()` | the custom-variable builder was removed from the app at the author's request; these were its engine and had no remaining call site |
 | `.Rhistory`, `README` | — | noise; README content is now `MANIFEST.md` |
 
 Nothing was deleted destructively: the originals stay in git history, and
