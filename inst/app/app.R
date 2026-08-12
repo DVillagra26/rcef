@@ -163,7 +163,7 @@ cef_result_ui <- function(src) {
       fluidRow(column(5, h4("Overview"), tbl_slot(ns("dist_sum"))),
                column(7, h4("What was measured"), tbl_slot(ns("dist_type")))),
       h4("Biology sampling by stratum"),
-      fluidRow(column(3, selectInput(ns("bio_dim"), "Group by", DIMS, "Fleet")),
+      fluidRow(column(3, uiOutput(ns("bio_dim_ui"))),
                column(9, tbl_slot(ns("bio_cov")))),
       h4("Preview"), tbl_slot(ns("dist_prev"))),
     tabPanel("effort",
@@ -313,12 +313,15 @@ final_ui <- function() sidebarLayout(
     # split by Fleet by default: the first question of a final raising is
     # almost always how the catch falls across the fleet, and an empty
     # split opened on the whole-stock total, which looked like one bar
-    selectInput("fin_x", "Split by", c("(whole stock)" = "", DIMS), "Fleet"),
-    selectInput("fin_facet", "Facet", c(NONE, DIMS), ""),
+    # Filled from the vocabulary once data lands - col_of() is the
+    # identity now, so a control still emitting the label "Fleet" would
+    # hand plot_raised_composition() a column that does not exist.
+    selectInput("fin_x", "Split by", c("(whole stock)" = ""), ""),
+    selectInput("fin_facet", "Facet", NONE, ""),
     tags$hr(),
     h4("Cross-tab"),
-    selectInput("fin_row", "Rows", DIMS, "Country"),
-    selectInput("fin_col", "Columns", DIMS, "Area"),
+    selectInput("fin_row", "Rows", NULL, NULL),
+    selectInput("fin_col", "Columns", NULL, NULL),
     apply_bar("fin"),
     uiOutput("fin_lvl_note"), alloc_box()),
   mainPanel(width = 9,
@@ -390,22 +393,21 @@ len_coverage_ui <- function(p, type = "LengthTotal") {
   ns <- function(x) paste0(p, "_cov_", x)
   tagList(
     control_deck(paste0(p, "_cov"), label = "Sampling coverage controls",
+      options = tagList(
+        len_cc_filter(ns),
+        pick_bar(ns("type"),
+                 list(heatmap = "Heatmap", bubbles = "Bubbles", bars = "Bars"),
+                 "heatmap")),
       settings = tagList(
         role_chips(ns("r"), c(y = "Y axis", fill = "X / Fill", facet = "Facet"),
-                   c("Fleet", "Country", "Area"), stacked = TRUE),
+                   c("metier4", "Country", "ICESDivision"), stacked = TRUE),
         # same reasoning as the discard coverage tab: the two thresholds
         # are what the heatmap and bubble colours mean, nothing to bars
         conditionalPanel(sprintf("input.%s != 'bars'", ns("type")),
           threshold_box(paste0(p, "_thr_cov"), paste0(p, "_thr_meas")))),
-      level = level_fields(paste0(p, "_lv"))),
+      ),
     deck_page(
-      picker = tagList(
-        len_cc_filter(ns),
-        tags$hr(),
-        h4("Plot"),
-        pick_bar(ns("type"),
-                 list(heatmap = "Heatmap", bubbles = "Bubbles", bars = "Bars"),
-                 "heatmap")),
+      picker = NULL,
       uiOutput(paste0(p, "_status")),
       div(class = "legend-strip", plotOutput(ns("legend"), height = "150px")),
       filter_banner(ns("")),
@@ -426,10 +428,13 @@ len_numbers_ui <- function(p, type = "LengthTotal") {
   ns <- function(x) paste0(p, "_n_", x)
   tagList(
     control_deck(paste0(p, "_n"), label = "Numbers at class controls",
+      options = tagList(
+        len_cc_filter(ns),
+        pick_bar(ns("type"), list(hist = "Histogram", ridge = "Density"), "hist")),
       settings = tagList(
         role_chips(ns("r"), c(fill = "Stack / colour", facet = "Facet",
                               shape = "Facet 2"),
-                   c("Country", "Fleet", ""), stacked = TRUE),
+                   c("Country", "metier4", ""), stacked = TRUE),
         free_scale_ticks(ns),
         conditionalPanel(sprintf("input.%s != 'ridge'", ns("type")),
           checkboxInput(ns("stack"), "Stack the bars", TRUE)),
@@ -438,13 +443,9 @@ len_numbers_ui <- function(p, type = "LengthTotal") {
           span(class = "note",
                "Turn it down for a well-sampled stratum to keep the detail, ",
                "up for a sparse or noisy one so the shape stays readable."))),
-      level = level_fields(paste0(p, "_lv"))),
+      ),
     deck_page(
-      picker = tagList(
-        len_cc_filter(ns),
-        tags$hr(),
-        h4("Plot"),
-        pick_bar(ns("type"), list(hist = "Histogram", ridge = "Density"), "hist")),
+      picker = NULL,
       uiOutput(paste0(p, "_status")),
       div(class = "legend-strip", plotOutput(ns("legend"), height = "120px")),
       filter_banner(ns("")),
@@ -456,33 +457,21 @@ len_meanw_ui <- function(p, type = "LengthTotal") {
   ns <- function(x) paste0(p, "_w_", x)
   tagList(
     control_deck(paste0(p, "_w"), label = "Mean weight controls",
+      options = tagList(
+        len_cc_filter(ns),
+        pick_bar(ns("type"),
+                 list(linedot = "Line + dots", box = "Boxplot"), "linedot")),
       settings = tagList(
         role_chips(ns("r"), c(fill = "Colour", facet = "Facet",
                               shape = "Facet 2"),
-                   c("Fleet", "Country", ""), stacked = TRUE),
+                   c("metier4", "Country", ""), stacked = TRUE),
         free_scale_ticks(ns),
         selectInput(ns("pt"), "Shape",
-                    c("-- none (average the rest) --" = "",
-                      setNames(DIMS, DIMS)), ""),
+                    c("-- none (average the rest) --" = ""), ""),
         checkboxInput(ns("points"), "Show points", TRUE)),
-      level = level_fields(paste0(p, "_lv"))),
+      ),
     deck_page(
-      picker = tagList(
-        len_cc_filter(ns),
-        tags$hr(),
-        # Two plots, not one plot with a switch: the line answers "what is
-        # the mean weight at this class", the boxes answer "how much did
-        # the strata averaged into it disagree". Swapping one for the other
-        # silently would be swapping the question.
-        h4("Plot"), pick_bar(ns("type"),
-                             list(linedot = "Line + dots", box = "Boxplot"),
-                             "linedot"),
-        span(class = "note",
-             "Boxplot draws the values BEFORE they are averaged: one box ",
-             "per class wherever more than one stratum contributes, a point ",
-             "where only one does. Add a Shape and the dots over the boxes ",
-             "carry it, so the season or country behind each value stays ",
-             "readable.")),
+      picker = NULL,
       uiOutput(paste0(p, "_status")),
       div(class = "chain", style = "font-size:11.5px;line-height:1.5",
           tags$b("How the points are built"), tags$br(),
@@ -509,7 +498,6 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
          "BMS is a landing in the exchange format but behaves like a ",
          "discard. With this on, any clause naming Dis also picks up BMS."),
     conditionalPanel(sprintf("input.%s != 'manual'", ns("method")),
-      level_deck(paste0(p, "_lv"), "Cascade - level of detail"),
       sidebarLayout(
         sidebarPanel(width = 3,
           h4("Nesting order"),
@@ -557,14 +545,7 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
         mainPanel(width = 9,
           uiOutput(ns("status")),
           tabsetPanel(id = ns("hier_out"), type = "tabs",
-            tabPanel("Code",
-              h4("allocStrataCond / bioMatchedCond"),
-              span(class = "note",
-                   "The grouping this cascade resolves to, as a script - ",
-                   "strata clauses written plainly, the partition applied ",
-                   "for you."),
-              verbatimTextOutput(ns("hier_conds"))),
-            tabPanel("Overview",
+                        tabPanel("Overview",
               h4("What each step resolves"),
               span(class = "note",
                    "One row per rung in the order it is tested, with the ",
@@ -597,9 +578,16 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
                    "One river per rung of the cascade: the strata resolved at ",
                    "that step on the left, the donor pool they drew from on ",
                    "the right."),
-              uiOutput(ns("step_rivers"))))))),
+              uiOutput(ns("step_rivers"))),
+            tabPanel("Code",
+              h4("allocStrataCond / bioMatchedCond"),
+              span(class = "note",
+                   "The grouping this cascade resolves to, as a script - ",
+                   "strata clauses written plainly, the partition applied ",
+                   "for you."),
+              verbatimTextOutput(ns("hier_conds"))),
+          )))),
     conditionalPanel(sprintf("input.%s == 'manual'", ns("method")),
-      level_deck(paste0(p, "_lv"), "Manual groups - level of detail"),
       sidebarLayout(
         sidebarPanel(width = 4,
           # Numbered the same as the discard manual builder, step for
@@ -686,13 +674,12 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
                                    "stratum with almost nothing measured is",
                                    "still a bad donor here. Set its own bars",
                                    "rather than inheriting the ones above.")),
-          checkboxInput(ns("ca_keep"),
-                        "Also apply the group exclusions above to the catch-all",
-                        FALSE),
-          span(class = "note",
-               "Off by default: a stratum kept out of one group's pool is ",
-               "usually still wanted as a last resort."),
-          actionButton(ns("addcatchall"), "Add catch-all", class = "btn-sm"),
+          # The catch-all carries ONLY its own bars, as on the discard
+          # side. Inheriting the groups' exclusions made the last
+          # resort's donor pool depend on decisions taken for unrelated
+          # groups, which is the opposite of what a last resort is for.
+          actionButton(ns("addcatchall"), "Add Catch All by All",
+                       class = "btn btn-addgrp"),
           tags$hr(),
 
           h4("7. Order"),
@@ -710,15 +697,7 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
         mainPanel(width = 8,
           uiOutput(ns("bmsnote")),
           tabsetPanel(id = ns("man_out"), type = "tabs",
-            tabPanel("Code",
-              h4("allocStrataCond / bioMatchedCond"),
-              span(class = "note",
-                   "The two lists as they would be written in a script - ",
-                   "strata clauses written plainly (first match wins), the ",
-                   "partition applied for you; donor conditions as metric ",
-                   "thresholds, not stratum lists."),
-              verbatimTextOutput(ns("conds"))),
-            tabPanel("Overview",
+                        tabPanel("Overview",
               uiOutput(ns("check")),
               h4("What is assigned, and what is still missing"),
               span(class = "note",
@@ -750,7 +729,16 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
               span(class = "note",
                    "One river per rule: the strata it allocates on the left, ",
                    "the donor pool it draws from on the right."),
-              uiOutput(ns("rule_rivers"))))))))
+              uiOutput(ns("rule_rivers"))),
+            tabPanel("Code",
+              h4("allocStrataCond / bioMatchedCond"),
+              span(class = "note",
+                   "The two lists as they would be written in a script - ",
+                   "strata clauses written plainly (first match wins), the ",
+                   "partition applied for you; donor conditions as metric ",
+                   "thresholds, not stratum lists."),
+              verbatimTextOutput(ns("conds"))),
+          )))))
 }
 
 # --- 2nd level: raising ------------------------------------------
@@ -771,12 +759,10 @@ len_raise_ui <- function(p, what = "Length") {
       control_deck(ns("cmp"), label = "Comparison controls",
         settings = tagList(
           role_chips(ns("cmpr"), c(facet = "Facet", shape = "Facet 2"),
-                     c("catchCategory", ""),
-                     choices = c(NONE, "Catch category" = "catchCategory",
-                                 setNames(DIMS, DIMS))),
+                     c("catchCategory", "")),
           free_scale_ticks(ns),
           numericInput(ns("cmpncol"), "Facet columns", 2, 1, 6, 1)),
-        level = level_fields(paste0(p, "_lv"))),
+        ),
       deck_page(
         picker = tagList(
           h4("Compare"),
@@ -855,10 +841,9 @@ sampling_stub <- function(kind) {
       tags$hr(),
       role_chips(paste0(kind, "_cov"),
                  c(y = "Y axis", fill = "X / Fill", facet = "Facet"),
-                 c("Fleet", "Season", "Country"), stacked = TRUE),
+                 c("metier4", "Season", "Country"), stacked = TRUE),
       selectInput(paste0(kind, "_cc"), "Catch category",
-                  c("Landings" = "Lan", "Discards" = "Dis", "Both" = "")),
-      level_box(paste0(kind, "_lv"))),
+                  c("Landings" = "Lan", "Discards" = "Dis", "Both" = ""))),
     mainPanel(width = 9,
       stub_note(tags$b("Not built yet."), tags$br(),
         "The stratum here carries one more dimension than the discard ",
@@ -1127,7 +1112,7 @@ deck_box <- function(title, ..., cls = "") div(class = paste("deckbox", cls),
 # the figure decks, so it can be pushed out of the way once the groups
 # are settled and the reader is working through the output tabs.
 builder_deck <- function(id, label, boxes, actions, cols = NULL,
-                         wide = NULL, numbers = NULL) {
+                         wide = NULL, numbers = NULL, grid = NULL) {
   did <- paste0(id, "_bdeck")
   # Step numbers are usually 1..n, but a deck may want to keep the
   # numbering of a longer workflow - the manual builder's catch-all is
@@ -1139,22 +1124,29 @@ builder_deck <- function(id, label, boxes, actions, cols = NULL,
   # The manual builder has more steps than the cascade, so the column
   # count follows the number of boxes rather than being fixed at three.
   n <- cols %||% length(boxes)
-  div(class = "deckwrap", id = did,
+  div(class = "deckwrap bdeck", id = did,
     div(class = "deckbar",
       tags$span(class = "decklabel", label),
       tags$button(class = "deckbtn", HTML("&#9650;"), title = "Minimise / expand",
                   onclick = sprintf("rcefDeck('%s')", did))),
-    div(class = paste0("deckgrid bdeckgrid bdeck-", n),
+    div(class = "deckbody-wrap",
+    # The wide step goes INSIDE the grid, not after it, so a named-area
+    # layout can place it under some columns and leave another running
+    # full height beside it. Assigning a clause means reading strataCond
+    # and matchedDataCond against each other, and squeezed into a third
+    # of the deck the two boxes are too narrow to compare.
+    div(class = paste("deckgrid bdeckgrid", paste0("bdeck-", n), grid),
       lapply(seq_along(boxes), function(i)
         deck_box(nm(i), boxes[[i]],
-                 cls = paste0("deck-step deck-step-", i)))),
-    # A step that needs the full width sits under the columns rather than
-    # inside one of them. Assigning a clause means reading strataCond and
-    # matchedDataCond against each other, and squeezed into a third of
-    # the deck the two boxes are too narrow to compare.
-    if (!is.null(wide)) div(class = "deckwide",
-      deck_box(names(wide)[1], wide[[1]], cls = "deck-step deck-step-wide")),
-    div(class = "deckapply bdeckapply", actions))
+                 cls = paste0("deck-step deck-step-", i))),
+      if (!is.null(wide)) div(class = "deckwide",
+        deck_box(names(wide)[1], wide[[1]],
+                 cls = "deck-step deck-step-wide"))),
+    # Inside the collapsible region, not after it. Apply / Add group /
+    # Save as scenario belong to the builder, so minimising the builder
+    # to read the output should take them with it - left outside, a
+    # collapsed deck still occupied two rows of the screen.
+    div(class = "deckapply bdeckapply", actions)))
 }
 
 #' One sticky strip of controls above a figure.
@@ -1244,9 +1236,14 @@ level_fields <- function(p, fleet = "fleetValue", area = "areaValue")
     tags$span(class = "note", style = "color:#9a5000;margin:2px 0 0 0",
               "Re-aggregates everything on this tab."))
 
-DIMS <- c("Fleet", "Country", "Area", "Season")
+# Retained only as the fallback list the pickers show before data lands;
+# nothing resolves through it any more. Selections ARE column names now,
+# so these are real columns rather than the old abstract dimension
+# labels - a control still emitting "Fleet" would name a column that
+# does not exist.
+DIMS <- c("metier4", "Country", "ICESDivision", "Season")
 # catchCategory is a stratum key in the length/age sections
-LEN_DIMS <- c("Catch cat.", DIMS)
+LEN_DIMS <- c("catchCategory", DIMS)
 # The empty option every role chip carries. It used to be blank, so
 # clearing a facet meant selecting a row with nothing in it and hoping -
 # the label makes it an option you can aim at, and the CSS below tints it
@@ -1303,13 +1300,15 @@ exclude_box <- function(p, metrics = c("coverage", "measurements", "rate"),
     tagList(sub("Exclude by % sampling coverage"),
             sliderInput(n("cov"), "% coverage below", 0, 100,
                         c(covdef, 100), 5, width = "100%"))
+  # A min-only slider, like the coverage one: the handle is the floor and
+  # the blue runs up to the ceiling, so the shaded side is the side that
+  # QUALIFIES. The ceiling is the largest measurement count present, so
+  # the scale fits the data instead of running to an arbitrary 100000
+  # that makes the useful range a few pixels wide. Rendered server-side
+  # for that reason - the maximum is not known until the data is loaded.
   meas_ui <- if ("measurements" %in% metrics)
-    # measurements stay a number box - there is no 0-100 ceiling to pin a
-    # slider to, and a slider to 100000 by 10 is undraggable
     tagList(sub("Exclude by number of measurements"),
-            numericInput(n("meas"), "measurements below",
-                         if (is.na(meas_default)) NA else meas_default,
-                         0, 100000, 10, width = "100%"))
+            uiOutput(n("meas_ui")))
   ord <- c("Weight" = "weight",
            if ("coverage" %in% metrics) c("Coverage" = "coverage"),
            if ("rate" %in% metrics) c("Discard rate" = "rate"),
@@ -1535,20 +1534,88 @@ ui <- navbarPage(
        headings - so nothing lined up. Everything below is stated once,
        here, and the boxes are no longer free to disagree. */
     .deckbox, .deckbox *{font-size:11.5px !important;line-height:1.35}
+    /* ---- readability of EVERY control in the workbench ----
+       The colour rules below were written for .deckbox and left every
+       other dropdown in the app - the builders, the loaders, the
+       InterCatch tabs, the comparison controls - inheriting whatever
+       tint sat behind them, which is exactly the unreadable state the
+       deck rules were added to fix. Stated once here, unscoped; the
+       .deckbox rules that follow only set SIZE.
+       The :not(.selectize-input input) exclusion matters: selectize puts
+       its own <input type=text> inside the widget to type into, and
+       giving that a white fill and a border draws an empty box beside
+       the selected value. */
+    select, .form-control, input[type=number],
+    input[type=text]:not(.selectize-input input){
+             background:#fff !important;color:#1b2b3a !important;
+             border:1px solid #c3ccd5 !important}
+    select option{background:#fff;color:#1b2b3a}
+    .selectize-input, .selectize-dropdown, .selectize-dropdown-content{
+             background:#fff !important;color:#1b2b3a !important}
+    .selectize-input{border:1px solid #c3ccd5 !important;
+             box-shadow:none !important}
+    .selectize-input > input{background:transparent !important;
+             border:0 !important;box-shadow:none !important;
+             padding:0 !important;min-height:0}
+    .selectize-dropdown [data-selectable]{background:#fff;color:#1b2b3a}
+    .selectize-dropdown .active, select option:checked{
+             background:#e6eef5 !important;color:#12324f !important}
+    /* the open list must float above a sticky deck and the navbar, or
+       the options are painted behind them and cannot be clicked */
+    .selectize-dropdown{z-index:3000 !important;
+             border:1px solid #c3ccd5;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+    .selectize-input .item{background:#e6eef5;color:#12324f;
+             border-radius:3px;padding:0 4px;margin:1px 2px 1px 0}
+    /* Sliders take the width they are given. The discard-rate slider sat
+       in a default-width form-group, so its scale labels were unreadable
+       while the coverage slider beside it - built full width - was
+       fine. (No quotes in this comment: the whole CSS block is one R
+       string, so a stray double quote ends it and the rest of the
+       stylesheet parses as code.) */
+    .irs, .js-irs-0{width:100% !important}
+    .shiny-input-container:not(.shiny-input-container-inline){
+             width:100% !important;max-width:100% !important}
+
     /* An explicit white background on every control. Inheriting the
        box tint made the selected value almost unreadable against it,
        which is fatal on a picker whose whole job is to say which
-       variable is on the axis. */
-    .deckbox .form-control, .deckbox select, .deckbox input[type=text],
+       variable is on the axis.
+       The :not(.selectize-input input) exclusions matter. Shiny renders
+       selectInput through selectize, which puts its own <input
+       type=text> INSIDE the widget to type into. Styling that as a
+       control gave it a white fill and a border of its own, so it
+       showed up as a small empty box sitting next to the selected
+       value. It has to stay transparent and borderless. */
+    .deckbox .form-control, .deckbox select,
     .deckbox input[type=number]{height:26px;padding:2px 6px;
              font-size:11.5px !important;
              background:#fff !important;color:#1b2b3a !important;
              border:1px solid #c3ccd5 !important}
+    .deckbox input[type=text]:not(.selectize-input input){
+             height:26px;padding:2px 6px;font-size:11.5px !important;
+             background:#fff !important;color:#1b2b3a !important;
+             border:1px solid #c3ccd5 !important}
     .deckbox select option{background:#fff;color:#1b2b3a}
-    .deckbox .selectize-dropdown, .deckbox .selectize-dropdown-content,
-    .deckbox .selectize-input, .deckbox .selectize-input input{
+    .deckbox .selectize-input, .deckbox .selectize-dropdown,
+    .deckbox .selectize-dropdown-content{
              background:#fff !important;color:#1b2b3a !important}
+    .deckbox .selectize-input{border:1px solid #c3ccd5 !important;
+             min-height:26px;padding:2px 6px;box-shadow:none !important}
+    /* the typing field: no box of its own */
+    .deckbox .selectize-input > input{background:transparent !important;
+             border:0 !important;box-shadow:none !important;height:auto;
+             padding:0 !important;min-height:0}
     .deckbox .selectize-dropdown .active{background:#e6eef5 !important}
+    /* A dropdown is absolutely positioned; without a z-index above the
+       buttons beneath it, the open list is painted under the Add
+       filter button, and the click lands on the button. */
+    .deckbox .selectize-dropdown{z-index:2200 !important;
+             border:1px solid #c3ccd5;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+    .deckbox .selectize-control{margin-bottom:4px}
+    .deckbox .selectize-control.multi .selectize-input.has-items{
+             padding:2px 6px}
+    .deckbox .selectize-input .item{background:#e6eef5;color:#12324f;
+             border-radius:3px;padding:0 4px;margin:1px 2px 1px 0}
     .deckbox .btn{font-size:11px !important;padding:2px 8px;line-height:1.4}
     .deckbox .selectize-input{min-height:26px;padding:2px 6px;
              font-size:11.5px !important}
@@ -1580,13 +1647,36 @@ ui <- navbarPage(
     .deckbox .picker{margin:0 0 4px 0}
     /* collapsed: the bar stays, so it can always be opened again */
     .deckwrap.mini{padding-bottom:2px;box-shadow:0 2px 6px rgba(0,0,0,.10)}
-    .deckwrap.mini .deckgrid{display:none}
+    .deckwrap.mini .deckgrid,
+    .deckwrap.mini .deckbody-wrap,
+    .deckwrap.mini .deckapply,
+    .deckwrap.mini .deckwide{display:none}
+    /* The BUILDER decks do not follow the page. A figure deck pinned
+       under the navbar is useful - the plot scrolls past it. A builder
+       deck is half the screen tall, so pinning it left almost nothing
+       of the output tabs visible, which is the thing the builder exists
+       to produce. They scroll away; the minimise button is how they get
+       out of the way on purpose. */
+    .deckwrap.bdeck{position:static;top:auto;box-shadow:0 2px 8px rgba(0,0,0,.10)}
     .deckwrap.mini .decklabel:after{content:' - minimised';font-weight:400;
                                     text-transform:none;letter-spacing:0}
     .lvdeck .deckgrid{grid-template-columns:minmax(210px,300px)}
     /* The builder deck: three numbered steps, taller than a figure deck
        because the key list and the donor bars need the room. */
+    /* The wide step sits under the FIRST TWO boxes only; the catch-all
+       column runs full height beside it. Laid out as a grid row rather
+       than a block, so the two line up with the columns above. */
     .deckwide{margin-top:8px}
+    .bdeck-3.mg-grid{grid-template-areas:'b1 b2 b3' 'wide wide b3';
+             grid-template-columns:minmax(230px,1fr) minmax(260px,1.15fr)
+                                   minmax(240px,1fr)}
+    .mg-grid > .deck-step-1{grid-area:b1}
+    .mg-grid > .deck-step-2{grid-area:b2}
+    .mg-grid > .deck-step-3{grid-area:b3}
+    .mg-grid > .deckwide{grid-area:wide;margin-top:0}
+    @media (max-width:1150px){
+      .bdeck-3.mg-grid{grid-template-areas:'b1' 'b2' 'b3' 'wide';
+               grid-template-columns:1fr}}
     .deck-step-wide{border-left-color:#E15759}
     .bdeck-2{grid-template-columns:minmax(320px,1fr) minmax(320px,1fr)}
     .bdeck-3{grid-template-columns:minmax(230px,.85fr) minmax(330px,1.5fr)
@@ -1603,10 +1693,21 @@ ui <- navbarPage(
     .deck-step-3{border-left-color:#59A14F}
     .bdeckapply{gap:8px}
     .bdeckapply .btn-apply{flex:2}
-    .bdeckapply .btn-savescn{background:#3d8b40;border-color:#3d8b40;
+    /* One meaning per colour, in both builders:
+         green (btn-addgrp)  adds a group to the set being built
+         teal  (btn-savescn) commits the whole set as a scenario
+         dark  (btn-apply)   recomputes what is on screen
+       These were crossed before: Save as scenario was green in the
+       cascade and dark in the manual builder, and green meant add in
+       one and save in the other. */
+    .btn-addgrp{background:#3d8b40 !important;border-color:#3d8b40 !important;
+             color:#fff !important;font-weight:700}
+    .btn-addgrp:hover{background:#2f6f32 !important;border-color:#2f6f32 !important}
+    .bdeckapply .btn-savescn{background:#12324f;border-color:#12324f;
              color:#fff;font-weight:700;flex:1;font-size:12.5px;
              padding:6px 10px}
-    .bdeckapply .btn-savescn:hover{background:#2f6f32;border-color:#2f6f32}
+    .bdeckapply .btn-savescn:hover{background:#1d4b73;border-color:#1d4b73}
+    .bdeckapply .btn-addgrp{flex:1;font-size:12.5px;padding:6px 10px}
     .bdeckapply .form-group{margin:0;flex:1}
     .bdeckapply input[type=text]{height:32px;font-size:12px}
     /* the key rows have to stay compact or three of them fill the box */
@@ -2013,7 +2114,7 @@ ui <- navbarPage(
                    list(ladder = "Hierarchical", manual = "Manual groups"),
                    "ladder"),
           conditionalPanel("input.grp_method != 'manual'", 
-          builder_deck("ar", "Hierarchical raising cascade",
+          builder_deck("ar", "Hierarchical strata allocation builder",
             boxes = list(
               "Define key hierarchy to group strata" = tagList(
                 span(class = "note",
@@ -2038,7 +2139,7 @@ ui <- navbarPage(
                        style = "font-size:11.5px;display:block;margin-top:6px"),
                 uiOutput("hier_chain")),
               "Exclusion rules for donor strata" = exclude_box(
-                "ar", metrics = c("coverage", "measurements"), title = NULL,
+                "ar", metrics = c("coverage"), title = NULL,
                 num = "2", rate_ui = uiOutput("ar_dr_ui"),
                 note = paste("Applies to every rung of the cascade. A stratum",
                              "kept out still gets raised itself - being too",
@@ -2098,8 +2199,13 @@ ui <- navbarPage(
               verbatimTextOutput("auto_conds")),
           )))),
           conditionalPanel("input.grp_method == 'manual'", 
-          builder_deck("mg", "Manual group builder",
-            numbers = c("1", "2", "5"),
+          builder_deck("mg", "Manual strata allocation builder",
+            # Numbering follows the reading order you asked for: the
+            # catch-all is step 3 on the right, and assigning the clause
+            # is step 4 across the bottom. (The mock-up labelled these
+            # 4 and 3 respectively - flagged, and the written instruction
+            # taken as the correction.)
+            numbers = c("1", "2", "3"), grid = "mg-grid",
             boxes = list(
               "Define the groups of strata to raise / allocate" = tagList(
                 tags$b("1.1 Name the group",
@@ -2123,7 +2229,7 @@ ui <- navbarPage(
                        style = "font-size:11.5px;display:block;margin-top:6px"),
                 uiOutput("rule_order")),
               "Exclusion rules for donor strata" = exclude_box(
-                "mg", metrics = c("coverage", "measurements"), title = NULL,
+                "mg", metrics = c("coverage"), title = NULL,
                 num = "2", rate_ui = uiOutput("rule_dr_ui"),
                 note = paste("Narrows THIS group's matchedDataCond only -",
                              "never the strata being raised. The stratum",
@@ -2137,8 +2243,8 @@ ui <- navbarPage(
                      "twice. Its matchedDataCond is every stratum, including ",
                      "those earlier groups already used: a donor may be ",
                      "reused, only a raised stratum may not."),
-                exclude_box("ca", metrics = c("coverage", "measurements"),
-                            title = NULL, num = "5",
+                exclude_box("ca", metrics = c("coverage"),
+                            title = NULL, num = "3",
                             rate_ui = tagList(
                               fluidRow(
                                 column(6, numericInput("catchall_dr_min",
@@ -2154,10 +2260,10 @@ ui <- navbarPage(
                                          "but a stratum too thin to lend is",
                                          "still too thin here.")),
                 actionButton("add_catchall", "Add Catch All by All",
-                             class = "btn btn-savescn btn-block",
+                             class = "btn btn-addgrp btn-block",
                              style = "margin-top:6px"))),
             wide = list(
-              "Assign the clause" = div(
+              "4. Assign the clause" = div(
                 style = "display:flex;gap:8px;align-items:stretch",
                 div(style = "flex:1",
                   div(class = "condbox",
@@ -2188,10 +2294,10 @@ ui <- navbarPage(
               # reader to press the wrong one and wonder why nothing was
               # stored.
               actionButton("save_rule", "Add group",
-                           class = "btn btn-savescn"),
+                           class = "btn btn-addgrp"),
               textInput("man_name", NULL, "manual_1", width = "100%"),
               actionButton("save_manual", "Save as scenario",
-                           class = "btn btn-apply"))),
+                           class = "btn btn-savescn"))),
           alloc_box(),
           fluidRow(
             column(12,
@@ -2595,6 +2701,26 @@ server <- function(input, output, session) {
       st <- try(strata_of(), silent = TRUE)
       if (inherits(st, "try-error") || is.null(st) || !nrow(st)) NULL else st
     }
+
+    # The measurements bar, scaled to the data. A fixed 0-100000 slider
+    # put every real value in the first few pixels; the ceiling here is
+    # the largest count actually present, so the whole track is usable.
+    # Min-only, like coverage: the handle is the floor and the shaded
+    # side is the side that qualifies.
+    if ("measurements" %in% metrics)
+      output[[paste0(p, "_xmeas_ui")]] <- renderUI({
+        st <- tbl()
+        top <- if (is.null(st) || !"n_measurements" %in% names(st)) 1000
+               else max(c(1, suppressWarnings(
+                 as.numeric(st$n_measurements))), na.rm = TRUE)
+        top <- max(200, ceiling(top / 50) * 50)
+        cur <- input[[paste0(p, "_xmeas")]]
+        val <- if (is.null(cur) || all(is.na(cur))) min(100, top)
+               else min(as.numeric(cur)[1], top)
+        sliderInput(paste0(p, "_xmeas"), "measurements below",
+                    0, top, c(val, top), step = max(1, round(top / 200)),
+                    width = "100%")
+      })
     # One settings object, so the expression on screen, the expression in
     # the emitted script and the table below can never disagree.
     spec <- reactive({
@@ -3033,10 +3159,27 @@ server <- function(input, output, session) {
   #  catchCategory is a stratum key here, not a tab, so the same
   #  three views cover landings and discards together or apart.
   # =========================================================
+  # Selections are real columns on the length and age tabs too, so this
+  # is the identity apart from the one alias the biology views add.
+  # The columns a length or age tab aggregates to: whatever its own role
+  # pickers put on screen, on the same principle as panel_dims() for the
+  # discard figures. No level-of-detail control any more - the
+  # resolution IS the variable choice.
+  len_dims <- function(p) {
+    v <- unique(Filter(nzchar, unlist(lapply(
+      c("cov", "n", "w"), function(view)
+        vapply(c("y", "fill", "facet", "shape"), function(r)
+          input[[paste0(p, "_", view, "_r_", r)]] %||% "", character(1))),
+      use.names = FALSE)))
+    v <- setdiff(v, "Catch cat.")
+    v <- avail(v)
+    if (length(v)) v else avail(DEF_DIMS)
+  }
+
   len_dim_col <- function(p, label) {
     if (is.null(label) || !nzchar(label)) return(NULL)
     if (label == "Catch cat.") return("catchCategory")
-    unname(dmap(paste0(p, "_lv"))[label])
+    unname(label)
   }
 
   length_server <- function(p, type = "LengthTotal") {
@@ -3044,7 +3187,7 @@ server <- function(input, output, session) {
     thr_cov  <- reactive(input[[paste0(p, "_thr_cov")]] %||% 50)
     thr_meas <- reactive(input[[paste0(p, "_thr_meas")]] %||% 0)
     dims_of <- function()
-      unique(c("catchCategory", unname(dmap(paste0(p, "_lv"))[DIMS])))
+      unique(c("catchCategory", len_dims(p)))
 
     dist_tbl <- reactive({
       if (!is.null(rv$dist)) rv$dist
@@ -3069,6 +3212,37 @@ server <- function(input, output, session) {
       biology_link(d, dist_tbl(), dims_of(), cc_of(view), type) }
 
     rc <- function(view, role) len_dim_col(p, input[[paste0(p, "_", view, "_r_", role)]])
+
+    # Same vocabulary as the discard figures. Without this the length and
+    # age pickers were left with the placeholder role_chips() ships -
+    # "-- none --" and nothing else - so no variable could be chosen at
+    # all.
+    local({
+      spec <- list(cov = c(y = "metier4", fill = "Country", facet = "ICESDivision"),
+                   n   = c(fill = "Country", facet = "metier4", shape = ""),
+                   w   = c(fill = "metier4", facet = "Country", shape = ""))
+      for (.v in names(spec)) local({
+        v <- .v; d <- spec[[v]]
+        observe({
+          ch <- c(NONE, "Catch category" = "catchCategory", gvars())
+          for (r in names(d)) {
+            id  <- paste0(p, "_", v, "_r_", r)
+            cur <- isolate(input[[id]])
+            sel <- if (is.null(cur)) { if (d[[r]] %in% ch) d[[r]] else "" }
+                   else if (!nzchar(cur) || cur %in% ch) cur else ""
+            updateSelectInput(session, id, choices = ch, selected = sel)
+          }
+        })
+      })
+    })
+
+    observe({
+      id  <- paste0(p, "_w_pt")
+      cur <- isolate(input[[id]])
+      ch  <- c("-- none (average the rest) --" = "", gvars())
+      updateSelectInput(session, id, choices = ch,
+                        selected = if (!is.null(cur) && cur %in% ch) cur else "")
+    })
 
     # One gate per view. The biology builders are the most expensive things
     # in the app - biology_link() and stratum_measurements() both walk the
@@ -3255,8 +3429,7 @@ server <- function(input, output, session) {
       note = function() sprintf(
         "%s at %s coverage / %s measurements; fleet = %s, area = %s",
         tools::toTitleCase(cc_word("cov")), paste0(thr_cov(), "%"),
-        thr_meas(), unname(dmap(paste0(p, "_lv"))["Fleet"]),
-        unname(dmap(paste0(p, "_lv"))["Area"])),
+        thr_meas(), paste(len_dims(p), collapse = ", "), ""),
       prep = function() bio_prep("cov"),
       call = function() taf_call("plot_biology_coverage", list(
         "bio_sc",
@@ -3414,10 +3587,16 @@ server <- function(input, output, session) {
     setrv <- function(slot, v) rv[[R(slot)]] <- v
     keep_cc <- reactive(isTRUE(input[[ns("keepcc")]]))
 
-    # the allocation works on the whole catch table, both categories, so
-    # it links without a category filter
+    # The allocation works on the whole catch table, both categories, so
+    # it links without a category filter.
+    #
+    # Its strata follow ITS OWN keys, not the figure pickers on the
+    # exploration tabs - len_dims() reads those, and a builder whose
+    # strata changed because someone had faceted a plot by mesh would be
+    # a nasty surprise. Same shape as the discard cascade: the stratum as
+    # uploaded, plus every column a key names.
     dims_of <- function()
-      unique(c("catchCategory", unname(dmap(paste0(p, "_lv"))[DIMS])))
+      avail(unique(c("catchCategory", "Stratum", alloc_cols())))
     dist_tbl <- reactive({
       if (!is.null(rv$dist)) rv$dist
       else if (!is.null(rv$ic$distributions)) as.data.frame(rv$ic$distributions)
@@ -3431,8 +3610,12 @@ server <- function(input, output, session) {
     alloc_cols <- reactive(
       vapply(alloc_keys(), function(k) len_dim_col(p, k), character(1)))
 
+    # Key 1 is the stratum's own data and Key 2 is catchCategory, both
+    # fixed, so the five user slots below are Keys 3 to 7.
+    N_ALLOC_KEYS <- 5
     alloc_keys <- reactive({
-      k <- vapply(1:4, function(i) input[[ns(paste0("k", i))]] %||% "",
+      k <- vapply(seq_len(N_ALLOC_KEYS),
+                  function(i) input[[ns(paste0("k", i))]] %||% "",
                   character(1))
       k[nzchar(k)] })
 
@@ -3527,11 +3710,20 @@ server <- function(input, output, session) {
                                 if (keep_cc()) "kept to the end" else "droppable"))),
         column(8, tags$span(class = "note",
                             "no threshold - this is the ceiling of the cascade")))
-      rows <- lapply(1:4, function(i)
+      # Choices come from the loaded table, like every other picker now.
+      # Rows past the last filled one are not drawn, so a three-key
+      # cascade is three rows rather than five empty slots.
+      ch <- c(NONE, gvars())
+      picked <- vapply(seq_len(N_ALLOC_KEYS),
+                       function(i) input[[ns(paste0("k", i))]] %||% "",
+                       character(1))
+      fl <- which(nzchar(picked))
+      last <- if (length(fl)) max(fl) else 4
+      dflt <- c("metier4", "Country", "areaValue", "ICESSubArea", "Season")
+      rows <- lapply(seq_len(min(N_ALLOC_KEYS, last + 1)), function(i)
         key_row(i + 1,
-                selectInput(ns(paste0("k", i)), paste("Key", i + 2),
-                            c(NONE, setNames(DIMS, DIMS)),
-                            c("Fleet","Country","Season","Area")[i],
+                selectInput(ns(paste0("k", i)), paste("Key", i + 2), ch,
+                            input[[ns(paste0("k", i))]] %||% dflt[i],
                             width = "100%")))
       tagList(
         div(class = "note",
@@ -3801,8 +3993,15 @@ server <- function(input, output, session) {
     # Same chip picker as the discard clause builder: the main stratum
     # variables up front, everything else behind "more variables".
     output[[ns("var_chips")]] <- renderUI({
-      sel <- input[[ns("var")]] %||% "Area"
-      var_chips(ns("var"), LEN_DIMS, character(0), sel) })
+      # Real columns, plus catchCategory - which IS meaningful here, in a
+      # way it is not as a raising stratum key: an allocation group very
+      # often IS "the discards", and allocStrataCond is not what
+      # build_strata() splits on.
+      vars <- unname(gvars())
+      sel <- input[[ns("var")]] %||%
+        if ("catchCategory" %in% c("catchCategory", vars)) "catchCategory"
+        else vars[1]
+      var_chips(ns("var"), c("catchCategory", vars), character(0), sel) })
 
     output[[ns("alloc_txt")]] <- renderUI(div(class = "clausebox",
       if (is.null(getrv("alloc_pend"))) "(not set - matches every stratum)"
@@ -3826,7 +4025,7 @@ server <- function(input, output, session) {
 
     alloc_dims <- function() alloc_cols_manual()
     alloc_cols_manual <- function()
-      intersect(c("catchCategory", unname(dmap(paste0(p, "_lv"))[DIMS])),
+      intersect(c("catchCategory", len_dims(p)),
                 names(bl_metrics() %||% data.frame()))
 
     x_keys_srv <- exclusion_server(ns("x"),
@@ -3873,10 +4072,10 @@ server <- function(input, output, session) {
     observeEvent(input[[ns("addcatchall")]], {
       g <- getrv("groups") %||% list()
       gid <- paste0("GA", length(g) + 1)
-      cb <- ca_keys_srv$bars(); gb <- x_keys_srv$bars()
-      excl <- unique(c(cb$named,
-                       if (isTRUE(input[[ns("ca_keep")]])) gb$named
-                       else character(0)))
+      cb <- ca_keys_srv$bars()
+      # Its own bars only. An exclusion made for one group is not a
+      # reason to remove a stratum from the last resort as well.
+      excl <- cb$named
       # no clause on either side: allocStrataCond is the complement of
       # everything above (assign_alloc_groups is first-match-wins), and
       # bioMatchedCond is every stratum less whatever the bars here drop
@@ -4081,7 +4280,7 @@ server <- function(input, output, session) {
     # servers are called with the same `p`, so both resolve to the same
     # level-of-detail box, and a stored allocation still overrides it.
     dims_of <- function()
-      unique(c("catchCategory", unname(dmap(paste0(p, "_lv"))[DIMS])))
+      unique(c("catchCategory", len_dims(p)))
 
     observe(updateSelectInput(session, ns("alloc"),
                               choices = names(rv[[store]] %||% list())))
@@ -4236,6 +4435,23 @@ server <- function(input, output, session) {
     cmp_panel <- function(obj) renderPlot({
       pl <- obj(); validate(need(!is.null(pl), ""))
       pl + theme(legend.position = "none") })
+
+    # The comparison facets were left with role_chips()' placeholder -
+    # "-- none --" and nothing else - so neither picker could be set and
+    # the figures could not be split at all.
+    local({
+      d <- c(facet = "catchCategory", shape = "")
+      observe({
+        ch <- c(NONE, "Catch category" = "catchCategory", gvars())
+        for (r in names(d)) {
+          id  <- ns(paste0("cmpr_", r))
+          cur <- isolate(input[[id]])
+          sel <- if (is.null(cur)) { if (d[[r]] %in% ch) d[[r]] else "" }
+                 else if (!nzchar(cur) || cur %in% ch) cur else ""
+          updateSelectInput(session, id, choices = ch, selected = sel)
+        }
+      })
+    })
 
     output[[ns("cmpplot_ui")]] <- renderUI(
       plotOutput(ns("cmpplot"), height = sprintf("%dpx", cmp_h())))
@@ -5198,11 +5414,26 @@ server <- function(input, output, session) {
   role_choices_server <- function(p, roles, defaults) {
     observe({
       ch <- c(NONE, gvars())
+      # isolate(): this observer WRITES the inputs it would otherwise
+      # read reactively, so without it every update retriggers it.
       for (i in seq_along(roles)) {
         id  <- paste0(p, "_", roles[i])
-        cur <- input[[id]]
-        sel <- if (!is.null(cur) && nzchar(cur) && cur %in% ch) cur
-               else if (defaults[i] %in% ch) defaults[i] else ""
+        cur <- isolate(input[[id]])
+        # Three states, and they are not the same:
+        #   NULL  never set - use the default
+        #   ""    the reader chose "-- none --" - KEEP IT
+        #   name  a column - keep it if it still exists
+        # Treating "" as "unset" made choosing none impossible: the
+        # value came back empty, failed nzchar(), and was overwritten
+        # with the default on the very next flush, so the picker
+        # silently snapped back to a variable.
+        sel <- if (is.null(cur)) {
+                 if (defaults[i] %in% ch) defaults[i] else ""
+               } else if (!nzchar(cur) || cur %in% ch) {
+                 cur                      # "" or a still-valid column
+               } else {
+                 ""                       # column vanished with the data
+               }
         updateSelectInput(session, id, choices = ch, selected = sel)
       }
     })
@@ -5213,6 +5444,25 @@ server <- function(input, output, session) {
                       c("metier4", "ICESDivision", "Season", "Country"))
   role_choices_server("box", c("x", "fill", "facet"),
                       c("Country", "ICESDivision", ""))
+
+  # The adopted-raising composition controls. Same vocabulary, but these
+  # are plain selectInputs rather than role chips, and fin_row / fin_col
+  # must never be empty - a crosstab needs both axes.
+  observe({
+    ch <- gvars()
+    if (!length(ch)) return()
+    pick <- function(id, prefer, allow_none) {
+      cur <- input[[id]]
+      opts <- if (allow_none) c("(whole stock)" = "", ch) else ch
+      sel <- if (!is.null(cur) && nzchar(cur) && cur %in% ch) cur
+             else if (prefer %in% ch) prefer else if (allow_none) "" else ch[[1]]
+      updateSelectInput(session, id, choices = opts, selected = sel)
+    }
+    pick("fin_x",     "metier4",      TRUE)
+    pick("fin_facet", "",             TRUE)
+    pick("fin_row",   "Country",      FALSE)
+    pick("fin_col",   "ICESDivision", FALSE)
+  })
 
   ar_hier_sig <- reactive(list(input$threshold, hier_cols(), hier_thr(),
                                self_thr_val(), ar_dr(), ar_excl_keys(),
@@ -6129,11 +6379,13 @@ server <- function(input, output, session) {
         t <- cef_tables(sc)$distributions
         validate(need(!is.null(t) && nrow(t), "No distributions table loaded."))
         dt(distributions_by_type(t)) })
+      output[[ns("bio_dim_ui")]] <- renderUI(
+        selectInput(ns("bio_dim"), "Group by", c(NONE, gvars()), "metier4"))
       output[[ns("bio_cov")]] <- renderDT({
         t <- cef_tables(sc)
         validate(need(!is.null(t$catches) && nrow(t$catches), "No catches table."))
         d <- derive_fields(as.data.frame(t$catches))
-        dim1 <- unname(dmap("dt")[input[[ns("bio_dim")]] %||% "Fleet"])
+        dim1 <- input[[ns("bio_dim")]] %||% "metier4"
         b <- biology_coverage(d, t$distributions, dim1) %>%
           mutate(across(where(is.numeric), ~round(.x, 3)))
         datatable(b, rownames = FALSE,
