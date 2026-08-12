@@ -108,8 +108,13 @@ FLEET_LEVELS <- c("Metier 4 (gear)"          = "metier4",
 #' @return A named character vector, `label = column`, ordered so the
 #'   things people reach for most are first.
 #' @seealso [derive_fields()], [build_strata()]
+#' @note Named `grouping_vars()`, not `group_vars()`: dplyr exports a
+#'   `group_vars()` and the app attaches dplyr, so the package's own
+#'   function was masked. It failed silently - the vocabulary came back
+#'   empty and every picker showed only "-- none --", with no error to
+#'   say why.
 #' @export
-group_vars <- function(d, max_levels = 400, extra_drop = character(0)) {
+grouping_vars <- function(d, max_levels = 400, extra_drop = character(0)) {
   if (is.null(d) || !is.data.frame(d) || !ncol(d)) return(character(0))
 
   structural <- c("catchCategory", "total", "variableUnit", "variableType",

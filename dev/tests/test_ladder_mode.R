@@ -106,14 +106,40 @@ if (!length(fx)) {
      "metier6 and metier4 are separate rungs, not one 'Fleet'")
 
   ## ---- 4. the vocabulary ---------------------------------------------
-  gv <- group_vars(cd)
-  ok(all(keys %in% gv), "group_vars() offers every key in the example")
+  gv <- grouping_vars(cd)
+  ok(all(keys %in% gv), "grouping_vars() offers every key in the example")
   ok(!("catchCategory" %in% gv),
      "and withholds catchCategory, which build_strata() splits on")
   ok(!("total" %in% gv), "and the measured quantity")
   ok(identical(unname(gv[1]), "Stratum"), "Stratum is offered first")
   ok(length(unique(cd$Stratum)) > 400,
      "Stratum exceeds the level cap, so the exemption is load-bearing")
+}
+
+
+
+## ---- 5. the vocabulary must not be masked ----------------------------
+##
+## This was named group_vars() and dplyr exports one too. The app
+## attaches dplyr, so inside the server the package's function was
+## shadowed - grouping_vars() came back empty, every picker showed only
+## "-- none --", and nothing errored to say why. A silent empty result
+## is the worst failure shape available, so it gets its own assertion.
+ok(!exists("group_vars", where = asNamespace("rcef"), inherits = FALSE),
+   "the masked name is gone from the package")
+ok(is.function(rcef::grouping_vars), "the vocabulary is exported unmasked")
+if (requireNamespace("dplyr", quietly = TRUE)) {
+  ok(!identical(rcef::grouping_vars, dplyr::group_vars),
+     "and is not dplyr's function")
+  ## the shape the app runs in: dplyr attached, rcef attached
+  f <- get("grouping_vars", envir = asNamespace("rcef"))
+  fx2 <- list.files(system.file("extdata", package = "rcef"),
+                    "catches_CEF.*\\.csv$", recursive = TRUE, full.names = TRUE)
+  if (length(fx2)) {
+    cd2 <- rcef:::derive_fields(utils::read.csv(fx2[1], stringsAsFactors = FALSE))
+    ok(length(f(cd2)) > 5,
+       "and returns a real vocabulary with dplyr on the search path")
+  }
 }
 
 cat("\nDONE ", FAIL, "failure(s)", "\n")
