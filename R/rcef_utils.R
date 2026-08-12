@@ -80,6 +80,83 @@ FLEET_LEVELS <- c("Metier 4 (gear)"          = "metier4",
                   "Metier 6 (gear_tgt_mesh)" = "metier6",
                   "Full fleetValue"          = "fleetValue")
 
+#' Every variable a stratum may be grouped, split or plotted by
+#'
+#' One vocabulary, used by the figure axes, the cascade keys and the
+#' manual clause builder alike. Before this there were two: the four
+#' abstract dimensions (Fleet, Country, Area, Season) resolved through a
+#' "level of detail" control, and the raw columns. That indirection meant
+#' a figure could only ever show one fleet resolution at a time, and a
+#' cascade could not widen from `metier6` to `metier4` - both are "Fleet",
+#' so the hierarchy had nothing to widen ALONG.
+#'
+#' Returning the real column names removes the indirection entirely: a
+#' key or an axis IS a column, `metier4` and `metier6` are two different
+#' keys, and a cascade can step from one to the other.
+#'
+#' Structural columns are never offered. [build_strata()] filters on
+#' `catchCategory` to split landings from discards and sums `total` in the
+#' unit `variableUnit` names, so grouping BY one of those does not error -
+#' it quietly makes every stratum either landings or discards, leaving the
+#' discard rate 0 or NA everywhere.
+#'
+#' @param d A prepared catch table (post [derive_fields()]).
+#' @param max_levels Drop columns with more distinct values than this. A
+#'   column with one value splits nothing; one with thousands makes every
+#'   stratum its own group.
+#' @param extra_drop Further columns to withhold.
+#' @return A named character vector, `label = column`, ordered so the
+#'   things people reach for most are first.
+#' @seealso [derive_fields()], [build_strata()]
+#' @export
+group_vars <- function(d, max_levels = 400, extra_drop = character(0)) {
+  if (is.null(d) || !is.data.frame(d) || !ncol(d)) return(character(0))
+
+  structural <- c("catchCategory", "total", "variableUnit", "variableType",
+                  "variance", "domainCatchDis", "domainCatchBMS",
+                  "domainBiology", "originType", "recordType",
+                  "numPSUs", "numTrips", "comment", "year", "stock",
+                  "speciesCode", "workingGroup", "fisheriesManagementUnit",
+                  "areaType", "seasonType", "fleetType")
+
+  cand <- setdiff(names(d), c(structural, extra_drop))
+  keep <- vapply(cand, function(k) {
+    v <- d[[k]]
+    if (!(is.character(v) || is.factor(v) || is.logical(v))) return(FALSE)
+    n <- length(unique(v))
+    # Stratum is exempt from the ceiling. It is one level per uploaded
+    # stratum by construction - hundreds of them - and that is the point:
+    # it is the "own data" rung a cascade starts from. Capping it out
+    # would remove the one key the whole hierarchy is relative to.
+    if (identical(k, "Stratum")) return(n > 1)
+    n > 1 && n <= max_levels
+  }, logical(1))
+  cand <- cand[keep]
+
+  # Preferred order: the native stratum, then each family finest-last so
+  # a cascade reads naturally when the keys are picked top to bottom.
+  pref <- c("Stratum",
+            "fleetValue", "metier6", "metier5", "metier4", "gear",
+            "target", "mesh", "FleetType",
+            "Country", "vesselFlagCountry",
+            "areaValue", "ICESSubdivision", "ICESDivision", "ICESSubArea",
+            "Season", "PSU")
+  ordered <- c(intersect(pref, cand), sort(setdiff(cand, pref)))
+
+  lab <- c(Stratum = "Stratum (as uploaded)",
+           fleetValue = "fleetValue (full)",
+           metier6 = "metier6 (gear_tgt_mesh)",
+           metier5 = "metier5 (gear_target)",
+           metier4 = "metier4 (gear)",
+           areaValue = "areaValue (full)",
+           ICESSubdivision = "ICES subdivision (27.X.X.X)",
+           ICESDivision = "ICES division (27.X.X)",
+           ICESSubArea = "ICES subarea (27.X)",
+           Country = "Country", Season = "Season")
+  stats::setNames(ordered,
+                  ifelse(is.na(lab[ordered]), ordered, lab[ordered]))
+}
+
 #' Area levels a stratum may be grouped by
 #'
 #' Named vector of the nested ICES area resolutions, coarsest first, as
@@ -177,6 +254,15 @@ derive_fields <- function(x) {
       ICESSubArea     = ices_area_levels(areaValue)$ICESSubArea,
       ICESDivision    = ices_area_levels(areaValue)$ICESDivision,
       ICESSubdivision = ices_area_levels(areaValue)$ICESSubdivision,
+      # The stratum AS UPLOADED: the four native CEF keys, joined. This
+      # is the finest grouping the data itself defines, and it is the
+      # only one that needs no interpretation - every other column here
+      # is something rcef derived by splitting or mapping a native one.
+      # Offering it as a grouping key lets a cascade start from "the
+      # stratum on its own data" without that being a special case
+      # bolted onto the engine.
+      Stratum = paste(vesselFlagCountry, fleetValue, areaValue,
+                      seasonValue, sep = " | "),
       FleetType = case_when(
         (metier5 %in% c("OTB_DEF", "OTT_DEF") |
            metier4 %in% c("SDN", "SSC", "PTB")) &

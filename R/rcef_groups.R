@@ -255,7 +255,7 @@ apply_donor_exclusion <- function(strata, excluded, dims) {
 #' @export
 raising_steps <- function(hierarchy, thresholds, self_threshold = NA,
                           mode = "nested", dims = NULL) {
-  mode <- "nested"
+  mode <- match.arg(mode, c("ladder", "nested"))
   if (length(thresholds) == 1) thresholds <- rep(thresholds, length(hierarchy))
   stopifnot(length(thresholds) == length(hierarchy))
   if (is.null(dims)) dims <- hierarchy
@@ -277,14 +277,46 @@ raising_steps <- function(hierarchy, thresholds, self_threshold = NA,
                        label = "own stratum",
                        note = "the stratum has enough of its own sampling")
 
-  key_sets <- lapply(rev(seq_along(hierarchy)),
-                     function(k) hierarchy[seq_len(k)])
-  thr_of <- function(ks) thresholds[length(ks)]
+  # Two ways to turn an ordered list of keys into a cascade of pools.
+  #
+  # "nested" (the original): pool k is keys[1..k], walked from the full
+  # set down to just keys[1]. Key 1 is therefore retained in EVERY pool.
+  # That is right when the keys are abstract dimensions - Fleet, Country,
+  # Area, Season - each contributing an independent split.
+  #
+  # It breaks as soon as the keys are real columns at different
+  # resolutions of the SAME thing, which is the whole point of naming
+  # columns directly. Put Stratum first and every pool contains Stratum,
+  # so every pool IS the stratum and nothing is ever widened. Put
+  # areaValue above ICESSubArea and the coarser one adds nothing, because
+  # areaValue already determines it.
+  #
+  # "ladder": pool i is keys[i] ALONE, walked in the order given, finest
+  # first. Each rung is one grouping, so a rung can be coarser than the
+  # rung above it in the same family - Stratum, then metier4, then
+  # Country, then areaValue, then ICESSubArea, then Season - which is
+  # exactly "use the finer detail when possible and the coarser when
+  # needed".
+  key_sets <- if (identical(mode, "ladder"))
+    lapply(seq_along(hierarchy), function(k) hierarchy[k])
+  else
+    lapply(rev(seq_along(hierarchy)), function(k) hierarchy[seq_len(k)])
+
+  thr_of <- if (identical(mode, "ladder"))
+    function(ks) thresholds[match(ks[1], hierarchy)]
+  else
+    function(ks) thresholds[length(ks)]
 
   for (ks in key_sets) {
     # grouping by every dimension is the same thing as the stratum itself,
     # so skip it when the own-stratum step already covered that
     if (!is.na(self_threshold) && setequal(ks, dims)) next
+    # ... and so is grouping by Stratum, which identifies the stratum by
+    # construction. With Stratum as key 1 - the natural way to write
+    # "try its own data first" - the rung would otherwise appear twice,
+    # once as "own stratum" and again as "Stratum", the second always
+    # resolving nothing because the first already took everything.
+    if (!is.na(self_threshold) && identical(ks, "Stratum")) next
     steps[[length(steps) + 1]] <- list(
       keys = ks, self = FALSE, threshold = thr_of(ks),
       label = paste(ks, collapse = " + "), note = describe(ks))
