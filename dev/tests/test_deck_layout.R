@@ -82,12 +82,22 @@ ok(grepl("bdeck-", txt, fixed = TRUE),
    "the column count varies with the number of steps")
 
 ## ---- 5. extra key variables -----------------------------------------
-ok(grepl("hier_extra", txt, fixed = TRUE), "extra key variables are offered")
-ok(grepl("ar_extra_choices", txt, fixed = TRUE),
-   "and the choices come from the loaded table")
-## an extra key must reach the STRATA, not only the hierarchy
-ok(grepl("ar_dims <- reactive(unique(c(", txt, fixed = TRUE),
-   "ar_dims() folds the extras into the stratum definition")
+## The "extra key variables" control is gone. It existed to widen a fixed
+## four-dimension vocabulary; every key picker now offers every variable,
+## so it was a second way to do the same thing.
+ok(!grepl("hier_extra", txt, fixed = TRUE),
+   "the separate extra-keys control is gone")
+ok(!grepl("ar_extra_choices", txt, fixed = TRUE),
+   "and so is its choices reactive")
+ok(grepl("choices <- c(NONE, gvars())", txt, fixed = TRUE),
+   "key pickers draw from the one vocabulary")
+## a key must reach the STRATA, not only the hierarchy: build_strata()
+## creates only the columns it is given
+ok(grepl('ar_dims <- reactive(avail(unique(c("Stratum", hier_cols()))))',
+         txt, fixed = TRUE),
+   "strata are the uploaded stratum plus every column a key names")
+ok(grepl("mg_dims <- reactive", txt, fixed = TRUE),
+   "and the manual builder follows the same rule")
 ok(length(gregexpr('unname(dmap("ar")[DIMS])', txt, fixed = TRUE)[[1]]) <= 3,
    "the raising path routes through ar_dims(), not the bare four dims")
 ok(grepl("hier_idx <- reactive", txt, fixed = TRUE),
@@ -114,5 +124,78 @@ ok(i > 0 && grepl("btn-savescn", substr(disc, i, i + 200), fixed = TRUE),
 sr <- regexpr("save_rule", disc, fixed = TRUE)
 ok(sr > 0 && grepl("btn-savescn", substr(disc, sr, sr + 120), fixed = TRUE),
    "and Save group is that class, so they match")
+
+## ---- 7. the builder layouts follow the spec -------------------------
+##
+## Checked against the RENDERED UI, not the source: parse() is happy with
+## a semantically wrong nesting, and the ordering of steps is exactly the
+## thing a bad nesting scrambles.
+if (requireNamespace("shiny", quietly = TRUE)) {
+  ev <- new.env(parent = globalenv())
+  ap <- system.file("app/app.R", package = "rcef")
+  wd <- getwd(); setwd(dirname(ap))
+  suppressWarnings(suppressMessages(source(ap, local = ev)))
+  setwd(wd)
+  h <- as.character(ev$ui)
+  ok(nchar(h) > 3e5, "the UI renders")
+
+  ## Both decks title a box "2. Exclusion rules for donor strata", so a
+  ## whole-document search finds the hierarchical one first. Scope to the
+  ## branch or the ordering assertion fails for the wrong reason.
+  mg <- substr(h, regexpr("mg_bdeck", h, fixed = TRUE), nchar(h))
+  ar <- substr(h, regexpr("ar_bdeck", h, fixed = TRUE),
+               regexpr("mg_bdeck", h, fixed = TRUE))
+  at <- function(seg, k) as.integer(regexpr(k, seg, fixed = TRUE))
+
+  steps_mg <- c("1. Define the groups", "2. Exclusion rules for donor",
+                "5. Include a Catch All", "Assign the clause",
+                "Add group", "save_manual", "man_out")
+  ok(all(vapply(steps_mg, function(k) at(mg, k), integer(1)) > 0),
+     "every manual step is present")
+  ok(all(diff(vapply(steps_mg, function(k) at(mg, k), integer(1))) > 0),
+     "and they appear in the order a reader works through them")
+
+  steps_ar <- c("1. Define key hierarchy", "2. Exclusion rules for donor",
+                "ar_apply", "save_auto", "auto_out")
+  ok(all(diff(vapply(steps_ar, function(k) at(ar, k), integer(1))) > 0),
+     "the hierarchical steps are in order too")
+
+  ## the numbered exclusion sub-steps
+  for (k in c("2.1 Exclude by discard rate",
+              "2.2 Exclude by % sampling coverage",
+              "2.3 Exclude by number of measurements",
+              "2.4 Exclude a specific stratum",
+              "Summary of currently excluded strata"))
+    ok(grepl(k, ar, fixed = TRUE), paste("the cascade box states:", k))
+
+  ## Shiny binds an output id once. rule_order and the catch-all inputs
+  ## moved INTO the deck; a leftover copy below it would render blank and
+  ## the duplicated numericInputs would fight over the same value.
+  for (id in c("rule_order", "catchall_dr_min", "catchall_dr_max",
+               "ca_xcov", "mg_xcov", "clause_vals"))
+    ok(length(gregexpr(paste0("id=\"", id, "\""), h,
+                       fixed = TRUE)[[1]]) == 1,
+       paste(id, "is declared exactly once"))
+
+  ## Code last, in both
+  for (id in c("auto_out", "man_out")) {
+    seg <- substr(h, regexpr(paste0("id=\"", id, "\""), h), nchar(h))
+    tabs <- regmatches(seg, gregexpr("data-value=\"[^\"]+\"", seg))[[1]][1:5]
+    tabs <- gsub("data-value=|\"", "", tabs)
+    ok(identical(tabs[5], "Code"), paste("Code is the last tab in", id))
+    ok(identical(tabs[1], "Overview"), paste("Overview is first in", id))
+  }
+
+  ## the level-of-detail controls are gone from the discard side
+  for (id in c("ar_fleet", "ar_area", "mg_fleet", "mg_area",
+               "cov_fleet", "dr_fleet"))
+    ok(!grepl(paste0("id=\"", id, "\""), h, fixed = TRUE),
+       paste(id, "is gone - resolution is the variable choice now"))
+
+  ok(!grepl("hier_extra", h, fixed = TRUE),
+     "the separate extra-keys control is gone; every picker offers everything")
+  ok(!grepl(">Save group<", h, fixed = TRUE),
+     "the button says Add group, not Save group")
+}
 
 cat("\nDONE ", FAIL, "failure(s)", "\n")

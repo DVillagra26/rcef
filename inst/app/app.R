@@ -1126,8 +1126,16 @@ deck_box <- function(title, ..., cls = "") div(class = paste("deckbox", cls),
 # to right, act on the bar underneath. Same sticky/minimise behaviour as
 # the figure decks, so it can be pushed out of the way once the groups
 # are settled and the reader is working through the output tabs.
-builder_deck <- function(id, label, boxes, actions, cols = NULL) {
+builder_deck <- function(id, label, boxes, actions, cols = NULL,
+                         wide = NULL, numbers = NULL) {
   did <- paste0(id, "_bdeck")
+  # Step numbers are usually 1..n, but a deck may want to keep the
+  # numbering of a longer workflow - the manual builder's catch-all is
+  # step 5 even though it is the third box, because the reader meets
+  # steps 3 and 4 below the columns.
+  nm <- function(i) sprintf("%s. %s",
+                            if (is.null(numbers)) i else numbers[i],
+                            names(boxes)[i])
   # The manual builder has more steps than the cascade, so the column
   # count follows the number of boxes rather than being fixed at three.
   n <- cols %||% length(boxes)
@@ -1138,8 +1146,14 @@ builder_deck <- function(id, label, boxes, actions, cols = NULL) {
                   onclick = sprintf("rcefDeck('%s')", did))),
     div(class = paste0("deckgrid bdeckgrid bdeck-", n),
       lapply(seq_along(boxes), function(i)
-        deck_box(sprintf("%d. %s", i, names(boxes)[i]), boxes[[i]],
+        deck_box(nm(i), boxes[[i]],
                  cls = paste0("deck-step deck-step-", i)))),
+    # A step that needs the full width sits under the columns rather than
+    # inside one of them. Assigning a clause means reading strataCond and
+    # matchedDataCond against each other, and squeezed into a third of
+    # the deck the two boxes are too narrow to compare.
+    if (!is.null(wide)) div(class = "deckwide",
+      deck_box(names(wide)[1], wide[[1]], cls = "deck-step deck-step-wide")),
     div(class = "deckapply bdeckapply", actions))
 }
 
@@ -1572,6 +1586,8 @@ ui <- navbarPage(
     .lvdeck .deckgrid{grid-template-columns:minmax(210px,300px)}
     /* The builder deck: three numbered steps, taller than a figure deck
        because the key list and the donor bars need the room. */
+    .deckwide{margin-top:8px}
+    .deck-step-wide{border-left-color:#E15759}
     .bdeck-2{grid-template-columns:minmax(320px,1fr) minmax(320px,1fr)}
     .bdeck-3{grid-template-columns:minmax(230px,.85fr) minmax(330px,1.5fr)
                                    minmax(250px,1fr)}
@@ -2083,16 +2099,15 @@ ui <- navbarPage(
           )))),
           conditionalPanel("input.grp_method == 'manual'", 
           builder_deck("mg", "Manual group builder",
+            numbers = c("1", "2", "5"),
             boxes = list(
-              "Level of detail" = tagList(
-                level_fields("mg"),
-                span(class = "note",
-                     "Groups are defined on these columns. Changing it after ",
-                     "clauses are written leaves them naming columns the ",
-                     "strata table no longer has.")),
-              "Define the group" = tagList(
+              "Define the groups of strata to raise / allocate" = tagList(
+                tags$b("1.1 Name the group",
+                       style = "font-size:11.5px;display:block"),
                 fluidRow(column(5, textInput("rule_id", "Id", "G1")),
                          column(7, textInput("rule_label", "Label", ""))),
+                tags$b("1.2 Rules to group",
+                       style = "font-size:11.5px;display:block;margin-top:4px"),
                 span(class = "note", "A clause is one or more variable ",
                      "restrictions combined with AND. Add them one at a time."),
                 div(tags$b("Variable", style = "font-size:11.5px")),
@@ -2103,94 +2118,81 @@ ui <- navbarPage(
                   actionButton("add_clause", "Add to clause",
                                class = "btn-xs btn-primary"),
                   actionButton("clear_clause", "Clear clause", class = "btn-xs")),
-                uiOutput("clause_chip")),
-              "Exclude donors" = tagList(
+                uiOutput("clause_chip"),
+                tags$b("Overview of the groups defined",
+                       style = "font-size:11.5px;display:block;margin-top:6px"),
+                uiOutput("rule_order")),
+              "Exclusion rules for donor strata" = exclude_box(
+                "mg", metrics = c("coverage", "measurements"), title = NULL,
+                num = "2", rate_ui = uiOutput("rule_dr_ui"),
+                note = paste("Narrows THIS group's matchedDataCond only -",
+                             "never the strata being raised. The stratum",
+                             "stays available to later groups and to the",
+                             "catch-all.")),
+              "Include a Catch All by All group" = tagList(
                 span(class = "note",
-                     "Narrows matchedDataCond only - never the strata being ",
-                     "raised."),
-                tags$b("Discard rates", style = "font-size:11.5px"),
-                span(class = "note",
-                     "Max only - a stratum is only excluded for too HIGH a ",
-                     "discard rate."),
-                uiOutput("rule_dr_ui"),
-                exclude_box("mg", metrics = c("coverage"), title = NULL,
-                            note = paste("Applies to THIS group's donor pool",
-                                         "only. The stratum stays available to",
-                                         "later groups and to the catch-all."))),
-              "Assign the clause" = tagList(
-                # side by side: the two conditions are read against each
-                # other far more often than in sequence
-                div(style = "display:flex;gap:6px;align-items:stretch",
-                  div(style = "flex:1",
-                    div(class = "condbox",
-                        div(class = "condtitle", "strataCond"),
-                        span(class = "note", "strata to be raised"),
-                        dropzone("strata"),
-                        actionButton("to_strata", "Put clause here",
-                                     class = "btn-xs btn-info"))),
-                  div(style = "flex:0 0 34px;display:flex;flex-direction:column;
-                               justify-content:center;gap:4px",
-                    actionButton("mirror", HTML("&rarr;"),
-                                 class = "btn-xs btn-warning",
-                                 title = "copy to matchedDataCond"),
-                    actionButton("mirror_back", HTML("&larr;"),
-                                 class = "btn-xs btn-warning",
-                                 title = "copy back to strataCond")),
-                  div(style = "flex:1",
-                    div(class = "condbox",
-                        div(class = "condtitle", "matchedDataCond"),
-                        span(class = "note", "data used to raise"),
-                        dropzone("matched"),
-                        actionButton("to_matched", "Put clause here",
-                                     class = "btn-xs btn-info")))))),
+                     "A final group with no clause. Its strataCond is the ",
+                     "COMPLEMENT of everything above it, so it raises only ",
+                     "the strata no earlier rule claimed - nothing is raised ",
+                     "twice. Its matchedDataCond is every stratum, including ",
+                     "those earlier groups already used: a donor may be ",
+                     "reused, only a raised stratum may not."),
+                exclude_box("ca", metrics = c("coverage", "measurements"),
+                            title = NULL, num = "5",
+                            rate_ui = tagList(
+                              fluidRow(
+                                column(6, numericInput("catchall_dr_min",
+                                                       "rate above", NA, 0, 5,
+                                                       0.01, width = "100%")),
+                                column(6, numericInput("catchall_dr_max",
+                                                       "rate below", NA, 0, 5,
+                                                       0.01, width = "100%"))),
+                              span(class = "note",
+                                   "Blank switches a bound off.")),
+                            note = paste("The catch-all is the last resort, so",
+                                         "it usually wants the widest pool -",
+                                         "but a stratum too thin to lend is",
+                                         "still too thin here.")),
+                actionButton("add_catchall", "Add Catch All by All",
+                             class = "btn btn-savescn btn-block",
+                             style = "margin-top:6px"))),
+            wide = list(
+              "Assign the clause" = div(
+                style = "display:flex;gap:8px;align-items:stretch",
+                div(style = "flex:1",
+                  div(class = "condbox",
+                      div(class = "condtitle", "strataCond"),
+                      span(class = "note", "strata to be raised"),
+                      dropzone("strata"),
+                      actionButton("to_strata", "Put clause here",
+                                   class = "btn-xs btn-info"))),
+                div(style = "flex:0 0 40px;display:flex;flex-direction:column;
+                             justify-content:center;gap:5px",
+                  actionButton("mirror", HTML("&rarr;"),
+                               class = "btn-xs btn-warning",
+                               title = "copy to matchedDataCond"),
+                  actionButton("mirror_back", HTML("&larr;"),
+                               class = "btn-xs btn-warning",
+                               title = "copy back to strataCond")),
+                div(style = "flex:1",
+                  div(class = "condbox",
+                      div(class = "condtitle", "matchedDataCond"),
+                      span(class = "note", "data used to raise"),
+                      dropzone("matched"),
+                      actionButton("to_matched", "Put clause here",
+                                   class = "btn-xs btn-info"))))),
             actions = tagList(
-              actionButton("save_rule", "Save group", class = "btn btn-savescn"),
-              actionButton("add_catchall", "Add catch-all",
+              # "Add group", not "Save group": it appends this group to the
+              # set being built. "Save as scenario" is the one that commits
+              # the whole set, and two buttons both saying save invited the
+              # reader to press the wrong one and wonder why nothing was
+              # stored.
+              actionButton("save_rule", "Add group",
                            class = "btn btn-savescn"),
               textInput("man_name", NULL, "manual_1", width = "100%"),
               actionButton("save_manual", "Save as scenario",
                            class = "btn btn-apply"))),
           alloc_box(),
-          # The catch-all's own donor bars, and the running order of the
-          # rules already saved. Both are about the group SET rather than
-          # the group being built, so they sit below the deck instead of
-          # competing with the four steps for space in it.
-          fluidRow(
-            column(4,
-              div(class = "condbox",
-                h4("Catch-all group", style = "font-size:13px;margin-top:0"),
-                span(class = "note",
-                     "Adds a final group with no clause. Its strataCond is the ",
-                     "COMPLEMENT of everything above it, so it raises only the ",
-                     "strata no earlier rule claimed - a stratum is never raised ",
-                     "twice. Its matchedDataCond is every stratum, including ",
-                     "those already used by earlier groups: a donor can be ",
-                     "reused, only a raised stratum cannot. Put it last."),
-                fluidRow(
-                  column(6, numericInput("catchall_dr_min", "discard rate above",
-                                         NA, 0, 5, 0.01, width = "100%")),
-                  column(6, numericInput("catchall_dr_max", "discard rate below",
-                                         NA, 0, 5, 0.01, width = "100%"))),
-                span(class = "note",
-                     "Blank switches a bound off. Strata outside the window ",
-                     "stay out of the catch-all's donor pool."),
-                exclude_box("ca", metrics = c("coverage"), title = NULL,
-                            note = paste("The catch-all is the last resort, so",
-                                         "it usually wants the widest pool -",
-                                         "but a stratum too thin to lend is",
-                                         "still too thin here. Set its own",
-                                         "bars.")))),
-            column(8,
-              div(class = "condbox",
-                h4("Order", style = "font-size:13px;margin-top:0"),
-                span(class = "note",
-                     "Evaluated top to bottom; first match wins. A stratum is ",
-                     "raised by exactly one rule - the first that claims it - ",
-                     "so the emitted strataCond of each rule is its clause ",
-                     "minus everything above. Donor pools are the opposite: ",
-                     "they may overlap freely, so one stratum can feed several ",
-                     "groups."),
-                uiOutput("rule_order")))),
           fluidRow(
             column(12,
           tabsetPanel(id = "man_out", type = "tabs",
