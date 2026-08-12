@@ -382,11 +382,32 @@ dir_picker_recent <- local({
 #' @keywords internal
 #' @noRd
 plot_height <- function(df, facet_var = NULL, n_y = 10, ncol = 2,
-                        base = 300, per_row = 190, per_y = 17) {
+                        base = 300, per_row = 190, per_y = 17,
+                        y_var = NULL) {
   rows <- 1
-  if (!is.null(facet_var) && nzchar(facet_var) && !is.null(df))
+  if (!is.null(facet_var) && nzchar(facet_var) && !is.null(df) &&
+      facet_var %in% names(df))
     rows <- ceiling(length(unique(as.character(df[[facet_var]]))) / ncol)
-  max(340, round(base + rows * per_row + n_y * per_y))
+
+  # Count the y categories from the DATA rather than trusting the caller's
+  # guess. The fixed n_y was fine at metier4 (a handful of gears) and
+  # badly wrong at metier6, where a hundred-odd fleet codes were drawn
+  # into the same height and the axis labels printed on top of each
+  # other. The count is per facet ROW, not overall: faceting splits the
+  # categories across panels only when the facet is nested inside the y
+  # variable, so the safe assumption is that every panel may show them
+  # all.
+  if (!is.null(y_var) && nzchar(y_var) && !is.null(df) &&
+      y_var %in% names(df))
+    n_y <- length(unique(as.character(df[[y_var]])))
+
+  # Below ~25 categories the old spacing was comfortable; above it the
+  # per-category allowance is what has to grow, so tie the label band to
+  # the count and let the panel take the height it needs. Capped, or a
+  # metier6 x country grid asks for a plot taller than the browser will
+  # scroll comfortably.
+  band <- min(n_y, 120) * per_y
+  max(340, min(6000, round(base + rows * (per_row + band))))
 }
 
 #' Pixel height for a length or age plot panel

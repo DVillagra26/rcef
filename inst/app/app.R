@@ -1113,6 +1113,35 @@ function rcefDeck(id){
 deck_box <- function(title, ..., cls = "") div(class = paste("deckbox", cls),
   div(class = "decktitle", title), div(class = "deckbody", ...))
 
+# A builder deck: the numbered steps across the top, then one action bar.
+#
+# The grouping builders had their whole workflow in a 3-wide sidebar -
+# method note, keys with their sliders, donor bars, scenario name - so
+# the steps ran off the bottom of the screen and the output tabs beside
+# them were a third of the width they needed. Worse, the order was only
+# implied by vertical position, and step 3 was usually below the fold.
+#
+# Numbered boxes across the top make the sequence the layout: read left
+# to right, act on the bar underneath. Same sticky/minimise behaviour as
+# the figure decks, so it can be pushed out of the way once the groups
+# are settled and the reader is working through the output tabs.
+builder_deck <- function(id, label, boxes, actions, cols = NULL) {
+  did <- paste0(id, "_bdeck")
+  # The manual builder has more steps than the cascade, so the column
+  # count follows the number of boxes rather than being fixed at three.
+  n <- cols %||% length(boxes)
+  div(class = "deckwrap", id = did,
+    div(class = "deckbar",
+      tags$span(class = "decklabel", label),
+      tags$button(class = "deckbtn", HTML("&#9650;"), title = "Minimise / expand",
+                  onclick = sprintf("rcefDeck('%s')", did))),
+    div(class = paste0("deckgrid bdeckgrid bdeck-", n),
+      lapply(seq_along(boxes), function(i)
+        deck_box(sprintf("%d. %s", i, names(boxes)[i]), boxes[[i]],
+                 cls = paste0("deck-step deck-step-", i)))),
+    div(class = "deckapply bdeckapply", actions))
+}
+
 #' One sticky strip of controls above a figure.
 #'
 #' @param p        The panel prefix. filter_box(p) / apply_bar(p) hang off it.
@@ -1130,6 +1159,10 @@ control_deck <- function(p, settings, level = NULL, label = "Plot controls") {
       tags$span(class = "decklabel", label),
       tags$button(class = "deckbtn", HTML("&#9650;"), title = "Minimise / expand",
                   onclick = sprintf("rcefDeck('%s')", id))),
+    # Three boxes across, then Apply as one bar underneath them. Apply
+    # is not a fourth setting - it acts on all three - so a narrow column
+    # beside them said the wrong thing about what it does, and left a
+    # tall empty box next to three full ones.
     div(class = "deckgrid",
       deck_box("Plot settings", settings, cls = "deck-set"),
       deck_box("Filter this figure", uiOutput(paste0(p, "_flt_chips")),
@@ -1141,13 +1174,11 @@ control_deck <- function(p, settings, level = NULL, label = "Plot controls") {
                                 class = "btn-xs")),
                uiOutput(paste0(p, "_flt_list")),
                uiOutput(paste0(p, "_flt_note")), cls = "deck-flt"),
-      if (!is.null(level)) deck_box("Level of detail", level, cls = "deck-lod"),
-      div(class = "deckbox deck-go",
-        div(class = "decktitle", "Apply"),
-        div(class = "deckbody",
-          actionButton(paste0(p, "_apply"), "Apply",
-                       class = "btn btn-apply btn-block"),
-          uiOutput(paste0(p, "_apply_note"))))))
+      if (!is.null(level)) deck_box("Level of detail", level, cls = "deck-lod")),
+    div(class = "deckapply",
+      actionButton(paste0(p, "_apply"), "Apply",
+                   class = "btn btn-apply btn-block"),
+      uiOutput(paste0(p, "_apply_note"), inline = TRUE)))
 }
 
 # The body of a deck-topped tab: a narrow plot-type rail on the left and
@@ -1166,7 +1197,7 @@ deck_page <- function(picker, ...) fluidRow(
 #
 # Same sticky strip, same collapse, one box wide.
 level_deck <- function(p, label = "Level of detail",
-                       fleet = "metier4", area = "ICESDivision") {
+                       fleet = "fleetValue", area = "areaValue") {
   id <- paste0(p, "_lvdeck")
   div(class = "deckwrap lvdeck", id = id,
     div(class = "deckbar",
@@ -1180,7 +1211,7 @@ level_deck <- function(p, label = "Level of detail",
 
 # The level-of-detail box, stripped of the framing control_deck() supplies
 # (it draws its own title and border). Same input ids as level_box().
-level_fields <- function(p, fleet = "metier4", area = "ICESDivision")
+level_fields <- function(p, fleet = "fleetValue", area = "areaValue")
   tagList(
     selectInput(paste0(p, "_fleet"), "Fleet", FLEET_LEVELS, fleet, width = "100%"),
     selectInput(paste0(p, "_area"),  "Area",  AREA_LEVELS,  area,  width = "100%"),
@@ -1280,7 +1311,7 @@ filter_box <- function(p) div(class = "fltbox",
   uiOutput(paste0(p, "_flt_list")),
   uiOutput(paste0(p, "_flt_note")))
 
-level_box <- function(p, fleet = "metier4", area = "ICESDivision") {
+level_box <- function(p, fleet = "fleetValue", area = "areaValue") {
   div(class = "lodbox",
       div(class = "lodtitle", "Level of detail"),
       selectInput(paste0(p, "_fleet"), "Fleet", FLEET_LEVELS, fleet, width = "100%"),
@@ -1431,17 +1462,48 @@ ui <- navbarPage(
              color:#12324f;font-size:11px;line-height:1;padding:2px 9px;
              cursor:pointer}
     .deckbtn:hover{background:#e6eef5}
-    .deckgrid{display:grid;gap:8px;align-items:start;
-              grid-template-columns:minmax(210px,1.15fr) minmax(210px,1.15fr)
-                                    minmax(170px,.9fr) 108px}
-    /* below ~1250px the four boxes stop fitting; wrap to two rows rather
-       than squeezing the selects down to unreadable slivers */
-    @media (max-width:1250px){.deckgrid{grid-template-columns:1fr 1fr}}
+    /* Three equal columns, and align-items:stretch so the boxes are the
+       SAME height - align-items:start let each shrink to its content,
+       which is what made the three read as unrelated panels rather than
+       one row of controls. */
+    .deckgrid{display:grid;gap:8px;align-items:stretch;
+              grid-template-columns:repeat(3, minmax(210px, 1fr))}
+    @media (max-width:1100px){.deckgrid{grid-template-columns:1fr 1fr}}
     .deckbox{background:#fff;border:1px solid #d3dae1;border-radius:7px;
-             padding:5px 7px 6px 7px;max-height:272px;overflow:auto}
+             padding:5px 8px 6px 8px;overflow:auto;
+             /* one height for all three, tuned so the tallest content
+                (the filter chips) fits without the box growing past the
+                Level of detail box beside it */
+             height:186px}
+    /* ---- one type scale for everything inside the deck ----
+       The three boxes inherited whatever their contents happened to
+       bring - bootstrap's 14px selects next to 11px chips next to 13px
+       headings - so nothing lined up. Everything below is stated once,
+       here, and the boxes are no longer free to disagree. */
+    .deckbox, .deckbox *{font-size:11.5px !important;line-height:1.35}
+    .deckbox .form-control, .deckbox select, .deckbox input[type=text],
+    .deckbox input[type=number]{height:26px;padding:2px 6px;
+             font-size:11.5px !important}
+    .deckbox .btn{font-size:11px !important;padding:2px 8px;line-height:1.4}
+    .deckbox .selectize-input{min-height:26px;padding:2px 6px;
+             font-size:11.5px !important}
+    .deckbox .checkbox{margin:2px 0}
+    .deckbox .checkbox label{font-size:11.5px !important}
+    .deckbox .irs{font-size:10px}
+    .deckbox .decktitle{font-size:10.5px !important}
+    .deckbox .note, .deckbox .note *{font-size:10.5px !important;
+             line-height:1.35;color:#7a8791}
     .deckbox.deck-flt{border-color:#d9a441;background:#fffaf0}
     .deckbox.deck-lod{border:2px solid #F28E2B;background:#fff6e5}
-    .deckbox.deck-go{background:#eef3f8;border-color:#cfd8e0;overflow:visible}
+    /* Apply spans the whole deck: it acts on all three boxes, so it is
+       a bar under them rather than a fourth column beside them. */
+    .deckapply{display:flex;align-items:center;gap:10px;margin-top:8px}
+    .deckapply .btn-apply{background:#12324f;border-color:#12324f;color:#fff;
+             font-weight:700;flex:1;font-size:12.5px;padding:6px 10px;
+             letter-spacing:.3px}
+    .deckapply .btn-apply:hover{background:#1d4b73;border-color:#1d4b73}
+    .deckapply .note{font-size:10.5px;color:#7a8791;white-space:nowrap;
+             margin:0}
     .decktitle{font-size:10.5px;font-weight:700;color:#5b7186;
                text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
     .deck-flt .decktitle,.deck-lod .decktitle{color:#9a5000}
@@ -1451,15 +1513,38 @@ ui <- navbarPage(
     .deckbox .rolechips-stacked{gap:5px;margin:0}
     .deckbox h4{margin:2px 0 3px 0;font-size:12px}
     .deckbox .picker{margin:0 0 4px 0}
-    .deck-go .btn-apply{background:#12324f;border-color:#12324f;color:#fff;
-                        font-weight:700;width:100%;margin:0 0 4px 0}
-    .deck-go .btn-apply:hover{background:#1d4b73;border-color:#1d4b73}
     /* collapsed: the bar stays, so it can always be opened again */
     .deckwrap.mini{padding-bottom:2px;box-shadow:0 2px 6px rgba(0,0,0,.10)}
     .deckwrap.mini .deckgrid{display:none}
     .deckwrap.mini .decklabel:after{content:' - minimised';font-weight:400;
                                     text-transform:none;letter-spacing:0}
     .lvdeck .deckgrid{grid-template-columns:minmax(210px,300px)}
+    /* The builder deck: three numbered steps, taller than a figure deck
+       because the key list and the donor bars need the room. */
+    .bdeck-3{grid-template-columns:minmax(230px,.85fr) minmax(330px,1.5fr)
+                                   minmax(250px,1fr)}
+    .bdeck-4{grid-template-columns:minmax(190px,.7fr) minmax(240px,1.1fr)
+                                   minmax(220px,1fr) minmax(280px,1.3fr)}
+    @media (max-width:1400px){.bdeck-4{grid-template-columns:1fr 1fr}}
+    @media (max-width:1150px){.bdeckgrid{grid-template-columns:1fr}}
+    .bdeckgrid .deckbox{height:300px}
+    .deck-step-4{border-left-color:#B07AA1}
+    .deck-step{border-left:3px solid #c9d4de}
+    .deck-step-1{border-left-color:#F28E2B}
+    .deck-step-2{border-left-color:#4E79A7}
+    .deck-step-3{border-left-color:#59A14F}
+    .bdeckapply{gap:8px}
+    .bdeckapply .btn-apply{flex:2}
+    .bdeckapply .btn-savescn{background:#3d8b40;border-color:#3d8b40;
+             color:#fff;font-weight:700;flex:1;font-size:12.5px;
+             padding:6px 10px}
+    .bdeckapply .btn-savescn:hover{background:#2f6f32;border-color:#2f6f32}
+    .bdeckapply .form-group{margin:0;flex:1}
+    .bdeckapply input[type=text]{height:32px;font-size:12px}
+    /* the key rows have to stay compact or three of them fill the box */
+    .deckbox .hier-key-row{margin:0 0 2px 0}
+    .deckbox .hier-key-row .irs{margin-top:-4px}
+    .deckbox .hier-key-fixed{padding:2px 4px;font-size:11px}
     .plotrail{padding-right:4px}
     .plotrail .picker{flex-direction:column}
     .plotrail .pick{width:100%}
@@ -1860,62 +1945,59 @@ ui <- navbarPage(
                    list(ladder = "Hierarchical", manual = "Manual groups"),
                    "ladder"),
           conditionalPanel("input.grp_method != 'manual'", 
-          level_deck("ar", "Raising cascade - level of detail"),
-          sidebarLayout(
-            sidebarPanel(width = 3,
-              h4("1. Select hierarchical method"),
-              span(class = "note",
-                   "The donor pool is widened one key at a time. Each step ",
-                   "keeps the keys above it and releases the one below, so a ",
-                   "pool is always a relaxation of the one before it. A ",
-                   "stratum takes the narrowest pool that clears its ",
-                   "threshold."),
-              tags$hr(),
-              h4("2. Select keys to group"),
-              span(class = "note",
-                   "Key 1 is always the stratum's own data. Keys 2 onward ",
-                   "widen the donor pool one dimension at a time."),
-              div(class = "chain", style = "font-size:11.5px;line-height:1.45",
-                tags$b("The threshold beside each key"), tags$br(),
-                "is the share of that pool's landings weight that must carry a ",
-                "discard estimate before the pool is accepted. Set it high and ",
-                "a stratum has to look further for a well-sampled donor; set it ",
-                "low and it settles for a thinly sampled one nearby. The ",
-                "cascade stops at the first pool that clears its own threshold."),
-              # a min-only slider: the blue reaches from the handle up to
-              # 100, the handle is the threshold. Range c(value, 100) with
-              # the right end pinned paints the qualifying side; the reader
-              # takes element [1].
-              fluidRow(column(8, sliderInput("thr_all", "Set all thresholds to",
-                                             0, 100, c(50, 100), 5)),
-                       column(4, br(), actionButton("apply_all", "Apply",
-                                                    class = "btn-sm btn-primary"))),
-              uiOutput("hier_keys"),
-              div(style = "margin:6px 0",
-                  actionButton("ar_apply", "Apply settings",
-                               class = "btn-sm btn-primary"),
-                  uiOutput("ar_hier_stale", inline = TRUE)),
-              uiOutput("hier_chain"),
-              tags$hr(), h4("3. Exclude donors"),
-              tags$b("Discard rates", style = "font-size:12px"),
-              span(class = "note",
-                   "Max only - a stratum is only excluded for too HIGH a ",
-                   "discard rate. Applies to every step of the cascade; the ",
-                   "stratum stays in the diagnosis but never feeds a pool."),
-              uiOutput("ar_dr_ui"),
-              tags$hr(),
-              exclude_box("ar", metrics = c("coverage"),
-                          title = NULL,
-                          note = paste("A stratum whose own coverage is low",
-                                       "lends a discard rate that rests on",
-                                       "very little, so it can be kept out",
-                                       "of every pool in the cascade.")),
-              tags$hr(),
-              h4("4. Save scenario"),
-              textInput("auto_name", "Scenario name", "auto_1"),
-              actionButton("save_auto", "Save as scenario", class = "btn-success btn-sm"),
-              alloc_box()),
-            mainPanel(width = 9,
+          builder_deck("ar", "Hierarchical raising cascade",
+            boxes = list(
+              "Level of detail" = tagList(
+                level_fields("ar"),
+                span(class = "note",
+                     "The donor pool is widened one key at a time; a stratum ",
+                     "takes the narrowest pool that clears its threshold.")),
+              "Keys to group" = tagList(
+                span(class = "note",
+                     "Key 1 is the stratum's own data. Each key below widens ",
+                     "the pool by one dimension. The threshold is the share ",
+                     "of that pool's landings weight that must carry a ",
+                     "discard estimate before the pool is accepted."),
+                # a min-only slider: the blue reaches from the handle up to
+                # 100, the handle is the threshold. Range c(value, 100) with
+                # the right end pinned paints the qualifying side; the reader
+                # takes element [1].
+                fluidRow(column(8, sliderInput("thr_all", "Set all thresholds to",
+                                               0, 100, c(50, 100), 5)),
+                         column(4, br(), actionButton("apply_all", "Set",
+                                                      class = "btn-xs btn-primary"))),
+                selectizeInput("hier_extra", "Extra key variables", choices = NULL,
+                               multiple = TRUE, width = "100%",
+                               options = list(placeholder = "none - the four dimensions only")),
+                span(class = "note",
+                     "Anything added here becomes part of the strata AND is ",
+                     "offered as a key below."),
+                uiOutput("hier_keys"),
+                uiOutput("hier_chain")),
+              "Exclude donors" = tagList(
+                tags$b("Discard rates", style = "font-size:11.5px"),
+                span(class = "note",
+                     "Max only - a stratum is only excluded for too HIGH a ",
+                     "discard rate. Applies to every step; the stratum stays ",
+                     "in the diagnosis but never feeds a pool."),
+                uiOutput("ar_dr_ui"),
+                tags$hr(style = "margin:5px 0"),
+                exclude_box("ar", metrics = c("coverage"),
+                            title = NULL,
+                            note = paste("A stratum whose own coverage is low",
+                                         "lends a discard rate that rests on",
+                                         "very little, so it can be kept out",
+                                         "of every pool in the cascade.")))),
+            actions = tagList(
+              actionButton("ar_apply", "Apply settings",
+                           class = "btn btn-apply"),
+              uiOutput("ar_hier_stale", inline = TRUE),
+              textInput("auto_name", NULL, "auto_1", width = "100%"),
+              actionButton("save_auto", "Save as scenario",
+                           class = "btn btn-savescn"))),
+          alloc_box(),
+          fluidRow(
+            column(12,
           tabsetPanel(id = "auto_out", type = "tabs",
             tabPanel("Code",
               h4("The functions that build the raising"),
@@ -1959,124 +2041,117 @@ ui <- navbarPage(
                    "left, the donor pool they were raised from on the right."),
               uiOutput("tree_ui")))))),
           conditionalPanel("input.grp_method == 'manual'", 
-          level_deck("mg", "Manual groups - level of detail"),
-          sidebarLayout(
-            sidebarPanel(width = 4,
-              h4("1. Group"),
-              fluidRow(column(5, textInput("rule_id", "Id", "G1")),
-                       column(7, textInput("rule_label", "Label", ""))),
-
-              h4("2. Build a clause"),
-              span(class = "note", "A clause is one or more variable restrictions ",
-                   "combined with AND. Add them one at a time."),
-              div(tags$b("Variable", style = "font-size:12px")),
-        uiOutput("clause_var_chips"),
-              selectizeInput("clause_vals", "Values", NULL, multiple = TRUE),
-              checkboxInput("clause_neg", "Negate (NOT in)", FALSE),
-              actionButton("add_clause", "Add to clause", class = "btn-sm btn-primary"),
-              actionButton("clear_clause", "Clear clause", class = "btn-sm"),
-              uiOutput("clause_chip"),
-
-              tags$hr(),
-              h4("3. Exclude donors"),
-              span(class = "note",
-                   "Both of these narrow matchedDataCond only - never the ",
-                   "strata being raised. Same controls as the hierarchical ",
-                   "tab, so the two read the same way."),
-              tags$b("Discard rates", style = "font-size:12px"),
-              span(class = "note",
-                   "Max only - the minimum makes no sense, a stratum is only ",
-                   "excluded for having too HIGH a discard rate. Leave at the ",
-                   "top to keep every donor."),
-              uiOutput("rule_dr_ui"),
-              exclude_box("mg", metrics = c("coverage"), title = NULL,
-                          note = paste("Applies to THIS group's donor pool",
-                                       "only. The stratum stays available to",
-                                       "later groups and to the catch-all.")),
-
-              tags$hr(),
-              h4("4. Assign the clause"),
-              # side by side: the two conditions are read against each
-              # other far more often than in sequence
-              div(style = "display:flex;gap:8px;align-items:stretch",
-                div(style = "flex:1",
-                  div(class = "condbox",
-                      div(class = "condtitle", "strataCond"),
-                      span(class = "note", "strata to be raised"),
-                      dropzone("strata"),
-                      actionButton("to_strata", "Put clause here",
-                                   class = "btn-sm btn-info"))),
-                div(style = "flex:0 0 42px;display:flex;flex-direction:column;
-                             justify-content:center;gap:4px",
-                  actionButton("mirror", HTML("&rarr;"),
-                               class = "btn-sm btn-warning",
-                               title = "copy to matchedDataCond"),
-                  actionButton("mirror_back", HTML("&larr;"),
-                               class = "btn-sm btn-warning",
-                               title = "copy back to strataCond")),
-                div(style = "flex:1",
-                  div(class = "condbox",
-                      div(class = "condtitle", "matchedDataCond"),
-                      span(class = "note", "data used to raise"),
-                      dropzone("matched"),
-                      actionButton("to_matched", "Put clause here",
-                                   class = "btn-sm btn-info")))),
-
-              actionButton("save_rule", "5. Save group", class = "btn-success"),
-              tags$hr(),
-
-              h4("6. Catch-all group"),
-              span(class = "note",
-                   "Adds a final group with no clause. Its strataCond is the ",
-                   "COMPLEMENT of everything above it, so it raises only the ",
-                   "strata no earlier rule claimed - a stratum is never raised ",
-                   "twice. Its matchedDataCond is every stratum, including ",
-                   "those already used by earlier groups: a donor can be ",
-                   "reused, only a raised stratum cannot. Put it last."),
-              # a box, not a slider, so it lines up with the % coverage box
-              # beside it - two controls doing the same job should not be
-              # two different kinds of control
-              fluidRow(
-                column(6, numericInput("catchall_dr_min", "discard rate above",
-                                       NA, 0, 5, 0.01, width = "100%")),
-                column(6, numericInput("catchall_dr_max", "discard rate below",
-                                       NA, 0, 5, 0.01, width = "100%"))),
-              span(class = "note",
-                   "Blank switches a bound off. Strata outside the window ",
-                   "stay out of the catch-all's donor pool."),
-              exclude_box("ca", metrics = c("coverage"), title = NULL,
-                          note = paste("The catch-all is the last resort, so",
-                                       "it usually wants the widest pool -",
-                                       "but a stratum too thin to lend is",
-                                       "still too thin here. Set its own",
-                                       "bars rather than inheriting the",
-                                       "ones above.")),
-              checkboxInput("catchall_keep_excl",
-                            "Also apply the group exclusions above to the catch-all",
-                            FALSE),
-              span(class = "note",
-                   "Off by default: a stratum kept out of one group's donor ",
-                   "pool is usually still wanted as a last resort. Tick it to ",
-                   "keep it out of the catch-all too, on top of the bars set ",
-                   "here."),
-              actionButton("add_catchall", "Add catch-all", class = "btn-sm"),
-              tags$hr(),
-
-              h4("7. Order"),
-              span(class = "note",
-                   "Evaluated top to bottom; first match wins. A stratum is ",
-                   "raised by exactly one rule - the first that claims it - ",
-                   "so the emitted strataCond of each rule is its clause ",
-                   "minus everything above. Donor pools are the opposite: ",
-                   "they may overlap freely, so one stratum can feed several ",
-                   "groups."),
-              uiOutput("rule_order"),
-              tags$hr(),
-              h4("8. Save scenario"),
-              textInput("man_name", "Scenario name", "manual_1"),
-              actionButton("save_manual", "Save as scenario", class = "btn-success btn-sm"),
-              alloc_box()),
-            mainPanel(width = 8,
+          builder_deck("mg", "Manual group builder",
+            boxes = list(
+              "Level of detail" = tagList(
+                level_fields("mg"),
+                span(class = "note",
+                     "Groups are defined on these columns. Changing it after ",
+                     "clauses are written leaves them naming columns the ",
+                     "strata table no longer has.")),
+              "Define the group" = tagList(
+                fluidRow(column(5, textInput("rule_id", "Id", "G1")),
+                         column(7, textInput("rule_label", "Label", ""))),
+                span(class = "note", "A clause is one or more variable ",
+                     "restrictions combined with AND. Add them one at a time."),
+                div(tags$b("Variable", style = "font-size:11.5px")),
+                uiOutput("clause_var_chips"),
+                selectizeInput("clause_vals", "Values", NULL, multiple = TRUE),
+                checkboxInput("clause_neg", "Negate (NOT in)", FALSE),
+                div(style = "display:flex;gap:4px",
+                  actionButton("add_clause", "Add to clause",
+                               class = "btn-xs btn-primary"),
+                  actionButton("clear_clause", "Clear clause", class = "btn-xs")),
+                uiOutput("clause_chip")),
+              "Exclude donors" = tagList(
+                span(class = "note",
+                     "Narrows matchedDataCond only - never the strata being ",
+                     "raised."),
+                tags$b("Discard rates", style = "font-size:11.5px"),
+                span(class = "note",
+                     "Max only - a stratum is only excluded for too HIGH a ",
+                     "discard rate."),
+                uiOutput("rule_dr_ui"),
+                exclude_box("mg", metrics = c("coverage"), title = NULL,
+                            note = paste("Applies to THIS group's donor pool",
+                                         "only. The stratum stays available to",
+                                         "later groups and to the catch-all."))),
+              "Assign the clause" = tagList(
+                # side by side: the two conditions are read against each
+                # other far more often than in sequence
+                div(style = "display:flex;gap:6px;align-items:stretch",
+                  div(style = "flex:1",
+                    div(class = "condbox",
+                        div(class = "condtitle", "strataCond"),
+                        span(class = "note", "strata to be raised"),
+                        dropzone("strata"),
+                        actionButton("to_strata", "Put clause here",
+                                     class = "btn-xs btn-info"))),
+                  div(style = "flex:0 0 34px;display:flex;flex-direction:column;
+                               justify-content:center;gap:4px",
+                    actionButton("mirror", HTML("&rarr;"),
+                                 class = "btn-xs btn-warning",
+                                 title = "copy to matchedDataCond"),
+                    actionButton("mirror_back", HTML("&larr;"),
+                                 class = "btn-xs btn-warning",
+                                 title = "copy back to strataCond")),
+                  div(style = "flex:1",
+                    div(class = "condbox",
+                        div(class = "condtitle", "matchedDataCond"),
+                        span(class = "note", "data used to raise"),
+                        dropzone("matched"),
+                        actionButton("to_matched", "Put clause here",
+                                     class = "btn-xs btn-info")))))),
+            actions = tagList(
+              actionButton("save_rule", "Save group", class = "btn btn-savescn"),
+              actionButton("add_catchall", "Add catch-all",
+                           class = "btn btn-savescn"),
+              textInput("man_name", NULL, "manual_1", width = "100%"),
+              actionButton("save_manual", "Save as scenario",
+                           class = "btn btn-apply"))),
+          alloc_box(),
+          # The catch-all's own donor bars, and the running order of the
+          # rules already saved. Both are about the group SET rather than
+          # the group being built, so they sit below the deck instead of
+          # competing with the four steps for space in it.
+          fluidRow(
+            column(4,
+              div(class = "condbox",
+                h4("Catch-all group", style = "font-size:13px;margin-top:0"),
+                span(class = "note",
+                     "Adds a final group with no clause. Its strataCond is the ",
+                     "COMPLEMENT of everything above it, so it raises only the ",
+                     "strata no earlier rule claimed - a stratum is never raised ",
+                     "twice. Its matchedDataCond is every stratum, including ",
+                     "those already used by earlier groups: a donor can be ",
+                     "reused, only a raised stratum cannot. Put it last."),
+                fluidRow(
+                  column(6, numericInput("catchall_dr_min", "discard rate above",
+                                         NA, 0, 5, 0.01, width = "100%")),
+                  column(6, numericInput("catchall_dr_max", "discard rate below",
+                                         NA, 0, 5, 0.01, width = "100%"))),
+                span(class = "note",
+                     "Blank switches a bound off. Strata outside the window ",
+                     "stay out of the catch-all's donor pool."),
+                exclude_box("ca", metrics = c("coverage"), title = NULL,
+                            note = paste("The catch-all is the last resort, so",
+                                         "it usually wants the widest pool -",
+                                         "but a stratum too thin to lend is",
+                                         "still too thin here. Set its own",
+                                         "bars.")))),
+            column(8,
+              div(class = "condbox",
+                h4("Order", style = "font-size:13px;margin-top:0"),
+                span(class = "note",
+                     "Evaluated top to bottom; first match wins. A stratum is ",
+                     "raised by exactly one rule - the first that claims it - ",
+                     "so the emitted strataCond of each rule is its clause ",
+                     "minus everything above. Donor pools are the opposite: ",
+                     "they may overlap freely, so one stratum can feed several ",
+                     "groups."),
+                uiOutput("rule_order")))),
+          fluidRow(
+            column(12,
           tabsetPanel(id = "man_out", type = "tabs",
             tabPanel("Code",
               h4("strataCond / matchedDataCond"),
@@ -4642,8 +4717,13 @@ server <- function(input, output, session) {
   dmap <- function(p) {
     p <- DMAP_ALIAS(p)
     f <- input[[paste0(p, "_fleet")]]; a <- input[[paste0(p, "_area")]]
-    c(Fleet = if (is.null(f)) "metier4" else f, Country = "Country",
-      Area = if (is.null(a)) "ICESDivision" else a, Season = "Season")
+    # These fallbacks apply for the instant before the selectInputs
+    # register, and they MUST match level_fields()' defaults - when they
+    # did not, the first aggregation of a session ran at metier4 while
+    # the box on screen read "Full fleetValue", and the plot silently
+    # disagreed with its own control until something else invalidated.
+    c(Fleet = if (is.null(f)) "fleetValue" else f, Country = "Country",
+      Area = if (is.null(a)) "areaValue" else a, Season = "Season")
   }
   # Say, on the raising tabs, WHICH box the resolution came from. An
   # inherited setting that is merely absent reads as "not set"; named, it
@@ -4708,10 +4788,15 @@ server <- function(input, output, session) {
 
 
   # --- plot sizing: the container is sized here, so nothing overlaps ----
-  hgt <- function(p, facet_sel, n_y = 10) {
+  # y_sel is the Y AXIS selection, so the height can be counted off the
+  # data instead of guessed. Without it a metier6 view drew ~100 fleet
+  # codes into the height that suited metier4's handful, and the labels
+  # printed over each other.
+  hgt <- function(p, facet_sel, n_y = 10, y_sel = NULL) {
     s <- try(strata_x(p), silent = TRUE)
     if (inherits(s, "try-error")) return(460)
-    plot_height(s, col_of(p, facet_sel), n_y)
+    plot_height(s, col_of(p, facet_sel), n_y,
+                y_var = if (!is.null(y_sel)) col_of(p, y_sel) else NULL)
   }
   slot_ui <- function(id, h) renderUI(plotOutput(id, height = paste0(h, "px")))
 
@@ -4737,13 +4822,28 @@ server <- function(input, output, session) {
   # Key 1 is always the stratum's own data; keys 2..5 are the widening
   # dimensions the user picks. Each key row carries its own threshold
   # slider right beside it.
+  # Up to eight widening keys now, not four: the extras the user added are
+  # only useful if they can actually be placed in the cascade.
+  N_KEYS <- 8
   hier <- reactive({
-    h <- vapply(2:5, function(i) input[[paste0("hier_", i)]] %||% "", character(1))
+    h <- vapply(2:N_KEYS, function(i) input[[paste0("hier_", i)]] %||% "",
+                character(1))
     h <- h[nzchar(h)]
     validate(need(length(h) >= 1, "Pick at least one widening key (Key 2 onward)."),
              need(!any(duplicated(h)), "Each key can be used once."))
     h })
-  hier_cols <- reactive(unname(dmap("ar")[hier()]))
+
+  # A key is either one of the four DIM labels, which resolve through the
+  # level of detail, or an extra column, which IS its own name. dmap()
+  # returns NA for anything it does not know, and an NA column name
+  # reaches build_strata() as a missing column, so the two cases are
+  # separated here rather than left to subsetting.
+  key_col <- function(k) {
+    m <- dmap("ar")
+    if (k %in% names(m)) unname(m[k]) else k
+  }
+  hier_cols <- reactive(vapply(hier(), key_col, character(1),
+                               USE.NAMES = FALSE))
 
   # the own-stratum threshold is Key 1's slider
   self_thr_val <- reactive({
@@ -4758,17 +4858,24 @@ server <- function(input, output, session) {
                          tags$span(class = "note", "(the stratum on its own data)"))),
       column(6, sliderInput("thr_1", "threshold %", 0, 100,
                             c(input$threshold %||% 50, 100), 5)))
-    # Keys 2..5: user-chosen widening dimensions, each with a threshold
-    picked <- vapply(2:5, function(i) input[[paste0("hier_", i)]] %||% "",
+    # Keys 2..N: the four dimensions plus whatever extra columns were
+    # added, each with a threshold. Rows past the last filled one are not
+    # drawn, so a cascade of three keys is three rows and not eight - the
+    # picker grows as it is used instead of presenting empty slots.
+    ex <- ar_extra_choices()
+    choices <- c(NONE, setNames(DIMS, DIMS),
+                 if (length(ex)) setNames(ex, ex))
+    picked <- vapply(2:N_KEYS, function(i) input[[paste0("hier_", i)]] %||% "",
                      character(1))
-    krows <- lapply(2:5, function(i) {
-      def <- c(Fleet = "Fleet", Country = "Country", Area = "Area",
-               Season = "Season")
-      dflt <- c("Fleet", "Country", "Area", "Season")[i - 1]
-      already <- picked[seq_len(i - 2)]
+    dflts <- c("Fleet", "Country", "Area", "Season",
+               rep("", N_KEYS - 5))
+    filled <- which(nzchar(picked))
+    last <- if (length(filled)) max(filled) else 4
+    show <- 2:min(N_KEYS, last + 2)
+    krows <- lapply(show, function(i) {
+      dflt <- dflts[i - 1]
       fluidRow(class = "hier-key-row",
-        column(6, selectInput(paste0("hier_", i), paste("Key", i),
-                              c(NONE, setNames(DIMS, DIMS)),
+        column(6, selectInput(paste0("hier_", i), paste("Key", i), choices,
                               input[[paste0("hier_", i)]] %||% dflt)),
         column(6, sliderInput(paste0("thr_", i), "threshold %", 0, 100,
                               c(input$threshold %||% 50, 100), 5)))
@@ -4784,7 +4891,7 @@ server <- function(input, output, session) {
   output$hier_chain <- renderUI({
     st <- raising_steps(hier_cols(), hier_thr(),
                         self_thr_val(),
-                        "nested", unname(dmap("ar")[DIMS]))
+                        "nested", ar_dims())
     div(class = "chain", tags$b("Order actually tested:"), tags$br(),
         HTML(paste(c(vapply(st, `[[`, character(1), "label"), "ALL"),
                    collapse = " &rarr; "))) })
@@ -4831,7 +4938,7 @@ server <- function(input, output, session) {
   tree_tbl_r <- reactive(decision_tree(
     rec(), hier_cols(), hier_thr(),
     self_thr_val(),
-    "nested", unname(dmap("ar")[DIMS]), cumulative = TRUE))
+    "nested", ar_dims(), cumulative = TRUE))
 
   output$tree_tbl <- renderDT(datatable(
     tree_tbl_r(), rownames = FALSE, options = list(dom = "t", scrollX = TRUE)))
@@ -4842,9 +4949,9 @@ server <- function(input, output, session) {
     ids <- c("0", vapply(raising_steps(
       hier_cols(), hier_thr(),
       self_thr_val(),
-      "nested", unname(dmap("ar")[DIMS])),
+      "nested", ar_dims()),
       `[[`, character(1), "id"), "fallback")
-    rg <- rec_g(); pal <- auto_pal(); dd <- unname(dmap("ar")[DIMS])
+    rg <- rec_g(); pal <- auto_pal(); dd <- ar_dims()
     for (i in seq_along(ids)) local({
       j <- i; id <- ids[j]
       output[[paste0("river_", j)]] <- renderPlot({
@@ -4860,7 +4967,7 @@ server <- function(input, output, session) {
     if (is.null(r)) return("Apply settings to see the conditions.")
     b <- ar_excl_keys_srv$bars()
     paste(emit_hier_code(r, hier_cols(), hier_thr(),
-                         "fine_to_coarse", unname(dmap("ar")[DIMS]),
+                         "fine_to_coarse", ar_dims(),
                          self_threshold = self_thr_val(),
                          donor_cov_min = b$cov_min, donor_meas_min = b$meas_min,
                          donor_excluded = b$named),
@@ -4891,15 +4998,25 @@ server <- function(input, output, session) {
   observeEvent(input$apply_all, {
     v <- as.numeric(input$thr_all)[1]   # min side of the range slider
     updateSliderInput(session, "thr_1", value = c(v, 100))
-    for (i in 2:5)
+    for (i in 2:N_KEYS)
       updateSliderInput(session, paste0("thr_", i), value = c(v, 100))
     showNotification(paste("All thresholds set to", v, "%"),
                      type = "message", duration = 2) })
 
   # thresholds for the widening keys (2..5), in the order they are tested
+  # Which key SLOTS are filled. hier() drops the empty ones, so indexing
+  # thresholds by position in hier() reads thr_2 for whatever the first
+  # non-empty key happens to be - leaving Key 2 blank and filling Key 3
+  # silently applied Key 2's threshold to Key 3. Harmless with four
+  # contiguous defaults, easy to hit now there are eight slots.
+  hier_idx <- reactive({
+    h <- vapply(2:N_KEYS, function(i) input[[paste0("hier_", i)]] %||% "",
+                character(1))
+    (2:N_KEYS)[nzchar(h)] })
+
   hier_thr <- reactive({
-    vapply(seq_along(hier_cols()), function(k) {
-      x <- input[[paste0("thr_", k + 1)]]   # Key 2 -> thr_2, etc.
+    vapply(hier_idx(), function(i) {
+      x <- input[[paste0("thr_", i)]]
       if (is.null(x) || all(is.na(x))) input$threshold else as.numeric(x)[1]
     }, numeric(1)) })
 
@@ -4914,7 +5031,7 @@ server <- function(input, output, session) {
 
   ar_excl_keys_srv <- exclusion_server("ar",
     strata_of = function() strata_p("ar"),
-    dims_of   = function() unname(dmap("ar")[DIMS]),
+    dims_of   = function() ar_dims(),
     metrics   = c("coverage", "rate"),
     dr_of     = function() ar_dr())
 
@@ -4961,7 +5078,7 @@ server <- function(input, output, session) {
            else if (!is.null(rv$ic$distributions)) as.data.frame(rv$ic$distributions)
            else NULL
     if (is.null(d) || is.null(dst)) return()
-    dims <- unname(dmap("ar")[DIMS])
+    dims <- ar_dims()
     lk <- tryCatch(link_dist_to_strata(d, dst, c("catchCategory", dims), NULL),
                    error = function(e) NULL)
     if (is.null(lk) || !nrow(lk)) return()
@@ -4989,7 +5106,57 @@ server <- function(input, output, session) {
   # Fleet or Area resolution changes hier_cols() AND the strata columns,
   # and both must move together or recommend_raising() is handed a
   # hierarchy naming columns the freshly-built strata do not have.
-  ar_dims <- reactive(unname(dmap("ar")[DIMS]))
+  # The four canonical dimensions plus anything the user added as an extra
+  # key. Extras have to be part of the STRATA definition, not just the
+  # hierarchy: build_strata() only creates the columns it is given, so a
+  # key naming a column the strata table does not carry made
+  # recommend_raising() fail on a missing column.
+  ar_extra <- reactive({
+    x <- input$hier_extra
+    if (is.null(x)) character(0) else setdiff(x, unname(dmap("ar")[DIMS]))
+  })
+  ar_dims <- reactive(unique(c(unname(dmap("ar")[DIMS]), ar_extra())))
+
+  # Columns offered as extra keys: everything in the loaded table that is
+  # categorical and is not already one of the four dimensions (at any
+  # resolution - offering metier6 as an "extra" when Fleet is already
+  # metier6 would define the same split twice).
+  ar_extra_choices <- reactive({
+    d <- tryCatch(dat(), error = function(e) NULL)
+    if (is.null(d)) return(character(0))
+    used <- c(unname(dmap("ar")[DIMS]), FLEET_LEVELS, AREA_LEVELS,
+              "Season", "Country")
+    # build_strata() consumes these STRUCTURALLY - it filters on
+    # catchCategory to split landings from discards, sums `total` in the
+    # unit `variableUnit` names, and counts covered landings off
+    # domainCatchDis. Making any of them a stratum key does not error,
+    # it quietly breaks the split: with catchCategory as a dimension
+    # every stratum is either landings OR discards, so discards is 0 and
+    # the discard rate is 0 or NA everywhere - and the cascade then
+    # "resolves" against numbers that mean nothing. They are not offered.
+    structural <- c("catchCategory", "total", "variableUnit",
+                    "domainCatchDis", "domainBiology", "originType",
+                    "variableType")
+    cand <- setdiff(names(d), c(used, structural))
+    keep <- vapply(cand, function(k) {
+      v <- d[[k]]
+      if (!(is.character(v) || is.factor(v) || is.logical(v))) return(FALSE)
+      n <- length(unique(v))
+      # a column with one value splits nothing; one with hundreds makes
+      # every stratum its own group and the cascade pointless
+      n > 1 && n <= 60
+    }, logical(1))
+    sort(cand[keep])
+  })
+  # The extra-key choices depend on the loaded table, so they are filled
+  # once the data lands rather than declared in the UI.
+  observe({
+    ch <- ar_extra_choices()
+    updateSelectizeInput(session, "hier_extra", choices = ch,
+                         selected = intersect(input$hier_extra %||%
+                                              character(0), ch),
+                         server = FALSE) })
+
   ar_hier_sig <- reactive(list(input$threshold, hier_cols(), hier_thr(),
                                self_thr_val(), ar_dr(), ar_excl_keys(),
                                ar_dims()))
@@ -5031,7 +5198,7 @@ server <- function(input, output, session) {
 
   # the data BEING raised - focused columns, TRUE shown as "Catch All by All"
   output$diag_tbl <- renderDT({
-    d <- strata_raise_table(rec_g(), unname(dmap("ar")[DIMS]))
+    d <- strata_raise_table(rec_g(), ar_dims())
     validate(need(!is.null(d), "Apply settings first."))
     dt_group_colours(
       datatable(d, options = list(scrollX = TRUE, pageLength = 15), rownames = FALSE),
@@ -5039,7 +5206,7 @@ server <- function(input, output, session) {
 
   # the data USED to raise - the donor-pool view of the same strata
   output$diag_donor_tbl <- renderDT({
-    d <- strata_donor_table(rec_g(), unname(dmap("ar")[DIMS]))
+    d <- strata_donor_table(rec_g(), ar_dims())
     validate(need(!is.null(d), "Apply settings first."))
     datatable(d, options = list(scrollX = TRUE, pageLength = 15), rownames = FALSE) })
 
@@ -5135,17 +5302,14 @@ server <- function(input, output, session) {
   observeEvent(input$add_catchall, {
     dr <- ca_dr()
     cb <- ca_excl_keys_srv$bars()
-    gb <- mg_excl_keys_srv$bars()
-    keep <- isTRUE(input$catchall_keep_excl)
     rv$rules <- c(rv$rules, list(new_rule(paste0("G", length(rv$rules) + 1),
       "catch-all", list(), NULL, dr[1], dr[2],
-      # The catch-all's own bars. Hand-picked strata from the groups
-      # above are folded in only if asked: an exclusion made for one
-      # group is rarely meant to remove the stratum from the last resort
-      # as well.
+      # The catch-all's own bars, and only those. An exclusion made for
+      # one group is not a reason to remove a stratum from the last
+      # resort as well.
       cov_min  = cb$cov_min,
       meas_min = cb$meas_min,
-      excluded = unique(c(cb$named, if (keep) gb$named else character(0))))))
+      excluded = cb$named)))
     showNotification("Catch-all added at the end", duration = 2) })
 
   man_pal <- reactive(group_palette(vapply(rv$rules, `[[`, character(1), "id")))
@@ -5336,7 +5500,7 @@ server <- function(input, output, session) {
   observeEvent(input$save_auto, {
     req(nzchar(input$auto_name))
     save_sc(input$auto_name, scenario_auto(
-      input$auto_name, unname(dmap("ar")[DIMS]), hier_cols(), hier_thr(),
+      input$auto_name, ar_dims(), hier_cols(), hier_thr(),
       input$ar_fleet, input$ar_area,
       self_threshold = self_thr_val(),
       mode = "nested",
@@ -5426,8 +5590,13 @@ server <- function(input, output, session) {
   # used, falling back to the canonical default for each dimension.
   cmp_col <- function(dim_label) {
     if (is.null(dim_label) || !nzchar(dim_label)) return(NULL)
-    def <- c(Fleet = "metier4", Area = "ICESDivision", Season = "Season",
-             Country = "Country")
+    # Resolve through the level of detail actually in force rather than a
+    # hardcoded default: with the boxes now defaulting to fleetValue /
+    # areaValue, a fixed "metier4" here named a column the runs were
+    # never keyed by, and the chip silently selected nothing.
+    m <- dmap("ar")
+    def <- c(Fleet = unname(m["Fleet"]), Area = unname(m["Area"]),
+             Season = "Season", Country = "Country")
     col <- unname(def[dim_label])
     if (is.na(col)) col <- dim_label
     if (col %in% cmp_keys()) col else NULL
@@ -5501,13 +5670,13 @@ server <- function(input, output, session) {
         emit_load_code(cef_src()$catches, input$sep, dir = cef_src()$dir,
                        dist_file = cef_src()$dist, eff_file = cef_src()$eff),
         c(emit_area_helper(), emit_derive_code()),
-        emit_filter_code(input$stock, input$year, unname(dmap("ar")[DIMS]),
+        emit_filter_code(input$stock, input$year, ar_dims(),
                          ar_dr()[1], ar_dr()[2]))
     if ("auto" %in% input$code_parts)
       out <- c(out, {
         b <- ar_excl_keys_srv$bars()
         emit_hier_code(rec(), hier_cols(), hier_thr(),
-                       "fine_to_coarse", unname(dmap("ar")[DIMS]),
+                       "fine_to_coarse", ar_dims(),
                        self_threshold = self_thr_val(),
                        donor_cov_min = b$cov_min, donor_meas_min = b$meas_min,
                        donor_excluded = b$named) })
@@ -5679,7 +5848,11 @@ server <- function(input, output, session) {
   output$cov_plot_ui <- renderUI({
     cov_g$now(); cov_live()
     plotOutput("cov_plot",
-               height = paste0(isolate(hgt("cov", input$cov_facet, 16)), "px")) })
+               height = paste0(isolate(
+                 hgt("cov", input$cov_facet, 16,
+                     # bars put the fleet on y; heatmap/bubbles use the
+                     # Y AXIS picker, which is the same control
+                     y_sel = input$cov_y)), "px")) })
 
   output$cov_plot <- renderPlot({
     p <- cov_plot_obj()
@@ -5739,7 +5912,9 @@ server <- function(input, output, session) {
     dr_g$now(); dr_live()
     plotOutput("dr_plot", height = paste0(isolate(
       hgt("dr", if (identical(input$dr_type, "box")) input$box_facet
-                else input$dr_facet)), "px")) })
+                else input$dr_facet,
+          y_sel = if (identical(input$dr_type, "box")) input$box_x
+                  else input$dr_x)), "px")) })
 
   output$dr_plot <- renderPlot({
     p <- dr_plot_obj()
@@ -6097,7 +6272,7 @@ server <- function(input, output, session) {
       # clearly marked so it is never mistaken for a saved decision.
       if (!length(emitted)) {
         live_auto <- tryCatch(
-          code_auto_rule("unsaved_auto", unname(dmap("ar")[DIMS]),
+          code_auto_rule("unsaved_auto", ar_dims(),
                          hier_cols(), hier_thr(), self_thr_val(),
                          "nested",
                          ar_dr()[1], ar_dr()[2]),
@@ -6109,7 +6284,7 @@ server <- function(input, output, session) {
             "## configuration, not a decision. Save it in the app to make",
             "## it a named allocation.",
             live_auto,
-            code_raise("unsaved_auto", unname(dmap("ar")[DIMS]),
+            code_raise("unsaved_auto", ar_dims(),
                        input$nr_type %||% "discards",
                        input$nr_origin %||% "WGEstimate",
                        input$nr_vartype %||% "WeightLive",
@@ -6252,7 +6427,7 @@ server <- function(input, output, session) {
       # hand-rolled copy of the area splitter written into the script
       load_lines = tc(taf_load_lines()),
       stock = cfg$stock %||% input$stock, year = cfg$year %||% input$year,
-      dims_disc   = tc(unname(dmap("ar")[DIMS])),
+      dims_disc   = tc(ar_dims()),
       fleet_level = tc(unname(dmap("ar")["Fleet"])),
       area_level  = tc(unname(dmap("ar")["Area"])),
       threshold   = input$threshold %||% 50,
@@ -6298,7 +6473,7 @@ server <- function(input, output, session) {
                      eff_file = cef_src()$eff),
       emit_derive_code()), error = function(e) NULL))
     lg <- log_set(lg, "strata", tryCatch(
-      emit_filter_code(input$stock, input$year, unname(dmap("ar")[DIMS]),
+      emit_filter_code(input$stock, input$year, ar_dims(),
                        ar_dr()[1], ar_dr()[2]), error = function(e) NULL))
     # The script must reproduce the WHOLE analysis, not only what was
     # saved. So it always writes:
