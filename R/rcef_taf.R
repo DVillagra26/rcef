@@ -55,6 +55,43 @@
 #  The file set
 # ----------------------------------------------------------
 
+#' The standard header comment block for a TAF script
+#'
+#' Every one of the seven files opens with the same shape: what the
+#' script is for, in one line, then what it reads and what it writes, so
+#' a reader (or the working group, a year later) can tell what feeds
+#' what without opening every file.
+#'
+#' Called seven times across this file and, until now, never defined -
+#' a gap invisible to `check_all.sh`, since nothing in the active test
+#' suite exercises the TAF emitters (only `dev/tests/legacy/`, which is
+#' not wired into the harness, ever called them). `roxygenise()`'s
+#' namespace audit is what surfaced it: `taf_header` was listed as an
+#' export with no function behind it.
+#'
+#' @param script The script's TAF name, without the extension, e.g.
+#'   `"data"` or `"model_explore_discards"`.
+#' @param purpose One-line description of what the script does.
+#' @param reads,writes What the script reads from and writes to disk,
+#'   each a character vector of paths or descriptions.
+#' @param notes Further lines of commentary, one bullet each.
+#' @return A character vector of R code (comment lines).
+#' @export
+taf_header <- function(script, purpose, reads = character(0),
+                       writes = character(0), notes = character(0)) {
+  bullet <- function(label, x)
+    if (!length(x)) NULL else c(sprintf("##   %s:", label),
+                                sprintf("##     %s", x))
+  c("## ===========================================================",
+    sprintf("## %s.R", script),
+    sprintf("## %s", purpose),
+    "## ===========================================================",
+    bullet("Reads", reads),
+    bullet("Writes", writes),
+    if (length(notes)) c("##", sprintf("## %s", notes)),
+    "")
+}
+
 #' The TAF script set: part id -> file name
 #'
 #' Order is the order the scripts must be run in, which is also the order
@@ -81,17 +118,6 @@ TAF_METHOD_LABEL <- c(
   cef         = "CEF files (catches / distributions / effort)",
   rdbes       = "RDBES / CEF database")
 
-#' Which TAF stage each part belongs to
-#' @export
-TAF_STAGE <- c(
-  data                          = "data",
-  model_explore_discards        = "model",
-  model_allocate_raise_discards = "model",
-  model_explore_length_age      = "model",
-  model_allocate_length_age     = "model",
-  output                        = "output",
-  report                        = "report")
-
 #' Short human labels, used for the sub-tabs
 #' @export
 TAF_LABEL <- c(
@@ -102,48 +128,6 @@ TAF_LABEL <- c(
   model_allocate_length_age     = "4. Allocate length / age",
   output                        = "output.R",
   report                        = "report.R")
-
-#' The parts belonging to one TAF stage
-#' @param stage "data", "model", "output" or "report".
-#' @return Character vector of part ids.
-#' @export
-taf_parts_of <- function(stage) names(TAF_STAGE)[TAF_STAGE == stage]
-
-# ----------------------------------------------------------
-#  Shared pieces
-# ----------------------------------------------------------
-
-#' A banner header for one TAF script
-#'
-#' Every script says what it does, what it reads and what it leaves behind.
-#' The READS / WRITES lines are the contract between the scripts: they are
-#' what makes the set re-runnable stage by stage instead of only end to end.
-#'
-#' @param part Part id (a name of [TAF_FILES]).
-#' @param title One-line description.
-#' @param reads,writes Character vectors of paths, or `NULL`.
-#' @param notes Extra comment lines placed under the banner.
-#' @return A character vector of R code.
-#' @export
-taf_header <- function(part, title, reads = NULL, writes = NULL, notes = NULL) {
-  rule <- paste0("## ", strrep("=", 68))
-  c(rule,
-    sprintf("##  %s", TAF_FILES[[part]]),
-    sprintf("##  %s", title),
-    "##",
-    sprintf("##  TAF stage : %s", TAF_STAGE[[part]]),
-    sprintf("##  Generated : %s by the RCEF Workbench",
-            format(Sys.time(), "%Y-%m-%d %H:%M:%S")),
-    "##",
-    if (length(reads))
-      c("##  READS  :", paste0("##    ", reads))
-    else "##  READS  : nothing (first script in the chain)",
-    if (length(writes))
-      c("##  WRITES :", paste0("##    ", writes))
-    else "##  WRITES : nothing",
-    rule,
-    if (length(notes)) c("##", paste0("## ", notes), "") else "")
-}
 
 #' The library block every TAF script opens with
 #' @param extra Extra package names.

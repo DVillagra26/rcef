@@ -670,8 +670,16 @@ alloc_steps <- function(keys, thresholds, keep_cc = TRUE, min_meas = 0,
   out
 }
 
-# Which pass a step belongs to, for the table and the chain.
-#' @noRd
+#' Which pass of the cascade a step belongs to
+#'
+#' `keep_cc = TRUE` runs the cascade twice: once within each catch
+#' category, then again (if anything is left) with categories pooled.
+#' This names which rung produced a step - `"within category"`,
+#' `"categories joined"`, or `"last resort - no threshold"` - so the
+#' table and the chain summary can say which pass it belongs to.
+#'
+#' @param step One step from [alloc_steps()].
+#' @return A length-one character vector.
 #' @export
 alloc_step_scope <- function(step) {
   if (identical(step$id, "last")) "last resort - no threshold"
@@ -1028,7 +1036,7 @@ assign_alloc_groups <- function(strata, groups, bms_as_dis = TRUE) {
 
 #' Allocated against donated, one row per allocation group
 #'
-#' The counterpart of [manual_overview()] on the discard side. Two
+#' The biology counterpart of [raising_groups()] on the discard side. Two
 #' numbers that are easy to conflate and mean different things: how many
 #' strata a group ALLOCATES (exactly one group per stratum) and how many
 #' sit in the pool it allocates FROM (a stratum can lend to several).
@@ -1266,9 +1274,6 @@ assign_alloc_cascade <- function(bl, keys, steps, bms_as_dis = TRUE) {
   d
 }
 
-# What each rung of the cascade actually resolved.
-#' @noRd
-#' @export
 #' A one-line summary of what a rung groups by
 #'
 #' The readable form of the `pool` column: the keys still distinguished
@@ -1277,7 +1282,6 @@ assign_alloc_cascade <- function(bl, keys, steps, bms_as_dis = TRUE) {
 #'
 #' @param step One step from [alloc_steps()].
 #' @return A length-one character vector.
-#' @noRd
 #' @export
 alloc_step_grouping <- function(step, allkeys = NULL) {
   if (identical(step$id, "own")) return("the stratum itself")
@@ -1288,8 +1292,19 @@ alloc_step_grouping <- function(step, allkeys = NULL) {
   else "all data in the category"
 }
 
-# What each rung of the cascade actually resolved.
-#' @noRd
+#' Table of what each rung of the allocation cascade actually resolved
+#'
+#' One row per rung, in the order tested, with the running total of
+#' strata and weight - the allocation counterpart of [decision_tree()]
+#' on the discard side.
+#'
+#' @param assigned A stratum table tagged by [assign_alloc_cascade()].
+#' @param steps The cascade steps, from [alloc_steps()].
+#' @param keys The full key set, so the grouping column can name what
+#'   each rung keeps. Defaults to `attr(steps, "keys")`.
+#' @return A data frame, one row per rung, or `NULL` if `assigned` is
+#'   empty.
+#' @seealso [alloc_step_grouping()], [decision_tree()]
 #' @export
 alloc_cascade_table <- function(assigned, steps, keys = NULL) {
   if (is.null(assigned) || !nrow(assigned)) return(NULL)
@@ -1539,48 +1554,6 @@ manual_missing <- function(assigned, dims, weight_col = "weight") {
   out <- out[order(-out[[weight_col]]), , drop = FALSE]
   num <- vapply(out, is.numeric, logical(1))
   out[num] <- lapply(out[num], function(x) round(x, 3))
-  out
-}
-
-# A richer per-group summary, in the shape the discard section uses:
-# what each group RAISES on the left, what it is SOURCED from on the
-# right, plus how much is still unassigned.
-#' @noRd
-#' @export
-alloc_group_table <- function(assigned, groups, dims,
-                              weight_col = "weight") {
-  if (is.null(assigned) || !nrow(assigned) || !length(groups)) return(NULL)
-  w <- assigned[[weight_col]]
-  rows <- lapply(seq_along(groups), function(i) {
-    g <- names(groups)[i]
-    sel <- assigned$alloc_group == g & !is.na(assigned$alloc_group)
-    # the donor side is evaluated independently: a group may be sourced
-    # from strata it does not itself raise
-    src <- tryCatch(rlang::eval_tidy(fld(groups[[g]], "matched_expr",
-                                         groups[[g]][["alloc_expr"]]),
-                                     data = assigned),
-                    error = function(e) rep(FALSE, nrow(assigned)))
-    src[is.na(src)] <- FALSE
-    data.frame(
-      # NOTE [[ ]] not $ : `$` partial-matches on lists, so `$matched`
-      # would silently return `matched_expr` - a quosure - and land a
-      # language object in a data.frame column.
-      group_id = g, label = fld(groups[[g]], "label", ""),
-      allocStrataCond = fld(groups[[g]], "alloc", ""),
-      bioMatchedCond = fld(groups[[g]], "matched", fld(groups[[g]], "alloc", "")),
-      n_strata_raised = sum(sel),
-      weight_raised = round(sum(w[sel], na.rm = TRUE), 3),
-      n_strata_source = sum(src),
-      source_coverage = if (sum(src))
-        round(sum(assigned$weight_measured[src], na.rm = TRUE) /
-              sum(assigned$weight[src], na.rm = TRUE) * 100, 1) else NA_real_,
-      source_measurements = if (sum(src) && "n_measurements" %in% names(assigned))
-        sum(assigned$n_measurements[src], na.rm = TRUE) else NA_real_,
-      stringsAsFactors = FALSE)
-  })
-  out <- do.call(rbind, rows)
-  miss_n <- sum(is.na(assigned$alloc_group))
-  out$still_missing <- c(rep(NA_integer_, nrow(out) - 1), miss_n)
   out
 }
 

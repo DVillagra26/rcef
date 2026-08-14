@@ -173,15 +173,21 @@ if (requireNamespace("shiny", quietly = TRUE)) {
                regexpr("mg_bdeck", h, fixed = TRUE))
   at <- function(seg, k) as.integer(regexpr(k, seg, fixed = TRUE))
 
-  ## Catch-all is step 3 on the right; assigning the clause is step 4
-  ## across the bottom, under boxes 1 and 2 only.
+  ## Assigning the clause is step 3, across the bottom under boxes 1 and
+  ## 2 only; the catch-all is step 4, full height on the right.
   steps_mg <- c("1. Define the groups", "2. Exclusion rules for donor",
-                "3. Include a Catch All", "4. Assign the clause",
+                "3. Assign the clause", "4. Include a Catch All",
                 "Add group", "save_manual", "man_out")
   ok(all(vapply(steps_mg, function(k) at(mg, k), integer(1)) > 0),
      "every manual step is present")
-  ok(all(diff(vapply(steps_mg, function(k) at(mg, k), integer(1))) > 0),
-     "and they appear in the order a reader works through them")
+  ## Source order, not step number: the catch-all is step 4 but is
+  ## emitted as the third grid child, because it occupies the right-hand
+  ## column beside the step-3 row rather than following it.
+  src_order <- c("1. Define the groups", "2. Exclusion rules for donor",
+                 "4. Include a Catch All", "3. Assign the clause",
+                 "Add group", "save_manual", "man_out")
+  ok(all(diff(vapply(src_order, function(k) at(mg, k), integer(1))) > 0),
+     "the manual deck emits its boxes, then the wide row, then the actions")
 
   steps_ar <- c("1. Define key hierarchy", "2. Exclusion rules for donor",
                 "ar_apply", "save_auto", "auto_out")
@@ -199,9 +205,35 @@ if (requireNamespace("shiny", quietly = TRUE)) {
     ok(grepl(k, ar, fixed = TRUE), paste("the cascade box states:", k))
   for (k in c("2.1 Exclude by discard rate",
               "2.3 Exclude a specific stratum",
-              "3.1 Exclude by discard rate",
-              "3.3 Exclude a specific stratum"))
+              "4.1 Exclude by discard rate",
+              "4.3 Exclude a specific stratum"))
     ok(grepl(k, mg, fixed = TRUE), paste("the manual builder states:", k))
+
+  ## ---- 9. length and age use the same builder shape ----------------
+  for (id in c("len_ga_hier_bdeck", "age_ga_hier_bdeck",
+               "len_ga_mg_bdeck", "age_ga_mg_bdeck"))
+    ok(grepl(id, h, fixed = TRUE),
+       paste(id, "is a deck, not a sidebar"))
+  ok(grepl("2.2 Exclude by number of measurements", h, fixed = TRUE),
+     "the biology cascade numbers its donor bars")
+  ## the donor measurements bar is a data-scaled slider, not a free
+  ## numeric box, so it needs a server renderer per builder
+  ok(length(unique(regmatches(h,
+       gregexpr("[A-Za-z0-9_]*dmeas_ui", h))[[1]])) == 2,
+     "each biology cascade renders its own measurements slider")
+
+  ## namespaced ids matter here: two manual builders (length, age) share
+  ## the same box titles, so a bare string search for "saverule" finds
+  ## whichever occurs first REGARDLESS of which builder it belongs to.
+  ## Every check below uses the full id, not a substring.
+  for (pfx in c("len_ga", "age_ga")) {
+    o <- as.integer(regexpr(paste0(pfx, "_mg_bdeck"), h, fixed = TRUE))
+    a <- as.integer(regexpr(paste0('id="', pfx, '_saverule"'), h, fixed = TRUE))
+    b <- as.integer(regexpr(paste0('id="', pfx, '_savemanual"'), h, fixed = TRUE))
+    c <- as.integer(regexpr(paste0('id="', pfx, '_man_out"'), h, fixed = TRUE))
+    ok(o > 0 && o < a && a < b && b < c,
+       paste(pfx, "manual deck: box, then Add group, Save, then output tabs"))
+  }
 
   ## Shiny binds an output id once. rule_order and the catch-all inputs
   ## moved INTO the deck; a leftover copy below it would render blank and
@@ -238,7 +270,7 @@ if (requireNamespace("shiny", quietly = TRUE)) {
               "Manual strata allocation builder"))
     ok(grepl(k, h, fixed = TRUE), paste("titled:", k))
   for (k in c("1. Define the groups", "2. Exclusion rules",
-              "3. Include a Catch All by All", "4. Assign the clause"))
+              "3. Assign the clause", "4. Include a Catch All by All"))
     ok(grepl(k, mg, fixed = TRUE), paste("manual step present:", k))
 
   ## ---- measurements is a BIOLOGY test only -------------------------

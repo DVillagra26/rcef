@@ -135,7 +135,7 @@ ic_output_ui <- function() tagList(
          "Fleet copies fleetValue into metier6 and remaps count units to NE3; ",
          "NULL leaves the MIS_MIS_0_0_0 placeholder."),
     tags$hr(),
-    actionButton("run_ic", "Run conversion", class = "btn-success btn-lg")),
+    actionButton("run_ic", "Run conversion", class = "btn btn-run btn-lg")),
   mainPanel(width = 8,
     h4("Status"), uiOutput("ic_result"))))
 
@@ -198,7 +198,7 @@ db_request_ui <- function() sidebarLayout(
     checkboxInput("db_dn", opt_lab("DN", "distributions"), TRUE),
     checkboxInput("db_en", opt_lab("EN", "effort"), TRUE),
     tags$hr(),
-    actionButton("db_request", "Request data", class = "btn-success btn-lg")),
+    actionButton("db_request", "Request data", class = "btn btn-run btn-lg")),
   mainPanel(width = 8, load_owner_ui(3), uiOutput("db_request_status")))
 
 # ---------------------------------------------------------
@@ -299,32 +299,29 @@ drates_ui <- function() tagList(
     plot_slot("dr_plot", capture = TRUE),
     tags$hr(), h4("Underlying strata"), tbl_slot("dr_tbl")))
 
-final_ui <- function() sidebarLayout(
-  sidebarPanel(width = 3,
-    h4("Adopted allocation"),
-    span(class = "note",
-         "The one that feeds the assessment. It is the allocation the ",
-         "script records as final; the rest stay as exploration."),
-    selectInput("final_alloc", NULL, choices = character(0)),
-    actionButton("run_final", "Raise with this allocation",
-                 class = "btn-success"),
-    tags$hr(),
-    h4("Aggregation"),
-    # split by Fleet by default: the first question of a final raising is
-    # almost always how the catch falls across the fleet, and an empty
-    # split opened on the whole-stock total, which looked like one bar
-    # Filled from the vocabulary once data lands - col_of() is the
-    # identity now, so a control still emitting the label "Fleet" would
-    # hand plot_raised_composition() a column that does not exist.
-    selectInput("fin_x", "Split by", c("(whole stock)" = ""), ""),
-    selectInput("fin_facet", "Facet", NONE, ""),
-    tags$hr(),
-    h4("Cross-tab"),
-    selectInput("fin_row", "Rows", NULL, NULL),
-    selectInput("fin_col", "Columns", NULL, NULL),
-    apply_bar("fin"),
-    uiOutput("fin_lvl_note"), alloc_box()),
-  mainPanel(width = 9,
+final_ui <- function() tagList(
+  control_deck("fin", label = "Adopted allocation controls",
+    options = tagList(
+      # split by whichever variable is on top of the vocabulary by
+      # default: the first question of a final raising is almost always
+      # how the catch falls across the fleet, and an empty split opened
+      # on the whole-stock total, which looked like one bar
+      selectInput("final_alloc", "Adopted allocation", choices = character(0)),
+      span(class = "note",
+           "The one that feeds the assessment. It is the allocation the ",
+           "script records as final; the rest stay as exploration."),
+      actionButton("run_final", "Raise with this allocation",
+                   class = "btn btn-run btn-block")),
+    settings = tagList(
+      selectInput("fin_x", "Split by", c("(whole stock)" = ""), ""),
+      selectInput("fin_facet", "Facet", NONE, ""),
+      tags$hr(style = "margin:6px 0"),
+      tags$b("Cross-tab", style = "font-size:11.5px"),
+      selectInput("fin_row", "Rows", NULL, NULL),
+      selectInput("fin_col", "Columns", NULL, NULL))),
+  deck_page(
+    picker = NULL,
+    uiOutput("fin_lvl_note"), alloc_box(),
     uiOutput("final_status"),
     tabsetPanel(id = "fin_out", type = "tabs",
       tabPanel("Plot",
@@ -498,51 +495,50 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
          "BMS is a landing in the exchange format but behaves like a ",
          "discard. With this on, any clause naming Dis also picks up BMS."),
     conditionalPanel(sprintf("input.%s != 'manual'", ns("method")),
-      sidebarLayout(
-        sidebarPanel(width = 3,
-          h4("Nesting order"),
-          checkboxInput(ns("keepcc"), "Never drop catchCategory", TRUE),
-          span(class = "note",
-               "On: the cascade stops at the catch category, so a landings ",
-               "stratum is only ever matched to landings. Off: once the ",
-               "other keys are exhausted the category is dropped too and ",
-               "landings and discards pool together."),
-          uiOutput(ns("keys")),
-
-          tags$hr(),
-          h4("Exclude donors", style = "font-size:13px"),
-          span(class = "note",
-               "A separate question from the thresholds above. Those decide ",
-               "WHICH STRATA a rung will resolve; these decide WHICH STRATA ",
-               "MAY LEND their distribution. A stratum failing these bars is ",
-               "still allocated - it is just not used as a donor, which is ",
-               "the whole point of it needing to borrow."),
-          tags$b("% Sampling coverage", style = "font-size:12px"),
-          sliderInput(ns("dcov"), "donor % coverage above", 0, 100,
-                      c(0, 100), 5, width = "100%"),
-          tags$b("Measurements", style = "font-size:12px"),
-          numericInput(ns("dmeas"), "donor measurements above",
-                       NA, 0, 100000, 10, width = "100%"),
-          span(class = "note",
-               "Coverage floor 0 switches that bar off. These apply to ",
-               "every rung, including the last-resort pool: 'use everything ",
-               "except the strata with under 50% coverage and under 100 ",
-               "measurements' is 50 and 100 here."),
-
-          tags$hr(),
-          # Nothing below recomputes until this is pressed. Five keys,
-          # each with four numbers, means twenty controls that each used
-          # to re-walk the whole cascade on every keystroke - setting up
-          # a ladder was slower than running it.
-          div(style = "margin:6px 0",
-              actionButton(ns("apply"), "Apply settings",
-                           class = "btn-sm btn-primary"),
-              uiOutput(ns("stale"), inline = TRUE)),
-          uiOutput(ns("chain")),
-          tags$hr(),
-          textInput(ns("name"), "Save as", "alloc_1"),
-          actionButton(ns("save"), "Save allocation", class = "btn-success")),
-        mainPanel(width = 9,
+      builder_deck(ns("hier"), "Hierarchical strata allocation builder",
+        boxes = list(
+          "Define key hierarchy to group strata" = tagList(
+            checkboxInput(ns("keepcc"), "Never drop catchCategory", TRUE),
+            span(class = "note",
+                 "On: the cascade stops at the catch category, so a landings ",
+                 "stratum is only ever matched to landings. Off: once the ",
+                 "other keys are exhausted the category is dropped too and ",
+                 "landings and discards pool together."),
+            uiOutput(ns("keys")),
+            tags$b("Order actually tested",
+                   style = "font-size:11.5px;display:block;margin-top:6px"),
+            uiOutput(ns("chain"))),
+          "Exclusion rules for donor strata" = tagList(
+            span(class = "note",
+                 "A separate question from the thresholds beside. Those ",
+                 "decide WHICH STRATA a rung resolves; these decide WHICH ",
+                 "STRATA MAY LEND their distribution. A stratum failing ",
+                 "these bars is still allocated - it is just not used as a ",
+                 "donor, which is the whole point of it needing to borrow."),
+            tags$b("2.1 Exclude by % sampling coverage",
+                   style = "font-size:11.5px;display:block;margin-top:5px"),
+            sliderInput(ns("dcov"), "donor % coverage above", 0, 100,
+                        c(0, 100), 5, width = "100%"),
+            tags$b("2.2 Exclude by number of measurements",
+                   style = "font-size:11.5px;display:block;margin-top:5px"),
+            uiOutput(ns("dmeas_ui")),
+            span(class = "note",
+                 "A coverage floor of 0 switches that bar off. These apply ",
+                 "to every rung, including the last-resort pool: 'use ",
+                 "everything except the strata under 50% coverage and under ",
+                 "100 measurements' is 50 and 100 here."))),
+        cols = 2,
+        actions = tagList(
+          # Nothing below recomputes until Apply is pressed. Seven keys,
+          # each with four numbers, means twenty-odd controls that would
+          # otherwise re-walk the whole cascade on every keystroke -
+          # setting up a ladder was slower than running it.
+          actionButton(ns("apply"), "Apply settings", class = "btn btn-apply"),
+          uiOutput(ns("stale"), inline = TRUE),
+          textInput(ns("name"), NULL, "alloc_1", width = "100%"),
+          actionButton(ns("save"), "Save as scenario",
+                       class = "btn btn-savescn"))),
+      div(
           uiOutput(ns("status")),
           tabsetPanel(id = ns("hier_out"), type = "tabs",
                         tabPanel("Overview",
@@ -585,68 +581,80 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
                    "The grouping this cascade resolves to, as a script - ",
                    "strata clauses written plainly, the partition applied ",
                    "for you."),
-              verbatimTextOutput(ns("hier_conds"))),
-          )))),
+              verbatimTextOutput(ns("hier_conds")))))),
     conditionalPanel(sprintf("input.%s == 'manual'", ns("method")),
-      sidebarLayout(
-        sidebarPanel(width = 4,
-          # Numbered the same as the discard manual builder, step for
-          # step, because they are the same decision made on a different
-          # quantity and a user who has learnt one should not have to
-          # learn the other.
-          h4("1. Group"),
-          fluidRow(column(5, textInput(ns("gid"), "Id", "GA1")),
-                   column(7, textInput(ns("glab"), "Label", ""))),
-
-          h4("2. Build a clause"),
-          span(class = "note", "A clause is one or more variable restrictions ",
-               "combined with AND. Add them one at a time."),
-          div(tags$b("Variable", style = "font-size:12px")),
-          uiOutput(ns("var_chips")),
-          uiOutput(ns("vals")),
-          checkboxInput(ns("neg"), "NOT in these", FALSE),
-          actionButton(ns("add"), "Add to clause", class = "btn-sm btn-primary"),
-          actionButton(ns("clear"), "Clear", class = "btn-sm"),
-          uiOutput(ns("clause")),
-
-          tags$hr(),
-          h4("3. Exclude donors"),
-          span(class = "note",
-               "Narrows bioMatchedCond only - never the strata being ",
-               "allocated. A stratum too thinly measured to lend a ",
-               "distribution is exactly the one that needs to borrow one."),
-          exclude_box(ns("x"), metrics = c("coverage", "measurements"),
-                      title = NULL,
-                      note = paste("Coverage is the share of catch weight",
-                                   "carrying a distribution; measurements is",
-                                   "the number of fish behind it. A pool can",
-                                   "reach 80% coverage on eleven fish, and",
-                                   "that is not a distribution to allocate",
-                                   "from.")),
-
-          tags$hr(),
-          h4("4. Assign the clause"),
-          span(class = "note",
-               "The two can differ: a group of strata may be allocated from ",
-               "a wider pool of sampled data."),
-          # side by side, the same layout as the discard builder: the two
-          # conditions are read against each other far more often than in
-          # sequence, and stacked they were a scroll apart
-          div(style = "display:flex;gap:8px;align-items:stretch",
+      builder_deck(ns("mg"), "Manual strata allocation builder",
+        numbers = c("1", "2", "4"), grid = "mg-grid",
+        boxes = list(
+          "Define the groups of strata to allocate" = tagList(
+            tags$b("1.1 Name the group",
+                   style = "font-size:11.5px;display:block"),
+            fluidRow(column(5, textInput(ns("gid"), "Id", "GA1")),
+                     column(7, textInput(ns("glab"), "Label", ""))),
+            tags$b("1.2 Rules to group",
+                   style = "font-size:11.5px;display:block;margin-top:4px"),
+            span(class = "note", "A clause is one or more variable ",
+                 "restrictions combined with AND. Add them one at a time."),
+            div(tags$b("Variable", style = "font-size:11.5px")),
+            uiOutput(ns("var_chips")),
+            uiOutput(ns("vals")),
+            checkboxInput(ns("neg"), "Negate (NOT in)", FALSE),
+            div(style = "display:flex;gap:4px",
+              actionButton(ns("add"), "Add to clause",
+                           class = "btn-xs btn-primary"),
+              actionButton(ns("clear"), "Clear clause", class = "btn-xs")),
+            uiOutput(ns("clause")),
+            tags$b("Overview of the groups defined",
+                   style = "font-size:11.5px;display:block;margin-top:6px"),
+            uiOutput(ns("order"))),
+          "Exclusion rules for donor strata" = tagList(
+            span(class = "note",
+                 "Narrows bioMatchedCond only - never the strata being ",
+                 "allocated. A stratum too thinly measured to lend a ",
+                 "distribution is exactly the one that needs to borrow one."),
+            exclude_box(ns("x"), metrics = c("coverage", "measurements"),
+                        title = NULL, num = "2",
+                        note = paste("Coverage is the share of catch weight",
+                                     "carrying a distribution; measurements is",
+                                     "the number of fish behind it. A pool can",
+                                     "reach 80% coverage on eleven fish, and",
+                                     "that is not a distribution to allocate",
+                                     "from."))),
+          "Include a Catch All by All group" = tagList(
+            span(class = "note",
+                 "A final group with no clause. Its allocStrataCond is the ",
+                 "COMPLEMENT of everything above it, so it allocates only ",
+                 "the strata no earlier group claimed - nothing is ",
+                 "allocated twice. Its bioMatchedCond is every stratum, ",
+                 "including those earlier groups already used: a donor may ",
+                 "be reused, only an allocated stratum may not."),
+            exclude_box(ns("ca"), metrics = c("coverage", "measurements"),
+                        title = NULL, num = "4",
+                        note = paste("The catch-all is the last resort, so it",
+                                     "usually wants the widest pool - but a",
+                                     "stratum with almost nothing measured is",
+                                     "still a bad donor here. Set its own bars",
+                                     "rather than inheriting the ones above.")),
+            actionButton(ns("addcatchall"), "Add Catch All by All",
+                         class = "btn btn-addgrp btn-block",
+                         style = "margin-top:6px"))),
+        wide = list(
+          "3. Assign the clause" = div(
+            style = "display:flex;gap:8px;align-items:stretch",
             div(style = "flex:1",
               div(class = "condbox",
                   div(class = "condtitle", "allocStrataCond"),
                   span(class = "note", "strata to allocate"),
                   uiOutput(ns("alloc_txt")),
                   actionButton(ns("to_alloc"), "Put clause here",
-                               class = "btn-sm btn-info"))),
-            div(style = "flex:0 0 42px;display:flex;flex-direction:column;
-                         justify-content:center;gap:4px",
+                               class = "btn-xs btn-info"))),
+            div(style = "flex:0 0 40px;display:flex;flex-direction:column;
+                         justify-content:center;gap:5px",
               actionButton(ns("mirror"), HTML("&rarr;"),
-                           class = "btn-sm btn-warning",
+                           class = "btn-xs btn-warning",
                            title = "copy to bioMatchedCond"),
               actionButton(ns("mirror_back"), HTML("&larr;"),
-                           class = "btn-sm btn-warning",
+                           class = "btn-xs btn-warning",
                            title = "copy back to allocStrataCond")),
             div(style = "flex:1",
               div(class = "condbox",
@@ -654,47 +662,13 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
                   span(class = "note", "sampled data used"),
                   uiOutput(ns("matched_txt")),
                   actionButton(ns("to_matched"), "Put clause here",
-                               class = "btn-sm btn-info")))),
-
-          actionButton(ns("saverule"), "5. Save group", class = "btn-success"),
-          tags$hr(),
-
-          h4("6. Catch-all group"),
-          span(class = "note",
-               "Adds a final group with no clause. Its allocStrataCond is ",
-               "the COMPLEMENT of everything above it, so it allocates only ",
-               "the strata no earlier group claimed - a stratum is never ",
-               "allocated twice. Its bioMatchedCond is every stratum, ",
-               "including those already used: a donor can be reused, only an ",
-               "allocated stratum cannot. Put it last."),
-          exclude_box(ns("ca"), metrics = c("coverage", "measurements"),
-                      title = NULL,
-                      note = paste("The catch-all is the last resort, so it",
-                                   "usually wants the widest pool - but a",
-                                   "stratum with almost nothing measured is",
-                                   "still a bad donor here. Set its own bars",
-                                   "rather than inheriting the ones above.")),
-          # The catch-all carries ONLY its own bars, as on the discard
-          # side. Inheriting the groups' exclusions made the last
-          # resort's donor pool depend on decisions taken for unrelated
-          # groups, which is the opposite of what a last resort is for.
-          actionButton(ns("addcatchall"), "Add Catch All by All",
-                       class = "btn btn-addgrp"),
-          tags$hr(),
-
-          h4("7. Order"),
-          span(class = "note",
-               "Evaluated top to bottom; first match wins. A stratum is ",
-               "allocated by exactly one group - the first that claims it. ",
-               "Donor pools are the opposite: they may overlap freely, so ",
-               "one stratum can feed several groups."),
-          uiOutput(ns("order")),
-          tags$hr(),
-          h4("8. Save allocation"),
-          textInput(ns("mname"), "Save this set as", "manual_1"),
-          actionButton(ns("savemanual"), "Save allocation",
-                       class = "btn-success")),
-        mainPanel(width = 8,
+                               class = "btn-xs btn-info"))))),
+        actions = tagList(
+          actionButton(ns("saverule"), "Add group", class = "btn btn-addgrp"),
+          textInput(ns("mname"), NULL, "manual_1", width = "100%"),
+          actionButton(ns("savemanual"), "Save as scenario",
+                       class = "btn btn-savescn"))),
+      div(
           uiOutput(ns("bmsnote")),
           tabsetPanel(id = ns("man_out"), type = "tabs",
                         tabPanel("Overview",
@@ -737,8 +711,7 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
                    "strata clauses written plainly (first match wins), the ",
                    "partition applied for you; donor conditions as metric ",
                    "thresholds, not stratum lists."),
-              verbatimTextOutput(ns("conds"))),
-          )))))
+              verbatimTextOutput(ns("conds")))))))
 }
 
 # --- 2nd level: raising ------------------------------------------
@@ -800,7 +773,7 @@ len_raise_ui <- function(p, what = "Length") {
                   c("NumberAtAoL", "CATON"), "NumberAtAoL"),
       tags$hr(),
       actionButton(ns("run"), sprintf("Allocate %s", tolower(what)),
-                   class = "btn-success btn-lg"),
+                   class = "btn btn-run btn-lg"),
       tags$hr(),
       h4("Aggregation"),
       selectInput(ns("group"), "Group by", c("catchCategory", NONE),
@@ -825,56 +798,13 @@ len_raise_ui <- function(p, what = "Length") {
 }
 
 # ---------------------------------------------------------
-#  Length / Age skeletons
+#  Length / Age helpers
 # ---------------------------------------------------------
-stub_note <- function(...) div(class = "chain",
-  style = "font-size:13px;line-height:1.55;max-width:780px", ...)
-
-sampling_stub <- function(kind) {
-  v <- if (kind == "length") "length class" else "age class"
-  sidebarLayout(
-    sidebarPanel(width = 3,
-      h4("Plot"),
-      pick_bar(paste0(kind, "_type"),
-               list(heatmap = "Coverage", bars = "Sampled", box = "Distribution"),
-               "heatmap"),
-      tags$hr(),
-      role_chips(paste0(kind, "_cov"),
-                 c(y = "Y axis", fill = "X / Fill", facet = "Facet"),
-                 c("metier4", "Season", "Country"), stacked = TRUE),
-      selectInput(paste0(kind, "_cc"), "Catch category",
-                  c("Landings" = "Lan", "Discards" = "Dis", "Both" = ""))),
-    mainPanel(width = 9,
-      stub_note(tags$b("Not built yet."), tags$br(),
-        "The stratum here carries one more dimension than the discard ",
-        "section: catchCategory. Landings and discards are measured ",
-        "separately, so a stratum is fleet x country x area x season x catch ",
-        "category, and the coverage question becomes which of those have a ",
-        "distribution at all - read off domainBiology, not domainCatchDis.",
-        tags$br(), tags$br(),
-        "The rate view is replaced by two curves: numbers at ", v,
-        " and mean weight at ", v, ". The equivalent of the discard-rate ",
-        "boxplot is those distributions overlaid by stratum, so it is ",
-        "visible whether pooling two strata merges compatible shapes or ",
-        "smears two different ones together.")))
-}
-
-grouping_stub <- function(kind) div(style = "padding:8px 4px",
-  pick_bar(paste0(kind, "_grp"),
-           list(ladder = "Hierarchical", manual = "Manual groups"), "ladder"),
-  stub_note(tags$b("Not built yet."), tags$br(),
-    "Both builders carry over unchanged in shape - a threshold cascade and ",
-    "an ordered rule table producing strataCond and matchedDataCond. What ",
-    "changes is the criterion: a stratum qualifies on number of samples and ",
-    "number of measurements rather than on the sampled fraction of ",
-    "landings, so the thresholds are counts, not percentages."))
-
-alloc_stub <- function(kind) div(style = "padding:8px 4px",
-  stub_note(tags$b("Not built yet."), tags$br(),
-    "Runs the groups through catchAllocationAoL() from ",
-    "0_Functions_age-length_alloc.R, the age/length counterpart of ",
-    "catchRaising(), and compares allocations the same way the discard ",
-    "section does."))
+# (sampling_stub / grouping_stub / alloc_stub / stub_ui / stub_note were
+#  placeholders drawn before the length and age sections were built out.
+#  Nothing calls them any more - len_coverage_ui(), the builder_deck()
+#  cascades and len_alloc_ui() replaced them - so they are removed rather
+#  than carried as dead weight.)
 
 # A clause you can pick up and drop into either box. The buttons stay as
 # a fallback, since drag-and-drop is awkward on a trackpad.
@@ -958,7 +888,7 @@ nr_ui <- function() {
       checkboxInput("nr_assembled", "assembled_output", TRUE),
       textInput("nr_log", "logFile", "Log.txt"),
       tags$hr(),
-      actionButton("run_native", "Run raising", class = "btn-success"),
+      actionButton("run_native", "Run raising", class = "btn btn-run"),
       # No level-of-detail box: this tab inherits the resolution the
       # allocation groups were built at (see DMAP_ALIAS). Showing a
       # second one invited it to be set to something the saved groups
@@ -1708,6 +1638,18 @@ ui <- navbarPage(
              padding:6px 10px}
     .bdeckapply .btn-savescn:hover{background:#1d4b73;border-color:#1d4b73}
     .bdeckapply .btn-addgrp{flex:1;font-size:12.5px;padding:6px 10px}
+    /* A fourth role, for buttons that RUN an engine call rather than
+       change a definition - Run conversion, Request data, Run raising,
+       Allocate, Start. These used to be plain Bootstrap green
+       (btn-success), which is a different green from btn-addgrp and
+       meant three shades of green were doing three different jobs on
+       the same screen. F28E2B is already the accent used for Level of
+       detail and Exclude donors, so reusing it here signals a
+       significant, engine-touching action with a colour the app
+       already trained the eye on. */
+    .btn-run{background:#F28E2B !important;border-color:#F28E2B !important;
+             color:#fff !important;font-weight:700}
+    .btn-run:hover{background:#d97a1c !important;border-color:#d97a1c !important}
     .bdeckapply .form-group{margin:0;flex:1}
     .bdeckapply input[type=text]{height:32px;font-size:12px}
     /* the key rows have to stay compact or three of them fill the box */
@@ -1852,7 +1794,7 @@ ui <- navbarPage(
               background:#eef6ef;border:2px solid #59A14F;border-radius:9px;
               padding:8px 10px;box-shadow:0 3px 12px rgba(0,0,0,.18);
               max-height:210px;overflow:auto}
-    .alloctitle{color:#245c2a;font-weight:700;font-size:11px;
+    .alloctitle{color:#14532d;font-weight:700;font-size:11px;
                 text-transform:uppercase;letter-spacing:.4px}
     .dragchip{cursor:grab;background:#12324f;color:#fff;border-radius:14px;
               padding:5px 12px;font-family:monospace;font-size:11px;
@@ -2200,12 +2142,9 @@ ui <- navbarPage(
           )))),
           conditionalPanel("input.grp_method == 'manual'", 
           builder_deck("mg", "Manual strata allocation builder",
-            # Numbering follows the reading order you asked for: the
-            # catch-all is step 3 on the right, and assigning the clause
-            # is step 4 across the bottom. (The mock-up labelled these
-            # 4 and 3 respectively - flagged, and the written instruction
-            # taken as the correction.)
-            numbers = c("1", "2", "3"), grid = "mg-grid",
+            # Catch-all is step 4 on the right, assigning the clause is
+            # step 3 across the bottom - as in the mock-up.
+            numbers = c("1", "2", "4"), grid = "mg-grid",
             boxes = list(
               "Define the groups of strata to raise / allocate" = tagList(
                 tags$b("1.1 Name the group",
@@ -2244,7 +2183,7 @@ ui <- navbarPage(
                      "those earlier groups already used: a donor may be ",
                      "reused, only a raised stratum may not."),
                 exclude_box("ca", metrics = c("coverage"),
-                            title = NULL, num = "3",
+                            title = NULL, num = "4",
                             rate_ui = tagList(
                               fluidRow(
                                 column(6, numericInput("catchall_dr_min",
@@ -2263,7 +2202,7 @@ ui <- navbarPage(
                              class = "btn btn-addgrp btn-block",
                              style = "margin-top:6px"))),
             wide = list(
-              "4. Assign the clause" = div(
+              "3. Assign the clause" = div(
                 style = "display:flex;gap:8px;align-items:stretch",
                 div(style = "flex:1",
                   div(class = "condbox",
@@ -2450,7 +2389,7 @@ ui <- navbarPage(
 
 startup_modal <- function() modalDialog(
   title = NULL, size = "l", easyClose = FALSE, fade = TRUE,
-  footer = tagList(actionButton("start_go", "Start", class = "btn-success")),
+  footer = tagList(actionButton("start_go", "Start", class = "btn btn-run")),
   div(style = "text-align:center;margin-bottom:10px",
       h3(style = "margin:0;color:#12324f", "RCEF Workbench"),
       div(class = "note",
@@ -3745,6 +3684,25 @@ server <- function(input, output, session) {
                       "level must reach before it is used")),
         k1, cc, tags$hr(style = "margin:6px 0"), rows) })
 
+    # The donor measurements bar, scaled to the data. Same reasoning as
+    # the exclusion boxes: a fixed 0-100000 numeric put every real value
+    # in the first pixel of the range, so the ceiling is the largest
+    # count actually present. Min-only, so the shaded side is the side
+    # that qualifies as a donor.
+    output[[ns("dmeas_ui")]] <- renderUI({
+      bl <- tryCatch(bl_metrics(), error = function(e) NULL)
+      top <- if (is.null(bl) || !"n_measurements" %in% names(bl)) 1000
+             else max(c(1, suppressWarnings(
+               as.numeric(bl$n_measurements))), na.rm = TRUE)
+      top <- max(200, ceiling(top / 50) * 50)
+      cur <- input[[ns("dmeas")]]
+      val <- if (is.null(cur) || all(is.na(cur))) min(100, top)
+             else min(as.numeric(cur)[1], top)
+      sliderInput(ns("dmeas"), "donor measurements above", 0, top,
+                  c(val, top), step = max(1, round(top / 200)),
+                  width = "100%")
+    })
+
     # The live settings, and the ones the panel is currently drawn from.
     donor_bars <- reactive({
       cv <- num_in("dcov", NA)        # slider floor 0 means "no bar"
@@ -3951,7 +3909,7 @@ server <- function(input, output, session) {
 
     output[[ns("bmsnote")]] <- renderUI(
       if (bms_on())
-        div(class = "chain", style = "color:#245c2a",
+        div(class = "chain", style = "color:#14532d",
             "BMS is being treated as a discard: a clause naming Dis also matches BMS.")
       else
         div(class = "chain", style = "color:#9a5000",
@@ -4487,7 +4445,7 @@ server <- function(input, output, session) {
 
     output[[ns("raisewarn")]] <- renderUI({
       if (discards_raised())
-        return(div(class = "chain", style = "color:#245c2a",
+        return(div(class = "chain", style = "color:#14532d",
                    sprintf("Discards have been raised; the %s allocation will use the raised catch table.",
                            tolower(what))))
       div(class = "chain", style = "color:#9a5000;border-left:5px solid #E15759",
@@ -5331,20 +5289,26 @@ server <- function(input, output, session) {
     m <- suppressWarnings(max(s$discard_rate, na.rm = TRUE))
     if (!is.finite(m)) 1 else max(1, ceiling(m * 1.05 * 100) / 100) }
 
+  # strata_of and dims_of MUST agree. strata_p() aggregates to
+  # panel_dims(), which reads the plot role inputs - and a builder has
+  # none, so it fell back to DEF_DIMS while dims_of() returned the
+  # cascade keys. exclusion_choices() then asked for Stratum, areaValue
+  # and ICESSubArea in a table built without them and returned nothing,
+  # so the "exclude a specific stratum" dropdown was empty.
   ar_excl_keys_srv <- exclusion_server("ar",
-    strata_of = function() strata_p("ar"),
+    strata_of = function() build_strata(dat(), ar_dims()),
     dims_of   = function() ar_dims(),
     metrics   = c("coverage", "rate"),
     dr_of     = function() ar_dr())
 
   mg_excl_keys_srv <- exclusion_server("mg",
-    strata_of = function() strata_p("mg"),
+    strata_of = function() build_strata(dat(), mg_dims()),
     dims_of   = function() mg_dims(),
     metrics   = c("coverage", "rate"),
     dr_of     = function() rule_dr())
 
   ca_excl_keys_srv <- exclusion_server("ca",
-    strata_of = function() strata_p("mg"),
+    strata_of = function() build_strata(dat(), mg_dims()),
     dims_of   = function() mg_dims(),
     metrics   = c("coverage"))
 

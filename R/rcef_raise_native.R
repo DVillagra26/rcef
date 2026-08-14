@@ -150,39 +150,3 @@ native_summary <- function(raised, dims) {
               .groups = "drop")
 }
 
-# ---- emitted code -----------------------------------------------------
-#' @noRd
-#' @export
-emit_native_code <- function(conds, dims, type = "discards",
-                             originType = "WGEstimate",
-                             variableType = "WeightLive",
-                             log_file = "Log.txt") {
-  q_txt <- function(l) vapply(seq_along(l), function(i)
-    sprintf("    %s = quo(%s)%s", names(l)[i],
-            wrap_lines(rlang::quo_text(l[[i]]), width = 66),
-            if (i < length(l)) "," else ""), character(1))
-  c("## ---- Raising with catchRaising() -------------------------",
-    sprintf("dims <- %s", fmt_vals(dims)),
-    "catch_data <- catch_data %>%",
-    "    mutate(stratum_id = do.call(paste, c(across(all_of(dims)), sep = \" | \")))",
-    "",
-    "strataCond <- list(", q_txt(conds$strataCond), ")",
-    "",
-    "matchedDataCond <- list(", q_txt(conds$matchedDataCond), ")",
-    "",
-    "## Optional but good practice - checks the conditions before raising:",
-    "cond_test  <- check_group_conditions(catch_data, strataCond,",
-    '                                     conditionType = "strata", logFile = NULL)',
-    "cond_test2 <- check_group_conditions(catch_data, matchedDataCond,",
-    '                                     conditionType = "matched_data", logFile = NULL)',
-    "",
-    "catch_data_raised <- catchRaising(",
-    "    catch_data                  = catch_data,",
-    "    condition_raising_st_list   = strataCond,",
-    "    condition_matched_data_list = matchedDataCond,",
-    sprintf('    type = "%s", originType = "%s", variableType = "%s",',
-            type, originType, variableType),
-    sprintf('    logFile = "%s", assembled_output = TRUE)', log_file),
-    "",
-    "table(catch_data_raised$DrGroup, catch_data_raised$importedOrRaised)")
-}

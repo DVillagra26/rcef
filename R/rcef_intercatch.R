@@ -101,19 +101,6 @@ ic_code <- function(i) {
     'attr(res, "CEF_version")')
 }
 
-# Lay uploaded files out the way the functions expect
-#' @noRd
-#' @export
-ic_stage_uploads <- function(files, source_type, years) {
-  root <- file.path(tempdir(), paste0("ic_", as.integer(Sys.time())))
-  dir.create(root, recursive = TRUE, showWarnings = FALSE)
-  # funICoutCEF looks in dat_path/<year>/ ; funIntercatchCEF in dat_path/
-  dest <- if (source_type == "output") file.path(root, years[1]) else root
-  dir.create(dest, recursive = TRUE, showWarnings = FALSE)
-  file.copy(files$datapath, file.path(dest, files$name))
-  root
-}
-
 # The canonical filename each role must have so the functions' internal
 # grep/`%like%` finds it. funICoutCEF() re-globs dat_path/<year>/ and
 # matches "StockOverview", "Numbers", "MeanWeigth"; funIntercatchCEF()

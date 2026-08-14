@@ -23,9 +23,13 @@ decision_tree2(
 A data frame, one row per step, with cumulative columns.
 }
 \description{
-[decision_tree()] plus the share of landings each step resolved and the
-running totals, so it is obvious how much of the stock is settled by the
-time the cascade reaches the fallback.
+Deprecated. `decision_tree(..., cumulative = TRUE)` returns exactly this
+table; the two were a strict superset of one another, and the app called
+both with identical arguments, walking the cascade twice on every
+invalidation to produce one table that was a prefix of the other.
+}
+\details{
+Kept so saved scripts that name it keep running.
 }
 \seealso{
 [decision_tree()], [check_partition()]

@@ -15,7 +15,7 @@ alloc_overview(assigned, groups)
 A data frame, one row per group, plus `(unassigned)` if any.
 }
 \description{
-The counterpart of [manual_overview()] on the discard side. Two
+The biology counterpart of [raising_groups()] on the discard side. Two
 numbers that are easy to conflate and mean different things: how many
 strata a group ALLOCATES (exactly one group per stratum) and how many
 sit in the pool it allocates FROM (a stratum can lend to several).

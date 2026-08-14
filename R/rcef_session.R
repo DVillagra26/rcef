@@ -52,15 +52,6 @@ log_render <- function(lg) {
   unlist(lapply(ids, function(i) c(lg$blocks[[i]], "")), use.names = FALSE)
 }
 
-#' @noRd
-#' @export
-log_write <- function(lg, path) {
-  d <- dirname(path)
-  if (!dir.exists(d)) dir.create(d, recursive = TRUE, showWarnings = FALSE)
-  writeLines(log_render(lg), path)
-  invisible(path)
-}
-
 # ------------------------------------------------------------
 #  State: save / restore the app itself
 # ------------------------------------------------------------

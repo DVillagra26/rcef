@@ -10,7 +10,8 @@ decision_tree(
   thresholds,
   self_threshold,
   mode = "nested",
-  dims = NULL
+  dims = NULL,
+  cumulative = FALSE
 )
 }
 \arguments{
@@ -18,6 +19,10 @@ decision_tree(
 
 \item{hierarchy, thresholds, self_threshold, mode, dims}{As passed to
 [recommend_raising()].}
+
+\item{cumulative}{Add the running totals (`pct_strata`, `cum_pct_strata`,
+`cum_pct_landings`), so it is visible how much of the stock is settled
+by the time the cascade reaches the fallback.}
 }
 \value{
 A data frame, one row per step (including step 0 and the fallback).

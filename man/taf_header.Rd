@@ -2,24 +2,41 @@
 % Please edit documentation in R/rcef_taf.R
 \name{taf_header}
 \alias{taf_header}
-\title{A banner header for one TAF script}
+\title{The standard header comment block for a TAF script}
 \usage{
-taf_header(part, title, reads = NULL, writes = NULL, notes = NULL)
+taf_header(
+  script,
+  purpose,
+  reads = character(0),
+  writes = character(0),
+  notes = character(0)
+)
 }
 \arguments{
-\item{part}{Part id (a name of [TAF_FILES]).}
+\item{script}{The script's TAF name, without the extension, e.g.
+`"data"` or `"model_explore_discards"`.}
 
-\item{title}{One-line description.}
+\item{purpose}{One-line description of what the script does.}
 
-\item{reads, writes}{Character vectors of paths, or `NULL`.}
+\item{reads, writes}{What the script reads from and writes to disk,
+each a character vector of paths or descriptions.}
 
-\item{notes}{Extra comment lines placed under the banner.}
+\item{notes}{Further lines of commentary, one bullet each.}
 }
 \value{
-A character vector of R code.
+A character vector of R code (comment lines).
 }
 \description{
-Every script says what it does, what it reads and what it leaves behind.
-The READS / WRITES lines are the contract between the scripts: they are
-what makes the set re-runnable stage by stage instead of only end to end.
+Every one of the seven files opens with the same shape: what the
+script is for, in one line, then what it reads and what it writes, so
+a reader (or the working group, a year later) can tell what feeds
+what without opening every file.
+}
+\details{
+Called seven times across this file and, until now, never defined -
+a gap invisible to `check_all.sh`, since nothing in the active test
+suite exercises the TAF emitters (only `dev/tests/legacy/`, which is
+not wired into the harness, ever called them). `roxygenise()`'s
+namespace audit is what surfaced it: `taf_header` was listed as an
+export with no function behind it.
 }

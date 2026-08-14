@@ -11,7 +11,10 @@ emit_load_code(
   year = NULL,
   dims = NULL,
   dr_min = NA,
-  dr_max = NA
+  dr_max = NA,
+  dir = NA_character_,
+  dist_file = NA_character_,
+  eff_file = NA_character_
 )
 }
 \arguments{
@@ -24,6 +27,12 @@ emit_load_code(
 \item{dims}{The stratum dimensions.}
 
 \item{dr_min, dr_max}{Donor discard-rate window.}
+
+\item{dir}{The folder the tables were read from, emitted as `cef_dir`
+so the script runs from anywhere. `NA` for an upload, where there is
+no path worth recording.}
+
+\item{dist_file, eff_file}{The companion tables, when they were loaded.}
 }
 \value{
 A character vector of R code.

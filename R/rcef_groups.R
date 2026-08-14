@@ -539,18 +539,6 @@ new_rule <- function(id, label = "", raise = list(), source = NULL,
        excluded = excluded)
 }
 
-#' The discard-rate window as a printable clause
-#' @param r A rule.
-#' @return A string such as `discard_rate >= 0.05`, or "".
-#' @keywords internal
-#' @noRd
-#' @export
-dr_clause_string <- function(r) {
-  bits <- c(if (!is.na(r$dr_min %||% NA)) sprintf("discard_rate >= %s", r$dr_min),
-            if (!is.na(r$dr_max %||% NA)) sprintf("discard_rate <= %s", r$dr_max))
-  if (!length(bits)) "" else paste(bits, collapse = " & ")
-}
-
 #' Full donor condition text for a rule (clauses + rate + exclusions)
 #' @param r A rule.
 #' @param dims Stratum key columns, for named exclusions.
@@ -1022,46 +1010,6 @@ add_tree_totals <- function(tr) {
   tr$cum_pct_strata   <- round(cumsum(tr$n_strata) / tot_n * 100, 1)
   tr$cum_pct_landings <- pc(cumsum(tr$landings))
   tr
-}
-
-#' Everything currently kept out of the donor pools
-#'
-#' Lists the strata excluded from donating and WHY, from both routes at once:
-#' the discard-rate window and the named-stratum list. Reading them in one place
-#' is the point - a stratum can vanish from a pool for either reason, and
-#' otherwise it is not obvious which.
-#'
-#' @param strata A stratum table.
-#' @param dims The stratum key columns.
-#' @param excluded Joined stratum keys excluded by name.
-#' @param dr_min,dr_max The discard-rate window.
-#' @return A data frame of excluded strata with a `reason` column, or `NULL`
-#'   when nothing is excluded.
-#' @seealso [flag_donor_exclusion()], [apply_donor_exclusion()]
-#' @export
-excluded_overview <- function(strata, dims, excluded = character(0),
-                              dr_min = NA, dr_max = NA) {
-  if (is.null(strata) || !nrow(strata)) return(NULL)
-  d <- as.data.frame(strata)
-  present <- intersect(dims, names(d))
-  if (!length(present)) return(NULL)
-  key <- do.call(paste, c(lapply(present, function(k) as.character(d[[k]])),
-                          sep = " | "))
-  rate <- if ("discard_rate" %in% names(d)) d$discard_rate else NA_real_
-  by_name <- key %in% excluded
-  by_rate <- rep(FALSE, nrow(d))
-  if (!is.na(dr_min)) by_rate <- by_rate | (!is.na(rate) & rate < dr_min)
-  if (!is.na(dr_max)) by_rate <- by_rate | (!is.na(rate) & rate > dr_max)
-  sel <- by_name | by_rate
-  if (!any(sel)) return(NULL)
-  out <- data.frame(
-    stratum = key[sel],
-    discard_rate = round(rate[sel], 4),
-    landings = if ("landings" %in% names(d)) round(d$landings[sel], 3) else NA_real_,
-    reason = ifelse(by_name[sel] & by_rate[sel], "named + rate window",
-             ifelse(by_name[sel], "named", "outside rate window")),
-    stringsAsFactors = FALSE)
-  out[order(-out$landings), , drop = FALSE]
 }
 
 # ----------------------------------------------------------
