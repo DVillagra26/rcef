@@ -162,6 +162,22 @@ grouping_vars <- function(d, max_levels = 400, extra_drop = character(0)) {
                   ifelse(is.na(lab[ordered]), ordered, lab[ordered]))
 }
 
+#' Join a character vector as English prose: "a, b and c"
+#'
+#' Shared by the discard cascade's step descriptions and the length/age
+#' allocation cascade's - both say "same X, Y - pooled across all Z" and
+#' should read identically rather than each spelling out its own comma
+#' joiner.
+#'
+#' @param v A character vector.
+#' @return A single string.
+#' @export
+and_list <- function(v) {
+  if (!length(v)) return("")
+  if (length(v) == 1) return(v)
+  paste(paste(v[-length(v)], collapse = ", "), "and", v[length(v)])
+}
+
 #' Area levels a stratum may be grouped by
 #'
 #' Named vector of the nested ICES area resolutions, coarsest first, as

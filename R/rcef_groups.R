@@ -160,7 +160,8 @@ row_condition <- function(row, keys) {
 #' @export
 flag_donor_exclusion <- function(s, dr_min = NA, dr_max = NA,
                                  cov_min = NA, meas_min = NA,
-                                 excluded = character(0), dims = NULL) {
+                                 excluded = character(0), dims = NULL,
+                                 trips_min = NA) {
   ok <- rep(TRUE, nrow(s))
   if (!is.na(dr_min)) ok <- ok & (is.na(s$discard_rate) | s$discard_rate >= dr_min)
   if (!is.na(dr_max)) ok <- ok & (is.na(s$discard_rate) | s$discard_rate <= dr_max)
@@ -174,12 +175,50 @@ flag_donor_exclusion <- function(s, dr_min = NA, dr_max = NA,
     ok <- ok & (is.na(s$coverage) | s$coverage >= cov_min)
   if (!is.na(meas_min) && "n_measurements" %in% names(s))
     ok <- ok & (is.na(s$n_measurements) | s$n_measurements >= meas_min)
+  # Same treatment as coverage/measurements: a stratum with no reported
+  # trip count is left in as a potential donor rather than silently
+  # dropped, since the bar here is only meant to catch a KNOWN thin
+  # sample, not to punish a stock whose CEF file never reported numTrips.
+  if (!is.na(trips_min) && "numTrips" %in% names(s))
+    ok <- ok & (is.na(s$numTrips) | s$numTrips >= trips_min)
 
   if (length(excluded) && !is.null(dims))
     ok <- ok & !(stratum_keys(s, dims) %in% excluded)
 
   s$donor_ok <- ok
   s
+}
+
+#' Translate excluded keys from one resolution to a coarser one
+#'
+#' A stratum picked out by hand at one resolution - "Belgium
+#' TBB_DEF_120-219, 27.4.c, season 1" at the resolution the data was
+#' submitted at - has to become something [flag_donor_exclusion()] can
+#' act on at whatever resolution the donor pool actually runs at, which
+#' may be coarser (metier4 instead of the full fleet code, say). Both
+#' resolutions are grouped from the SAME finer table, so a key at
+#' `from_dims` maps unambiguously to one or more keys at `to_dims` - it
+#' is a lookup, not a guess.
+#'
+#' @param strata A stratum table carrying BOTH `from_dims` and `to_dims`
+#'   as columns - built at their union, or finer than either alone.
+#' @param named Character keys, built on `from_dims` (as produced by
+#'   [stratum_keys()], or picked from [exclusion_choices()] run at that
+#'   resolution).
+#' @param from_dims,to_dims Column sets.
+#' @return Character keys at `to_dims` resolution, deduplicated. Empty
+#'   when either dimension set is empty or nothing matches.
+#' @seealso [flag_donor_exclusion()], [stratum_keys()]
+#' @export
+roll_up_excluded_keys <- function(strata, named, from_dims, to_dims) {
+  if (!length(named) || is.null(strata) || !nrow(strata)) return(character(0))
+  from_dims <- from_dims[nzchar(from_dims)]
+  to_dims   <- to_dims[nzchar(to_dims)]
+  if (!length(from_dims) || !length(to_dims)) return(character(0))
+  km  <- stratum_keys(strata, from_dims)
+  hit <- strata[km %in% named, , drop = FALSE]
+  if (!nrow(hit)) return(character(0))
+  unique(stratum_keys(hit, to_dims))
 }
 
 #' Read the `donor_ok` flag, defaulting to all-eligible
@@ -260,10 +299,6 @@ raising_steps <- function(hierarchy, thresholds, self_threshold = NA,
   stopifnot(length(thresholds) == length(hierarchy))
   if (is.null(dims)) dims <- hierarchy
 
-  and_list <- function(v) {
-    if (length(v) == 1) return(v)
-    paste(paste(v[-length(v)], collapse = ", "), "and", v[length(v)])
-  }
   describe <- function(keys) {
     dropped <- setdiff(dims, keys)
     paste0("same ", and_list(keys),

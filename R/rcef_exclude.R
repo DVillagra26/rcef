@@ -81,6 +81,7 @@ stratum_metrics <- function(strata, dims) {
 
   parts <- split(seq_len(nrow(d)), key)
   cov <- col("coverage"); dr <- col("discard_rate"); nm <- col("n_measurements")
+  tr  <- col("numTrips")
 
   out <- data.frame(
     key = names(parts),
@@ -99,6 +100,15 @@ stratum_metrics <- function(strata, dims) {
         else mean(xx[ok]) } }, numeric(1)),
     n_measurements = vapply(parts, function(i)
       if (is.null(nm)) NA_real_ else sum(nm[i], na.rm = TRUE), numeric(1)),
+    # Summed across the DIFFERENT strata being pooled here - unlike
+    # build_strata()'s max(), which guards against one trip's count
+    # being repeated across several RAW ROWS of that same stratum.
+    # Different strata are, by definition, different data; pooling two
+    # of them combines genuinely separate trips, so their effort adds.
+    numTrips = vapply(parts, function(i)
+      if (is.null(tr)) NA_real_ else {
+        x <- tr[i]; if (!any(!is.na(x))) NA_real_ else sum(x, na.rm = TRUE)
+      }, numeric(1)),
     stringsAsFactors = FALSE)
   rownames(out) <- NULL
   out
@@ -124,9 +134,9 @@ stratum_metrics <- function(strata, dims) {
 #' @export
 exclusion_choices <- function(strata, dims,
                               order_by = c("weight", "coverage", "rate",
-                                           "measurements"),
+                                           "measurements", "trips"),
                               show = c("coverage", "rate", "measurements",
-                                       "weight")) {
+                                       "weight", "trips")) {
   order_by <- match.arg(order_by)
   m <- stratum_metrics(strata, dims)
   if (is.null(m) || !nrow(m)) return(character(0))
@@ -136,7 +146,8 @@ exclusion_choices <- function(strata, dims,
     weight       = order(-m$weight),
     coverage     = order(m$coverage, na.last = TRUE),
     rate         = order(-m$discard_rate, na.last = TRUE),
-    measurements = order(m$n_measurements, na.last = TRUE))
+    measurements = order(m$n_measurements, na.last = TRUE),
+    trips        = order(m$numTrips, na.last = TRUE))
   m <- m[ord, , drop = FALSE]
 
   num <- function(x, digits = 1, suffix = "")
@@ -149,6 +160,8 @@ exclusion_choices <- function(strata, dims,
     bits$dr <- paste0("DR ", num(m$discard_rate * 100, 1, "%"))
   if ("measurements" %in% show && has("n_measurements"))
     bits$ms <- paste0(num(m$n_measurements, 0), " meas")
+  if ("trips" %in% show && has("numTrips"))
+    bits$tr <- paste0(num(m$numTrips, 0), " trips")
   if ("weight" %in% show)
     bits$w <- paste0(num(m$weight, 1), " t")
 
@@ -180,7 +193,8 @@ exclusion_choices <- function(strata, dims,
 #' @export
 exclusion_overview <- function(strata, dims, named = character(0),
                                cov_min = NA, meas_min = NA,
-                               dr_min = NA, dr_max = NA, wt_min = NA) {
+                               dr_min = NA, dr_max = NA, wt_min = NA,
+                               trips_min = NA) {
   m <- stratum_metrics(strata, dims)
   if (is.null(m) || !nrow(m)) return(NULL)
 
@@ -189,6 +203,8 @@ exclusion_overview <- function(strata, dims, named = character(0),
     coverage     = !is.na(cov_min)  & !is.na(m$coverage) & m$coverage < cov_min,
     measurements = !is.na(meas_min) & !is.na(m$n_measurements) &
                      m$n_measurements < meas_min,
+    trips        = !is.na(trips_min) & !is.na(m$numTrips) &
+                     m$numTrips < trips_min,
     rate         = (!is.na(dr_min) & !is.na(m$discard_rate) &
                       m$discard_rate < dr_min) |
                    (!is.na(dr_max) & !is.na(m$discard_rate) &
@@ -198,6 +214,7 @@ exclusion_overview <- function(strata, dims, named = character(0),
 
   word <- c(named = "named", coverage = "below coverage threshold",
             measurements = "too few measurements",
+            trips = "too few trips",
             rate = "outside rate window", weight = "no weight")
   any_fail <- Reduce(`|`, fail)
   if (!any(any_fail)) return(NULL)
@@ -318,6 +335,13 @@ add_stratum_metrics <- function(data, dims, strata = NULL, dist = NULL) {
   # or it errors the same way a missing coverage column does.
   data$n_measurements <- if ("n_measurements" %in% names(m))
     ifelse(is.na(m$n_measurements[i]), 0, m$n_measurements[i]) else 0
+  # Same convention: always present, so a condition naming numTrips does
+  # not error on a stratum where no numTrips was ever reported. Unlike
+  # n_measurements, 0 here is not "off" - a real 0-trip stratum and an
+  # unreported one both read as 0, on the same "unknown is not adequate"
+  # basis the classification takes.
+  data$numTrips <- if ("numTrips" %in% names(m))
+    ifelse(is.na(m$numTrips[i]), 0, m$numTrips[i]) else 0
   data
 }
 
@@ -340,10 +364,12 @@ add_stratum_metrics <- function(data, dims, strata = NULL, dist = NULL) {
 #' exclusion_expr(cov_min = 50, dr_max = 0.9)
 #' exclusion_expr(named = "TBB | 27.4.b", dims = c("metier4", "ICESDivision"))
 exclusion_expr <- function(cov_min = NA, meas_min = NA, dr_min = NA,
-                           dr_max = NA, named = character(0), dims = NULL) {
+                           dr_max = NA, named = character(0), dims = NULL,
+                           trips_min = NA) {
   bits <- character(0)
-  if (!is.na(cov_min))  bits <- c(bits, sprintf("coverage >= %s", cov_min))
-  if (!is.na(meas_min)) bits <- c(bits, sprintf("n_measurements >= %s", meas_min))
+  if (!is.na(cov_min))   bits <- c(bits, sprintf("coverage >= %s", cov_min))
+  if (!is.na(meas_min))  bits <- c(bits, sprintf("n_measurements >= %s", meas_min))
+  if (!is.na(trips_min)) bits <- c(bits, sprintf("numTrips >= %s", trips_min))
   if (!is.na(dr_min))   bits <- c(bits, sprintf("discard_rate >= %s", dr_min))
   if (!is.na(dr_max))   bits <- c(bits, sprintf("discard_rate <= %s", dr_max))
   if (length(named) && !is.null(dims))
@@ -388,7 +414,7 @@ and_condition <- function(base, excl) {
 exclusion_report <- function(strata, dims, named = character(0),
                              cov_min = NA, meas_min = NA, dr_min = NA,
                              dr_max = NA, scope = NULL,
-                             drop_unusable = TRUE) {
+                             drop_unusable = TRUE, trips_min = NA) {
   d <- as.data.frame(strata)
   if (!is.null(scope)) {
     scope[is.na(scope)] <- FALSE
@@ -396,7 +422,8 @@ exclusion_report <- function(strata, dims, named = character(0),
     d <- d[scope, , drop = FALSE]
   }
   if (!nrow(d)) return(NULL)
-  ov <- exclusion_overview(d, dims, named, cov_min, meas_min, dr_min, dr_max)
+  ov <- exclusion_overview(d, dims, named, cov_min, meas_min, dr_min, dr_max,
+                           trips_min = trips_min)
   if (is.null(ov) || !nrow(ov)) return(NULL)
   if (isTRUE(drop_unusable)) {
     keep <- !( (!is.na(ov$weight) & ov$weight <= 0) |
@@ -406,4 +433,76 @@ exclusion_report <- function(strata, dims, named = character(0),
   if (!nrow(ov)) return(NULL)
   rownames(ov) <- NULL
   ov
+}
+
+#' The donor pool's own combined metrics, after every bar and named pick
+#'
+#' Every bar in an exclusion box is a per-stratum test - a stratum below
+#' the coverage floor is dropped whole. What is left after every test is
+#' the pool a group would actually borrow from, and that pool can still
+#' look thin even when no individual stratum was thin enough to trip a
+#' bar: three strata at 20%, 10% and 5% coverage clear a 0% (off) floor
+#' individually and still combine to an 12% pool - exactly the "OTB + SDN
+#' + SSC together only reach 25%" case a per-stratum bar cannot catch by
+#' construction, because it is never asked the question.
+#'
+#' `warn_cov_min` / `warn_meas_min` are that question, and deliberately
+#' separate from `cov_min` / `meas_min` (the per-stratum floor that built
+#' the pool in the first place): a pool built with no per-stratum bar at
+#' all can still be checked against "is this enough to call adequately
+#' sampled", using the same reference the workbench's sampling-status
+#' colours use elsewhere.
+#'
+#' @param strata A stratum table.
+#' @param dims The key columns.
+#' @param named,cov_min,meas_min,dr_min,dr_max,trips_min The per-stratum
+#'   bars, as in [exclusion_overview()] - what built the pool.
+#' @param warn_cov_min,warn_meas_min,warn_trips_min The pool-level sanity
+#'   thresholds - what decides `ok`. `NA` switches that check off.
+#'   Coverage defaults to 50%, the same "adequately sampled" reference
+#'   used throughout the workbench; measurements and trips have no such
+#'   universal reference (a discard pool has nothing to measure, and
+#'   "enough trips" is stock-specific), so both default off.
+#' @return A list: `n_strata`, `weight`, `coverage`, `discard_rate`,
+#'   `n_measurements`, and `ok` (does the POOL clear the sanity bars).
+#'   `NULL` if there is nothing to summarise.
+#' @seealso [exclusion_overview()], [stratum_metrics()]
+#' @export
+donor_pool_summary <- function(strata, dims, named = character(0),
+                               cov_min = NA, meas_min = NA,
+                               dr_min = NA, dr_max = NA,
+                               warn_cov_min = 50, warn_meas_min = NA,
+                               trips_min = NA, warn_trips_min = NA) {
+  m <- stratum_metrics(strata, dims)
+  if (is.null(m) || !nrow(m)) return(NULL)
+  excl <- exclusion_overview(strata, dims, named, cov_min, meas_min,
+                             dr_min, dr_max, trips_min = trips_min)
+  kept <- if (is.null(excl)) m else m[!m$key %in% excl$key, , drop = FALSE]
+  if (!nrow(kept))
+    return(list(n_strata = 0L, weight = 0, coverage = NA_real_,
+               discard_rate = NA_real_, n_measurements = 0, numTrips = 0,
+               ok = FALSE))
+
+  w <- kept$weight; w[is.na(w)] <- 0
+  wmean <- function(x) {
+    ok <- !is.na(x)
+    if (!any(ok)) return(NA_real_)
+    if (sum(w[ok]) > 0) sum(x[ok] * w[ok]) / sum(w[ok]) else mean(x[ok])
+  }
+  cov <- wmean(kept$coverage)
+  dr  <- wmean(kept$discard_rate)
+  nmeas <- sum(kept$n_measurements, na.rm = TRUE)
+  # Summed, not weight-weighted: numTrips is an EFFORT count (how many
+  # trips back the pool), not a rate, so the pool's total is the sum of
+  # what each surviving stratum brought - the same convention
+  # stratum_metrics() uses when pooling across different strata.
+  ntrips <- if (!"numTrips" %in% names(kept) || !any(!is.na(kept$numTrips)))
+    NA_real_ else sum(kept$numTrips, na.rm = TRUE)
+
+  ok <- (is.na(warn_cov_min)   || is.na(cov)    || cov    >= warn_cov_min)   &&
+        (is.na(warn_meas_min)  || is.na(nmeas)  || nmeas  >= warn_meas_min)  &&
+        (is.na(warn_trips_min) || is.na(ntrips) || ntrips >= warn_trips_min)
+  list(n_strata = nrow(kept), weight = sum(kept$weight, na.rm = TRUE),
+       coverage = cov, discard_rate = dr, n_measurements = nmeas,
+       numTrips = ntrips, ok = ok)
 }

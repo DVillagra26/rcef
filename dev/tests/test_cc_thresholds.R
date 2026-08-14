@@ -196,7 +196,10 @@ st2 <- alloc_steps(kk, thresholds = list(own = c(Lan = 55, Dis = 55),
 ok(unname(st2[[own]]$threshold["Lan"]) == 55,
    "a spec carrying $own puts that bar on the own rung, not Area's")
 
-## the grouping column names what each rung keeps
+## the grouping column names what each rung keeps, in the same
+## "same X, Y - pooled across all Z" prose the discard cascade uses -
+## not the "X + Y" join the pool LABEL uses, which is a different column
+## with a different job (naming the pool, not describing it)
 bl <- data.frame(catchCategory = "Lan", Fleet = "TBB", Country = "BE",
                  Season = 1, Area = "27.4", weight = 100,
                  weight_measured = 90, n_measurements = 500,
@@ -206,8 +209,28 @@ tb <- alloc_cascade_table(a, st, keys = kk)
 ok("grouping" %in% names(tb), "the cascade table has a grouping column")
 ok(tb$grouping[tb$step == 1] == "the stratum itself",
    "the own rung groups by the stratum itself")
-ok(any(grepl("Fleet \\+ Country \\+ Season", tb$grouping)),
+ok(any(grepl("same Fleet, Country and Season", tb$grouping, fixed = TRUE)),
    "a widened rung names the keys it still distinguishes")
+
+## keys and dims are NOT the same thing, and conflating them was the bug:
+## a column in dims but not in keys (never chosen as a cascade key) has
+## to show up as "pooled across", or the summary understates how much a
+## rung actually collapses. Fleet/Country/Season/Area are the cascade's
+## own keys; Stratum is part of the strata definition but was never
+## offered as a key.
+tb2 <- alloc_cascade_table(a, st, keys = kk, dims = c("Stratum", kk))
+w1 <- tb2$grouping[!tb2$grouping %in%
+  c("the stratum itself", "everything pooled", "all data in the category")][1]
+ok(grepl("pooled across all Stratum", w1, fixed = TRUE) ||
+     grepl("pooled across all .*Stratum", w1),
+   "a dim that is not a cascade key still shows as pooled across")
+ok(!any(grepl("catchCategory", tb2$grouping, fixed = TRUE)),
+   "catchCategory never appears in grouping text - scope already says so")
+
+## keys = NULL (the pre-fix caller shape) must not error
+tb3 <- alloc_cascade_table(a, st)
+ok(is.data.frame(tb3) && "grouping" %in% names(tb3),
+   "omitting keys/dims still produces a table, using the steps' own keys")
 
 cat(sprintf("\nDONE  %d failure(s)\n", FAIL))
 if (FAIL) quit(status = 1L)

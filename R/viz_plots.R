@@ -340,21 +340,26 @@ plot_bubbles <- function(sc, y_var, x_var = NULL, facet_var = NULL,
                                           big.mark = ",", trim = TRUE)), "")
     # Label only the cells a reader has to ACT on. Two exclusions:
     #   - the SAFE categories, which need no explanation;
-    #   - "no lengths/ages sampled" (cat_key "nosamp"), whose numbers are
-    #     always 0% and n=0 and so say nothing the red colour has not
-    #     already said. On a stock where most cells are unsampled that one
-    #     category supplies most of the labels, and the crowd of "0%"
-    #     buries the handful of borderline cells that actually matter.
-    lab_me <- d$cat_key %in% c("full_thin", "safe_thin", "low_ok", "low_thin")
+    #   - "coverage, trips and measurements all fail" (cat_key "red"),
+    #     whose numbers are usually 0% and n=0 and so say nothing the red
+    #     colour has not already said. On a stock where most cells are
+    #     unsampled that one category supplies most of the labels, and
+    #     the crowd of "0%" buries the handful of borderline cells that
+    #     actually matter.
+    lab_me <- d$cat_key %in% c("yellowgreen", "yellow", "orangeyellow",
+                               "orange_lowtrip", "orange_lowcov",
+                               "orange_lowcovtrip")
     d$lab <- ifelse(lab_me,
                     paste0(cov_bit,
                            ifelse(nzchar(cov_bit) & nzchar(mea_bit), "\n", ""),
                            mea_bit),
                     "")
   } else {
-    d$lab <- with(d, case_when(cat_key == "disc_only" ~ "100%\nDisc",
-                               cat_key == "warn" ~ paste0(round(coverage, 1), "%"),
-                               TRUE ~ ""))
+    d$lab <- with(d, case_when(
+      cat_key == "disc_only" ~ "100%\nDisc",
+      cat_key %in% c("warn_lowcov", "warn_lowtrip") ~
+        paste0(round(coverage, 1), "%"),
+      TRUE ~ ""))
   }
   # A bubble plot says two things at once: status in the colour, weight in
   # the diameter. The second is guesswork without a scale bar, so the

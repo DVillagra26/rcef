@@ -51,71 +51,106 @@ NULL
 
 #' Sampling-status categories, decisions and colours
 #'
-#' The single source of truth for how a stratum's sampling is described. For
-#' discards it is a one-axis scheme on coverage; for lengths and ages it is a
-#' two-axis scheme on coverage AND the number of fish measured, so a fully
-#' covered but thinly measured stratum is flagged rather than trusted.
-#' Colours are shades of one palette (green = use own data, yellow / orange =
-#' borrow, red = nothing sampled) so hue gives the verdict and shade the
-#' severity.
+#' The single source of truth for how a stratum's sampling is described.
+#' Coverage alone says how much of the landings weight carries a discard
+#' estimate; it says nothing about how many TRIPS that estimate rests
+#' on, and a stratum 100% covered by one unusually large trip is a
+#' thinner basis than the same coverage spread across a dozen. Every
+#' scheme here is therefore at least two-axis: coverage and trips for
+#' discards, coverage, trips and measurements for lengths and ages -
+#' three sampling-effort questions asked at once, not folded into one
+#' number.
+#'
+#' Colours are shades of one palette (green = use own data, yellow /
+#' orange = borrow, red = nothing usable) so hue gives the verdict and
+#' shade the severity. `min_trips` and the trips comparisons themselves
+#' are unknown-averse: a stratum with no trip count reported is treated
+#' as failing the trips test rather than passing it by default, the same
+#' way a stratum outside every category collapses to the worst one
+#' rather than the best.
 #'
 #' @param threshold Coverage threshold in percent that separates "enough"
 #'   from "too little".
 #' @param what "discard" (default), "length" or "age".
 #' @param min_meas Minimum number of measurements for a length/age stratum to
 #'   count as well measured. Ignored for discards.
+#' @param min_trips Minimum number of trips for a stratum to count as
+#'   adequately covered in EFFORT terms, separately from coverage in
+#'   WEIGHT terms. Defaults to 2, matching ICES practice.
 #' @return A data frame with columns `cat_key`, `status`, `decision` and
 #'   `colour`, one row per category.
 #' @seealso [classify_strata()], [status_palette()]
 #' @export
-cat_lookup <- function(threshold, what = "discard", min_meas = 0) {
-  # Length / age: a two-way status on coverage AND number of measurements,
-  # so a fully covered but thinly measured stratum is flagged rather than
-  # trusted. Colours are shades of the discard palette so a category is
-  # read by hue (green = use own data, yellow / orange = borrow, red =
-  # nothing sampled) and its severity by shade.
+cat_lookup <- function(threshold, what = "discard", min_meas = 0,
+                       min_trips = 2) {
+  # Length / age: coverage, trips and measurements together - eight
+  # combinations of "does each of the three clear its own bar", with the
+  # top corner (all three, generously) split once more into a genuinely
+  # complete stratum (100% coverage, well beyond the trips floor) and an
+  # ordinarily safe one. Nine categories, three shades of orange so the
+  # middling ones read as siblings rather than as one undifferentiated
+  # warning colour.
   if (what %in% c("length", "age")) {
     unit <- if (what == "age") "ages" else "lengths"
     borrow <- paste("Look for a group to raise with instead of the",
                     "stratum's own distribution")
     return(data.frame(
-      cat_key = c("full_ok", "safe_ok", "full_thin", "safe_thin",
-                  "low_ok", "low_thin", "nosamp"),
+      cat_key = c("full_ok", "safe_ok", "yellowgreen", "yellow",
+                  "orangeyellow", "orange_lowtrip", "orange_lowcov",
+                  "orange_lowcovtrip", "red"),
       status = c(
-        sprintf("SAFE: 100%% sampled and > %s measurements", min_meas),
-        sprintf("SAFE: > %s%% coverage and > %s measurements", threshold, min_meas),
-        sprintf("WARNING: 100%% sampled but < %s measurements", min_meas),
-        sprintf("WARNING: > %s%% coverage but < %s measurements", threshold, min_meas),
-        sprintf("WARNING: < %s%% coverage but > %s measurements", threshold, min_meas),
-        sprintf("WARNING: < %s%% coverage and < %s measurements", threshold, min_meas),
-        sprintf("WARNING: no %s sampled", unit)),
-      # decision and colour follow the cat_key order above: the two SAFE
-      # categories first, so both read as green
+        sprintf("SAFE: 100%% sampled, more than %s trips and %s measurements",
+                min_trips, min_meas),
+        sprintf("SAFE: > %s%% coverage, %s+ trips and %s+ measurements",
+                threshold, min_trips, min_meas),
+        sprintf("WARNING: < %s%% coverage but %s+ trips and %s+ measurements",
+                threshold, min_trips, min_meas),
+        sprintf("WARNING: > %s%% coverage and %s+ trips but < %s measurements",
+                threshold, min_trips, min_meas),
+        sprintf("WARNING: > %s%% coverage and %s+ measurements but < %s trips",
+                threshold, min_meas, min_trips),
+        sprintf("WARNING: > %s%% coverage but < %s trips and < %s measurements",
+                threshold, min_trips, min_meas),
+        sprintf("WARNING: < %s%% coverage and < %s measurements but %s+ trips",
+                threshold, min_meas, min_trips),
+        sprintf("WARNING: < %s%% coverage and < %s trips but %s+ measurements",
+                threshold, min_trips, min_meas),
+        "WARNING: coverage, trips and measurements all fail their targets"),
+      # decision follows the cat_key order: the two SAFE categories
+      # first, so both read as green
       decision = c("No raising needed (fully sampled, well measured)",
                    "Raise with own strata",
-                   borrow, borrow, borrow, borrow, borrow),
-      # dark green, light green, pale yellow, light orange, yellow,
-      # dark orange, red
-      colour = c("#00441B", "#74C476", "#FFF2AE", "#FDAE61",
-                 "#FFD92F", "#E66101", "#D7191C"),
+                   borrow, borrow, borrow, borrow, borrow, borrow, borrow),
+      # dark green, green, yellow-green, yellow, yellow-orange,
+      # three distinguishable oranges (light / medium / dark), red
+      colour = c("#00441B", "#41AE76", "#A6D96A", "#FFD92F",
+                 "#FEC44F", "#FDAE61", "#F46D43", "#D66A35", "#D7191C"),
       stringsAsFactors = FALSE))
   }
+  # Discards: coverage (weight terms) and trips (effort terms). A
+  # stratum can be fully covered by weight and still rest on almost no
+  # trips, which is exactly the case min_trips exists to separate from a
+  # genuinely well-sampled one.
   data.frame(
-    cat_key = c("full", "safe", "warn", "no_disc", "disc_only", "none"),
-    status = c("SAFE: 100% sampled",
-               paste0("SAFE: > ", threshold, "% coverage"),
-               paste0("WARNING: < ", threshold, "% coverage"),
-               "WARNING: no discard data",
-               "SAFE: discards only / no landings",
-               "No landings / no discards"),
+    cat_key = c("full", "safe", "warn_lowcov", "warn_lowtrip", "warn_red",
+                "disc_only", "none"),
+    status = c(
+      sprintf("SAFE: 100%% sampled and more than %s trips", min_trips),
+      sprintf("SAFE: > %s%% sampled and %s+ trips", threshold, min_trips),
+      sprintf("WARNING: < %s%% sampled but %s+ trips", threshold, min_trips),
+      sprintf("WARNING: > %s%% sampled but < %s trips", threshold, min_trips),
+      "WARNING: no discard sampled",
+      "SAFE: discards only / no landings",
+      "No landings / no discards"),
     decision = c("No raising needed (fully sampled)",
                  "Direct raising",
+                 "POOL: group with adjacent strata",
                  "POOL: group with adjacent strata",
                  "BORROW: find similar strata",
                  "No raising needed (all catch discarded)",
                  "Excluded: no data"),
-    colour = c("#00441B", "#41AE76", "#FFD92F",
-               "#E66101", "#4292C6", "#F0F1F1"),
+    colour = c("#00441B", "#41AE76", "#FFD92F", "#FDAE61", "#D7191C",
+               "#4292C6", "#F0F1F1"),
     stringsAsFactors = FALSE
   )
 }
@@ -131,8 +166,9 @@ cat_lookup <- function(threshold, what = "discard", min_meas = 0) {
 #' @return A character vector of hex colours named by status label.
 #' @seealso [cat_lookup()], [classify_strata()]
 #' @export
-status_palette <- function(threshold, what = "discard", min_meas = 0) {
-  lk <- cat_lookup(threshold, what, min_meas)
+status_palette <- function(threshold, what = "discard", min_meas = 0,
+                           min_trips = 2) {
+  lk <- cat_lookup(threshold, what, min_meas, min_trips)
   # Map status text directly to colors as named vector
   setNames(lk$colour, lk$status)
 }
@@ -227,6 +263,27 @@ build_strata <- function(catch_data, dims, dist = NULL) {
       st$n_measurements <- ifelse(is.na(cc$n[i]), 0, cc$n[i])
     }
   }
+
+  # Sampling effort, alongside sampling coverage: how many trips back
+  # the estimate, not just how much of the landings weight it covers. A
+  # stratum can be 100% covered by a single trip that happened to land
+  # everything in one go, which is a thinner basis than the same
+  # coverage spread across a dozen trips. max(), not sum(): numTrips is
+  # reported per raw CEF row and the same trip count is often repeated
+  # across several rows of the same sample (by catch category, by
+  # length class in the wide files) - summing would count one trip
+  # several times over. NA where the column is absent or nothing in the
+  # stratum reports it, which the sampling-status classification below
+  # treats as "unknown", not as zero.
+  if ("numTrips" %in% names(cd)) {
+    trips <- cd %>%
+      group_by(across(all_of(dims))) %>%
+      summarise(numTrips = suppressWarnings(max(numTrips, na.rm = TRUE)),
+               .groups = "drop")
+    trips$numTrips[!is.finite(trips$numTrips)] <- NA_real_
+    st <- as.data.frame(st %>% left_join(trips, by = dims))
+  } else st$numTrips <- NA_real_
+
   st
 }
 
@@ -259,38 +316,61 @@ count_measurements_by_stratum <- function(catch_data, dist, dims) {
 #'
 #' Adds the sampling verdict to a stratum table: `cat_key` (a stable key),
 #' `Status` (a factor with every level from [cat_lookup()], so legends stay
-#' complete) and `Raising_Decision` (what to do about it). Discards use the
-#' one-axis coverage scheme; lengths and ages use the two-axis
-#' coverage-by-measurements scheme, where a thinly measured stratum keeps its
-#' real coverage but is flagged rather than demoted.
+#' complete) and `Raising_Decision` (what to do about it). Discards are
+#' classified on coverage and trips; lengths and ages on coverage, trips
+#' AND measurements - three sampling-effort questions at once, none of
+#' which substitutes for the others.
 #'
-#' @param s A stratum table from [build_strata()] (discards) or the biology
-#'   link (length/age), carrying at least `coverage`; length/age
-#'   classification also reads `n_measurements`.
+#' @param s A stratum table from [build_strata()] (discards) or
+#'   [biology_link()] (length/age), carrying at least `coverage`;
+#'   length/age classification also reads `n_measurements`. Both carry
+#'   `numTrips` when the loaded CEF file reported it; a stratum with no
+#'   trip count is treated as failing the trips test, not passing it -
+#'   unknown is not the same as adequate.
 #' @param threshold Coverage threshold in percent.
 #' @param what "discard" (default), "length" or "age".
 #' @param min_meas Minimum number of measurements for length/age; ignored for
 #'   discards.
+#' @param min_trips Minimum number of trips. Defaults to 2.
 #' @return `s` with `cat_key`, `Status` and `Raising_Decision` added.
 #' @seealso [build_strata()], [cat_lookup()]
 #' @export
-classify_strata <- function(s, threshold, what = "discard", min_meas = 0) {
-  lk <- cat_lookup(threshold, what, min_meas)
+classify_strata <- function(s, threshold, what = "discard", min_meas = 0,
+                            min_trips = 2) {
+  lk <- cat_lookup(threshold, what, min_meas, min_trips)
+  if (!"numTrips" %in% names(s)) s$numTrips <- NA_real_
+  # trips2: a stratum with no reported trip count is treated as failing
+  # the trips test (< min_trips), never as passing it - the same
+  # unknown-is-not-adequate stance the rest of the classification takes.
+  trips2 <- ifelse(is.na(s$numTrips), min_trips - 1, s$numTrips)
 
-  # Length / age: classify on coverage AND number of measurements.
+  # Length / age: classify on coverage, trips AND measurements. Eight
+  # combinations of the three yes/no tests, with the "all three, well
+  # beyond the floor" corner split once more into a genuinely complete
+  # stratum vs an ordinarily safe one.
   if (what %in% c("length", "age")) {
     if (!"n_measurements" %in% names(s)) s$n_measurements <- 0
     return(s %>%
              mutate(
                n_measurements = ifelse(is.na(n_measurements), 0, n_measurements),
                cat_key = case_when(
-                 is.na(coverage) | coverage <= 0       ~ "nosamp",
-                 coverage >= 100 & n_measurements >= min_meas ~ "full_ok",
-                 coverage >= 100                               ~ "full_thin",
-                 coverage >  threshold & n_measurements >= min_meas ~ "safe_ok",
-                 coverage >  threshold                               ~ "safe_thin",
-                 n_measurements >= min_meas                         ~ "low_ok",
-                 TRUE                                               ~ "low_thin"
+                 coverage >= 100 & trips2 > min_trips &
+                   n_measurements >= min_meas                  ~ "full_ok",
+                 coverage >= threshold & trips2 >= min_trips &
+                   n_measurements >= min_meas                  ~ "safe_ok",
+                 coverage <  threshold & trips2 >= min_trips &
+                   n_measurements >= min_meas                  ~ "yellowgreen",
+                 coverage >= threshold & trips2 >= min_trips &
+                   n_measurements <  min_meas                  ~ "yellow",
+                 coverage >= threshold & trips2 <  min_trips &
+                   n_measurements >= min_meas                  ~ "orangeyellow",
+                 coverage >= threshold & trips2 <  min_trips &
+                   n_measurements <  min_meas                  ~ "orange_lowtrip",
+                 coverage <  threshold & trips2 >= min_trips &
+                   n_measurements <  min_meas                  ~ "orange_lowcov",
+                 coverage <  threshold & trips2 <  min_trips &
+                   n_measurements >= min_meas                  ~ "orange_lowcovtrip",
+                 TRUE                                          ~ "red"
                ),
                Status = factor(lk$status[match(cat_key, lk$cat_key)],
                                levels = unique(lk$status)),
@@ -299,15 +379,19 @@ classify_strata <- function(s, threshold, what = "discard", min_meas = 0) {
              ))
   }
 
+  # Discards: coverage (weight terms) and trips (effort terms). A
+  # stratum can be fully covered by weight and still rest on very few
+  # trips - min_trips is what separates that from genuinely well-sampled.
   s %>%
     mutate(
       cat_key = case_when(
-        landings <= 0 & discards <= 0     ~ "none",
-        landings <= 0                     ~ "disc_only",
-        is.na(coverage) | coverage <= 0   ~ "no_disc",
-        coverage >= 100                   ~ "full",
-        coverage >  threshold             ~ "safe",
-        TRUE                              ~ "warn"
+        landings <= 0 & discards <= 0                    ~ "none",
+        landings <= 0                                     ~ "disc_only",
+        coverage >= 100 & trips2 > min_trips               ~ "full",
+        coverage >= threshold & trips2 >= min_trips        ~ "safe",
+        coverage <  threshold & trips2 >= min_trips        ~ "warn_lowcov",
+        coverage >= threshold & trips2 <  min_trips        ~ "warn_lowtrip",
+        TRUE                                                ~ "warn_red"
       ),
       Status = factor(lk$status[match(cat_key, lk$cat_key)],
                       levels = unique(lk$status)),

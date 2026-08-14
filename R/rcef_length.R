@@ -162,10 +162,19 @@ biology_link <- function(catches, dist, dims, catch_category = NULL,
               n_rows            = n(),
               n_measured        = sum(.measured),
               n_dangling        = sum(.dangling),
+              # max(), not sum(): numTrips is reported per raw CEF row
+              # and the same trip count is routinely repeated across
+              # several rows of one sample (by length class in the wide
+              # files); summing would count one trip several times over.
+              # See build_strata()'s identical treatment on the discard
+              # side.
+              numTrips = if ("numTrips" %in% names(d))
+                suppressWarnings(max(numTrips, na.rm = TRUE)) else NA_real_,
               .groups = "drop") %>%
     mutate(coverage = ifelse(weight > 0, weight_measured / weight * 100,
                              NA_real_),
-           sampled  = n_measured > 0) %>%
+           sampled  = n_measured > 0,
+           numTrips = ifelse(is.finite(numTrips), numTrips, NA_real_)) %>%
     as.data.frame()
 }
 
@@ -1276,20 +1285,47 @@ assign_alloc_cascade <- function(bl, keys, steps, bms_as_dis = TRUE) {
 
 #' A one-line summary of what a rung groups by
 #'
-#' The readable form of the `pool` column: the keys still distinguished
-#' at that rung. The own rung is the stratum itself; the last resort is
-#' everything pooled.
+#' The readable form of the `pool` column: which of the STRATA-DEFINING
+#' columns a rung still distinguishes, and which it has widened across.
+#' The biology counterpart of `describe()` inside [raising_steps()] on
+#' the discard side, and deliberately worded the same way: `"same X, Y -
+#' pooled across all Z"`.
+#'
+#' `keys` and `dims` are not the same list, and conflating them was the
+#' bug this fixes. `keys` is the cascade's OWN widening order - the
+#' columns a rung can drop as it widens. `dims` is the full set of
+#' columns the strata table was built on, which is usually broader: the
+#' raw uploaded stratum carries columns (Country, Season, ...) nobody
+#' chose as a cascade key, and those still need to show up as "pooled
+#' across" or the summary understates how much is being collapsed.
+#' Reading `dims` where `keys` belongs did the opposite - it retained
+#' columns the cascade never touches, so every rung looked like it kept
+#' more than it actually did.
 #'
 #' @param step One step from [alloc_steps()].
+#' @param keys The cascade's own key list, in cascade order (what
+#'   `alloc_steps()` was called with).
+#' @param dims The full set of columns the strata table is built on.
+#'   Defaults to `keys` when not supplied, which reproduces the old
+#'   (narrower) behaviour for callers that have no broader definition.
 #' @return A length-one character vector.
 #' @export
-alloc_step_grouping <- function(step, allkeys = NULL) {
+alloc_step_grouping <- function(step, keys = NULL, dims = NULL) {
   if (identical(step$id, "own")) return("the stratum itself")
   if (identical(step$id, "last") || isTRUE(step$drop_all))
     return("everything pooled")
-  kept <- if (!is.null(allkeys)) setdiff(allkeys, step$drop) else NULL
-  if (length(kept)) paste(kept, collapse = " + ")
-  else "all data in the category"
+  if (is.null(dims)) dims <- keys
+  # catchCategory is not a widenable key - it is reported separately via
+  # alloc_step_scope() ("within category" / "categories joined"), so
+  # showing it here too would say the same thing twice.
+  keys <- setdiff(keys, "catchCategory")
+  dims <- setdiff(dims, "catchCategory")
+  kept <- if (!is.null(keys)) setdiff(keys, step$drop) else NULL
+  if (!length(kept)) return("all data in the category")
+  dropped <- setdiff(dims, kept)
+  paste0("same ", and_list(kept),
+         if (length(dropped)) paste0(" - pooled across all ", and_list(dropped))
+         else "")
 }
 
 #' Table of what each rung of the allocation cascade actually resolved
@@ -1300,16 +1336,21 @@ alloc_step_grouping <- function(step, allkeys = NULL) {
 #'
 #' @param assigned A stratum table tagged by [assign_alloc_cascade()].
 #' @param steps The cascade steps, from [alloc_steps()].
-#' @param keys The full key set, so the grouping column can name what
-#'   each rung keeps. Defaults to `attr(steps, "keys")`.
+#' @param keys The cascade's own key list, in cascade order. Defaults to
+#'   `attr(steps, "keys")`, which [alloc_steps()] sets automatically.
+#' @param dims The full set of columns the strata table is built on -
+#'   usually broader than `keys`, since the uploaded stratum carries
+#'   columns nobody chose as a cascade key. Defaults to `keys` when not
+#'   supplied.
 #' @return A data frame, one row per rung, or `NULL` if `assigned` is
 #'   empty.
 #' @seealso [alloc_step_grouping()], [decision_tree()]
 #' @export
-alloc_cascade_table <- function(assigned, steps, keys = NULL) {
+alloc_cascade_table <- function(assigned, steps, keys = NULL, dims = NULL) {
   if (is.null(assigned) || !nrow(assigned)) return(NULL)
   # the full key set, so the grouping column can name what each rung keeps
   allkeys <- keys %||% attr(steps, "keys")
+  alldims <- dims %||% allkeys
   tot_w <- sum(assigned$weight, na.rm = TRUE)
   tot_n <- nrow(assigned)
   rows <- lapply(seq_along(steps), function(i) {
@@ -1319,7 +1360,7 @@ alloc_cascade_table <- function(assigned, steps, keys = NULL) {
     dcv <- steps[[i]]$donor_cov_min
     dms <- steps[[i]]$donor_meas_min
     st <- steps[[i]]
-    grouping <- alloc_step_grouping(st, allkeys)
+    grouping <- alloc_step_grouping(st, allkeys, alldims)
     data.frame(step = i,
                scope = alloc_step_scope(st),
                pool = st$label,
