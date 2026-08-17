@@ -565,7 +565,8 @@ draw_legend <- function(p) {
     key <- if (identical(spec$key, "tile")) "tile" else "point"
     sz  <- spec$size
     p <- tryCatch(status_legend_plot(spec$threshold, spec$what, spec$min_meas,
-                                     key = key, size = sz),
+                                     key = key, size = sz,
+                                     min_trips = spec$min_trips %||% 2),
                   error = function(e) p)
   }
   lg <- tryCatch(extract_legend(p, key = key, keep_size = !is.null(sz)),

@@ -136,17 +136,3 @@ run_native_raising <- function(catch_data, dims, conds,
                assembled_output = assembled_output)
 }
 
-# Summarise a catchRaising result the same way the app summarises its own,
-# so the two can sit side by side in the comparison
-#' @noRd
-#' @export
-native_summary <- function(raised, dims) {
-  raised %>%
-    filter(toupper(catchCategory) %in% c("DIS")) %>%
-    group_by(across(all_of(intersect(dims, names(.))))) %>%
-    summarise(imported = sum(total[importedOrRaised %in% "imported"], na.rm = TRUE),
-              raised   = sum(total[importedOrRaised %in% "raised"], na.rm = TRUE),
-              estimated_discards = sum(total, na.rm = TRUE),
-              .groups = "drop")
-}
-

@@ -60,7 +60,7 @@ alloc_box <- function() uiOutput("alloc_box")
 ic_load_ui <- function() tagList(
   uiOutput("ic_input_note"),
   sidebarLayout(
-  sidebarPanel(width = 4,
+  sidebarPanel(width = 4, class = "simplecard",
     h4("Input files"),
     radioButtons("ic_mode", NULL,
       c("Upload files" = "upload", "Point at a folder" = "dir"), "upload"),
@@ -100,7 +100,7 @@ ic_output_ui <- function() tagList(
        "fill in out_path, file_prefix and file_suffix (those fields appear ",
        "only when a file is being written)."),
   sidebarLayout(
-  sidebarPanel(width = 4,
+  sidebarPanel(width = 4, class = "simplecard",
     h4("Output"),
     checkboxGroupInput("ic_output_format", "output_format",
       choiceNames = lapply(names(OUTPUT_DESC),
@@ -177,17 +177,17 @@ cef_result_ui <- function(src) {
 #  server side; these two panels collect what it will need.
 # ---------------------------------------------------------
 db_cred_ui <- function() sidebarLayout(
-  sidebarPanel(width = 4,
+  sidebarPanel(width = 4, class = "simplecard",
     h4("Credentials"),
     textInput("db_user", "Username", ""),
     passwordInput("db_pass", "Password", ""),
     span(class = "note",
          "Used only to authenticate this session's database call; not stored."),
-    actionButton("db_connect", "Connect", class = "btn-primary")),
+    actionButton("db_connect", "Connect", class = "btn btn-run")),
   mainPanel(width = 8, uiOutput("db_cred_status")))
 
 db_request_ui <- function() sidebarLayout(
-  sidebarPanel(width = 4,
+  sidebarPanel(width = 4, class = "simplecard",
     h4("Request"),
     textInput("db_stock", "Stock code", "", placeholder = "bll.27.3a47de"),
     numericInput("db_year", "Year",
@@ -205,7 +205,7 @@ db_request_ui <- function() sidebarLayout(
 #  Section 2: load the three CEF tables
 # ---------------------------------------------------------
 cef_load_ui <- function() sidebarLayout(
-  sidebarPanel(width = 4,
+  sidebarPanel(width = 4, class = "simplecard",
     h4("CEF files"),
     span(class = "note",
          "catches is required. distributions is only needed when lengths or ",
@@ -267,7 +267,8 @@ coverage_ui <- function() tagList(
       # with no X / Fill the heatmap and bubbles are unavailable and bars
       # is what is drawn.
       conditionalPanel("input.cov_type != 'bars' && input.cov_fill != ''",
-        threshold_box("threshold", NULL, "% coverage"))),
+        threshold_box("threshold", NULL, "% coverage",
+                      id_trips = "cov_trips"))),
     ),
   deck_page(
     picker = NULL,
@@ -319,7 +320,26 @@ final_ui <- function() tagList(
       tags$hr(style = "margin:6px 0"),
       tags$b("Cross-tab", style = "font-size:11.5px"),
       selectInput("fin_row", "Rows", NULL, NULL),
-      selectInput("fin_col", "Columns", NULL, NULL))),
+      selectInput("fin_col", "Columns", NULL, NULL),
+      tags$hr(style = "margin:6px 0"),
+      # catchRaising() settings for the run this button actually
+      # triggers. These used to live only on nr_ui() - a "Raise groups"
+      # panel that was superseded by this one and never wired into any
+      # navigation tree, so the settings it held were unreachable and
+      # run_final() silently ran on their defaults (discards /
+      # WGEstimate / WeightLive, no log file) regardless of what the
+      # data actually needed.
+      tags$b("catchRaising settings", style = "font-size:11.5px"),
+      radioButtons("nr_source", "Groups from",
+                   c("Auto raising cascade" = "auto",
+                     "Manual groups" = "manual"), inline = TRUE),
+      span(class = "note",
+           "Which saved groups this raise runs on - not what the plots ",
+           "above explore. \"Level of detail\" below follows this choice."),
+      selectInput("nr_type", "type", c("discards", "BMS")),
+      selectInput("nr_origin", "originType", c("WGEstimate", "Official")),
+      selectInput("nr_vartype", "variableType", c("WeightLive", "Number")),
+      textInput("nr_log", "logFile", "Log.txt"))),
   deck_page(
     picker = NULL,
     uiOutput("fin_lvl_note"), alloc_box(),
@@ -364,26 +384,34 @@ len_cc_filter <- function(ns)
 # The sufficiency thresholds, shown where they are used rather than at
 # load time. Coverage asks how much of the weight carries a
 # distribution; measurements asks how many fish that distribution was
-# built on. A stratum has to clear both to be a usable donor, so a
-# domain resting on eight fish cannot pass on coverage alone.
+# built on; trips asks how many trips back the sample, independent of
+# either. A stratum has to clear all that apply to be shown as SAFE, so
+# a domain resting on eight fish from one trip cannot pass on coverage
+# alone.
 threshold_box <- function(id_cov, id_meas = NULL, cov_label = "% coverage",
-                          cov_default = 50, meas_default = 0) {
+                          cov_default = 50, meas_default = 0,
+                          id_trips = NULL, trips_default = 2) {
+  n <- sum(!is.null(id_meas), !is.null(id_trips)) + 1
+  w <- if (n == 1) 12 else if (n == 2) 6 else 4
   tagList(
     h4("Sufficiency"),
     fluidRow(
-      column(if (is.null(id_meas)) 12 else 6,
-             numericInput(id_cov, cov_label, cov_default, 0, 100, 5)),
+      column(w, numericInput(id_cov, cov_label, cov_default, 0, 100, 5)),
+      if (!is.null(id_trips))
+        column(w, numericInput(id_trips, "min trips", trips_default,
+                               0, 1000, 1)) else NULL,
       if (!is.null(id_meas))
-        column(6, numericInput(id_meas, "min measurements", meas_default,
+        column(w, numericInput(id_meas, "min measurements", meas_default,
                                0, 100000, 10)) else NULL),
     span(class = "note",
-         if (is.null(id_meas))
+         if (is.null(id_meas) && is.null(id_trips))
            "Strata at or above this share of sampled weight count as covered."
          else
-           paste("Coverage sets the sampling status; the measurement count",
-                 "refines it. A stratum with fewer than this many measured",
-                 "fish is flagged as a warning (a lighter shade) rather than",
-                 "trusted - it is not dropped, so its coverage still shows.")))
+           paste("Coverage sets the sampling status; trips and measurements",
+                 "(where shown) refine it. A stratum short on either is",
+                 "flagged as a warning (a lighter shade) rather than",
+                 "trusted - it is not dropped, so its coverage still shows.",
+                 "The legend below updates to match whatever is set here.")))
 }
 
 # --- 3rd level 1: sampling coverage (same shapes as the discards) ---
@@ -402,7 +430,8 @@ len_coverage_ui <- function(p, type = "LengthTotal") {
         # same reasoning as the discard coverage tab: the two thresholds
         # are what the heatmap and bubble colours mean, nothing to bars
         conditionalPanel(sprintf("input.%s != 'bars'", ns("type")),
-          threshold_box(paste0(p, "_thr_cov"), paste0(p, "_thr_meas")))),
+          threshold_box(paste0(p, "_thr_cov"), paste0(p, "_thr_meas"),
+                        id_trips = paste0(p, "_thr_trips")))),
       ),
     deck_page(
       picker = NULL,
@@ -769,7 +798,7 @@ len_raise_ui <- function(p, what = "Length") {
         plot_slot(ns("cmpplotmw"), capture = TRUE))),
     conditionalPanel(sprintf("input.%s == 'stgraise'", ns("mode")),
   sidebarLayout(
-    sidebarPanel(width = 3,
+    sidebarPanel(width = 3, class = "simplecard",
       h4("Allocation to apply"),
       selectInput(ns("alloc"), NULL, choices = character(0)),
       span(class = "note",
@@ -881,36 +910,6 @@ stub_ui <- function(kind, what) {
           "The stratum machinery (build_strata, the role slots, the group ",
           "builders, the scenario store and the script log) is shared, so ",
           "this section reuses it rather than duplicating it."))
-}
-
-nr_ui <- function() {
-  sidebarLayout(
-    sidebarPanel(width = 3,
-      h4("Groups from"),
-      span(class = "note",
-           "Raising always runs through catchRaising(), on the full CEF ",
-           "table, so catch categories, units and domains survive and every ",
-           "row comes back flagged imported or raised."),
-      radioButtons("nr_source", NULL,
-        c("Auto raising cascade" = "auto", "Manual groups" = "manual")),
-      selectInput("nr_type", "type", c("discards", "BMS")),
-      selectInput("nr_origin", "originType", c("WGEstimate", "Official")),
-      selectInput("nr_vartype", "variableType", c("WeightLive", "Number")),
-      checkboxInput("nr_assembled", "assembled_output", TRUE),
-      textInput("nr_log", "logFile", "Log.txt"),
-      tags$hr(),
-      actionButton("run_native", "Run raising", class = "btn btn-run"),
-      # No level-of-detail box: this tab inherits the resolution the
-      # allocation groups were built at (see DMAP_ALIAS). Showing a
-      # second one invited it to be set to something the saved groups
-      # were never resolved against.
-      uiOutput("nr_lvl_note"), alloc_box()),
-    mainPanel(width = 9,
-      uiOutput("nr_status"),
-      h4("Conditions that will be used"),
-      verbatimTextOutput("nr_conds"),
-      h4("Result"), tbl_slot("nr_tbl"),
-      h4("By group"), tbl_slot("nr_grp")))
 }
 
 # A copy-to-clipboard button for a given verbatimTextOutput id. Factored out
@@ -1572,6 +1571,16 @@ ui <- navbarPage(
        whole deck still collapses to one line when it is in the way. */
     .deckbox{background:#fff;border:1px solid #d3dae1;border-radius:7px;
              padding:6px 9px 8px 9px;overflow:visible;height:auto}
+    /* A one-shot form - credentials, a data request, a folder loader -
+       is the wrong SHAPE for control_deck()/builder_deck(): those are
+       built around repeated iteration (adjust, Apply, adjust again) or
+       a numbered sequence of steps, and neither fits a form the reader
+       fills in once and presses Connect on. This borrows the deck's visual language -
+       white card, same border radius, same left-border accent by
+       purpose - without pulling in machinery the panel does not need. */
+    .simplecard{background:#fff;border:1px solid #d3dae1;border-radius:7px;
+             border-left:3px solid #4E79A7;padding:10px 14px}
+    .simplecard h4{margin-top:0}
     /* ---- one type scale for everything inside the deck ----
        The three boxes inherited whatever their contents happened to
        bring - bootstrap's 14px selects next to 11px chips next to 13px
@@ -3405,8 +3414,9 @@ server <- function(input, output, session) {
 
   length_server <- function(p, type = "LengthTotal") {
     what_word <- if (identical(type, "Age")) "age" else "length"
-    thr_cov  <- reactive(input[[paste0(p, "_thr_cov")]] %||% 50)
-    thr_meas <- reactive(input[[paste0(p, "_thr_meas")]] %||% 0)
+    thr_cov   <- reactive(input[[paste0(p, "_thr_cov")]] %||% 50)
+    thr_meas  <- reactive(input[[paste0(p, "_thr_meas")]] %||% 0)
+    thr_trips <- reactive(input[[paste0(p, "_thr_trips")]] %||% 2)
     dims_of <- function()
       unique(c("catchCategory", len_dims(p)))
 
@@ -3483,7 +3493,8 @@ server <- function(input, output, session) {
     # why those two worked and all six biology panels did not.
     flt_sig <- function(view) flt_inputs(paste0(p, "_", view))
     cov_sig <- reactive(c(list(i_("cov_cc"), i_("thr_cov"),
-                               i_("thr_meas"), i_("cov_r_y"), i_("cov_r_fill"),
+                               i_("thr_meas"), i_("thr_trips"), i_("cov_r_y"),
+                               i_("cov_r_fill"),
                                i_("cov_r_facet"), flt_sig("cov")), lv_sig()))
     cov_live <- reactive(i_("cov_type"))
     n_sig <- reactive(c(list(i_("n_cc"), i_("n_r_fill"),
@@ -3592,13 +3603,13 @@ server <- function(input, output, session) {
         mutate(landings = weight,
                landings_with_discards = weight_measured,
                discards = 0, discard_rate = NA_real_)
-      sc <- classify_strata(sc, thr_cov(), what_word, thr_meas())
+      sc <- classify_strata(sc, thr_cov(), what_word, thr_meas(), thr_trips())
       y <- rc("cov", "y"); f <- rc("cov", "fill"); fc <- rc("cov", "facet")
       validate(need(!is.null(y), "Pick a Y axis."))
       wl <- cc_word("cov"); th <- thr_cov()
       plot_biology_coverage(sc, type = input[[paste0(p, "_cov_type")]] %||% "heatmap",
         y = y, fill = f, facet = fc, threshold = th, what = what_word,
-        weight_label = wl, min_meas = thr_meas()) },
+        weight_label = wl, min_meas = thr_meas(), min_trips = thr_trips()) },
       live = cov_live)
 
     # how many rows the plot will actually draw, so the panel grows with them
@@ -3639,8 +3650,8 @@ server <- function(input, output, session) {
       sprintf("%s <- bl %%>%% mutate(landings = weight,", out),
       "        landings_with_discards = weight_measured,",
       "        discards = 0, discard_rate = NA_real_)",
-      sprintf('%s <- classify_strata(%s, %s, "%s", %s)',
-              out, out, thr_cov(), what_word, thr_meas()))
+      sprintf('%s <- classify_strata(%s, %s, "%s", %s, %s)',
+              out, out, thr_cov(), what_word, thr_meas(), thr_trips()))
 
     keep_plot(paste0(p, "_cov_plot"), cov_obj, gate = cov_gate,
       section = "model_explore_length_age",
@@ -3648,9 +3659,9 @@ server <- function(input, output, session) {
         tools::toTitleCase(what_word),
         input[[paste0(p, "_cov_type")]] %||% "heatmap", cc_word("cov")),
       note = function() sprintf(
-        "%s at %s coverage / %s measurements; fleet = %s, area = %s",
+        "%s at %s coverage / %s trips / %s measurements; fleet = %s, area = %s",
         tools::toTitleCase(cc_word("cov")), paste0(thr_cov(), "%"),
-        thr_meas(), paste(len_dims(p), collapse = ", "), ""),
+        thr_trips(), thr_meas(), paste(len_dims(p), collapse = ", "), ""),
       prep = function() bio_prep("cov"),
       call = function() taf_call("plot_biology_coverage", list(
         "bio_sc",
@@ -3658,7 +3669,7 @@ server <- function(input, output, session) {
         y = taf_q(rc("cov", "y")), fill = taf_q(rc("cov", "fill")),
         facet = taf_q(rc("cov", "facet")), threshold = thr_cov(),
         what = taf_q(what_word), weight_label = taf_q(cc_word("cov")),
-        min_meas = thr_meas())))
+        min_meas = thr_meas(), min_trips = thr_trips())))
 
     # ---- view 2: numbers at length ------------------------------
     num_data <- reactive({
@@ -4647,7 +4658,11 @@ server <- function(input, output, session) {
               sprintf("Failed: %s", paste(bad, collapse = ", "))) else NULL) })
 
     output[[ns("cmptot")]] <- renderDT({
-      d <- comparison_totals(cmp_data())
+      d <- tryCatch(comparison_totals(cmp_data()),
+                    error = function(e) {
+                      validate(need(FALSE, paste("Could not build the totals:",
+                                                 conditionMessage(e))))
+                    })
       validate(need(!is.null(d), "Nothing to compare."))
       datatable(d, rownames = FALSE, options = list(dom = "t", scrollX = TRUE)) })
 
@@ -4666,13 +4681,24 @@ server <- function(input, output, session) {
       validate(need(!is.null(d) && nrow(d), "Nothing to compare."))
       f  <- input[[ns("cmpr_facet")]] %||% ""
       f2 <- input[[ns("cmpr_shape")]] %||% ""
-      plot_allocation_comparison(d, value,
-        facet_var = if (nzchar(f)) f else NULL,
-        what = what,
-        ncol = input[[ns("cmpncol")]] %||% 2,
-        facet2 = if (nzchar(f2)) f2 else NULL,
-        free_x = isTRUE(input[[ns("freex")]]),
-        free_y = !isFALSE(input[[ns("freey")]])) })
+      # Wrapped: an error this deep used to crash the whole comparison
+      # tab, including the other two plots and the totals table, which
+      # made a single bad facet combination look like the feature was
+      # broken rather than one input being wrong. Failing here shows the
+      # real message instead - if it fires, the text on screen IS the
+      # diagnostic, not a guess at one.
+      tryCatch(
+        plot_allocation_comparison(d, value,
+          facet_var = if (nzchar(f)) f else NULL,
+          what = what,
+          ncol = input[[ns("cmpncol")]] %||% 2,
+          facet2 = if (nzchar(f2)) f2 else NULL,
+          free_x = isTRUE(input[[ns("freex")]]),
+          free_y = !isFALSE(input[[ns("freey")]])),
+        error = function(e) {
+          validate(need(FALSE, paste("Could not build this comparison:",
+                                     conditionMessage(e))))
+        }) })
 
     cmp_obj   <- cmp_plot_of("numbers")
     cmp_obj_w <- cmp_plot_of("tonnes")
@@ -5271,7 +5297,6 @@ server <- function(input, output, session) {
                   ". The saved groups were resolved at this level, so it ",
                   "is not editable here."))
   }
-  output$nr_lvl_note  <- renderUI(lvl_note())
   output$fin_lvl_note <- renderUI(lvl_note())
 
   # ------------------------------------------------------------------
@@ -6300,68 +6325,8 @@ server <- function(input, output, session) {
     paste(log_render(lg), collapse = "\n") })
 
   # =========================================================
-  #  SECTION 3 - Apply raising through catchRaising()
+  #  SECTION 3 - group allocations box
   # =========================================================
-  nr_conds <- reactive({
-    if (identical(input$nr_source, "manual")) {
-      req(length(rv$rules) >= 1)
-      conds_from_rules(rv$rules, rv$sets, mg_dims())
-    } else conds_from_auto(rec())
-  })
-
-  output$nr_conds <- renderText({
-    cd <- tryCatch(nr_conds(), error = function(e) NULL)
-    if (is.null(cd)) return("Define groups first.")
-    paste(c("strataCond:",
-            paste0("  ", names(cd$strataCond), " = ",
-                   vapply(cd$strataCond, rlang::quo_text, character(1))),
-            "", "matchedDataCond:",
-            paste0("  ", names(cd$matchedDataCond), " = ",
-                   vapply(cd$matchedDataCond, rlang::quo_text, character(1)))),
-          collapse = "\n") })
-
-  output$nr_status <- renderUI({
-    ck <- cef_check(dat())
-    if (!EXT_STATUS$raising)
-      return(div(class = "chain", style = "color:#7a1f1f",
-        tags$b("catchRaising() is not loaded."),
-        " Point the external script folder at 0_Functions_discards_raising.R ",
-        "and 0_Functions_other.R. The code is still written to the R script."))
-    if (!ck$ok)
-      return(div(class = "chain", style = "color:#9a5000",
-        tags$b("The CEF table is missing columns catchRaising() needs: "),
-        paste(ck$missing, collapse = ", "),
-        tags$br(), "A table converted in section 1 will have them."))
-    div(class = "chain", style = "color:#14532d",
-        "Ready: CEF table has every column catchRaising() needs.") })
-
-  observeEvent(input$run_native, {
-    r <- with_busy("Raising discards...", tryCatch(run_native_raising(
-      dat(), nr_dims(), nr_conds(),
-      type = input$nr_type, originType = input$nr_origin,
-      variableType = input$nr_vartype,
-      log_file = if (nzchar(input$nr_log %||% "")) input$nr_log else NULL,
-      assembled_output = isTRUE(input$nr_assembled)),
-      error = function(e) e))
-    if (inherits(r, "error")) {
-      rv$native <- NULL
-      showNotification(paste("Raising failed:", conditionMessage(r)),
-                       type = "error", duration = 10)
-    } else {
-      rv$native <- r
-      showNotification(sprintf("Raised: %s rows", nrow(r)),
-                       type = "message", duration = 4)
-    } })
-
-  output$nr_tbl <- renderDT({
-    validate(need(!is.null(rv$native), "Run the raising to see the result."))
-    datatable(head(rv$native, 500), options = list(scrollX = TRUE, pageLength = 10),
-              rownames = FALSE) })
-
-  output$nr_grp <- renderDT({
-    validate(need(!is.null(rv$native), "Run the raising to see the result."))
-    datatable(native_summary(rv$native, nr_dims()),
-              options = list(scrollX = TRUE), rownames = FALSE) })
 
   # group allocations, listed in a small box like the level-of-detail one
   output$alloc_box <- renderUI({
@@ -6406,7 +6371,8 @@ server <- function(input, output, session) {
   cov_sc <- reactive({
     req(isTruthy(input$cov_y))
     classify_strata(strata_roles("cov", c(input$cov_y, input$cov_fill,
-                                          input$cov_facet)), input$threshold) })
+                                          input$cov_facet)), input$threshold,
+                    min_trips = input$cov_trips %||% 2) })
 
   # A heatmap or a bubble grid needs two axes. With X / Fill on (none)
   # there is nothing to put on the x axis, so those two icons are greyed
@@ -6436,8 +6402,8 @@ server <- function(input, output, session) {
   # was concerned nothing had been reconfigured. The biology panels had
   # it from the start; these two did not.
   cov_sig <- reactive(list(input$cov_y, input$cov_fill, input$cov_facet,
-                           input$threshold, input$cov_fleet, input$cov_area,
-                           flt_inputs("cov")))
+                           input$threshold, input$cov_trips, input$cov_fleet,
+                           input$cov_area, flt_inputs("cov")))
   cov_live <- reactive(input$cov_type)
   cov_g <- gate_of("cov", cov_sig, live = cov_live)
 
@@ -6445,7 +6411,8 @@ server <- function(input, output, session) {
     y <- col_of("cov", input$cov_y); f <- col_of("cov", input$cov_fill)
     fc <- col_of("cov", input$cov_facet)
     plot_coverage(cov_sc(), type = cov_type_eff(), y = y, fill = f,
-                  facet = fc, threshold = input$threshold, what = "discard") },
+                  facet = fc, threshold = input$threshold, what = "discard",
+                  min_trips = input$cov_trips %||% 2) },
     live = cov_live)
 
   output$cov_plot_ui <- renderUI({
@@ -6469,21 +6436,23 @@ server <- function(input, output, session) {
   keep_plot("cov_plot", cov_plot_obj, gate = cov_g,
     section = "model_explore_discards",
     title = function() sprintf("Discard coverage - %s", cov_type_eff()),
-    note = function() sprintf("threshold %s%%; fleet = %s, area = %s",
-      input$threshold %||% 50, paste(panel_dims("cov"), collapse = ", "),
-      ""),
+    note = function() sprintf("threshold %s%%, min %s trips; fleet = %s, area = %s",
+      input$threshold %||% 50, input$cov_trips %||% 2,
+      paste(panel_dims("cov"), collapse = ", "), ""),
     # strata_discards comes off disk from the model stage, but it was built
     # at that stage's level of detail; re-deriving it here keeps the plot
     # honest when the coverage tab was looking at a different resolution
     prep = function() c(
-      sprintf("strata_cov <- classify_strata(build_strata(catch_data, %s), %s)",
-              fmt_vals(panel_dims("cov")), input$threshold %||% 50)),
+      sprintf("strata_cov <- classify_strata(build_strata(catch_data, %s), %s, min_trips = %s)",
+              fmt_vals(panel_dims("cov")), input$threshold %||% 50,
+              input$cov_trips %||% 2)),
     call = function() taf_call("plot_coverage", list(
       "strata_cov", type = taf_q(cov_type_eff()),
       y = taf_q(col_of("cov", input$cov_y)),
       fill = taf_q(col_of("cov", input$cov_fill)),
       facet = taf_q(col_of("cov", input$cov_facet)),
-      threshold = input$threshold %||% 50, what = '"discard"')))
+      threshold = input$threshold %||% 50, what = '"discard"',
+      min_trips = input$cov_trips %||% 2)))
 
   # merged discard-rate plot
   # same for the raw/boxplot toggle
@@ -6787,11 +6756,26 @@ server <- function(input, output, session) {
     } })
 
   output$final_status <- renderUI({
-    if (is.null(rv$final))
-      return(div(class = "note", "Pick an allocation and run the raising."))
-    div(class = "chain", style = "color:#14532d",
+    if (!is.null(rv$final))
+      return(div(class = "chain", style = "color:#14532d",
         sprintf("Adopted: %s | %s rows | this is the allocation the script records as final.",
-                input$final_alloc, format(nrow(rv$final), big.mark = ","))) })
+                input$final_alloc, format(nrow(rv$final), big.mark = ","))))
+    # Nothing run yet - say why it might not work before the user finds
+    # out from a failed-raising notification instead. This is the
+    # pre-flight check nr_status used to give; final_ui() is now the only
+    # place "Raise with this allocation" is triggered from, so this is
+    # where a reader needs to see it.
+    if (!EXT_STATUS$raising)
+      return(div(class = "chain", style = "color:#7a1f1f",
+        tags$b("catchRaising() is not loaded."),
+        " Point the external script folder at 0_Functions_discards_raising.R ",
+        "and 0_Functions_other.R first."))
+    ck <- cef_check(tryCatch(dat(), error = function(e) NULL))
+    if (!is.null(ck) && !ck$ok)
+      return(div(class = "chain", style = "color:#9a5000",
+        tags$b("The CEF table is missing columns catchRaising() needs: "),
+        paste(ck$missing, collapse = ", ")))
+    div(class = "note", "Pick an allocation and run the raising.") })
 
   fin_d <- reactive({ req(!is.null(rv$final)); derive_fields(rv$final) })
 

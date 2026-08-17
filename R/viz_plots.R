@@ -139,26 +139,38 @@ sampled_for_discards <- function(s) {
 #' @keywords internal
 #' @noRd
 #' @export
-collapse_cells <- function(sc, keys, threshold, what = "discard", min_meas = 0) {
+collapse_cells <- function(sc, keys, threshold, what = "discard", min_meas = 0,
+                           min_trips = 2) {
   keys <- keys[!is.na(keys) & nzchar(keys)]
   if (!length(keys)) return(sc)
   # carry a measurement count through the collapse (length/age) so the
   # re-classification can still flag thinly measured cells; measurements
   # sum across the fine strata that merge into each cell
   if (!"n_measurements" %in% names(sc)) sc$n_measurements <- 0
+  # Same for trips: summed, not maxed - a cell that merges several
+  # strata genuinely combines several DIFFERENT samples' trips, the
+  # same convention stratum_metrics() uses when pooling across strata
+  # rather than within one. Without this, every collapsed cell lost its
+  # trip count entirely (summarise() only keeps what it is told to),
+  # which reclassified every merged cell as "unknown trips" regardless
+  # of the real data - the heatmap's colouring would have been wrong
+  # for any cell with more than one stratum in it.
+  if (!"numTrips" %in% names(sc)) sc$numTrips <- NA_real_
   sc %>%
     group_by(across(all_of(keys))) %>%
     summarise(landings = sum(landings, na.rm = TRUE),
               landings_with_discards = sum(landings_with_discards, na.rm = TRUE),
               discards = sum(discards, na.rm = TRUE),
               n_measurements = sum(n_measurements, na.rm = TRUE),
+              numTrips = if (!any(!is.na(numTrips))) NA_real_
+                        else sum(numTrips, na.rm = TRUE),
               n_strata = dplyr::n(), .groups = "drop") %>%
     mutate(coverage = ifelse(landings > 0,
                              landings_with_discards / landings * 100, NA_real_),
            discard_rate = ifelse(landings_with_discards + discards > 0,
                                  discards / (landings_with_discards + discards),
                                  NA_real_)) %>%
-    classify_strata(threshold, what, min_meas) %>%
+    classify_strata(threshold, what, min_meas, min_trips) %>%
     as.data.frame()
 }
 
@@ -214,9 +226,10 @@ samp_word <- function(what)
 #' @family coverage plots
 #' @export
 status_legend_plot <- function(threshold, what = "discard", min_meas = 0,
-                               key = c("point", "tile"), size = NULL) {
+                               key = c("point", "tile"), size = NULL,
+                               min_trips = 2) {
   key <- match.arg(key)
-  lk <- cat_lookup(threshold, what, min_meas)
+  lk <- cat_lookup(threshold, what, min_meas, min_trips)
   d <- data.frame(.x = seq_len(nrow(lk)), .y = 1,
                   Status = factor(lk$status, levels = lk$status))
   p <- ggplot(d, aes(x = .data$.x, y = .data$.y, fill = .data$Status)) +
@@ -267,11 +280,13 @@ status_legend_plot <- function(threshold, what = "discard", min_meas = 0,
 #' @export
 plot_heatmap <- function(sc, y_var, x_var = NULL, facet_var = NULL,
                          threshold = 50, what = "discard",
-                         weight_label = "landings", min_meas = 0) {
+                         weight_label = "landings", min_meas = 0,
+                         min_trips = 2) {
   d <- sc %>% filter(cat_key != "none")
   if (!nrow(d)) return(NULL)
   if (is.null(x_var) || !nzchar(x_var)) { d$.x <- "All"; x_var <- ".x" }
-  d <- collapse_cells(d, c(y_var, x_var, facet_var), threshold, what, min_meas)
+  d <- collapse_cells(d, c(y_var, x_var, facet_var), threshold, what, min_meas,
+                      min_trips)
   fmt <- function(v) ifelse(is.na(v) | v <= 0, "",
                      ifelse(v > 99, sprintf("%.0f", v),
                      ifelse(v >= 10, sprintf("%.1f", v), sprintf("%.2f", v))))
@@ -279,8 +294,9 @@ plot_heatmap <- function(sc, y_var, x_var = NULL, facet_var = NULL,
     geom_tile(colour = OUTLINE, alpha = 0.9) +
     geom_text(aes(label = fmt(landings)), size = 2.6, fontface = "bold",
               colour = OUTLINE) +
-    scale_fill_manual(values = status_palette(threshold, what, min_meas),
-                      limits = names(status_palette(threshold, what, min_meas)),
+    scale_fill_manual(values = status_palette(threshold, what, min_meas, min_trips),
+                      limits = names(status_palette(threshold, what, min_meas,
+                                                    min_trips)),
                       drop = FALSE, name = "Sampling status") +
     maybe_facet(facet_var) +
     labs(title = sprintf("%s sampling coverage vs threshold",
@@ -295,7 +311,8 @@ plot_heatmap <- function(sc, y_var, x_var = NULL, facet_var = NULL,
   # lets a caller rebuild the complete-status legend (see status_legend_plot).
   # key = "tile": the legend swatches should be squares, like the cells.
   attr(p, "status_legend") <- list(threshold = threshold, what = what,
-                                   min_meas = min_meas, key = "tile")
+                                   min_meas = min_meas, min_trips = min_trips,
+                                   key = "tile")
   p
 }
 
@@ -319,13 +336,15 @@ plot_heatmap <- function(sc, y_var, x_var = NULL, facet_var = NULL,
 #' @export
 plot_bubbles <- function(sc, y_var, x_var = NULL, facet_var = NULL,
                          threshold = 50, what = "discard",
-                         weight_label = "landings", min_meas = 0) {
+                         weight_label = "landings", min_meas = 0,
+                         min_trips = 2) {
   d <- sc %>% filter(cat_key != "none")
   if (!nrow(d)) return(NULL)
   if (is.null(x_var) || !nzchar(x_var)) { d$.x <- "All"; x_var <- ".x" }
   # one bubble per cell, or several sit on the same point with their
   # labels overlapping
-  d <- collapse_cells(d, c(y_var, x_var, facet_var), threshold, what, min_meas)
+  d <- collapse_cells(d, c(y_var, x_var, facet_var), threshold, what, min_meas,
+                      min_trips)
   smallest <- suppressWarnings(min(d$landings[d$landings > 0], na.rm = TRUE))
   if (!is.finite(smallest)) smallest <- 1
   d$plot_size <- ifelse(d$cat_key == "disc_only", smallest, d$landings)
@@ -390,8 +409,9 @@ plot_bubbles <- function(sc, y_var, x_var = NULL, facet_var = NULL,
     scale_size_continuous(range = SZ$range, limits = SZ$limits,
                           breaks = SZ$breaks, labels = SZ$labels,
                           name = SZ$name) +
-    scale_fill_manual(values = status_palette(threshold, what, min_meas),
-                      limits = names(status_palette(threshold, what, min_meas)),
+    scale_fill_manual(values = status_palette(threshold, what, min_meas, min_trips),
+                      limits = names(status_palette(threshold, what, min_meas,
+                                                    min_trips)),
                       drop = FALSE, name = "Sampling status",
                       guide = guide_legend(override.aes = list(size = 5))) +
     scale_x_discrete(expand = expansion(0.2)) +
@@ -411,7 +431,8 @@ plot_bubbles <- function(sc, y_var, x_var = NULL, facet_var = NULL,
   # key = "point": circles in the legend, like the bubbles in the panel.
   # size = SZ: a second key giving the weight each diameter stands for.
   attr(p, "status_legend") <- list(
-    threshold = threshold, what = what, min_meas = min_meas, key = "point",
+    threshold = threshold, what = what, min_meas = min_meas,
+    min_trips = min_trips, key = "point",
     size = if (length(sz_vals)) SZ else NULL)
   p
 }
@@ -557,13 +578,14 @@ plot_coverage <- function(strata,
                           type = c("heatmap", "bubbles", "bars"),
                           y, fill = NULL, facet = NULL,
                           threshold = 50, what = "discard",
-                          weight_label = "landings", ncol = 2, min_meas = 0) {
+                          weight_label = "landings", ncol = 2, min_meas = 0,
+                          min_trips = 2) {
   type <- match.arg(type)
   switch(type,
     heatmap = plot_heatmap(strata, y, fill, facet, threshold, what,
-                           weight_label, min_meas),
+                           weight_label, min_meas, min_trips),
     bubbles = plot_bubbles(strata, y, fill, facet, threshold, what,
-                           weight_label, min_meas),
+                           weight_label, min_meas, min_trips),
     bars    = plot_coverage_bars(strata, y, fill, facet, ncol, what, weight_label))
 }
 
@@ -586,10 +608,12 @@ plot_biology_coverage <- function(strata,
                                   type = c("heatmap", "bubbles", "bars"),
                                   y, fill = NULL, facet = NULL,
                                   threshold = 50, what = "length",
-                                  weight_label = "catch", ncol = 2, min_meas = 0) {
+                                  weight_label = "catch", ncol = 2, min_meas = 0,
+                                  min_trips = 2) {
   plot_coverage(strata, type = type, y = y, fill = fill, facet = facet,
                 threshold = threshold, what = what,
-                weight_label = weight_label, ncol = ncol, min_meas = min_meas)
+                weight_label = weight_label, ncol = ncol, min_meas = min_meas,
+                min_trips = min_trips)
 }
 
 # ----------------------------------------------------------

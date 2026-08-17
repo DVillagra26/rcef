@@ -247,25 +247,6 @@ donor_exclusion_expr <- function(excluded, dims) {
           paste0('"', excluded, '"', collapse = ", "))
 }
 
-#' Drop named strata from a table, for a donor-pool preview
-#'
-#' Removes the rows whose joined key (`dims` pasted with " | ") is in
-#' `excluded`. Used to preview a donor pool after named exclusions.
-#'
-#' @param strata A stratum table.
-#' @param excluded Character vector of joined stratum keys to drop.
-#' @param dims The key columns that make up a stratum key.
-#' @return `strata` without the excluded rows.
-#' @seealso [flag_donor_exclusion()]
-#' @export
-apply_donor_exclusion <- function(strata, excluded, dims) {
-  if (!length(excluded) || is.null(strata) || !nrow(strata)) return(strata)
-  present <- intersect(dims, names(strata))
-  if (!length(present)) return(strata)
-  key <- do.call(paste, c(lapply(present, function(k)
-    as.character(strata[[k]])), sep = " | "))
-  strata[!key %in% excluded, , drop = FALSE]
-}
 
 # ----------------------------------------------------------
 #  Automatic method: fine-to-coarse cascade

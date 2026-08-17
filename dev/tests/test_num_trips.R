@@ -148,4 +148,50 @@ if (nzchar(app)) {
      "the trips slider has a server renderer")
 }
 
+## ---- 7. numTrips is a sufficiency control on the coverage plots -------
+##
+## Not just wired to classify_strata() - the whole chain from a trips
+## floor down to the rendered pixels has to actually respond: the
+## heatmap has to recolour and the legend has to match it. Checked at
+## the plotting-function level (plot_heatmap() + status_legend_plot()),
+## which exercises the identical code path app.R's server calls, without
+## depending on package attachment ORDER inside a live Shiny session -
+## app.R relies on shiny being attached before rcef (see
+## dev/check_server.R's loading order), which this harness's own
+## invocation does not guarantee, and a test that only passes under one
+## attachment order is a worse regression guard than one that does not
+## need it.
+strata <- data.frame(
+  metier4 = c("OTB", "SDN", "SSC"),
+  landings = c(100, 100, 100), landings_with_discards = c(80, 70, 60),
+  discards = c(8, 7, 6), coverage = c(80, 70, 60),
+  discard_rate = c(0.08, 0.07, 0.06), n_measurements = c(0, 0, 0),
+  numTrips = c(1, 1, 1), cat_key = "safe", stringsAsFactors = FALSE)
+
+p_lo <- plot_heatmap(strata, "metier4", threshold = 50, min_trips = 1)
+p_hi <- plot_heatmap(strata, "metier4", threshold = 50, min_trips = 5)
+ok(!is.null(p_lo) && !is.null(p_hi), "the heatmap renders at both trips floors")
+b_lo <- ggplot2::ggplot_build(p_lo)$data[[1]]$fill
+b_hi <- ggplot2::ggplot_build(p_hi)$data[[1]]$fill
+ok(!identical(b_lo, b_hi),
+   "the rendered TILE COLOURS differ between trips floors 1 and 5 - min_trips=1")
+
+leg_lo <- status_legend_plot(50, "discard", min_trips = 1)
+leg_hi <- status_legend_plot(50, "discard", min_trips = 5)
+lt_lo <- levels(ggplot2::ggplot_build(leg_lo)$plot$data$Status)
+lt_hi <- levels(ggplot2::ggplot_build(leg_hi)$plot$data$Status)
+ok(!identical(lt_lo, lt_hi),
+   "and the legend's own status TEXT differs to match - not just the colours")
+ok(any(grepl("5\\+ trips|more than 5 trips|< 5 trips", lt_hi)),
+   "the legend at min_trips=5 actually states 5 somewhere in its labels")
+
+ok(grepl("cov_trips %||% 2", txt, fixed = TRUE),
+   "the discard coverage plot's live classification reads cov_trips")
+ok(grepl("thr_trips()", txt, fixed = TRUE),
+   "the biology coverage plot's live classification reads thr_trips()")
+ok(grepl('id_trips = "cov_trips"', txt, fixed = TRUE),
+   "the discard Sufficiency box renders the trips slider")
+ok(grepl('id_trips = paste0(p, "_thr_trips")', txt, fixed = TRUE),
+   "the biology Sufficiency box renders the trips slider")
+
 cat("\nDONE ", FAIL, "failure(s)", "\n")
