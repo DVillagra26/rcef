@@ -38,10 +38,12 @@ ok(all(lengths(lk) == 1), "every ladder rung is exactly one key")
 ok(identical(unlist(lk), keys[-1]),
    "and they appear in the order given, Stratum folded into own-stratum")
 
-## nested rungs accumulate and always retain key 1
+## nested rungs accumulate and always retain the LAST key - the drop
+## order runs key 1 first now (read top to bottom, widen top to
+## bottom), so the key picked last is the one kept the longest
 nk <- Filter(Negate(is.null), lapply(nes, `[[`, "keys"))
-ok(all(vapply(nk, function(k) keys[1] %in% k, logical(1))),
-   "every nested rung retains key 1")
+ok(all(vapply(nk, function(k) keys[length(keys)] %in% k, logical(1))),
+   "every nested rung retains the last key")
 
 ## ---- 2. Stratum is not offered twice ---------------------------------
 ##
@@ -93,8 +95,18 @@ if (!length(fx)) {
   tn <- decision_tree(rn, keys, rep(50, 6), 50, "nested", keys,
                       cumulative = TRUE)
   fb <- function(t) t$n_strata[t$step == "Fallback"]
-  ok(fb(tl) < fb(tn),
-     "the ladder leaves far less to the catch-all than nested does here")
+  # "ladder" mode existed because nested mode was broken by a Stratum-
+  # first key list: Stratum, retained in every pool under the OLD drop
+  # order (drop from the coarse end, keep key 1 throughout), meant every
+  # nested rung WAS the stratum, so nothing widened and everything fell
+  # to the catch-all. Reversing the drop order so key 1 is dropped FIRST
+  # fixed exactly this - nested mode now cascades through metier4,
+  # Country, areaValue, ICESSubArea, Season same as ladder does, and
+  # both leave nothing to the catch-all on this fixture. Ladder no
+  # longer has to be strictly better; it is enough that neither mode is
+  # broken by Stratum being first any more.
+  ok(fb(tl) <= fb(tn),
+     "the ladder is never WORSE than nested here, now that nested is not broken")
 
   ## two resolutions of one family must be distinguishable
   fam <- c("Stratum", "metier6", "metier4")

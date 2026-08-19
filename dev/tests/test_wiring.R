@@ -247,7 +247,7 @@ absent <- need[!vapply(need, exists, logical(1), mode = "function")]
 ok("all helpers app.R relies on are exported", length(absent) == 0, absent)
 ok("constants defined", all(vapply(c("OUTPUT_FORMATS","OUTPUT_DESC",
                                      "IC_FILE_ROLES","IC_FILE_PATTERN",
-                                     "FLEET_LEVELS","AREA_LEVELS","FILTER_VARS",
+                                     "FILTER_VARS",
                                      "LOG_ORDER","CEF_ORDER","CEF_REQUIRED",
                                      "FILTER_ANY","RCEF_APP_PKGS"),
                                    exists, logical(1))))
@@ -262,6 +262,19 @@ for (gone in c("nr_engine", "hm_plot", "bb_plot", "cb_plot",
   ok(paste("gone:", gone),
      !grepl(paste0('"', gone, '"'), txt, fixed = TRUE))
 ok("gone: built-in raising engine", !grepl("Built-in", txt, fixed = TRUE))
+## the "Groups from: auto/manual" toggle and everything only it fed -
+## the level of detail shown on the final raising tab now always comes
+## from the SELECTED allocation's own dims, which is what run_final()
+## actually uses, rather than a separate choice that could disagree
+for (gone_fn in c("DMAP_ALIAS", "nr_dims", "level_deck", "level_fields",
+                  "level_box", "input$nr_source", "input$ar_fleet",
+                  "input$ar_area", "input$mg_fleet", "input$mg_area"))
+  ok(paste("gone:", gone_fn), !grepl(gone_fn, txt, fixed = TRUE))
+## Cross-tab on the final raising tab - Rows/Columns duplicated what
+## Split by / Facet already offered, and raised_crosstab() had no other
+## caller
+for (gone_ct in c("fin_row", "fin_col", "fin_crosstab", "raised_crosstab"))
+  ok(paste("gone:", gone_ct), !grepl(gone_ct, txt, fixed = TRUE))
 
 cat("\n=== 8. every render output actually renders ===\n")
 # Rendering each output catches things static analysis cannot: a tag given

@@ -602,12 +602,20 @@ alloc_steps <- function(keys, thresholds, keep_cc = TRUE, min_meas = 0,
   add("own", "own stratum", character(0), FALSE, own_thr, own_mm)
 
   # --- pass 1: stay inside the catch category, widen one key at a time
+  #
+  # Keys are read in the order picked - Key 2 first - and dropped in
+  # THAT order too: Key 2 is the first thing pooled across, Key
+  # (n_keys+1) (the last one picked) is kept the longest. This was
+  # flipped before (dropped the LAST key first, keeping the first one
+  # picked the longest) - the reverse of "read top to bottom, widen top
+  # to bottom".
   for (i in seq_along(keys)) {
-    dropped <- rev(keys)[seq_len(i)]        # drop the i coarsest keys
+    dropped <- keys[seq_len(i)]             # drop the i keys picked first
     kept <- setdiff(keys, dropped)
-    # finest key still pooled is keys[n-i]; when nothing is left the pool
-    # is the whole category, which takes the coarsest bar, key 1
-    ki <- if (length(kept)) n - i else 1L
+    # finest key still pooled is keys[i+1] - the next one in line to be
+    # dropped; when nothing is left the pool is the whole category, which
+    # takes the bar of the key retained the longest (the last one picked)
+    ki <- if (length(kept)) i + 1L else n
     add(paste0("w", i),
         if (length(kept)) paste(c("catchCategory", kept), collapse = " + ")
         else "catchCategory (all other data in the same category)",
@@ -624,9 +632,9 @@ alloc_steps <- function(keys, thresholds, keep_cc = TRUE, min_meas = 0,
   # resort, not the first thing tried after the category is released.
   if (!keep_cc) {
     for (j in seq_along(c(0, keys)) - 1) {   # j = 0 .. length(keys)
-      dropped <- if (j == 0) character(0) else rev(keys)[seq_len(j)]
+      dropped <- if (j == 0) character(0) else keys[seq_len(j)]
       kept <- setdiff(keys, dropped)
-      ki <- if (length(kept)) n - j else 1L
+      ki <- if (length(kept)) j + 1L else n
       add(paste0("x", j),
           if (length(kept))
             paste0(paste(kept, collapse = " + "), "  (categories joined)")

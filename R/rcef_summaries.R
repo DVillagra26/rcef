@@ -195,37 +195,6 @@ raised_overview_table <- function(raised) {
     mutate(`Caton (t)` = round(`Caton (t)`, 3))
 }
 
-# Country x area style cross-tab: one block of Landings / Discards / BMS
-# per level of col_var, plus a Total block and a Total row.
-#' @noRd
-#' @export
-raised_crosstab <- function(raised, row_var = "vesselFlagCountry",
-                            col_var = "areaValue") {
-  u <- if ("variableUnit" %in% names(raised)) raised$variableUnit else NULL
-  cat_of <- function(x) case_when(
-    toupper(x) %in% c("LAN", "LANDINGS") ~ "Landings",
-    toupper(x) %in% c("BMS", "BMS LANDING") ~ "BMS",
-    TRUE ~ "Discards")
-  d <- raised %>%
-    mutate(.t = to_tonnes(total, u), .cat = cat_of(catchCategory),
-           .r = as.character(.data[[row_var]]),
-           .c = as.character(.data[[col_var]])) %>%
-    group_by(.r, .c, .cat) %>%
-    summarise(t = sum(.t, na.rm = TRUE), .groups = "drop")
-  tot <- d %>% group_by(.r, .cat) %>%
-    summarise(t = sum(t), .groups = "drop") %>% mutate(.c = "Total")
-  all <- bind_rows(d, tot) %>%
-    mutate(.cat = factor(.cat, levels = c("Landings", "Discards", "BMS")))
-  wide <- all %>%
-    tidyr::pivot_wider(names_from = c(.c, .cat), values_from = t,
-                       values_fill = 0, names_sep = " | ") %>%
-    arrange(.r)
-  grand <- wide %>% summarise(across(where(is.numeric), sum)) %>% mutate(.r = "Total")
-  bind_rows(wide, grand) %>%
-    rename(!!row_var := .r) %>%
-    mutate(across(where(is.numeric), ~round(.x, 3)))
-}
-
 # Landings and discards split into imported and raised
 #' @noRd
 #' @export

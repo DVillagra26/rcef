@@ -184,7 +184,18 @@ if (length(fx)) {
      "and drops the raw condition - it is the donor tab's concern")
   ok(!any(rt$raised_by == "TRUE", na.rm = TRUE),
      "no bare TRUE - a fallback reads as Catch All by All")
-  ok(any(rt$raised_by == "Catch All by All"),
+  ## On this fixture with this key set, every stratum now resolves
+  ## before reaching the fallback - the key-order fix (Key 2 drops
+  ## first, not last) makes the cascade noticeably more effective, so
+  ## there is nothing left for "Catch All by All" to catch here. That is
+  ## a real, positive difference from before, not a broken assertion -
+  ## checked directly with unreachable thresholds instead, which
+  ## deterministically forces every stratum to the fallback regardless
+  ## of how well the cascade otherwise performs.
+  rec_forced <- recommend_raising(st, dm, rep(101, 4), 101, "nested",
+                                  "Catch All by All", dm)
+  rt_forced <- strata_raise_table(rec_forced, dm)
+  ok(any(rt_forced$raised_by == "Catch All by All"),
      "the fallback level is named in full")
   ok(all(diff(rt$landings) <= 1e-9, na.rm = TRUE) || is.unsorted(-rt$landings) == FALSE,
      "sorted heaviest first")

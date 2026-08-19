@@ -322,7 +322,7 @@ taf_data <- function(ctx) {
 #' short of drawing a single group.
 #'
 #' @param ctx Session context. Uses `dims_disc`, `threshold`, `dr_min`,
-#'   `dr_max`, `fleet_level`, `area_level`.
+#'   `dr_max`.
 #' @param kept Kept-plot records; those marked for this section are drawn
 #'   at the end of the script.
 #' @return A character vector of R code.
@@ -336,8 +336,7 @@ taf_model_explore_discards <- function(ctx, kept = list()) {
       writes = c("model/strata_discards.rds", "model/coverage_summary.csv"),
       notes = c(
         "Two decisions are taken here and nowhere else:",
-        sprintf("  * the level of detail  : fleet = %s, area = %s",
-                ctx$fleet_level %||% "metier4", ctx$area_level %||% "ICESDivision"),
+        sprintf("  * the strata definition : %s", paste(dims, collapse = " + ")),
         sprintf("  * the coverage threshold: %s%%", thr),
         "Both are written as plain objects at the top so they can be changed",
         "and the script re-run, which is exactly what the app is doing when",
@@ -470,21 +469,26 @@ taf_model_allocate_raise_discards <- function(ctx) {
 #' rather than one, because a fully covered stratum measured on nine fish is
 #' not a stratum to raise on.
 #'
-#' @param ctx Session context. Uses `dims_len`, `len_threshold`,
+#' @param ctx Session context. Uses `dims_len`, `dims_age`, `len_threshold`,
 #'   `len_min_meas`, `age_threshold`, `age_min_meas`.
 #' @param kept Kept-plot records; those marked for this section are drawn
 #'   at the end of the script.
 #' @return A character vector of R code.
 #' @export
 taf_model_explore_length_age <- function(ctx, kept = list()) {
-  dims <- ctx$dims_len %||% c("catchCategory", "metier4", "Country",
-                              "ICESDivision", "Season")
-  blk <- function(tag, what, thr, mm) c(
+  dims_length <- ctx$dims_len %||% c("catchCategory", "metier4", "Country",
+                                     "ICESDivision", "Season")
+  # Length and age can have DIFFERENT strata definitions in the app -
+  # own_key_strata_server() runs independently for "len" and "age", and
+  # customizing one never touches the other. Falling back to dims_length
+  # only when dims_age was never supplied, not silently reusing it.
+  dims_age <- ctx$dims_age %||% dims_length
+  blk <- function(tag, what, thr, mm, dims_var) c(
     sprintf("## ---- %s ---------------------------------------------", tag),
-    sprintf('bio_%s <- biology_link(catch_for_biology, distributions, dims_biology, type = "%s")',
-            what, if (identical(tag, "Age")) "Age" else "LengthTotal"),
-    sprintf('meas_%s <- stratum_measurements(catch_for_biology, distributions, dims_biology, type = "%s")',
-            what, if (identical(tag, "Age")) "Age" else "LengthTotal"),
+    sprintf('bio_%s <- biology_link(catch_for_biology, distributions, %s, type = "%s")',
+            what, dims_var, if (identical(tag, "Age")) "Age" else "LengthTotal"),
+    sprintf('meas_%s <- stratum_measurements(catch_for_biology, distributions, %s, type = "%s")',
+            what, dims_var, if (identical(tag, "Age")) "Age" else "LengthTotal"),
     sprintf("bio_%s <- add_sufficiency(bio_%s, meas_%s, %s, %s)",
             what, what, what, thr, mm),
     "## coverage keeps its real value; a thinly measured stratum is FLAGGED",
@@ -523,10 +527,13 @@ taf_model_explore_length_age <- function(ctx, kept = list()) {
     'catch_for_biology <- if (file.exists("model/catch_data_raised.rds"))',
     '    readRDS("model/catch_data_raised.rds") else readRDS("data/catch_data.rds")',
     "",
-    sprintf("dims_biology <- %s", fmt_vals(dims)),
+    sprintf("dims_biology_length <- %s", fmt_vals(dims_length)),
+    sprintf("dims_biology_age    <- %s", fmt_vals(dims_age)),
     "",
-    blk("Length", "length", ctx$len_threshold %||% 50, ctx$len_min_meas %||% 0),
-    blk("Age", "age", ctx$age_threshold %||% 50, ctx$age_min_meas %||% 0),
+    blk("Length", "length", ctx$len_threshold %||% 50, ctx$len_min_meas %||% 0,
+        "dims_biology_length"),
+    blk("Age", "age", ctx$age_threshold %||% 50, ctx$age_min_meas %||% 0,
+        "dims_biology_age"),
     # same reasoning as the discard exploration: the picture sits with the
     # numbers it describes
     taf_plot_blocks(kept, "model_explore_length_age"))
@@ -569,6 +576,14 @@ taf_model_allocate_length_age <- function(ctx) {
     taf_sources(ctx$external_dir %||% "."),
     taf_mkdir("model"),
     "## ---- Input ------------------------------------------------",
+    "## A raw readRDS() here fails with \"cannot open the connection\" -",
+    "## true, but not why. The real reason is always the same: no Final",
+    "## raising has been adopted and run yet, in the app or in",
+    "## model_allocate_raise_discards.R.",
+    'if (!file.exists("model/catch_data_raised.rds"))',
+    '  stop("model/catch_data_raised.rds not found. Run a Final raising ",',
+    '       "first - either \\"Raise with this allocation\\" in the app, or ",',
+    '       "model_allocate_raise_discards.R, with an allocation adopted.")',
     'catch_data_raised <- readRDS("model/catch_data_raised.rds")',
     'distributions     <- readRDS("data/distributions.rds")',
     'bio_length        <- readRDS("model/bio_link_length.rds")',

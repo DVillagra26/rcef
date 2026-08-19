@@ -67,19 +67,6 @@ fmt_t3 <- function(x) formatC(x, format = "f", digits = 3, big.mark = ",")
 #  Vocabulary: what a stratum may be built from
 # ----------------------------------------------------------
 
-#' Fleet levels a stratum may be grouped by
-#'
-#' Named vector of the nested fleet resolutions, coarsest first, as
-#' `label = column`. The names are what a user picks from; the values are the
-#' columns [derive_fields()] creates.
-#'
-#' @keywords internal
-#' @export
-FLEET_LEVELS <- c("Metier 4 (gear)"          = "metier4",
-                  "Metier 5 (gear_target)"   = "metier5",
-                  "Metier 6 (gear_tgt_mesh)" = "metier6",
-                  "Full fleetValue"          = "fleetValue")
-
 #' Every variable a stratum may be grouped, split or plotted by
 #'
 #' One vocabulary, used by the figure axes, the cascade keys and the
@@ -114,6 +101,7 @@ FLEET_LEVELS <- c("Metier 4 (gear)"          = "metier4",
 #'   empty and every picker showed only "-- none --", with no error to
 #'   say why.
 #' @export
+
 grouping_vars <- function(d, max_levels = 400, extra_drop = character(0)) {
   if (is.null(d) || !is.data.frame(d) || !ncol(d)) return(character(0))
 
@@ -162,6 +150,151 @@ grouping_vars <- function(d, max_levels = 400, extra_drop = character(0)) {
                   ifelse(is.na(lab[ordered]), ordered, lab[ordered]))
 }
 
+#' The cascade-key vocabulary, grouped into Fleet / Country / Area / Season
+#'
+#' A curated subset of [grouping_vars()] for the hierarchical cascade's
+#' key pickers specifically. Two differences from the full vocabulary:
+#'
+#'   - Narrower. `gear`, `target`, `mesh`, `FleetType`, `vesselFlagCountry`
+#'     and `PSU` are real columns [grouping_vars()] offers for plot axes
+#'     and clause building, but they are not meaningful CASCADE keys - a
+#'     rung grouped by `PSU` says nothing about fleet, area or season
+#'     resolution, so it does not belong beside the four families a
+#'     cascade actually widens through.
+#'   - Grouped. Returned as a named list of named vectors -
+#'     `list(Fleet = c(...), Country = c(...), Area = c(...), Season =
+#'     c(...))` - which `selectInput(choices = )` renders as HTML
+#'     `<optgroup>`s: each family gets a bold subtitle in the dropdown,
+#'     so "which resolution of fleet" and "which resolution of area" read
+#'     as two separate questions rather than ten items in one flat list.
+#'
+#' Each family is ordered finest-first (`fleetValue` before `metier4`;
+#' `areaValue` before `ICESSubArea`), matching the order a cascade widens
+#' in when keys are picked top to bottom.
+#'
+#' How fine a cascade-key variable is, within its family
+#'
+#' Fleet and Area are each a family of nested resolutions - `fleetValue`
+#' is finer than `metier4`, `areaValue` finer than `ICESSubArea` - and
+#' two variables from the SAME family only make sense in fine-to-coarse
+#' order, never the reverse. Rank 1 is finest; Country and Season are
+#' single-variable families and never conflict with themselves.
+#'
+#' @keywords internal
+#' @export
+KEY_FAMILY_RANK <- c(fleetValue = 1L, metier6 = 2L, metier5 = 3L, metier4 = 4L,
+                     areaValue = 1L, ICESSubdivision = 2L, ICESDivision = 3L,
+                     ICESSubArea = 4L, Country = 1L, Season = 1L)
+
+#' Which family a cascade-key variable belongs to
+#' @keywords internal
+#' @export
+KEY_FAMILY_OF <- c(fleetValue = "Fleet", metier6 = "Fleet", metier5 = "Fleet",
+                   metier4 = "Fleet", areaValue = "Area",
+                   ICESSubdivision = "Area", ICESDivision = "Area",
+                   ICESSubArea = "Area", Country = "Country", Season = "Season")
+
+#' Warn when a cascade key is finer than the strata definition
+#'
+#' The strata table is already built at whatever resolution the strata
+#' definition (Key 1) names - a metier5-based definition never carries
+#' the raw `fleetValue` values, they were collapsed away when the strata
+#' were built. A key asking for something FINER than that, in the same
+#' family, can never split anything: every stratum already looks
+#' identical at that resolution, so the rung resolves 0 strata and quietly
+#' does nothing.
+#'
+#' @param keys Character vector of chosen cascade-key columns (Key 2
+#'   onward - may contain `""` for unfilled slots, skipped).
+#' @param strata_vars Character vector of columns the strata definition
+#'   (Key 1) resolved to.
+#' @return A character vector of warning messages, one per offending key,
+#'   or `character(0)` if none.
+#' @seealso [key_order_warnings()], [key_vocab_grouped()]
+#' @export
+key_vs_strata_warnings <- function(keys, strata_vars) {
+  warn <- character(0)
+  for (k in keys) {
+    if (!nzchar(k) || is.na(KEY_FAMILY_OF[k])) next
+    fam <- KEY_FAMILY_OF[[k]]
+    same_fam <- strata_vars[strata_vars %in% names(KEY_FAMILY_OF) &
+                              KEY_FAMILY_OF[strata_vars] == fam]
+    if (!length(same_fam)) next
+    strata_rank <- min(KEY_FAMILY_RANK[same_fam])
+    if (KEY_FAMILY_RANK[[k]] < strata_rank)
+      warn <- c(warn, sprintf(
+        "%s is finer than the strata definition (%s) - the strata table has already collapsed this, so nothing will be grouped.",
+        k, paste(same_fam, collapse = "/")))
+  }
+  warn
+}
+
+#' Warn when cascade keys go coarse-then-fine within the same family
+#'
+#' Widening is supposed to get progressively coarser: once the cascade
+#' has tried grouping by `ICESSubArea` (coarse), trying `areaValue`
+#' (finer) at a later key is backwards - the earlier, coarser key already
+#' pooled everything that finer one could ever distinguish.
+#'
+#' @param keys Character vector of chosen cascade-key columns, IN THE
+#'   ORDER they are tried (Key 2 first). May contain `""` for unfilled
+#'   slots, skipped.
+#' @return A character vector of warning messages, one per offending key,
+#'   or `character(0)` if none.
+#' @seealso [key_vs_strata_warnings()], [key_vocab_grouped()]
+#' @export
+key_order_warnings <- function(keys) {
+  warn <- character(0)
+  seen <- list()
+  for (k in keys) {
+    if (!nzchar(k) || is.na(KEY_FAMILY_OF[k])) next
+    fam  <- KEY_FAMILY_OF[[k]]
+    rank <- KEY_FAMILY_RANK[[k]]
+    prev <- seen[[fam]]
+    if (!is.null(prev) && rank < prev$rank)
+      warn <- c(warn, sprintf(
+        "%s is finer than %s, already tried earlier in the same %s family - nothing left for it to distinguish.",
+        k, prev$var, fam))
+    if (is.null(prev) || rank > prev$rank) seen[[fam]] <- list(rank = rank, var = k)
+  }
+  warn
+}
+
+#' The cascade-key vocabulary, grouped into Fleet / Country / Area / Season
+#'
+#' A curated subset of [grouping_vars()] for the hierarchical cascade's
+#' key pickers specifically, returned as a named list of named vectors -
+#' `list(Fleet = c(...), Country = c(...), Area = c(...), Season =
+#' c(...))` - which `selectInput(choices = )` renders as HTML
+#' `<optgroup>`s: a bold subtitle per family in the dropdown. Narrower
+#' than the full vocabulary too - `gear`, `target`, `mesh`, `FleetType`,
+#' `vesselFlagCountry` and `PSU` are real columns [grouping_vars()]
+#' offers for plot axes and clause building, but are not meaningful
+#' CASCADE keys. Each family is ordered finest-first.
+#'
+#' @param d A data frame (typically the loaded catch table).
+#' @return A named list of named character vectors, each present family
+#'   filtered to columns [grouping_vars()] would offer.
+#' @seealso [grouping_vars()], [key_vs_strata_warnings()]
+#' @export
+key_vocab_grouped <- function(d) {
+  gv <- grouping_vars(d)
+  fam <- list(
+    Fleet   = c("fleetValue (full)" = "fleetValue",
+               "metier6 (gear_tgt_mesh)" = "metier6",
+               "metier5 (gear_target)" = "metier5",
+               "metier4 (gear)" = "metier4"),
+    Country = c(Country = "Country"),
+    Area    = c("areaValue (full)" = "areaValue",
+               "ICES subdivision (27.X.X.X)" = "ICESSubdivision",
+               "ICES division (27.X.X)" = "ICESDivision",
+               "ICES subarea (27.X)" = "ICESSubArea"),
+    Season  = c(Season = "Season"))
+  out <- lapply(fam, function(v) v[v %in% gv])
+  Filter(length, out)
+}
+
+
 #' Join a character vector as English prose: "a, b and c"
 #'
 #' Shared by the discard cascade's step descriptions and the length/age
@@ -177,18 +310,6 @@ and_list <- function(v) {
   if (length(v) == 1) return(v)
   paste(paste(v[-length(v)], collapse = ", "), "and", v[length(v)])
 }
-
-#' Area levels a stratum may be grouped by
-#'
-#' Named vector of the nested ICES area resolutions, coarsest first, as
-#' `label = column`.
-#'
-#' @keywords internal
-#' @export
-AREA_LEVELS  <- c("ICES subarea (27.X)"          = "ICESSubArea",
-                  "ICES division (27.X.X)"       = "ICESDivision",
-                  "ICES subdivision (27.X.X.X)"  = "ICESSubdivision",
-                  "Full areaValue"               = "areaValue")
 
 #' Columns that may be filtered on
 #'

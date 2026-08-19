@@ -30,7 +30,7 @@ res <- tryCatch({
     session$flushReact()
     ## the helpers a module server calls directly while the body runs
     for (fn in c("exclusion_server", "flt_inputs", "explore_dat",
-                 "filter_server", "excl_num", "dmap", "strata_p",
+                 "filter_server", "excl_num", "strata_p",
                  "strata_x", "dat"))
       if (!exists(fn, inherits = TRUE))
         stop("helper not defined in the server body: ", fn)
@@ -153,33 +153,41 @@ if (!length(fx)) {
       if (is.character(bad)) paste(bad, collapse = "; ") else bad)
 
   ## ---------------------------------------------------------------
-  ##  Per-tab level of detail is independent.
+  ##  Per-tab axis selections are independent.
   ##
-  ##  Ported from the retired test_app_server.R. Each figure tab picks its
-  ##  own fleet and area resolution; changing one must not move another.
-  ##  The old test asserted this against Area1, a dimension since removed,
-  ##  so only the independence check survives - the mechanism (dmap reads
-  ##  <prefix>_fleet / <prefix>_area) is what matters, not the columns.
+  ##  Ported from the retired test_app_server.R, twice now. The original
+  ##  asserted on Area1, a dimension since removed. The first port
+  ##  checked dmap("cov")/dmap("dr") - an abstract "Fleet"/"Area" picker
+  ##  per tab - which the strata-definition-box rework superseded: a
+  ##  figure's axes name real columns directly now (cov_y, dr_x, ...),
+  ##  there is no separate level-of-detail control to read. dmap() itself
+  ##  was confirmed dead and removed. What survives is the actual claim:
+  ##  changing one tab's axis selection must not move another's.
   ## ---------------------------------------------------------------
   lod <- tryCatch({
     shiny::testServer(d, {
       rv$cef_catches <- utils::read.csv(fx[1], stringsAsFactors = FALSE)
       session$flushReact()
-      session$setInputs(cov_fleet = "metier5", cov_area = "ICESDivision",
-                        dr_fleet  = "metier4", dr_area  = "ICESSubArea")
+      session$setInputs(cov_y = "metier5", cov_fill = "ICESDivision",
+                        dr_x  = "metier4", dr_fill  = "ICESSubArea")
       session$flushReact()
-      a <- unname(dmap("cov")["Fleet"]); b <- unname(dmap("dr")["Fleet"])
-      c1 <- unname(dmap("cov")["Area"]); c2 <- unname(dmap("dr")["Area"])
-      if (!(a == "metier5" && b == "metier4"))
-        stop("fleet level bled across tabs: cov=", a, " dr=", b)
-      if (!(c1 == "ICESDivision" && c2 == "ICESSubArea"))
-        stop("area level bled across tabs: cov=", c1, " dr=", c2)
+      a <- panel_dims("cov"); b <- panel_dims("dr")
+      if (!("metier5" %in% a && "ICESDivision" %in% a))
+        stop("cov's own axes did not reach panel_dims('cov'): ",
+             paste(a, collapse = ","))
+      if (!("metier4" %in% b && "ICESSubArea" %in% b))
+        stop("dr's own axes did not reach panel_dims('dr'): ",
+             paste(b, collapse = ","))
+      if ("metier5" %in% b || "ICESDivision" %in% b)
+        stop("cov's axis selection bled into dr: ", paste(b, collapse = ","))
+      if ("metier4" %in% a || "ICESSubArea" %in% a)
+        stop("dr's axis selection bled into cov: ", paste(a, collapse = ","))
       TRUE
     })
     TRUE
   }, error = function(e) conditionMessage(e))
   say(isTRUE(lod),
-      "each tab's fleet/area level of detail is independent of the others",
+      "each tab's axis selections are independent of the others",
       lod)
 
   ## ---------------------------------------------------------------
@@ -214,11 +222,17 @@ if (!length(fx)) {
 ## ---------------------------------------------------------------
 ##  Changing the aggregation level must not crash recommend_raising().
 ##
-##  The strata were built from the LIVE dmap while the hierarchy came from
-##  the FROZEN applied signature, so a level change moved the strata
-##  columns instantly while the hierarchy stayed frozen - and
-##  recommend_raising() aborted with "hierarchy %in% names(strata) is not
-##  TRUE". Both must come from the same (applied) dims.
+##  The strata were built from the LIVE level-of-detail control while the
+##  hierarchy came from the FROZEN applied signature, so a level change
+##  moved the strata columns instantly while the hierarchy stayed frozen
+##  - and recommend_raising() aborted with "hierarchy %in% names(strata)
+##  is not TRUE". Both must come from the same (applied) dims.
+##
+##  Ported forward again: the level-of-detail control used to be
+##  ar_fleet/ar_area, superseded by the strata-definition box
+##  (ar_sd_sdmode/ar_sd_sd1..5). Those two old inputs no longer bind to
+##  anything, so setting them was a silent no-op and this check was
+##  passing without exercising the scenario it names.
 ## ---------------------------------------------------------------
 if (length(fx)) {
   box <- new.env(parent = emptyenv())
@@ -227,11 +241,13 @@ if (length(fx)) {
       rv$cef_catches <- utils::read.csv(fx[1], stringsAsFactors = FALSE)
       session$flushReact()
       session$setInputs(hier_2 = "Country", hier_3 = "Season", threshold = 50,
-                        ar_fleet = "metier4", ar_area = "ICESDivision")
+                        ar_sd_sdmode = "custom", ar_sd_sd1 = "metier4",
+                        ar_sd_sd2 = "", ar_sd_sd3 = "", ar_sd_sd4 = "",
+                        ar_sd_sd5 = "")
       session$flushReact()
       session$setInputs(ar_apply = 1); session$flushReact()
       box$n1 <- tryCatch(nrow(rec()), error = function(e) NA)
-      session$setInputs(ar_fleet = "metier6", ar_area = "ICESSubArea")
+      session$setInputs(ar_sd_sd1 = "metier6", ar_sd_sd2 = "areaValue")
       session$flushReact()
       box$before <- tryCatch(nrow(rec()), error = function(e) conditionMessage(e))
       session$setInputs(ar_apply = 2); session$flushReact()

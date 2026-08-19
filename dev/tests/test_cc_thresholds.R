@@ -170,11 +170,14 @@ ok(all(c("donor_cov_min", "donor_meas_min") %in% names(tbl)),
 
 ## --- the threshold follows the FINEST KEY STILL POOLED --------------
 ##
-## This was reversed: rev(keys) drops from the coarse end but thr(i+1)
-## read forward, so the Area box drove the catchCategory rung and the
-## Fleet box drove the own rung. A user setting Area = 80 saw it applied
-## to the wrong level entirely.
-kk <- c("Fleet", "Country", "Season", "Area")   # fine -> coarse
+## Keys are read in the order picked and dropped in that SAME order:
+## the first key picked is the first one pooled across, the last key
+## picked is kept the longest. This was reversed before - the first key
+## picked was retained longest and the LAST one was dropped first, the
+## opposite of "read top to bottom, widen top to bottom" - so a
+## threshold set on the box the reader read as "last, coarsest" was
+## actually driving the FIRST widening step, and vice versa.
+kk <- c("Fleet", "Country", "Season", "Area")   # picked in this order
 st <- alloc_steps(kk, thresholds = list(Lan = c(50, 60, 70, 80),
                                         Dis = c(50, 60, 70, 80)),
                   keep_cc = TRUE)
@@ -182,11 +185,16 @@ lbl <- vapply(st, `[[`, "", "label")
 thr <- vapply(st, function(x) unname(x$threshold["Lan"]), numeric(1))
 own <- which(vapply(st, function(x) identical(x$id, "own"), logical(1)))
 ok(thr[own] == 80,
-   "own stratum (every key kept) takes the finest key Area's bar")
-w1 <- which(grepl("Fleet \\+ Country \\+ Season", lbl))[1]
-ok(thr[w1] == 70, "the pool keeping down to Season takes Season's bar")
-w_fleet <- which(grepl("\\+ Fleet$", lbl))
-ok(all(thr[w_fleet] == 50), "the pool keeping only Fleet takes Fleet's bar")
+   "own stratum (every key kept) takes the last key's (Area's) bar")
+## Fleet, picked first, is dropped first: the next rung keeps
+## Country+Season+Area and takes Country's bar (the new finest key)
+w1 <- which(grepl("Country \\+ Season \\+ Area", lbl))[1]
+ok(!is.na(w1) && thr[w1] == 60,
+   "dropping Fleet first, the pool down to Country+Season+Area takes Country's bar")
+## Area, picked last, is kept until only it remains, and takes its own bar
+w_area <- which(lbl == "catchCategory + Area")
+ok(length(w_area) == 1 && thr[w_area] == 80,
+   "the pool keeping only Area (dropped last) takes Area's bar")
 
 ## an explicit own bar overrides the finest-key default
 st2 <- alloc_steps(kk, thresholds = list(own = c(Lan = 55, Dis = 55),
@@ -209,7 +217,7 @@ tb <- alloc_cascade_table(a, st, keys = kk)
 ok("grouping" %in% names(tb), "the cascade table has a grouping column")
 ok(tb$grouping[tb$step == 1] == "the stratum itself",
    "the own rung groups by the stratum itself")
-ok(any(grepl("same Fleet, Country and Season", tb$grouping, fixed = TRUE)),
+ok(any(grepl("same Country, Season and Area", tb$grouping, fixed = TRUE)),
    "a widened rung names the keys it still distinguishes")
 
 ## keys and dims are NOT the same thing, and conflating them was the bug:

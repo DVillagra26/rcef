@@ -113,20 +113,18 @@ apply_raising <- function(strata, donor_key = "raise_condition",
 #' @param dims The stratum dimensions.
 #' @param hierarchy Key columns, finest first.
 #' @param thresholds One threshold, or one per level.
-#' @param fleet_level,area_level The chosen fleet and area resolutions.
 #' @param self_threshold Own-stratum threshold, or `NA`.
 #' @param mode Retained for older saved scenarios.
 #' @param dr_min,dr_max Donor discard-rate window.
 #' @return A scenario list, ready for [run_scenario()] or [scenarios_to_json()].
 #' @seealso [scenario_manual()], [run_scenario()]
 #' @export
-scenario_auto <- function(name, dims, hierarchy, thresholds, fleet_level,
-                          area_level, self_threshold = NA, mode = "nested",
+scenario_auto <- function(name, dims, hierarchy, thresholds,
+                          self_threshold = NA, mode = "nested",
                           dr_min = NA, dr_max = NA) {
   list(name = name, method = "auto", dims = dims, hierarchy = hierarchy,
        thresholds = thresholds, self_threshold = self_threshold, mode = mode,
        dr_min = dr_min, dr_max = dr_max,
-       fleet_level = fleet_level, area_level = area_level,
        saved = format(Sys.time(), "%Y-%m-%d %H:%M:%S"))
 }
 
@@ -136,13 +134,11 @@ scenario_auto <- function(name, dims, hierarchy, thresholds, fleet_level,
 #' @param dims The stratum dimensions.
 #' @param rules The rule list.
 #' @param sets Named value sets referenced by the rules.
-#' @param fleet_level,area_level The chosen fleet and area resolutions.
 #' @return A scenario list.
 #' @seealso [scenario_auto()], [run_scenario()]
 #' @export
-scenario_manual <- function(name, dims, rules, sets, fleet_level, area_level) {
+scenario_manual <- function(name, dims, rules, sets) {
   list(name = name, method = "manual", dims = dims, rules = rules, sets = sets,
-       fleet_level = fleet_level, area_level = area_level,
        saved = format(Sys.time(), "%Y-%m-%d %H:%M:%S"))
 }
 

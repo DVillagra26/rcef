@@ -97,7 +97,7 @@ cat_lookup <- function(threshold, what = "discard", min_meas = 0,
     return(data.frame(
       cat_key = c("full_ok", "safe_ok", "yellowgreen", "yellow",
                   "orangeyellow", "orange_lowtrip", "orange_lowcov",
-                  "orange_lowcovtrip", "red"),
+                  "orange_lowcovtrip", "red", "none"),
       status = c(
         sprintf("SAFE: 100%% sampled, more than %s trips and %s measurements",
                 min_trips, min_meas),
@@ -115,16 +115,25 @@ cat_lookup <- function(threshold, what = "discard", min_meas = 0,
                 threshold, min_meas, min_trips),
         sprintf("WARNING: < %s%% coverage and < %s trips but %s+ measurements",
                 threshold, min_trips, min_meas),
-        "WARNING: coverage, trips and measurements all fail their targets"),
+        "WARNING: coverage, trips and measurements all fail their targets",
+        "No catch to classify"),
       # decision follows the cat_key order: the two SAFE categories
       # first, so both read as green
       decision = c("No raising needed (fully sampled, well measured)",
                    "Raise with own strata",
-                   borrow, borrow, borrow, borrow, borrow, borrow, borrow),
+                   borrow, borrow, borrow, borrow, borrow, borrow, borrow,
+                   "Excluded: no data"),
       # dark green, green, yellow-green, yellow, yellow-orange,
-      # three distinguishable oranges (light / medium / dark), red
+      # three distinguishable oranges (light / medium / dark), red,
+      # then the same near-white used for the discard side's "no
+      # landings / no discards" - a stratum with nothing to measure is
+      # not a sampling FAILURE (which is what red means everywhere
+      # else), it is a stratum with nothing in it. Landing that in red
+      # made every truly empty cell in a heatmap look identical to a
+      # completely unsampled one, which is a much worse finding.
       colour = c("#00441B", "#41AE76", "#A6D96A", "#FFD92F",
-                 "#FEC44F", "#FDAE61", "#F46D43", "#D66A35", "#D7191C"),
+                 "#FEC44F", "#FDAE61", "#F46D43", "#D66A35", "#D7191C",
+                 "#F0F1F1"),
       stringsAsFactors = FALSE))
   }
   # Discards: coverage (weight terms) and trips (effort terms). A
@@ -350,10 +359,25 @@ classify_strata <- function(s, threshold, what = "discard", min_meas = 0,
   # stratum vs an ordinarily safe one.
   if (what %in% c("length", "age")) {
     if (!"n_measurements" %in% names(s)) s$n_measurements <- 0
+    # Only strata a real weight column says have nothing in them. A
+    # caller that never tracked weight at all (works from coverage
+    # directly) gets the ORIGINAL behaviour - falling through to the
+    # coverage/trips/measurement comparisons - rather than being
+    # silently reclassified as "no catch" for a column it never had.
+    no_catch <- if ("weight" %in% names(s))
+      (is.na(s$weight) | s$weight <= 0) else rep(FALSE, nrow(s))
     return(s %>%
              mutate(
                n_measurements = ifelse(is.na(n_measurements), 0, n_measurements),
                cat_key = case_when(
+                 # A stratum with nothing landed or discarded has
+                 # nothing to sample - checked FIRST, same as the
+                 # discard side's landings<=0 & discards<=0 case, or
+                 # every one of these fell through every coverage/
+                 # trips/measurement comparison (all NA on 0 weight)
+                 # straight to the catch-all "red", making an empty
+                 # stratum look identical to a completely failed one.
+                 no_catch                                      ~ "none",
                  coverage >= 100 & trips2 > min_trips &
                    n_measurements >= min_meas                  ~ "full_ok",
                  coverage >= threshold & trips2 >= min_trips &

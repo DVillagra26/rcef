@@ -295,17 +295,20 @@ raising_steps <- function(hierarchy, thresholds, self_threshold = NA,
 
   # Two ways to turn an ordered list of keys into a cascade of pools.
   #
-  # "nested" (the original): pool k is keys[1..k], walked from the full
-  # set down to just keys[1]. Key 1 is therefore retained in EVERY pool.
-  # That is right when the keys are abstract dimensions - Fleet, Country,
-  # Area, Season - each contributing an independent split.
+  # "nested" (the current one): the keys are read in the order a reader
+  # picks them - Key 2 first, Key 3 second, and so on - and that is also
+  # the order they are GROUPED OVER. Own stratum is tried first; then Key
+  # 2 is the first dimension pooled across, so pool k retains
+  # hierarchy[(n-k+1):n] - a shrinking SUFFIX, dropping from the front.
+  # Key 2 is therefore dropped soonest and Key (n+1) (the last one
+  # picked) is retained longest, right up to the last resort before
+  # everything is pooled.
   #
-  # It breaks as soon as the keys are real columns at different
-  # resolutions of the SAME thing, which is the whole point of naming
-  # columns directly. Put Stratum first and every pool contains Stratum,
-  # so every pool IS the stratum and nothing is ever widened. Put
-  # areaValue above ICESSubArea and the coarser one adds nothing, because
-  # areaValue already determines it.
+  # This was flipped before: pool k retained hierarchy[1:k], a shrinking
+  # PREFIX dropping from the END, so Key 2 (read first, meant to be
+  # grouped over first) was actually retained the LONGEST and the last
+  # key picked was dropped first - the reverse of "read top to bottom,
+  # widen top to bottom".
   #
   # "ladder": pool i is keys[i] ALONE, walked in the order given, finest
   # first. Each rung is one grouping, so a rung can be coarser than the
@@ -313,15 +316,17 @@ raising_steps <- function(hierarchy, thresholds, self_threshold = NA,
   # Country, then areaValue, then ICESSubArea, then Season - which is
   # exactly "use the finer detail when possible and the coarser when
   # needed".
+  n_hier <- length(hierarchy)
   key_sets <- if (identical(mode, "ladder"))
     lapply(seq_along(hierarchy), function(k) hierarchy[k])
   else
-    lapply(rev(seq_along(hierarchy)), function(k) hierarchy[seq_len(k)])
+    lapply(rev(seq_along(hierarchy)),
+           function(k) hierarchy[(n_hier - k + 1):n_hier])
 
   thr_of <- if (identical(mode, "ladder"))
     function(ks) thresholds[match(ks[1], hierarchy)]
   else
-    function(ks) thresholds[length(ks)]
+    function(ks) thresholds[n_hier - length(ks) + 1]
 
   for (ks in key_sets) {
     # grouping by every dimension is the same thing as the stratum itself,

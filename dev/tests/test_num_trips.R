@@ -49,12 +49,54 @@ r <- classify_strata(data.frame(coverage = 30, numTrips = 1,
                                 n_measurements = 50), 50, "length", 100)
 ok(r$cat_key == "red", "coverage, trips and measurements all failing is red")
 
+## a stratum with nothing landed or discarded is NOT the same as one
+## with everything failing - it has nothing to sample, which is not a
+## sampling FAILURE. Before this fix, weight=0 forced coverage to NA,
+## every comparison in the cascade failed, and it fell through to the
+## same "red" as a genuinely unsampled stratum - an empty cell and a
+## failed cell were visually indistinguishable in a heatmap.
+z <- data.frame(weight = c(0, NA, 100), weight_measured = c(0, 0, 80),
+                coverage = c(NA, NA, 80), numTrips = c(NA, NA, 3),
+                n_measurements = c(0, 0, 150), stringsAsFactors = FALSE)
+z <- classify_strata(z, threshold = 50, what = "length", min_meas = 100)
+ok(z$cat_key[1] == "none", "zero weight is 'none', not 'red'")
+ok(z$cat_key[2] == "none", "NA weight is 'none' too")
+ok(z$cat_key[3] != "none", "real weight is unaffected by the none check")
+ok(all(c("safe_ok", "full_ok", "yellowgreen", "yellow", "orangeyellow",
+        "orange_lowtrip", "orange_lowcov", "orange_lowcovtrip",
+        "red") != "none"),
+   "none is a distinct category from every sampling-status one")
+
+## a caller with no weight column at all (works from coverage directly,
+## as several existing callers and this suite's own earlier fixtures do)
+## keeps the ORIGINAL behaviour - falls through to the coverage/trips/
+## measurement comparisons - rather than being silently forced to "none"
+## for a column it never had
+no_wt <- data.frame(coverage = 80, numTrips = 3, n_measurements = 150)
+no_wt <- classify_strata(no_wt, 50, "length", 100)
+ok(no_wt$cat_key != "none",
+   "no weight column at all does not force 'none' - backward compatible")
+
+## none must exist for age too, not just length
+age_none <- classify_strata(data.frame(weight = 0, weight_measured = 0,
+                                       coverage = NA, numTrips = NA,
+                                       n_measurements = 0), 50, "age", 100)
+ok(age_none$cat_key == "none", "the same fix applies to age, not just length")
+
+## and its colour matches the discard side's white/gray exactly, so a
+## reader does not learn two different "nothing here" colours
+lk_none <- cat_lookup(50, "length", min_meas = 100)
+lk_disc <- cat_lookup(50, "discard")
+ok(identical(lk_none$colour[lk_none$cat_key == "none"],
+            lk_disc$colour[lk_disc$cat_key == "none"]),
+   "the none colour matches the discard side's 'no landings/no discards'")
+
 ## nine categories, three distinguishable oranges, as asked. Matched on
 ## "orange_" (with the underscore) specifically - "orangeyellow" is a
 ## real, separate fourth category and correctly has its own colour, but
 ## it is not one of the three oranges the request asked for.
 lk <- cat_lookup(50, "length", min_meas = 100)
-ok(nrow(lk) == 9, "nine length/age categories")
+ok(nrow(lk) == 10, "nine sampling-status categories, plus none for zero catch")
 oranges <- lk$colour[grepl("^orange_", lk$cat_key)]
 ok(length(oranges) == 3 && length(unique(oranges)) == 3,
    "three genuinely distinct oranges")
