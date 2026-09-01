@@ -123,11 +123,14 @@ cat("\n=== 4. every reactive called is defined ===\n")
 # length_server(), which indent their reactives further
 # gated() returns a reactive just as reactive() does - it is the Apply-gate
 # wrapper - so a plot built with it is as much a reactive as one built the
-# plain way. Missing it here does not fail loudly: the audit simply stops
-# knowing those nine objects exist, and then reports every one of them as
-# "called before it exists", which buries the one name that might be real.
-defined <- c(cap(sv, '\\n  ([A-Za-z_][A-Za-z0-9_.]*)\\s*<-\\s*(?:reactive|gated|function)'),
-             cap(sv, '\\n\\s{4,}([A-Za-z_][A-Za-z0-9_.]*)\\s*<-\\s*(?:reactive|gated|function)'),
+# plain way. debounce()/throttle() are the same: shiny's own reactive
+# wrappers, used to keep an expensive render from firing on every tick of
+# a slider being dragged. Missing any of these here does not fail
+# loudly: the audit simply stops knowing those objects exist, and then
+# reports every one of them as "called before it exists", which buries
+# the one name that might be real.
+defined <- c(cap(sv, '\\n  ([A-Za-z_][A-Za-z0-9_.]*)\\s*<-\\s*(?:reactive|gated|debounce|throttle|function)'),
+             cap(sv, '\\n\\s{4,}([A-Za-z_][A-Za-z0-9_.]*)\\s*<-\\s*(?:reactive|gated|debounce|throttle|function)'),
              ## A reactive pulled out of a list a *_server() helper
              ## returned - `x_keys <- srv$keys` - is as much a reactive
              ## as one written inline. Without this the audit reports

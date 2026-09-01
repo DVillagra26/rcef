@@ -599,22 +599,14 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
               verbatimTextOutput(ns("hier_conds")))))),
     conditionalPanel(sprintf("input.%s == 'manual'", ns("method")),
       builder_deck(ns("mg"), "Manual strata allocation builder",
-        top = list("Definition of the strata (set on the Hierarchical tab)" =
-          tagList(
-            span(class = "note",
-                 "One resolution for this data, used by both methods - the ",
-                 "hierarchical cascade and the manual groups below feed the ",
-                 "same adopted allocation, so they work on the same strata. ",
-                 "Switch to the Hierarchical tab to change it."),
-            uiOutput(ns("msd_mirror")))),
-        numbers = c("2", "3", "5"), grid = "mg-grid",
+        numbers = c("1", "2", "4"), grid = "mg-grid",
         boxes = list(
           "Define the groups of strata to allocate" = tagList(
-            tags$b("2.1 Name the group",
+            tags$b("1.1 Name the group",
                    style = "font-size:11.5px;display:block"),
             fluidRow(column(5, textInput(ns("gid"), "Id", "GA1")),
                      column(7, textInput(ns("glab"), "Label", ""))),
-            tags$b("2.2 Rules to group",
+            tags$b("1.2 Rules to group",
                    style = "font-size:11.5px;display:block;margin-top:4px"),
             span(class = "note", "A clause is one or more variable ",
                  "restrictions combined with AND. Add them one at a time."),
@@ -636,7 +628,7 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
                  "allocated. A stratum too thinly measured to lend a ",
                  "distribution is exactly the one that needs to borrow one."),
             exclude_box(ns("x"), metrics = c("coverage", "trips", "measurements"),
-                        title = NULL, num = "3",
+                        title = NULL, num = "2",
                         note = paste("Coverage is the share of catch weight",
                                      "carrying a distribution; measurements is",
                                      "the number of fish behind it. A pool can",
@@ -652,7 +644,7 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
                  "including those earlier groups already used: a donor may ",
                  "be reused, only an allocated stratum may not."),
             exclude_box(ns("ca"), metrics = c("coverage", "trips", "measurements"),
-                        title = NULL, num = "5",
+                        title = NULL, num = "4",
                         note = paste("The catch-all is the last resort, so it",
                                      "usually wants the widest pool - but a",
                                      "stratum with almost nothing measured is",
@@ -662,7 +654,7 @@ len_alloc_ui <- function(p, type = "LengthTotal") {
                          class = "btn btn-addgrp btn-block",
                          style = "margin-top:6px"))),
         wide = list(
-          "4. Assign the clause" = div(
+          "3. Assign the clause" = div(
             style = "display:flex;gap:8px;align-items:stretch",
             div(style = "flex:1",
               div(class = "condbox",
@@ -2401,7 +2393,7 @@ ui <- navbarPage(
               # question - how do the allocations differ by fleet - is
               # exactly what it should have been showing.
               role_chips("cmp", c(x = "X axis", facet = "Facet"),
-                         c("Fleet", ""), stacked = TRUE),
+                         c("metier4", ""), stacked = TRUE),
               span(class = "note",
                    "Pick the keys the allocations share; leave Facet on ",
                    "(none) for a single panel."),
@@ -2988,9 +2980,23 @@ server <- function(input, output, session) {
                          warn_cov_min = 50, warn_meas_min = warn_meas,
                          trips_min = sp$trips_min, warn_trips_min = warn_trips)
     })
+    # Every coverage / trips / measurements slider above feeds spec(),
+    # which feeds pool() directly and un-gated (there is no Apply here -
+    # a donor bar is meant to react as you set it). A slider fires many
+    # input events per second while being dragged, and donor_pool_summary()
+    # is not cheap (it walks the strata table twice, once for its own
+    # aggregate and once inside exclusion_overview()'s per-stratum
+    # pass) - so on a real dataset the render queue never caught up with
+    # the drag, and the "recalculating" overlay looked stuck rather than
+    # slow. debounce() lets pool() keep recomputing on every tick
+    # internally (cheap consumers can still read it live), but only
+    # pool_d() - what the two expensive renders below actually use -
+    # settles 400ms after the LAST tick, so a drag produces one render
+    # instead of dozens.
+    pool_d <- debounce(pool, 400)
 
     output[[paste0(p, "_used_warn")]] <- renderUI({
-      s <- pool()
+      s <- pool_d()
       if (is.null(s) || s$n_strata == 0)
         return(div(class = "note", style = "color:#7a1f1f;font-weight:600",
                    "Nothing is left to raise from - every stratum was excluded."))
@@ -3011,7 +3017,7 @@ server <- function(input, output, session) {
     })
 
     output[[paste0(p, "_used_tbl")]] <- renderDT({
-      s <- pool()
+      s <- pool_d()
       validate(need(!is.null(s) && s$n_strata > 0, "Nothing left to raise from."))
       d <- data.frame(
         `strata in`   = s$n_strata,
@@ -3849,14 +3855,6 @@ server <- function(input, output, session) {
     strata_dims <- own_key_strata_server(ns("hsd"))
     dims_of <- function()
       avail(unique(c("catchCategory", strata_dims(), alloc_cols())))
-
-    # The read-only mirror on the manual panel. Same value as
-    # strata_dims(), just displayed rather than editable there.
-    output[[ns("msd_mirror")]] <- renderUI({
-      v <- strata_dims()
-      div(class = "note", style = "margin-top:5px;color:#12324f;font-weight:600",
-          "Strata resolved to: ", paste(v, collapse = " + "))
-    })
 
     dist_tbl <- reactive({
       if (!is.null(rv$dist)) rv$dist
@@ -5806,6 +5804,15 @@ server <- function(input, output, session) {
                       c("metier4", "ICESDivision", "Season", "Country"))
   role_choices_server("box", c("x", "fill", "facet"),
                       c("Country", "ICESDivision", ""))
+  # The compare-allocation tabs' Facet / Facet 2 (or X axis / Facet)
+  # pickers never had this wired up. role_chips() renders them with
+  # NONE (just "-- none --") as a placeholder until something calls
+  # updateSelectInput() with the real vocabulary - nothing ever did, so
+  # every one of these three dropdowns was permanently stuck on that one
+  # placeholder entry regardless of what data was loaded.
+  role_choices_server("cmp", c("x", "facet"), c("metier4", ""))
+  role_choices_server("len_rz_cmpr", c("facet", "shape"), c("catchCategory", ""))
+  role_choices_server("age_rz_cmpr", c("facet", "shape"), c("catchCategory", ""))
 
   # The adopted-raising composition controls. Same vocabulary as
   # everywhere else, but these are plain selectInputs rather than role

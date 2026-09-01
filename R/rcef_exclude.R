@@ -187,6 +187,9 @@ exclusion_choices <- function(strata, dims,
 #'   excluded.
 #' @param wt_min Minimum weight. Chiefly useful to drop the zero-weight
 #'   strata, which carry no data to lend.
+#' @param m A pre-computed `stratum_metrics(strata, dims)`, for a caller
+#'   that already has one and would otherwise pay for it twice. `NULL`
+#'   (the default) computes it here, as before.
 #' @return A data frame with one row per excluded stratum: `key`, the
 #'   metrics, and a `reason` naming every test it failed.
 #' @seealso [excluded_keys()]
@@ -194,8 +197,13 @@ exclusion_choices <- function(strata, dims,
 exclusion_overview <- function(strata, dims, named = character(0),
                                cov_min = NA, meas_min = NA,
                                dr_min = NA, dr_max = NA, wt_min = NA,
-                               trips_min = NA) {
-  m <- stratum_metrics(strata, dims)
+                               trips_min = NA, m = NULL) {
+  # m lets a caller that already has stratum_metrics(strata, dims) - like
+  # donor_pool_summary(), which needs its own copy regardless - pass it
+  # straight through instead of this walking the strata table a second
+  # time. Every existing caller still just gets `strata`/`dims` computed
+  # for it, unchanged.
+  if (is.null(m)) m <- stratum_metrics(strata, dims)
   if (is.null(m) || !nrow(m)) return(NULL)
 
   fail <- list(
@@ -476,7 +484,7 @@ donor_pool_summary <- function(strata, dims, named = character(0),
   m <- stratum_metrics(strata, dims)
   if (is.null(m) || !nrow(m)) return(NULL)
   excl <- exclusion_overview(strata, dims, named, cov_min, meas_min,
-                             dr_min, dr_max, trips_min = trips_min)
+                             dr_min, dr_max, trips_min = trips_min, m = m)
   kept <- if (is.null(excl)) m else m[!m$key %in% excl$key, , drop = FALSE]
   if (!nrow(kept))
     return(list(n_strata = 0L, weight = 0, coverage = NA_real_,

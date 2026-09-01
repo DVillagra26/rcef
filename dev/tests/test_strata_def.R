@@ -40,18 +40,19 @@ if (!requireNamespace("shiny", quietly = TRUE)) {
   ## ---- 1. mg's separate top box is still there, statically ---------
   h <- as.character(ev$ui)
   ok(nchar(h) > 3e5, "the UI renders")
-  ## Three things start with "1. Definition of the strata": mg's real,
-  ## editable top box, and the length/age manual builders' READ-ONLY
-  ## mirrors of their hierarchical tab's Key 1 (titled "...(set on the
-  ## Hierarchical tab)") - those aren't a second editable mechanism,
-  ## just a display of the one Key-1-embedded choice. Matched on the
-  ## exact, un-suffixed title to count only the true separate box.
+  ## The length/age manual builders' READ-ONLY mirror of their
+  ## hierarchical tab's Key 1 (titled "...(set on the Hierarchical
+  ## tab)") is gone - removed on request, since it only ever displayed
+  ## what Key 1 already showed on the other tab and added a box to read
+  ## past rather than new information. mg (the discard manual builder)
+  ## keeps its own real, EDITABLE top box - it has no Key 1 to embed
+  ## into, so this is its only way to customize its own resolution.
   ok(length(gregexpr('"1. Definition of the strata</div>',
                      h, fixed = TRUE)[[1]]) == 1,
      "exactly one separate, EDITABLE top box left (mg, the discard manual builder)")
-  ok(length(gregexpr("1. Definition of the strata (set on the Hierarchical tab)",
-                     h, fixed = TRUE)[[1]]) == 2,
-     "and two read-only mirrors (length and age manual builders)")
+  ok(!grepl("Definition of the strata (set on the Hierarchical tab)",
+            h, fixed = TRUE),
+     "the read-only mirror is gone from both length and age manual builders")
   ar <- substr(h, regexpr("ar_bdeck", h, fixed = TRUE),
                regexpr("mg_bdeck", h, fixed = TRUE))
   ok(grepl("2. Exclusion rules for donor strata", ar, fixed = TRUE),
@@ -146,11 +147,16 @@ if (!requireNamespace("shiny", quietly = TRUE)) {
       ok(!"Country" %in% names(st_full) || length(unique(st_full$metier4)) > 0,
          "and the table is genuinely built on it")
 
-      ## ---- 6. length/age: hierarchical and manual share ONE
-      ## resolution, and the manual mirror follows it live ------------
-      mirror_htm <- output$len_ga_msd_mirror$html %||% ""
-      ok(grepl("metier4", mirror_htm, fixed = TRUE),
-         "the manual tab's read-only mirror shows the hierarchical Key 1 value")
+      ## ---- 6. length/age: hierarchical and manual still share ONE
+      ## resolution, even with the mirror display gone -----------------
+      ##
+      ## The mirror was only ever a DISPLAY of dims_of() - removing it
+      ## does not change what feeds either tab, both of which read
+      ## dims_of() directly. Checked here at the source.
+      ok("metier4" %in% len_alloc$dims_of(),
+         paste("dims_of() - what both the hierarchical cascade and the",
+               "manual builder's own clause variables read - still",
+               "carries Key 1's customized column"))
 
       ## ---- 7. len / age / discards are fully independent ------------
       age_htm <- output$age_ga_hsd_summary$html %||% ""

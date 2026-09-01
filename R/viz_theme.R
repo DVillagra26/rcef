@@ -98,16 +98,35 @@ OUTLINE_LW <- 0.25
 #' @return A character vector of colours, named by level.
 #' @seealso [scale_fill_var()], [scale_colour_var()], [reset_palettes()]
 #' @export
-var_palette <- function(var, values) {
+#' Colourblind-safe categorical palette (Okabe-Ito)
+#'
+#' The standard 8-colour palette recommended for red-green and
+#' blue-yellow colour vision deficiencies, distinct even in greyscale.
+#' An alternative to [PAL_BASE] for [var_palette()]'s `palette =
+#' "colorblind"`.
+#'
+#' @keywords internal
+#' @export
+PAL_CB <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2",
+           "#D55E00", "#CC79A7", "#000000")
+
+var_palette <- function(var, values, palette = c("default", "colorblind")) {
+  palette <- match.arg(palette)
+  pal_src <- if (identical(palette, "colorblind")) PAL_CB else PAL_BASE
+  # cached per (variable, palette) - not just per variable, or asking
+  # for "colorblind" after "default" already ran for this variable in
+  # this session returns the stale default colours instead of actually
+  # switching
+  cache_key <- paste0(var, "\r", palette)
   vals <- sort(unique(as.character(values[!is.na(values)])))
   if (!length(vals)) return(character(0))
-  cur <- if (exists(var, envir = .LEVEL_COLOURS))
-    get(var, envir = .LEVEL_COLOURS) else character(0)
+  cur <- if (exists(cache_key, envir = .LEVEL_COLOURS))
+    get(cache_key, envir = .LEVEL_COLOURS) else character(0)
   new <- setdiff(vals, names(cur))
   if (length(new)) {
-    idx <- (length(cur) + seq_along(new) - 1L) %% length(PAL_BASE) + 1L
-    cur <- c(cur, setNames(PAL_BASE[idx], new))
-    assign(var, cur, envir = .LEVEL_COLOURS)
+    idx <- (length(cur) + seq_along(new) - 1L) %% length(pal_src) + 1L
+    cur <- c(cur, setNames(pal_src[idx], new))
+    assign(cache_key, cur, envir = .LEVEL_COLOURS)
   }
   cur
 }

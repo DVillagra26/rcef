@@ -316,6 +316,165 @@ plot_heatmap <- function(sc, y_var, x_var = NULL, facet_var = NULL,
   p
 }
 
+#' Coverage heatmap, drawn with base R graphics
+#'
+#' Same data and the same colour-by-status scheme as [plot_heatmap()],
+#' drawn with `graphics::image()`/`graphics::rect()` instead of ggplot2.
+#' Called through `plot_coverage(..., engine = "base")`, not directly.
+#'
+#' @inheritParams plot_heatmap
+#' @return `NULL`, invisibly - drawn on the current graphics device.
+#' @seealso [plot_heatmap()], [plot_coverage()]
+#' @keywords internal
+#' @export
+plot_heatmap_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
+                              threshold = 50, what = "discard",
+                              weight_label = "landings", min_meas = 0,
+                              min_trips = 2, palette = c("default", "colorblind"),
+                              angle = 45, n_per_screen = NULL) {
+  palette <- match.arg(palette)
+  d <- sc %>% filter(cat_key != "none")
+  if (!nrow(d)) { message("Nothing to plot."); return(invisible(NULL)) }
+  if (is.null(x_var) || !nzchar(x_var)) { d$.x <- "All"; x_var <- ".x" }
+  d <- collapse_cells(d, c(y_var, x_var, facet_var), threshold, what,
+                      min_meas, min_trips)
+  pal <- status_palette(threshold, what, min_meas, min_trips)
+  # Every possible status, in the SAME order cat_lookup() defines them
+  # (safest first) - a legend built only from the statuses actually
+  # PRESENT in this figure was missing whichever ones this particular
+  # cut of the data did not happen to hit, which is exactly backwards:
+  # the reader needs the full scale to judge where what they ARE
+  # seeing sits, especially when the worst (or best) category is
+  # exactly the one absent here.
+  lk_all <- cat_lookup(threshold, what, min_meas, min_trips)
+
+  draw_one <- function(dd, main) {
+    ys <- sort(unique(as.character(dd[[y_var]])))
+    xs <- sort(unique(as.character(dd[[x_var]])))
+    m_col <- matrix(NA_character_, length(ys), length(xs),
+                    dimnames = list(ys, xs))
+    m_lab <- matrix(NA_character_, length(ys), length(xs),
+                    dimnames = list(ys, xs))
+    for (i in seq_len(nrow(dd))) {
+      yi <- as.character(dd[[y_var]][i]); xi <- as.character(dd[[x_var]][i])
+      m_col[yi, xi] <- pal[as.character(dd$Status[i])] %||% "#CCCCCC"
+      m_lab[yi, xi] <- if (is.na(dd$landings[i]) || dd$landings[i] <= 0) ""
+                        else if (dd$landings[i] > 99) sprintf("%.0f", dd$landings[i])
+                        else if (dd$landings[i] >= 10) sprintf("%.1f", dd$landings[i])
+                        else sprintf("%.2f", dd$landings[i])
+    }
+    graphics::plot(NA, xlim = c(0, length(xs)), ylim = c(0, length(ys)),
+                   xaxs = "i", yaxs = "i", axes = FALSE, xlab = "",
+                   ylab = "", main = main)
+    for (r in seq_along(ys)) for (cc in seq_along(xs)) {
+      col <- m_col[r, cc]
+      if (is.na(col)) next
+      # Black outline (OUTLINE), not white - a tile's own edge should
+      # read clearly against its neighbours regardless of how close
+      # two statuses' fill colours happen to be.
+      graphics::rect(cc - 1, r - 1, cc, r, col = col, border = OUTLINE, lwd = 0.6)
+      lab <- m_lab[r, cc]
+      if (nzchar(lab))
+        graphics::text(cc - 0.5, r - 0.5, lab, cex = 0.7, font = 2,
+                       col = OUTLINE)
+    }
+    graphics::box()
+    graphics::axis(1, at = seq_along(xs) - 0.5, labels = xs,
+                   las = if (angle >= 45) 2 else 1, cex.axis = 0.8, tick = TRUE)
+    graphics::axis(2, at = seq_along(ys) - 0.5, labels = ys, las = 1,
+                   cex.axis = 0.8, tick = TRUE)
+  }
+
+  facets <- if (!is.null(facet_var) && facet_var %in% names(d))
+    sort(unique(as.character(d[[facet_var]]))) else NA
+  # One left margin for every panel, sized to the WIDEST y-axis label
+  # anywhere in the figure - not recomputed per panel, or a panel whose
+  # own labels happen to be short gets a narrow margin and the next
+  # panel's labels bleed into it.
+  lmar <- max(6, max(nchar(as.character(d[[y_var]]))) * 0.42)
+  groups <- split_facets_to_screens(facets, n_per_screen)
+  main_txt <- sprintf("%s sampling coverage vs threshold", cov_title_what(what))
+  # Captured once, before the loop: dev.cur() changes the moment the
+  # first dev.new() runs, so re-checking it every iteration would only
+  # ever open a second screen and then stop.
+  had_device <- grDevices::dev.cur() > 1
+  for (grp in groups) {
+    op <- graphics::par(no.readonly = TRUE); on.exit(graphics::par(op), add = TRUE)
+    if (length(groups) > 1 && !had_device) grDevices::dev.new()
+    if (!identical(grp, "__nofacet__") && length(grp) > 1) {
+      nc <- ceiling(sqrt(length(grp))); nr <- ceiling(length(grp) / nc)
+      graphics::par(mfrow = c(nr, nc), mar = c(4, lmar, 2, 1), oma = c(0, 0, 3, 8))
+      for (fv in grp)
+        draw_one(d[as.character(d[[facet_var]]) == fv, , drop = FALSE], fv)
+      graphics::mtext(main_txt, outer = TRUE, side = 3, cex = 1.05, font = 2, line = 1)
+      if (!is.null(facet_var))
+        graphics::mtext(paste(facet_var, "=", paste(grp, collapse = ", ")),
+                        outer = TRUE, side = 3, cex = 0.8, line = -0.2, col = "grey30")
+    } else if (!identical(grp, "__nofacet__") && length(grp) == 1) {
+      graphics::par(mar = c(4, lmar, 3, 8))
+      draw_one(d[as.character(d[[facet_var]]) == grp, , drop = FALSE],
+               paste0(main_txt, " (", facet_var, " = ", grp, ")"))
+    } else {
+      graphics::par(mar = c(4, lmar, 3, 8))
+      draw_one(d, main_txt)
+    }
+    legend_status_base(lk_all)
+    graphics::par(op)
+  }
+  invisible(NULL)
+}
+
+#' Draw a status legend in the current figure's right margin
+#'
+#' Shared by the base-R heatmap and bubble plots: every possible status
+#' from [cat_lookup()], not just the ones present in this particular
+#' figure - drawn in the outer margin so it does not have to compete
+#' for space with the plotting area itself. Needs `oma`/`mar` room
+#' already reserved on the right (both callers set one).
+#'
+#' @param lk_all A [cat_lookup()] data frame.
+#' @return `NULL`, invisibly.
+#' @keywords internal
+#' @export
+legend_status_base <- function(lk_all) {
+  graphics::par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0),
+               new = TRUE)
+  graphics::plot.new()
+  wrap <- function(s, w = 26) {
+    words <- strsplit(s, " ")[[1]]; out <- character(0); cur <- ""
+    for (w2 in words) {
+      cand <- if (nzchar(cur)) paste(cur, w2) else w2
+      if (nchar(cand) > w) { out <- c(out, cur); cur <- w2 } else cur <- cand
+    }
+    c(out, cur)
+  }
+  labs <- vapply(lk_all$status, function(s) wrap(s)[1], character(1))
+  graphics::legend("right", legend = labs, fill = lk_all$colour, cex = 0.55,
+                   bty = "o", bg = "white", box.col = "grey80", title = "Status",
+                   xpd = NA, inset = c(0.001, 0))
+  invisible(NULL)
+}
+
+#' Split a vector of facet values into groups, N per screen
+#'
+#' Used by every base-R plot's faceting: `NULL` (the default) keeps
+#' everything on one screen, matching every plotting call before this
+#' existed. A number splits the facets into that many per group, each
+#' group meant for its OWN figure/device - the caller loops over the
+#' groups and draws one figure per group.
+#'
+#' @param facets Character vector of facet values, or `NA` (no facet).
+#' @param n_per_screen `NULL` (one screen) or a positive integer.
+#' @return A list of character vectors (each a group of facet values),
+#'   or `list("__nofacet__")` when `facets` is `NA`.
+#' @keywords internal
+#' @export
+split_facets_to_screens <- function(facets, n_per_screen) {
+  if (length(facets) == 1 && is.na(facets)) return(list("__nofacet__"))
+  if (is.null(n_per_screen) || n_per_screen >= length(facets)) return(list(facets))
+  split(facets, ceiling(seq_along(facets) / n_per_screen))
+}
+
 #' Coverage bubble plot
 #'
 #' One bubble per cell, sized by weight and filled by sampling status, with
@@ -538,9 +697,312 @@ plot_coverage_bars <- function(sc, y_var, fill_var = NULL, facet_var = NULL,
     theme(plot.margin = margin(10, 115, 10, 10))
 }
 
-# ----------------------------------------------------------
-#  Coverage dispatchers
-# ----------------------------------------------------------
+#' Sampled-vs-unsampled weight bars, drawn with base R graphics
+#'
+#' Same underlying split as [plot_coverage_bars()] - each stratum's
+#' weight divided into the part that carries a sampling estimate and
+#' the part that does not - drawn as a stacked horizontal bar per
+#' `y_var` category with `graphics::barplot()` instead of ggplot2.
+#' Bars are grouped by `fill_var` within each `y_var` category when
+#' `fill_var` is given, rather than the ggplot version's sorted
+#' two-block layout with separator lines and percentage callouts -
+#' the same two numbers (sampled weight, unsampled weight) are all
+#' still there, shown a plainer way. Called through
+#' `plot_coverage(..., engine = "base")`, not directly.
+#'
+#' @inheritParams plot_coverage_bars
+#' @return `NULL`, invisibly - drawn on the current graphics device.
+#' @seealso [plot_coverage_bars()], [plot_coverage()]
+#' @keywords internal
+#' @export
+plot_coverage_bars_base <- function(sc, y_var, fill_var = NULL,
+                                    facet_var = NULL, what = "discard",
+                                    weight_label = "landings",
+                                    palette = c("default", "colorblind"),
+                                    n_per_screen = NULL,
+                                    show_fill_in_labels = FALSE) {
+  palette <- match.arg(palette)
+  d <- sc %>% filter(cat_key != "none", landings > 0)
+  if (!nrow(d)) { message("Nothing to plot."); return(invisible(NULL)) }
+  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+  d$.lab   <- as.character(d[[y_var]])
+  d$.facet <- if (has(facet_var)) as.character(d[[facet_var]]) else ""
+  d$.fill  <- if (has(fill_var))  as.character(d[[fill_var]])  else d$.lab
+
+  wi <- paste("With", samp_word(what), "sampling")
+  wo <- paste("Without", samp_word(what), "sampling")
+  # Coloured by the FILL variable (Country, say), not by sampled status -
+  # matching what the ggplot engine actually draws. The with/without
+  # split is shown by splitting each (y, fill) pair into two ROWS, one
+  # per group, sorted so every "with sampling" row comes before every
+  # "without sampling" row within a facet - the same two-block layout
+  # plot_coverage_bars() draws, just without its exact separator line
+  # and percentage callouts.
+  agg <- d %>%
+    group_by(.facet, .lab, .fill) %>%
+    summarise(samp = sum(landings_with_discards, na.rm = TRUE),
+             unsamp = sum(landings, na.rm = TRUE) -
+                      sum(landings_with_discards, na.rm = TRUE),
+             .groups = "drop") %>%
+    tidyr::pivot_longer(c(samp, unsamp), names_to = ".part",
+                        values_to = "landings") %>%
+    filter(landings > 1e-9) %>%
+    mutate(sampled = factor(ifelse(.part == "samp", wi, wo), levels = c(wi, wo))) %>%
+    arrange(.facet, sampled, dplyr::desc(landings))
+
+  pal <- var_palette(if (has(fill_var)) fill_var else y_var, agg$.fill, palette)
+
+  draw_one <- function(dd, main) {
+    key <- if (has(fill_var) && isTRUE(show_fill_in_labels))
+      paste(dd$.lab, dd$.fill, sep = " / ") else dd$.lab
+    # barplot() draws bottom-to-top, so the vector is reversed here -
+    # otherwise the FIRST row (the largest "with sampling" bar) would
+    # end up drawn at the BOTTOM of the figure instead of the top, the
+    # opposite of every other plot in this package.
+    ord <- rev(seq_len(nrow(dd)))
+    op <- graphics::par(mar = c(4, max(6, max(nchar(key)) * 0.5), 5, 2))
+    on.exit(graphics::par(op), add = TRUE)
+    bp <- graphics::barplot(dd$landings[ord], horiz = TRUE, las = 1,
+                            names.arg = key[ord], cex.names = 0.7,
+                            col = pal[dd$.fill[ord]], border = OUTLINE,
+                            xlab = sprintf("%s (t)", tools::toTitleCase(weight_label)),
+                            main = "")
+    # box(): the same panel border every ggplot figure in this package
+    # carries by default - barplot() draws its own axis and tick marks
+    # already, but never a bounding rectangle around the plotting area.
+    graphics::box()
+    # A dashed separator between the "with" and "without" blocks, same
+    # purpose as the ggplot version's - the one piece of that layout
+    # this port keeps, since without it the two groups (sorted purely
+    # by size within each) are not visually distinguishable from a
+    # single mixed list.
+    grp <- as.character(dd$sampled[ord])
+    edge <- which(grp[-1] != grp[-length(grp)])
+    if (length(edge))
+      graphics::abline(h = bp[edge, 1] + diff(bp[c(edge, edge + 1), 1]) / 2,
+                       lty = 2, col = "grey50")
+    graphics::mtext(main, side = 3, line = 3.3, cex = 1.05, font = 2)
+    graphics::mtext(paste0(wi, "   /   ", wo), side = 3, line = 1.6,
+                    cex = 0.8, adj = 0.5, col = "grey30", font = 2)
+    if (has(fill_var)) {
+      lv <- sort(unique(dd$.fill))
+      graphics::legend("bottomright", legend = lv, fill = pal[lv],
+                       cex = 0.62, bty = "o", bg = "white", box.col = "grey80",
+                       ncol = min(2, ceiling(length(lv) / 6)))
+    }
+  }
+
+  facets <- if (has(facet_var)) sort(unique(agg$.facet)) else NA
+  pct <- sum(agg$landings[agg$sampled == wi]) / sum(agg$landings) * 100
+  title_txt <- sprintf("%s with vs without %s sampling (%s%% sampled)",
+                       tools::toTitleCase(weight_label), samp_word(what),
+                       round(pct, 0))
+  groups <- split_facets_to_screens(facets, n_per_screen)
+  # Captured once, before the loop: dev.cur() itself changes the moment
+  # the first dev.new() runs, so re-checking it each iteration would
+  # only ever open a second screen and then stop, thinking a device
+  # was already open (it was, of course - the one just opened).
+  had_device <- grDevices::dev.cur() > 1
+  for (grp in groups) {
+    op <- graphics::par(no.readonly = TRUE); on.exit(graphics::par(op), add = TRUE)
+    # A new screen per group when nothing was already open - a caller
+    # writing to their own png()/pdf() keeps writing to that one
+    # device, since dev.new() there would just add an unwanted extra
+    # page. Without an explicit device, `n_per_screen` genuinely
+    # produces several SEPARATE figures in the plot viewer, not several
+    # panels squeezed onto one.
+    if (length(groups) > 1 && !had_device) grDevices::dev.new()
+    if (!identical(grp, "__nofacet__") && length(grp) > 1) {
+      nc <- ceiling(sqrt(length(grp))); nr <- ceiling(length(grp) / nc)
+      graphics::par(mfrow = c(nr, nc), oma = c(0, 0, 2, 0))
+      for (fv in grp) draw_one(agg[agg$.facet == fv, , drop = FALSE], fv)
+      if (!is.null(facet_var))
+        graphics::mtext(paste0(title_txt, "  (", facet_var, " = ",
+                               paste(grp, collapse = ", "), ")"),
+                        outer = TRUE, cex = 0.85, font = 2, line = 0.3)
+    } else if (!identical(grp, "__nofacet__") && length(grp) == 1) {
+      draw_one(agg[agg$.facet == grp, , drop = FALSE],
+               paste0(title_txt, " (", facet_var, " = ", grp, ")"))
+    } else {
+      draw_one(agg, title_txt)
+    }
+    graphics::par(op)
+  }
+  invisible(NULL)
+}
+
+#' Coverage bubble plot, drawn with base R graphics
+#'
+#' Same data and colour-by-status scheme as [plot_bubbles()] - status in
+#' the fill colour, weight in the circle's area - drawn with
+#' `graphics::symbols(circles = )` instead of ggplot2's size-mapped
+#' points. `disc_only` cells still get a cross mark; warning-status
+#' cells still get a coverage/measurement label, placed just above the
+#' bubble rather than steered clear of neighbours the way
+#' `ggrepel::geom_text_repel()` does in the ggplot version - the one
+#' piece of the original this port does not reproduce, since base R has
+#' no built-in overlap-avoidance layout. Called through
+#' `plot_coverage(..., engine = "base")`, not directly.
+#'
+#' @inheritParams plot_bubbles
+#' @return `NULL`, invisibly - drawn on the current graphics device.
+#' @seealso [plot_bubbles()], [plot_coverage()]
+#' @keywords internal
+#' @export
+plot_bubbles_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
+                              threshold = 50, what = "discard",
+                              weight_label = "landings", min_meas = 0,
+                              min_trips = 2, palette = c("default", "colorblind"),
+                              angle = 45, n_per_screen = NULL) {
+  palette <- match.arg(palette)
+  d <- sc %>% filter(cat_key != "none")
+  if (!nrow(d)) { message("Nothing to plot."); return(invisible(NULL)) }
+  if (is.null(x_var) || !nzchar(x_var)) { d$.x <- "All"; x_var <- ".x" }
+  d <- collapse_cells(d, c(y_var, x_var, facet_var), threshold, what,
+                      min_meas, min_trips)
+  smallest <- suppressWarnings(min(d$landings[d$landings > 0], na.rm = TRUE))
+  if (!is.finite(smallest)) smallest <- 1
+  d$plot_size <- ifelse(d$cat_key == "disc_only", smallest, d$landings)
+  pal <- status_palette(threshold, what, min_meas, min_trips)
+
+  if (what %in% c("length", "age")) {
+    cov_bit <- ifelse(!is.na(d$coverage) & d$coverage < threshold,
+                      paste0(round(d$coverage, 1), "%"), "")
+    mea_bit <- ifelse(!is.na(d$n_measurements) & d$n_measurements < min_meas,
+                      paste0("n=", format(round(d$n_measurements),
+                                          big.mark = ",", trim = TRUE)), "")
+    lab_me <- d$cat_key %in% c("yellowgreen", "yellow", "orangeyellow",
+                               "orange_lowtrip", "orange_lowcov",
+                               "orange_lowcovtrip")
+    d$lab <- ifelse(lab_me,
+                    paste0(cov_bit, ifelse(nzchar(cov_bit) & nzchar(mea_bit),
+                                           " ", ""), mea_bit), "")
+  } else {
+    d$lab <- dplyr::case_when(
+      d$cat_key == "disc_only" ~ "100% Disc",
+      d$cat_key %in% c("warn_lowcov", "warn_lowtrip") ~
+        paste0(round(d$coverage, 1), "%"),
+      TRUE ~ "")
+  }
+
+  sz_vals <- d$plot_size[is.finite(d$plot_size) & d$plot_size > 0]
+  facets <- if (!is.null(facet_var) && facet_var %in% names(d))
+    sort(unique(as.character(d[[facet_var]]))) else NA
+  # symbols(circles=) takes a RADIUS in the axis's own USER units here
+  # (xlim/ylim run 1 unit per category), converted through par("pin")
+  # (the panel's plotting region, in inches) and par("usr") so the
+  # LARGEST circle never exceeds a fixed fraction of one grid cell -
+  # ggplot's point-size legend is independent of how many rows or
+  # panels share the figure, but a physical-inch radius here is not:
+  # unless it is worked out from the panel's own dimensions AFTER
+  # par(mfrow=) is set, the same "big enough for one panel" radius
+  # buries 26 fleet categories crammed into a five-panel facet grid
+  # under solid, overlapping colour.
+  rad_of <- function(v, cell_rad) {
+    if (!length(sz_vals) || diff(range(sz_vals)) < 1e-9)
+      return(rep(cell_rad * 0.75, length(v)))
+    cell_rad * (0.28 + 0.72 * (v - min(sz_vals)) / diff(range(sz_vals)))
+  }
+
+  draw_one <- function(dd, main) {
+    xs <- sort(unique(as.character(dd[[x_var]])))
+    ys <- sort(unique(as.character(dd[[y_var]])))
+    dd$.xi <- match(as.character(dd[[x_var]]), xs)
+    dd$.yi <- match(as.character(dd[[y_var]]), ys)
+    fill <- pal[as.character(dd$Status)] %||% "#CCCCCC"
+    graphics::plot(NA, xlim = c(0.4, length(xs) + 0.6),
+                   ylim = c(0.4, length(ys) + 0.6), axes = FALSE,
+                   xlab = "", ylab = "", main = main)
+    # One grid cell is 1 x-unit by 1 y-unit here; symbols(inches=FALSE)
+    # takes its radius in THOSE user units directly, so a cell-relative
+    # radius holds regardless of how many rows/columns, panels, or what
+    # physical size the device ends up being - the actual source of the
+    # earlier overlap, not the facet count on its own.
+    cell_rad <- 0.42
+    graphics::symbols(dd$.xi, dd$.yi, circles = rad_of(dd$plot_size, cell_rad),
+                      inches = FALSE, bg = fill, fg = OUTLINE, add = TRUE)
+    xm <- dd$cat_key == "disc_only"
+    if (any(xm))
+      graphics::points(dd$.xi[xm], dd$.yi[xm], pch = 4, col = OUTLINE,
+                       cex = 0.9, lwd = 1.2)
+    haslab <- nzchar(dd$lab)
+    if (any(haslab)) {
+      # A label placed just above the bubble's own radius still sits ON
+      # the bubble for a large one - the radius that pushes the label
+      # clear of a SMALL bubble is nowhere near enough for a big one. A
+      # fixed nudge instead (independent of the bubble's own size), with
+      # a thin leader line back to the bubble it belongs to - the same
+      # idea ggrepel uses for the ggplot version, without the full
+      # collision-avoidance layout base R has no equivalent for.
+      lx <- dd$.xi[haslab] + 0.28
+      ly <- dd$.yi[haslab] + rad_of(dd$plot_size[haslab], cell_rad) + 0.3
+      graphics::segments(dd$.xi[haslab], dd$.yi[haslab] +
+                           rad_of(dd$plot_size[haslab], cell_rad),
+                         lx, ly - 0.06, col = "grey40", lwd = 0.5)
+      graphics::text(lx, ly, dd$lab[haslab], cex = 0.55, font = 2,
+                     col = "red3", adj = c(0.5, 0))
+    }
+    graphics::axis(1, at = seq_along(xs), labels = xs,
+                   las = if (angle >= 45) 2 else 1, cex.axis = 0.8, tick = TRUE)
+    graphics::axis(2, at = seq_along(ys), labels = ys, las = 1, cex.axis = 0.8,
+                   tick = TRUE)
+    graphics::box()
+  }
+
+  lmar <- max(6, max(nchar(as.character(d[[y_var]]))) * 0.42)
+  main_txt <- sprintf("%s coverage vs %s", cov_title_what(what), weight_label)
+  lk_all <- cat_lookup(threshold, what, min_meas, min_trips)
+  draw_legends <- function() {
+    legend_status_base(lk_all)
+    if (length(sz_vals) && diff(range(sz_vals)) > 1e-9) {
+      ref <- signif(c(min(sz_vals), stats::median(sz_vals), max(sz_vals)), 2)
+      graphics::par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0),
+                   new = TRUE)
+      graphics::plot.new()
+      graphics::legend("bottomright", title = sprintf("%s (t)", weight_label),
+                       legend = format(ref, big.mark = ","),
+                       pch = 21, pt.cex = c(0.9, 1.4, 2), pt.bg = "grey70",
+                       col = OUTLINE, cex = 0.6, bty = "o", bg = "white",
+                       box.col = "grey80", xpd = NA, inset = c(0.001, 0))
+    }
+  }
+
+  groups <- split_facets_to_screens(facets, n_per_screen)
+  had_device <- grDevices::dev.cur() > 1
+  for (grp in groups) {
+    op <- graphics::par(no.readonly = TRUE); on.exit(graphics::par(op), add = TRUE)
+    if (length(groups) > 1 && !had_device) grDevices::dev.new()
+    if (!identical(grp, "__nofacet__") && length(grp) > 1) {
+      nc <- ceiling(sqrt(length(grp))); nr <- ceiling(length(grp) / nc)
+      graphics::par(mfrow = c(nr, nc), mar = c(4, lmar, 2, 8), oma = c(0, 0, 3, 0))
+      for (fv in grp)
+        draw_one(d[as.character(d[[facet_var]]) == fv, , drop = FALSE], fv)
+      graphics::mtext(main_txt, outer = TRUE, side = 3, cex = 1.05, font = 2, line = 1)
+      if (!is.null(facet_var))
+        graphics::mtext(paste(facet_var, "=", paste(grp, collapse = ", ")),
+                        outer = TRUE, side = 3, cex = 0.8, line = -0.2, col = "grey30")
+    } else if (!identical(grp, "__nofacet__") && length(grp) == 1) {
+      graphics::par(mar = c(4, lmar, 4, 8))
+      draw_one(d[as.character(d[[facet_var]]) == grp, , drop = FALSE],
+               paste0(main_txt, " (", facet_var, " = ", grp, ")"))
+    } else {
+      graphics::par(mar = c(4, lmar, 4, 8))
+      draw_one(d, "")
+      graphics::mtext(main_txt, side = 3, line = 2.3, cex = 1.05, font = 2)
+      graphics::mtext(
+        if (what == "discard")
+          "Cross (X) = discards present with zero official landings"
+        else sprintf("Labels = coverage below %s%% and/or n below %s",
+                    threshold, min_meas),
+        side = 3, line = 0.8, cex = 0.72, col = "grey30")
+    }
+    draw_legends()
+    graphics::par(op)
+  }
+  invisible(NULL)
+}
+
+
 
 #' Sampling-coverage plot (heatmap, bubbles or bars)
 #'
@@ -574,19 +1036,227 @@ plot_coverage_bars <- function(sc, y_var, fill_var = NULL, facet_var = NULL,
 #' plot_coverage(sc, "bars", y = "metier4")
 #' }
 #' @export
+#' Discard- or biology-sampling coverage plot
+#'
+#' Draws a coverage figure directly from raw catch data, or from an
+#' already-built and classified strata table - whichever is handed in.
+#'
+#' `strata` can be either:
+#'   - a data frame already run through [build_strata()] and
+#'     [classify_strata()] (the original calling convention, still fully
+#'     supported - every existing caller keeps working unchanged), or
+#'   - raw catch data (whatever [build_strata()] itself expects), in
+#'     which case `plot_coverage()` builds and classifies it internally,
+#'     using `dims` (or, if `dims` is not given, the union of `y`,
+#'     `fill` and `facet`) and the `threshold` / `min_meas` / `min_trips`
+#'     already being passed in for the plot.
+#'
+#' The second form is the point: previously a caller always had to write
+#' `build_strata()` and `classify_strata()` themselves before calling a
+#' plot function, passing the SAME threshold and resolution to both
+#' steps by hand and risking the two disagreeing. Now one call is
+#' enough, and the strata table matches the figure by construction.
+#'
+#' `threshold` and `min_trips` are used differently by the three types.
+#' "heatmap" and "bubbles" colour every cell by its sampling STATUS,
+#' which is a verdict against these two bars - they are genuinely
+#' required, and default to 50 / 2 (the same defaults `classify_strata()`
+#' itself uses) whenever left `NULL`. "bars" shows the SAME split
+#' (sampled vs unsampled weight) regardless of what either bar is set
+#' to - the only thing that changes which rows are drawn at all is
+#' whether a stratum has any landings or discards, which neither
+#' threshold nor min_trips affects. Passing either in for `type =
+#' "bars"` is therefore accepted but ignored - both are forced to `NA`
+#' internally, and a `verbose` run says so, rather than silently
+#' pretending the value you set was used for something.
+#'
+#' @param strata Raw catch data, or an already-classified strata table
+#'   (see Details).
+#' @param dims Columns to build the strata on, when `strata` is raw
+#'   data. Defaults to the union of `y`, `fill` and `facet` - enough for
+#'   the figure itself, though a caller building strata for reuse
+#'   elsewhere may want to pass a wider set explicitly.
+#' @param type "heatmap", "bubbles" or "bars".
+#' @param y,fill,facet Column names for the plot's roles. `y` is
+#'   required; `fill`/`facet` may be `NULL`.
+#' @param threshold Coverage threshold (%), used to classify raw data
+#'   into a sampling status. Ignored for `type = "bars"` (see Details).
+#'   Defaults to 50 when `NULL` and the type needs it.
+#' @param what "discard" (default), "length" or "age".
+#' @param weight_label Axis/legend label for the weight measure.
+#' @param ncol Facet columns, for the "bars" type.
+#' @param min_meas,min_trips Sufficiency floors used to classify raw
+#'   data. `min_trips` is ignored for `type = "bars"` (see Details);
+#'   defaults to 2 when `NULL` and the type needs it. `min_meas`
+#'   defaults to 0 (no measurement floor) regardless of type.
+#' @param engine "ggplot" (default, unchanged) or "base" - draws with
+#'   base R graphics instead of ggplot2. Same data, same colour-by-status
+#'   scheme, same faceting, all three types ("heatmap", "bubbles",
+#'   "bars"); a lighter-weight rendering for a script that would rather
+#'   not depend on ggplot2, at the cost of some of the ggplot version's
+#'   finer annotation (exact separator lines, precise percentage
+#'   callouts, ggrepel's automatic label-overlap avoidance on the
+#'   bubble plot - labels there are placed just above each bubble
+#'   instead).
+#' @param verbose If `TRUE`, prints a short summary to the console
+#'   before drawing: the plot type and engine, which columns feed y /
+#'   fill / facet, whether a threshold applies and what it resolved to,
+#'   and how many strata rows are being drawn. Meant for exploring at
+#'   the console, not for a script that already knows what it asked for
+#'   - default `FALSE`.
+#' @return A ggplot object (`engine = "ggplot"`), or `NULL` invisibly
+#'   after drawing to the current device (`engine = "base"`).
+#' @seealso [build_strata()], [classify_strata()], [plot_biology_coverage()]
+#' @family coverage plots
+#' @export
 plot_coverage <- function(strata,
                           type = c("heatmap", "bubbles", "bars"),
                           y, fill = NULL, facet = NULL,
-                          threshold = 50, what = "discard",
+                          threshold = NULL, what = "discard",
                           weight_label = "landings", ncol = 2, min_meas = 0,
-                          min_trips = 2) {
-  type <- match.arg(type)
+                          min_trips = NULL, dims = NULL,
+                          engine = c("ggplot", "base"), verbose = FALSE,
+                          palette = c("default", "colorblind"), angle = 45,
+                          n_per_screen = NULL, show_fill_in_labels = FALSE) {
+  type    <- match.arg(type)
+  engine  <- match.arg(engine)
+  palette <- match.arg(palette)
+  # "bars" never uses either bar: the ggplot version filters on
+  # cat_key != "none" only, which landings/discards alone decide, and
+  # colours by the fill variable, not by status - a threshold or a
+  # trips floor genuinely changes nothing it draws. Forced to NA (not
+  # just left at whatever default) so a verbose run reports the truth,
+  # and a caller cannot be misled into thinking a value they set was
+  # doing something.
+  if (identical(type, "bars")) {
+    threshold_used <- NA_real_; min_trips_used <- NA_real_
+  } else {
+    threshold_used <- if (is.null(threshold) || is.na(threshold)) 50 else threshold
+    min_trips_used <- if (is.null(min_trips) || is.na(min_trips)) 2 else min_trips
+  }
+  # classify_strata() itself still needs SOME numeric threshold/min_trips
+  # to run, even when building for "bars" - an internal placeholder,
+  # standing in for the fact that no rung of the resulting table is
+  # actually influenced by it (see above). Never surfaced to the caller
+  # or the verbose summary as if it meant something.
+  classify_threshold <- if (is.na(threshold_used)) 50 else threshold_used
+  classify_min_trips <- if (is.na(min_trips_used)) 2 else min_trips_used
+
+  strata <- resolve_coverage_strata(strata, dims, y, fill, facet,
+                                    classify_threshold, what, min_meas,
+                                    classify_min_trips)
+
+  if (isTRUE(verbose)) coverage_verbose_summary(
+    strata, type, engine, y, fill, facet, threshold_used, what,
+    weight_label, min_meas, min_trips_used)
+
+  if (identical(engine, "base")) {
+    return(invisible(switch(type,
+      heatmap = plot_heatmap_base(strata, y, fill, facet, threshold_used, what,
+                                  weight_label, min_meas, min_trips_used,
+                                  palette = palette, angle = angle,
+                                  n_per_screen = n_per_screen),
+      bars    = plot_coverage_bars_base(strata, y, fill, facet, what,
+                                        weight_label, palette = palette,
+                                        n_per_screen = n_per_screen,
+                                        show_fill_in_labels = show_fill_in_labels),
+      bubbles = plot_bubbles_base(strata, y, fill, facet, threshold_used, what,
+                                  weight_label, min_meas, min_trips_used,
+                                  palette = palette, angle = angle,
+                                  n_per_screen = n_per_screen))))
+  }
   switch(type,
-    heatmap = plot_heatmap(strata, y, fill, facet, threshold, what,
-                           weight_label, min_meas, min_trips),
-    bubbles = plot_bubbles(strata, y, fill, facet, threshold, what,
-                           weight_label, min_meas, min_trips),
+    heatmap = plot_heatmap(strata, y, fill, facet, threshold_used, what,
+                           weight_label, min_meas, min_trips_used),
+    bubbles = plot_bubbles(strata, y, fill, facet, threshold_used, what,
+                           weight_label, min_meas, min_trips_used),
     bars    = plot_coverage_bars(strata, y, fill, facet, ncol, what, weight_label))
+}
+
+#' Build and classify strata only if `strata` looks like raw catch data
+#'
+#' The detection is simple and deliberate: a classified strata table
+#' always carries `cat_key` ([classify_strata()] adds it unconditionally),
+#' raw catch data never does. If `strata` already has it, it is returned
+#' completely unchanged - this function does not re-classify, re-filter,
+#' or otherwise second-guess a table a caller already built, which
+#' matters for every existing call site in the app that passes a strata
+#' table already carrying exclusions, a custom donor window, or a
+#' resolution wider than this one figure's own axes.
+#'
+#' @param strata Raw catch data, or an already-classified strata table.
+#' @param dims Columns to build on; defaults to the union of `y`,
+#'   `fill`, `facet` when `NULL`.
+#' @param y,fill,facet,threshold,what,min_meas,min_trips As in
+#'   [plot_coverage()].
+#' @return A classified strata table.
+#' @keywords internal
+#' @export
+resolve_coverage_strata <- function(strata, dims, y, fill, facet,
+                                    threshold, what, min_meas, min_trips) {
+  if (!is.null(strata) && "cat_key" %in% names(strata)) return(strata)
+  if (!identical(what, "discard"))
+    stop('"strata" must already be a classified length/age table for ',
+         'what = "', what, '" - build_strata() alone does not carry the ',
+         "distributions a biology stratum needs (biology_link(), ",
+         "stratum_measurements(), add_sufficiency()). Auto-building from ",
+         'raw catch data is only supported for what = "discard".')
+  if (is.null(dims)) {
+    has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+    dims <- unique(c(y, if (has(fill)) fill, if (has(facet)) facet))
+  }
+  classify_strata(build_strata(strata, dims), threshold, what,
+                  min_meas, min_trips)
+}
+
+#' Print a plain-language summary of a coverage plot before drawing it
+#'
+#' What `plot_coverage(..., verbose = TRUE)` prints: the type and
+#' engine, which columns are on which role, whether a threshold applies
+#' here and what it resolved to, and how many strata rows are about to
+#' be drawn. Meant to answer "what exactly am I looking at" at the
+#' console without having to read the call back to yourself - not a
+#' log, and not shown unless asked for.
+#'
+#' @param strata The (already classified) strata table about to be
+#'   plotted.
+#' @param type,engine,y,fill,facet,threshold,what,weight_label,min_meas,min_trips
+#'   As resolved inside [plot_coverage()] - `threshold`/`min_trips` are
+#'   already `NA` here when `type = "bars"`, not the raw arguments the
+#'   caller passed.
+#' @return `NULL`, invisibly - printed as a side effect.
+#' @keywords internal
+#' @export
+coverage_verbose_summary <- function(strata, type, engine, y, fill, facet,
+                                     threshold, what, weight_label,
+                                     min_meas, min_trips) {
+  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+  line <- function(...) cat(..., "\n", sep = "")
+  line("-- plot_coverage(): ", cov_title_what(what), " coverage, type = \"",
+       type, "\", engine = \"", engine, "\" --")
+  line("  y      : ", y)
+  line("  fill   : ", if (has(fill))  fill  else "(none)")
+  line("  facet  : ", if (has(facet)) facet else "(none)")
+  line("  weight : ", weight_label)
+  if (identical(type, "bars")) {
+    line("  threshold / min_trips: not used by type = \"bars\" - it shows ",
+         "sampled vs unsampled weight, which neither one affects. Any ",
+         "value passed in was ignored.")
+  } else {
+    line("  threshold  : ", threshold, "%")
+    line("  min_trips  : ", min_trips)
+  }
+  if (!is.na(min_meas) && min_meas > 0)
+    line("  min_meas   : ", min_meas)
+  n <- if (is.null(strata)) 0L else nrow(strata)
+  line("  strata rows being drawn: ", n)
+  if (n > 0 && "Status" %in% names(strata)) {
+    tb <- sort(table(strata$Status), decreasing = TRUE)
+    line("  status breakdown:")
+    for (i in seq_along(tb))
+      line("    ", tb[i], "  ", names(tb)[i])
+  }
+  invisible(NULL)
 }
 
 #' Length- or age-sampling coverage plot
@@ -597,23 +1267,61 @@ plot_coverage <- function(strata,
 #' scheme changed. Here "covered" means a length/age distribution exists for
 #' the stratum, and the status also reflects the number of fish measured.
 #'
+#' `strata` can be either:
+#'   - a data frame already run through the full biology pipeline
+#'     ([biology_link()], [stratum_measurements()], [add_sufficiency()],
+#'     [classify_strata()]) - the original calling convention, still
+#'     fully supported - or
+#'   - raw catch data, with `distributions` also supplied, in which
+#'     case the whole pipeline runs internally: `dims` (or the union of
+#'     `y`, `fill`, `facet` when `dims` is `NULL`), `what` (translated
+#'     to `distributionType`: "length" -> "LengthTotal", "age" ->
+#'     "Age"), and `threshold`/`min_meas`/`min_trips` (defaulting the
+#'     same way [plot_coverage()] does) drive every step. One call
+#'     instead of four, matching the discard side's own convenience.
+#'
 #' @inheritParams plot_coverage
+#' @param distributions The distributions table, required only when
+#'   `strata` is raw catch data rather than an already-built table.
 #' @param what "length" or "age".
 #' @param weight_label Defaults to "catch".
 #' @return A ggplot object, or `NULL`.
-#' @seealso [plot_coverage()]
+#' @seealso [plot_coverage()], [biology_link()]
 #' @family coverage plots
 #' @export
-plot_biology_coverage <- function(strata,
+plot_biology_coverage <- function(strata, distributions = NULL,
                                   type = c("heatmap", "bubbles", "bars"),
                                   y, fill = NULL, facet = NULL,
-                                  threshold = 50, what = "length",
+                                  threshold = NULL, what = "length",
                                   weight_label = "catch", ncol = 2, min_meas = 0,
-                                  min_trips = 2) {
+                                  min_trips = NULL, dims = NULL,
+                                  engine = c("ggplot", "base"), verbose = FALSE) {
+  type   <- match.arg(type)
+  engine <- match.arg(engine)
+  # Raw catch data never carries cat_key - classify_strata() is what
+  # adds it, at the end of a pipeline build_strata() alone cannot do
+  # for biology (it needs the distributions table too). A caller
+  # passing an already-classified table (has cat_key) is used exactly
+  # as before, distributions or not.
+  if (!is.null(distributions) && !("cat_key" %in% names(strata))) {
+    has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+    if (is.null(dims))
+      dims <- unique(c(y, if (has(fill)) fill, if (has(facet)) facet))
+    dist_type <- if (identical(what, "age")) "Age" else "LengthTotal"
+    thr    <- if (is.null(threshold) || is.na(threshold)) 50 else threshold
+    mtrips <- if (is.null(min_trips) || is.na(min_trips)) 2 else min_trips
+    bl <- biology_link(strata, distributions, dims, type = dist_type)
+    ms <- stratum_measurements(strata, distributions, dims, type = dist_type)
+    bl <- add_sufficiency(bl, ms, thr, min_meas)
+    bio <- bl %>% mutate(landings = weight, landings_with_discards = weight_measured,
+                         discards = 0, discard_rate = NA_real_)
+    strata <- classify_strata(bio, thr, what, min_meas, mtrips)
+  }
   plot_coverage(strata, type = type, y = y, fill = fill, facet = facet,
                 threshold = threshold, what = what,
                 weight_label = weight_label, ncol = ncol, min_meas = min_meas,
-                min_trips = min_trips)
+                min_trips = min_trips, dims = dims,
+                engine = engine, verbose = verbose)
 }
 
 # ----------------------------------------------------------
@@ -777,25 +1485,279 @@ plot_dr_box <- function(s_full, x_var, fill_var = NULL, facet_var = NULL,
 #' @param show_points (box) overlay the individual strata.
 #' @param show_pooled (box) add the catch-weighted pooled rate.
 #' @param ncol Facet columns.
+#' @param dims Columns to build the strata on, when `strata` is raw
+#'   catch data. Defaults to the union of `x`, `colour`/`fill` and
+#'   `facet` - the same convenience [plot_coverage()] offers, so a
+#'   discard-rate figure needs no `build_strata()` call of its own
+#'   either.
 #' @return A ggplot object, or `NULL`.
 #' @seealso [plot_dr_raw()], [plot_dr_box()]
 #' @family discard-rate plots
 #' @examples
 #' \dontrun{
-#' plot_discard_rate(strata, "raw", x = "Season", colour = "metier4")
-#' plot_discard_rate(strata, "box", x = "metier4", fill = "Country")
+#' plot_discard_rate(catch_data, "raw", x = "Season", colour = "metier4")
+#' plot_discard_rate(catch_data, "box", x = "metier4", fill = "Country")
 #' }
+#' @param engine "ggplot" (default) or "base" - draws with base R
+#'   graphics instead of ggplot2. Same data, same per-level colours
+#'   (via [var_palette()], the same assignment the ggplot engine uses),
+#'   same faceting.
+#' @param verbose If `TRUE`, prints a short console summary before
+#'   drawing - see [plot_coverage()]'s `verbose` for the same idea
+#'   applied here.
 #' @export
 plot_discard_rate <- function(strata,
                               type = c("raw", "box"),
                               x, colour = NULL, shape = NULL, facet = NULL,
                               jitter = TRUE, fill = NULL,
-                              show_points = TRUE, show_pooled = TRUE, ncol = 2) {
-  type <- match.arg(type)
+                              show_points = TRUE, show_pooled = TRUE, ncol = 2,
+                              dims = NULL,
+                              engine = c("ggplot", "base"), verbose = FALSE,
+                              palette = c("default", "colorblind"), angle = 45,
+                              n_per_screen = NULL) {
+  type    <- match.arg(type)
+  engine  <- match.arg(engine)
+  palette <- match.arg(palette)
+  # Raw catch data never carries discard_rate - build_strata() is what
+  # adds it. A caller passing an already-built table (has the column)
+  # is used exactly as before; nothing here changes for it.
+  if (!"discard_rate" %in% names(strata)) {
+    if (is.null(dims)) {
+      has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+      group_var <- if (identical(type, "box")) fill else colour
+      dims <- unique(c(x, if (has(group_var)) group_var, if (has(facet)) facet))
+    }
+    strata <- build_strata(strata, dims)
+  }
+  if (isTRUE(verbose)) {
+    cat("-- plot_discard_rate(): type = \"", type, "\", engine = \"", engine,
+        "\" --\n", sep = "")
+    cat("  x      : ", x, "\n", sep = "")
+    if (identical(type, "raw")) {
+      cat("  colour : ", if (!is.null(colour)) colour else "(none)", "\n", sep = "")
+      cat("  shape  : ", if (!is.null(shape))  shape  else "(none)", "\n", sep = "")
+    } else {
+      cat("  fill   : ", if (!is.null(fill)) fill else "(none)", "\n", sep = "")
+      cat("  show_points/show_pooled: ", show_points, " / ", show_pooled, "\n", sep = "")
+    }
+    cat("  facet  : ", if (!is.null(facet)) facet else "(none)", "\n", sep = "")
+    d <- sampled_for_discards(strata)
+    cat("  strata rows with a discard rate: ", nrow(d), "\n", sep = "")
+  }
+  if (identical(engine, "base")) {
+    return(invisible(if (identical(type, "box"))
+      plot_dr_box_base(strata, x, fill, facet, show_points, show_pooled,
+                       palette = palette, angle = angle,
+                       n_per_screen = n_per_screen)
+    else
+      plot_dr_raw_base(strata, x, colour, shape, facet, jitter,
+                       palette = palette, angle = angle,
+                       n_per_screen = n_per_screen)))
+  }
   if (type == "box")
     plot_dr_box(strata, x, fill, facet, show_points, show_pooled, ncol)
   else
     plot_dr_raw(strata, x, colour, shape, facet, jitter)
+}
+
+#' Discard rate by stratum, drawn with base R graphics
+#'
+#' Same data as [plot_dr_raw()] - one jittered point per stratum with a
+#' discard rate, coloured by `colour_var` via [var_palette()] (the same
+#' per-level colours the ggplot engine uses) - drawn with
+#' `graphics::plot()`/`points()` instead of ggplot2. `shape_var` maps to
+#' point shape via `pch`, the base-R equivalent of ggplot's shape scale.
+#' Called through `plot_discard_rate(..., engine = "base")`, not directly.
+#'
+#' @inheritParams plot_dr_raw
+#' @return `NULL`, invisibly - drawn on the current graphics device.
+#' @seealso [plot_dr_raw()], [plot_discard_rate()]
+#' @keywords internal
+#' @export
+plot_dr_raw_base <- function(s, x_var, colour_var = NULL, shape_var = NULL,
+                             facet_var = NULL, jitter = TRUE,
+                             palette = c("default", "colorblind"), angle = 45,
+                             n_per_screen = NULL) {
+  palette <- match.arg(palette)
+  d <- sampled_for_discards(s)
+  if (!nrow(d)) { message("Nothing to plot."); return(invisible(NULL)) }
+  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+  xs <- sort(unique(as.character(d[[x_var]])))
+  d$.xi <- match(as.character(d[[x_var]]), xs)
+  if (isTRUE(jitter)) {
+    set.seed(1)
+    d$.xi <- d$.xi + stats::runif(nrow(d), -0.18, 0.18)
+  }
+  d$.rate <- d$discard_rate * 100
+  # Colour and shape attached as columns of d itself, not looked up
+  # separately by row position or name - a lookup keyed on rownames()
+  # silently returns NA (an invisible point: pch = NA) the moment a
+  # facet subset's rownames do not still match the un-subset table's,
+  # which is exactly what happened here: only one point ever rendered,
+  # for a coincidental row where the mismatched lookup still lined up.
+  # A column travels with its row through any subsetting automatically.
+  pal <- if (has(colour_var)) var_palette(colour_var, d[[colour_var]], palette) else NULL
+  d$.ptcol <- if (has(colour_var)) pal[as.character(d[[colour_var]])] else PAL_BASE[1]
+  pch_lv <- c(21, 22, 23, 24, 25, 8, 3, 4)
+  d$.ptpch <- if (has(shape_var)) {
+    lv <- sort(unique(as.character(d[[shape_var]])))
+    pch_lv[match(as.character(d[[shape_var]]), lv)]
+  } else 21
+
+  draw_one <- function(dd, main) {
+    graphics::plot(dd$.xi, dd$.rate, xlim = c(0.5, length(xs) + 0.5),
+                   axes = FALSE, xlab = "", ylab = "Discard rate",
+                   main = main, pch = dd$.ptpch, bg = dd$.ptcol,
+                   col = OUTLINE, cex = 1.3)
+    graphics::box()
+    graphics::axis(1, at = seq_along(xs), labels = xs,
+                   las = if (angle >= 45) 2 else 1, cex.axis = 0.7)
+    graphics::axis(2, at = graphics::axTicks(2),
+                   labels = paste0(graphics::axTicks(2), "%"), las = 1, cex.axis = 0.8)
+  }
+
+  facets <- if (has(facet_var)) sort(unique(as.character(d[[facet_var]]))) else NA
+  main_txt <- "Discard rate by stratum (raw, no aggregation)"
+  # The legend, once, whether faceted or not - it used to be drawn only
+  # for the single-panel case, so a faceted figure had no key linking
+  # colour to level at all.
+  draw_legend <- function() {
+    if (!has(colour_var)) return(invisible(NULL))
+    lv <- sort(unique(as.character(d[[colour_var]])))
+    graphics::par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0),
+                 new = TRUE)
+    graphics::plot.new()
+    graphics::legend("right", title = colour_var, legend = lv,
+                     pt.bg = pal[lv], pch = 21, cex = 0.62, bty = "o",
+                     bg = "white", box.col = "grey80", xpd = NA,
+                     inset = c(0.001, 0))
+  }
+
+  groups <- split_facets_to_screens(facets, n_per_screen)
+  had_device <- grDevices::dev.cur() > 1
+  for (grp in groups) {
+    op <- graphics::par(no.readonly = TRUE); on.exit(graphics::par(op), add = TRUE)
+    if (length(groups) > 1 && !had_device) grDevices::dev.new()
+    rmar <- if (has(colour_var)) 9 else 2
+    if (!identical(grp, "__nofacet__") && length(grp) > 1) {
+      nc <- ceiling(sqrt(length(grp))); nr <- ceiling(length(grp) / nc)
+      graphics::par(mfrow = c(nr, nc), mar = c(7, 4, 2, rmar), oma = c(2, 0, 3, 1.5))
+      for (fv in grp) draw_one(d[as.character(d[[facet_var]]) == fv, , drop = FALSE], fv)
+      graphics::mtext(main_txt, outer = TRUE, side = 3, cex = 1.05, font = 2, line = 1)
+      graphics::mtext(paste(facet_var, "=", paste(grp, collapse = ", ")),
+                      outer = TRUE, side = 3, cex = 0.8, line = -0.2, col = "grey30")
+      # One shared x-axis title for the whole figure, in the OUTER
+      # margin - not per-panel, which is exactly what collided with the
+      # rotated tick labels once several small panels made each one's
+      # own margin too short relative to the label text underneath it.
+      graphics::mtext(x_var, outer = TRUE, side = 1, cex = 0.8, line = 0.3)
+    } else if (!identical(grp, "__nofacet__") && length(grp) == 1) {
+      graphics::par(mar = c(8, 4, 4, rmar))
+      draw_one(d[as.character(d[[facet_var]]) == grp, , drop = FALSE],
+               paste0(main_txt, " (", facet_var, " = ", grp, ")"))
+      graphics::mtext(x_var, side = 1, line = 6.5, cex = 0.85)
+    } else {
+      graphics::par(mar = c(8, 4, 4, rmar))
+      draw_one(d, main_txt)
+      graphics::mtext(x_var, side = 1, line = 6.5, cex = 0.85)
+    }
+    draw_legend()
+    graphics::par(op)
+  }
+  invisible(NULL)
+}
+
+#' Discard rate as a boxplot, drawn with base R graphics
+#'
+#' Same summary as [plot_dr_box()] - a boxplot of discard rate per
+#' `x_var` category, with the individual strata and a catch-weighted
+#' pooled rate optionally overlaid - drawn with `graphics::boxplot()`
+#' instead of ggplot2. Called through
+#' `plot_discard_rate(..., engine = "base")`, not directly.
+#'
+#' @inheritParams plot_dr_box
+#' @return `NULL`, invisibly - drawn on the current graphics device.
+#' @seealso [plot_dr_box()], [plot_discard_rate()]
+#' @keywords internal
+#' @export
+plot_dr_box_base <- function(s_full, x_var, fill_var = NULL, facet_var = NULL,
+                             show_points = TRUE, show_pooled = TRUE,
+                             palette = c("default", "colorblind"), angle = 45,
+                             n_per_screen = NULL) {
+  palette <- match.arg(palette)
+  d <- sampled_for_discards(s_full)
+  if (!nrow(d)) { message("Nothing to plot."); return(invisible(NULL)) }
+  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+  d$.rate <- d$discard_rate * 100
+  pal <- if (has(fill_var)) var_palette(fill_var, d[[fill_var]], palette) else NULL
+
+  draw_one <- function(dd, main) {
+    xs <- sort(unique(as.character(dd[[x_var]])))
+    bxcol <- if (has(fill_var)) pal[as.character(dd[[fill_var]])] else PAL_BASE[1]
+    graphics::boxplot(.rate ~ .data_x, data = data.frame(.rate = dd$.rate,
+                      .data_x = factor(as.character(dd[[x_var]]), levels = xs)),
+                      col = if (has(fill_var)) "white" else PAL_BASE[1],
+                      border = OUTLINE, outline = FALSE,
+                      las = if (angle >= 45) 2 else 1, cex.axis = 0.8,
+                      ylab = "Discard rate (%)", xlab = x_var, main = main)
+    graphics::box()
+    if (isTRUE(show_points)) {
+      xi <- match(as.character(dd[[x_var]]), xs)
+      xi <- xi + stats::runif(length(xi), -0.15, 0.15)
+      graphics::points(xi, dd$.rate, pch = 21, bg = bxcol, col = OUTLINE,
+                       cex = 1, lwd = 0.6)
+    }
+    if (isTRUE(show_pooled) && "landings_with_discards" %in% names(dd)) {
+      pooled <- dd %>% group_by(across(all_of(x_var))) %>%
+        summarise(w = sum(landings_with_discards, na.rm = TRUE),
+                 r = sum(discards, na.rm = TRUE) /
+                   pmax(sum(landings_with_discards, na.rm = TRUE) +
+                          sum(discards, na.rm = TRUE), 1e-9) * 100,
+                 .groups = "drop")
+      pi <- match(as.character(pooled[[x_var]]), xs)
+      graphics::points(pi, pooled$r, pch = 18, col = "red3", cex = 1.6)
+    }
+  }
+
+  draw_legend <- function() {
+    if (!has(fill_var)) return(invisible(NULL))
+    lv <- sort(unique(as.character(d[[fill_var]])))
+    graphics::par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0),
+                 new = TRUE)
+    graphics::plot.new()
+    graphics::legend("right", title = fill_var, legend = lv,
+                     pt.bg = pal[lv], pch = 21, cex = 0.62, bty = "o",
+                     bg = "white", box.col = "grey80", xpd = NA,
+                     inset = c(0.001, 0))
+  }
+
+  facets <- if (has(facet_var)) sort(unique(as.character(d[[facet_var]]))) else NA
+  groups <- split_facets_to_screens(facets, n_per_screen)
+  had_device <- grDevices::dev.cur() > 1
+  for (grp in groups) {
+    op <- graphics::par(no.readonly = TRUE); on.exit(graphics::par(op), add = TRUE)
+    if (length(groups) > 1 && !had_device) grDevices::dev.new()
+    rmar <- if (has(fill_var)) 9 else 2
+    if (!identical(grp, "__nofacet__") && length(grp) > 1) {
+      nc <- ceiling(sqrt(length(grp))); nr <- ceiling(length(grp) / nc)
+      graphics::par(mfrow = c(nr, nc), mar = c(5, 4, 2, rmar), oma = c(0, 0, 3, 0))
+      for (fv in grp) draw_one(d[as.character(d[[facet_var]]) == fv, , drop = FALSE], fv)
+      graphics::mtext("Discard rate by stratum", outer = TRUE, side = 3,
+                      cex = 1.05, font = 2, line = 1)
+      graphics::mtext(paste(facet_var, "=", paste(grp, collapse = ", ")),
+                      outer = TRUE, side = 3, cex = 0.8, line = -0.2, col = "grey30")
+    } else if (!identical(grp, "__nofacet__") && length(grp) == 1) {
+      graphics::par(mar = c(5, 4, 3, rmar))
+      draw_one(d[as.character(d[[facet_var]]) == grp, , drop = FALSE],
+               paste0("Discard rate by stratum (", facet_var, " = ", grp, ")"))
+    } else {
+      graphics::par(mar = c(5, 4, 3, rmar))
+      draw_one(d, "Discard rate by stratum")
+    }
+    draw_legend()
+    graphics::par(op)
+  }
+  invisible(NULL)
 }
 
 # ----------------------------------------------------------
@@ -1070,6 +2032,13 @@ plot_length_meanweight <- function(d, colour_var = NULL, facet1 = NULL,
 #' plot_biology_distribution(nums, "numbers", "histogram", fill = "Country")
 #' plot_biology_distribution(mw, "meanweight", "line", colour = "metier4")
 #' }
+#' @param engine "ggplot" (default) or "base" - draws with base R
+#'   graphics instead of ggplot2. Same data, same per-level colours (via
+#'   [var_palette()]), same faceting (up to two facet columns, combined
+#'   into one grid of panels rather than ggplot's nested rows/columns).
+#' @param verbose If `TRUE`, prints a short console summary before
+#'   drawing - see [plot_coverage()]'s `verbose` for the same idea
+#'   applied here.
 #' @export
 plot_biology_distribution <- function(data,
                                       quantity = c("numbers", "meanweight"),
@@ -1079,9 +2048,47 @@ plot_biology_distribution <- function(data,
                                       stacked = TRUE, smooth = 1,
                                       show_points = TRUE, show_spread = TRUE,
                                       ncol = 2, scales = "fixed",
-                                      class_label = "Length (cm)") {
+                                      class_label = "Length (cm)",
+                                      engine = c("ggplot", "base"),
+                                      verbose = FALSE,
+                                      palette = c("default", "colorblind"),
+                                      angle = 45, n_per_screen = NULL) {
   quantity <- match.arg(quantity)
   type <- match.arg(type)
+  engine <- match.arg(engine)
+  palette <- match.arg(palette)
+  if (isTRUE(verbose)) {
+    cat("-- plot_biology_distribution(): quantity = \"", quantity,
+        "\", type = \"", type, "\", engine = \"", engine, "\" --\n", sep = "")
+    cat("  class_label : ", class_label, "\n", sep = "")
+    if (identical(quantity, "numbers"))
+      cat("  fill  : ", if (!is.null(fill)) fill else "(none)", "\n", sep = "")
+    else {
+      cat("  colour: ", if (!is.null(colour)) colour else "(none)", "\n", sep = "")
+      cat("  shape : ", if (!is.null(shape))  shape  else "(none)", "\n", sep = "")
+    }
+    cat("  facet1 / facet2: ", if (!is.null(facet1)) facet1 else "(none)", " / ",
+        if (!is.null(facet2)) facet2 else "(none)", "\n", sep = "")
+    cat("  rows: ", if (is.null(data)) 0L else nrow(data), "\n", sep = "")
+  }
+  if (identical(engine, "base")) {
+    return(invisible(if (quantity == "numbers") {
+      if (type == "density")
+        plot_length_ridges_base(data, fill, facet1, facet2, smooth = smooth,
+                                class_label = class_label, palette = palette,
+                                angle = angle, n_per_screen = n_per_screen)
+      else
+        plot_length_hist_base(data, fill, facet1, facet2, stacked = stacked,
+                              class_label = class_label, palette = palette,
+                              angle = angle, n_per_screen = n_per_screen)
+    } else {
+      plot_length_meanweight_base(data, colour, facet1, facet2, shape,
+                                  show_points = show_points,
+                                  show_spread = show_spread,
+                                  class_label = class_label, palette = palette,
+                                  angle = angle, n_per_screen = n_per_screen)
+    }))
+  }
   if (quantity == "numbers") {
     if (type == "density")
       plot_length_ridges(data, fill, facet1, facet2, smooth = smooth,
@@ -1094,6 +2101,321 @@ plot_biology_distribution <- function(data,
                            show_points = show_points, show_spread = show_spread,
                            ncol = ncol, scales = scales, class_label = class_label)
   }
+}
+
+#' Facet key combining up to two facet columns into one grid of panels
+#'
+#' The base-R distribution plots use `par(mfrow = )` for faceting, one
+#' grid of panels rather than ggplot's nested rows/columns - so two
+#' facet columns are combined into a single composite label ("A | B")
+#' here, one panel per combination, rather than drawn as a true 2D grid
+#' the way [facet_two()] lays them out for ggplot.
+#'
+#' @param d A data frame.
+#' @param facet1,facet2 Optional facet column names.
+#' @return Character vector, one label per row of `d` (or `NA` if
+#'   neither facet is given).
+#' @keywords internal
+#' @export
+facet_key_base <- function(d, facet1 = NULL, facet2 = NULL) {
+  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+  parts <- list()
+  if (has(facet1)) parts$f1 <- as.character(d[[facet1]])
+  if (has(facet2)) parts$f2 <- as.character(d[[facet2]])
+  if (!length(parts)) return(rep(NA_character_, nrow(d)))
+  do.call(paste, c(parts, sep = " | "))
+}
+
+#' Numbers-at-class histogram, drawn with base R graphics
+#'
+#' Same data as [plot_length_hist()] - bars of numbers over the length
+#' or age classes, coloured by `fill_var` via [var_palette()] (the same
+#' per-level colours the ggplot engine uses), stacked or side-by-side -
+#' drawn with `graphics::barplot()` instead of ggplot2. Called through
+#' `plot_biology_distribution(..., engine = "base")`, not directly.
+#'
+#' @inheritParams plot_length_hist
+#' @return `NULL`, invisibly - drawn on the current graphics device.
+#' @seealso [plot_length_hist()], [plot_biology_distribution()]
+#' @keywords internal
+#' @export
+plot_length_hist_base <- function(d, fill_var = NULL, facet1 = NULL,
+                                  facet2 = NULL, stacked = TRUE,
+                                  class_label = "Length (cm)",
+                                  palette = c("default", "colorblind"),
+                                  angle = 45, n_per_screen = NULL) {
+  palette <- match.arg(palette)
+  if (is.null(d) || !nrow(d)) { message("Nothing to plot."); return(invisible(NULL)) }
+  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+  d$.fk <- facet_key_base(d, facet1, facet2)
+  pal <- if (has(fill_var)) var_palette(fill_var, d[[fill_var]], palette) else NULL
+
+  draw_one <- function(dd, main) {
+    classes <- sort(unique(dd$.class))
+    ax_las <- if (angle >= 45 || length(classes) > 20) 2 else 1
+    if (has(fill_var)) {
+      lv <- sort(unique(as.character(dd[[fill_var]])))
+      m <- matrix(0, length(lv), length(classes), dimnames = list(lv, classes))
+      for (i in seq_len(nrow(dd)))
+        m[as.character(dd[[fill_var]][i]), as.character(dd$.class[i])] <-
+          m[as.character(dd[[fill_var]][i]), as.character(dd$.class[i])] + dd$number[i]
+      graphics::barplot(m, col = pal[lv], border = OUTLINE, beside = !stacked,
+                        space = if (stacked) 0.1 else c(0, 1.5),
+                        xlab = class_label, ylab = "Numbers", main = main,
+                        cex.names = 0.7, las = ax_las)
+      graphics::legend("topright", legend = lv, fill = pal[lv], cex = 0.68,
+                       bty = "o", bg = "white", box.col = "grey80")
+    } else {
+      v <- stats::setNames(rep(0, length(classes)), classes)
+      agg <- stats::aggregate(number ~ .class, dd, sum)
+      v[as.character(agg$.class)] <- agg$number
+      graphics::barplot(v, col = PAL_BASE[1], border = OUTLINE, space = 0.1,
+                        xlab = class_label, ylab = "Numbers", main = main,
+                        cex.names = 0.7, las = ax_las)
+    }
+    graphics::box()
+  }
+
+  facets <- if (!all(is.na(d$.fk))) sort(unique(d$.fk)) else NA
+  main_txt <- sprintf("Numbers at %s", tolower(sub(" .*", "", class_label)))
+  groups <- split_facets_to_screens(facets, n_per_screen)
+  had_device <- grDevices::dev.cur() > 1
+  for (grp in groups) {
+    op <- graphics::par(no.readonly = TRUE); on.exit(graphics::par(op), add = TRUE)
+    if (length(groups) > 1 && !had_device) grDevices::dev.new()
+    if (!identical(grp, "__nofacet__") && length(grp) > 1) {
+      nc <- ceiling(sqrt(length(grp))); nr <- ceiling(length(grp) / nc)
+      graphics::par(mfrow = c(nr, nc), mar = c(4, 4, 2, 1), oma = c(0, 0, 3, 0))
+      for (fv in grp) draw_one(d[d$.fk == fv, , drop = FALSE], fv)
+      graphics::mtext(main_txt, outer = TRUE, side = 3, cex = 1.05, font = 2, line = 1)
+      graphics::mtext(paste0(facet1 %||% "", if (!is.null(facet2)) paste0(", ", facet2),
+                            " = ", paste(grp, collapse = ", ")),
+                      outer = TRUE, side = 3, cex = 0.8, line = -0.2, col = "grey30")
+    } else if (!identical(grp, "__nofacet__") && length(grp) == 1) {
+      graphics::par(mar = c(4, 4, 3, 2))
+      draw_one(d[d$.fk == grp, , drop = FALSE], paste0(main_txt, " (", grp, ")"))
+    } else {
+      graphics::par(mar = c(4, 4, 3, 2))
+      draw_one(d, main_txt)
+    }
+    graphics::par(op)
+  }
+  invisible(NULL)
+}
+
+#' Numbers-at-class smoothed density, drawn with base R graphics
+#'
+#' Same weighted kernel density as [plot_length_ridges()] - one curve
+#' per `group_var` level, each integrating to one so groups of very
+#' different size compare on shape alone - drawn as filled, vertically
+#' offset ribbons with `graphics::polygon()` instead of ggplot2's
+#' `geom_ribbon()`. Called through
+#' `plot_biology_distribution(..., engine = "base")`, not directly.
+#'
+#' @inheritParams plot_length_ridges
+#' @return `NULL`, invisibly - drawn on the current graphics device.
+#' @seealso [plot_length_ridges()], [plot_biology_distribution()]
+#' @keywords internal
+#' @export
+plot_length_ridges_base <- function(d, group_var = NULL, facet1 = NULL,
+                                    facet2 = NULL, overlap = 0.75,
+                                    smooth = 1, class_label = "Length (cm)",
+                                    palette = c("default", "colorblind"),
+                                    angle = 45, n_per_screen = NULL) {
+  palette <- match.arg(palette)
+  if (is.null(d) || !nrow(d)) { message("Nothing to plot."); return(invisible(NULL)) }
+  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+  if (!has(group_var)) { d$.g <- "All"; group_var <- ".g" }
+  d$.g <- as.character(d[[group_var]])
+  d$.fk <- facet_key_base(d, facet1, facet2)
+
+  # Same weighted-density logic as plot_length_ridges() - see there for
+  # why the bandwidth comes from the weighted spread rather than
+  # stats::density()'s own unweighted default.
+  dens_one <- function(g) {
+    x <- g$.class; w <- g$number
+    keep <- is.finite(x) & is.finite(w) & w > 0
+    x <- x[keep]; w <- w[keep]
+    if (length(x) < 2 || sum(w) <= 0 || length(unique(x)) < 2) return(NULL)
+    p <- w / sum(w)
+    mu <- sum(p * x); sdw <- sqrt(sum(p * (x - mu)^2))
+    if (!is.finite(sdw) || sdw <= 0) sdw <- diff(range(x)) / 6
+    n_eff <- 1 / sum(p^2)
+    bw <- 1.06 * sdw * n_eff^(-1 / 5) * smooth
+    if (!is.finite(bw) || bw <= 0) return(NULL)
+    dn <- tryCatch(stats::density(x, weights = p, bw = bw, n = 256,
+                                  from = min(x) - 2 * bw, to = max(x) + 2 * bw),
+                   error = function(e) NULL)
+    if (is.null(dn)) return(NULL)
+    data.frame(.class = dn$x, .dens = dn$y)
+  }
+  pal <- var_palette(group_var, d$.g, palette)
+
+  draw_one <- function(dd, main) {
+    lev <- sort(unique(dd$.g))
+    curves <- lapply(lev, function(g) dens_one(dd[dd$.g == g, , drop = FALSE]))
+    names(curves) <- lev
+    curves <- Filter(Negate(is.null), curves)
+    if (!length(curves)) { message("Nothing to plot for ", main); return(invisible(NULL)) }
+    maxd <- max(vapply(curves, function(x) max(x$.dens), numeric(1)))
+    scale_h <- (1 + overlap) / maxd
+    xr <- range(unlist(lapply(curves, function(x) x$.class)))
+    # ylim's upper bound was exactly length(lev) + 1.3, which clipped
+    # the TALLEST curve's peak whenever that curve belonged to the row
+    # closest to the top (its own peak plus 1+overlap could exceed that
+    # fixed margin) - widened to fit the actual tallest peak instead of
+    # a constant that assumed every curve's own height stayed small.
+    graphics::plot(NA, xlim = xr, ylim = c(0.5, length(lev) + max(1.3, 1 + overlap + 0.3)),
+                   axes = FALSE, xlab = class_label, ylab = "", main = main)
+    for (i in seq_along(lev)) {
+      g <- lev[i]; cv <- curves[[g]]
+      if (is.null(cv)) next
+      row <- i
+      # Black outline (OUTLINE), not coloured to match the fill - the
+      # same "make the shape's edge read clearly" fix the heatmap tiles
+      # got, here applied to the density ribbon.
+      graphics::polygon(c(cv$.class, rev(cv$.class)),
+                        c(row + cv$.dens * scale_h, rep(row, nrow(cv))),
+                        col = grDevices::adjustcolor(pal[g], alpha.f = 0.72),
+                        border = OUTLINE, lwd = 0.6)
+      graphics::segments(min(cv$.class), row, max(cv$.class), row,
+                         col = "grey65", lwd = 0.6)
+    }
+    graphics::box()
+    graphics::axis(1, cex.axis = 0.8)
+    graphics::axis(2, at = seq_along(lev), labels = lev, las = 1, cex.axis = 0.8)
+  }
+
+  facets <- if (!all(is.na(d$.fk))) sort(unique(d$.fk)) else NA
+  main_txt <- sprintf("Frequency, as a smoothed density (x%.2f smoothing)", smooth)
+  groups <- split_facets_to_screens(facets, n_per_screen)
+  had_device <- grDevices::dev.cur() > 1
+  for (grp in groups) {
+    op <- graphics::par(no.readonly = TRUE); on.exit(graphics::par(op), add = TRUE)
+    if (length(groups) > 1 && !had_device) grDevices::dev.new()
+    if (!identical(grp, "__nofacet__") && length(grp) > 1) {
+      nc <- ceiling(sqrt(length(grp))); nr <- ceiling(length(grp) / nc)
+      graphics::par(mfrow = c(nr, nc), mar = c(4, 6, 2, 1), oma = c(0, 0, 3, 0))
+      for (fv in grp) draw_one(d[d$.fk == fv, , drop = FALSE], fv)
+      graphics::mtext(main_txt, outer = TRUE, side = 3, cex = 1.05, font = 2, line = 1)
+    } else if (!identical(grp, "__nofacet__") && length(grp) == 1) {
+      graphics::par(mar = c(4, 6, 3, 2))
+      draw_one(d[d$.fk == grp, , drop = FALSE], paste0(main_txt, " (", grp, ")"))
+    } else {
+      graphics::par(mar = c(4, 6, 3, 2))
+      draw_one(d, main_txt)
+    }
+    graphics::par(op)
+  }
+  invisible(NULL)
+}
+
+#' Mean-weight-at-class line, drawn with base R graphics
+#'
+#' Same data as [plot_length_meanweight()] - mean weight per class as a
+#' line with points, coloured by `colour_var` via [var_palette()], with
+#' an optional +/- 1 sd ribbon - drawn with `graphics::plot()`/`lines()`
+#' instead of ggplot2. Called through
+#' `plot_biology_distribution(..., engine = "base")`, not directly.
+#'
+#' @inheritParams plot_length_meanweight
+#' @return `NULL`, invisibly - drawn on the current graphics device.
+#' @seealso [plot_length_meanweight()], [plot_biology_distribution()]
+#' @keywords internal
+#' @export
+plot_length_meanweight_base <- function(d, colour_var = NULL, facet1 = NULL,
+                                        facet2 = NULL, shape_var = NULL,
+                                        show_points = TRUE, show_spread = TRUE,
+                                        class_label = "Length (cm)",
+                                        palette = c("default", "colorblind"),
+                                        angle = 45, n_per_screen = NULL) {
+  palette <- match.arg(palette)
+  if (is.null(d) || !nrow(d)) { message("Nothing to plot."); return(invisible(NULL)) }
+  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+  d$.fk <- facet_key_base(d, facet1, facet2)
+  grp_var <- if (has(colour_var)) colour_var else if (has(shape_var)) shape_var else NULL
+  pal <- if (has(colour_var)) var_palette(colour_var, d[[colour_var]], palette) else NULL
+  pch_lv <- c(16, 17, 15, 18, 4, 3, 8, 7)
+
+  draw_one <- function(dd, main) {
+    ylim <- range(c(dd$mean_weight,
+                    if (show_spread && "sd_weight" %in% names(dd))
+                      dd$mean_weight + dd$sd_weight else NULL,
+                    if (show_spread && "sd_weight" %in% names(dd))
+                      pmax(0, dd$mean_weight - dd$sd_weight) else NULL),
+                  na.rm = TRUE)
+    graphics::plot(NA, xlim = range(dd$.class, na.rm = TRUE), ylim = ylim,
+                   xlab = class_label, ylab = "Mean weight (g)", main = main,
+                   axes = FALSE)
+    graphics::box(); graphics::axis(1, cex.axis = 0.8); graphics::axis(2, cex.axis = 0.8)
+    grp_lv <- if (!is.null(grp_var)) sort(unique(as.character(dd[[grp_var]]))) else "All"
+    for (g in grp_lv) {
+      gd <- if (!is.null(grp_var)) dd[as.character(dd[[grp_var]]) == g, , drop = FALSE] else dd
+      gd <- gd[order(gd$.class), ]
+      if (!nrow(gd)) next
+      col <- if (has(colour_var)) pal[g] else PAL_BASE[1]
+      if (isTRUE(show_spread) && !has(shape_var) && "sd_weight" %in% names(gd) &&
+            any(!is.na(gd$sd_weight))) {
+        # A polygon whose vertex list includes NA coordinates does not
+        # skip them the way lines() does - it drew a straight connecting
+        # segment across the gap instead, from whatever valid point came
+        # before the NA run to whatever valid point came after, which is
+        # exactly the wide diagonal wedge this fixes: a stratum missing
+        # sd_weight for a few classes in the middle of its range had its
+        # ribbon jump straight across that gap rather than break there.
+        # One polygon per CONTIGUOUS run of non-NA points instead, so a
+        # gap breaks the ribbon rather than bridging it.
+        ok_sd <- !is.na(gd$sd_weight)
+        run <- cumsum(c(TRUE, diff(ok_sd) != 0))
+        for (r in unique(run[ok_sd])) {
+          seg <- gd[run == r & ok_sd, , drop = FALSE]
+          if (nrow(seg) < 2) next
+          graphics::polygon(c(seg$.class, rev(seg$.class)),
+                            c(seg$mean_weight + seg$sd_weight,
+                              rev(pmax(0, seg$mean_weight - seg$sd_weight))),
+                            col = grDevices::adjustcolor(col, alpha.f = 0.18),
+                            border = NA)
+        }
+      }
+      graphics::lines(gd$.class, gd$mean_weight, col = col, lwd = 1.8)
+      if (isTRUE(show_points)) {
+        pch <- if (has(shape_var)) pch_lv[match(g, grp_lv)] else 21
+        graphics::points(gd$.class, gd$mean_weight, pch = pch, bg = col,
+                         col = if (pch %in% 21:25) OUTLINE else col, cex = 1.1)
+      }
+    }
+    if (!is.null(grp_var) && length(grp_lv) > 1) {
+      pch_leg <- if (has(shape_var)) pch_lv[seq_along(grp_lv)] else rep(21, length(grp_lv))
+      graphics::legend("topright", title = grp_var, legend = grp_lv,
+                       col = if (has(colour_var)) pal[grp_lv] else PAL_BASE[1],
+                       pt.bg = if (has(colour_var)) pal[grp_lv] else PAL_BASE[1],
+                       pch = pch_leg, lwd = 1.8, cex = 0.68, bty = "o",
+                       bg = "white", box.col = "grey80")
+    }
+  }
+
+  facets <- if (!all(is.na(d$.fk))) sort(unique(d$.fk)) else NA
+  main_txt <- sprintf("Mean weight at %s", tolower(sub(" .*", "", class_label)))
+  groups <- split_facets_to_screens(facets, n_per_screen)
+  had_device <- grDevices::dev.cur() > 1
+  for (grp in groups) {
+    op <- graphics::par(no.readonly = TRUE); on.exit(graphics::par(op), add = TRUE)
+    if (length(groups) > 1 && !had_device) grDevices::dev.new()
+    if (!identical(grp, "__nofacet__") && length(grp) > 1) {
+      nc <- ceiling(sqrt(length(grp))); nr <- ceiling(length(grp) / nc)
+      graphics::par(mfrow = c(nr, nc), mar = c(4, 4, 2, 1), oma = c(0, 0, 3, 0))
+      for (fv in grp) draw_one(d[d$.fk == fv, , drop = FALSE], fv)
+      graphics::mtext(main_txt, outer = TRUE, side = 3, cex = 1.05, font = 2, line = 1)
+    } else if (!identical(grp, "__nofacet__") && length(grp) == 1) {
+      graphics::par(mar = c(4, 4, 3, 2))
+      draw_one(d[d$.fk == grp, , drop = FALSE], paste0(main_txt, " (", grp, ")"))
+    } else {
+      graphics::par(mar = c(4, 4, 3, 2))
+      draw_one(d, main_txt)
+    }
+    graphics::par(op)
+  }
+  invisible(NULL)
 }
 
 # ----------------------------------------------------------

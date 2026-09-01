@@ -236,12 +236,28 @@ if (requireNamespace("shiny", quietly = TRUE)) {
               "5.4 Exclude a specific stratum"))
     ok(grepl(k, mg, fixed = TRUE), paste("the manual builder states:", k))
 
+  ## ---- 8b. length/age manual builder renumbered after the read-only
+  ## mirror was removed: no more separate top box, so "Define the
+  ## groups" moves from step 2 to step 1, its exclusion box from 3 to 2,
+  ## and the catch-all from 5 to 4 -----------------------------------
+  len_mg <- substr(h, regexpr("len_ga_mg_bdeck", h, fixed = TRUE),
+                   regexpr("age_ga_mg_bdeck", h, fixed = TRUE))
+  for (k in c("1.1 Name the group", "1.2 Rules to group",
+              "2.1 Exclude by % sampling coverage",
+              "2.2 Exclude by number of measurements",
+              "3. Assign the clause", "4. Include a Catch All by All"))
+    ok(grepl(k, len_mg, fixed = TRUE),
+       paste("the length manual builder states:", k))
+  ok(!grepl("Definition of the strata (set on the Hierarchical tab)",
+            len_mg, fixed = TRUE),
+     "and no longer carries the removed mirror box")
+
   ## ---- 9. length and age use the same builder shape ----------------
   for (id in c("len_ga_hier_bdeck", "age_ga_hier_bdeck",
                "len_ga_mg_bdeck", "age_ga_mg_bdeck"))
     ok(grepl(id, h, fixed = TRUE),
        paste(id, "is a deck, not a sidebar"))
-  ok(grepl("3.2 Exclude by number of measurements", h, fixed = TRUE),
+  ok(grepl("2.2 Exclude by number of measurements", h, fixed = TRUE),
      "the biology cascade numbers its donor bars")
   ## the donor measurements bar is a data-scaled slider, not a free
   ## numeric box, so it needs a server renderer per builder
