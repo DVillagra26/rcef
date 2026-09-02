@@ -752,51 +752,120 @@ plot_coverage_bars_base <- function(sc, y_var, fill_var = NULL,
 
   pal <- var_palette(if (has(fill_var)) fill_var else y_var, agg$.fill, palette)
 
-  draw_one <- function(dd, main) {
+  draw_one <- function(dd, main, subtitle, compact = FALSE) {
     key <- if (has(fill_var) && isTRUE(show_fill_in_labels))
       paste(dd$.lab, dd$.fill, sep = " / ") else dd$.lab
-    # barplot() draws bottom-to-top, so the vector is reversed here -
-    # otherwise the FIRST row (the largest "with sampling" bar) would
-    # end up drawn at the BOTTOM of the figure instead of the top, the
-    # opposite of every other plot in this package.
-    ord <- rev(seq_len(nrow(dd)))
-    op <- graphics::par(mar = c(4, max(6, max(nchar(key)) * 0.5), 5, 2))
+    # barplot() draws bottom-to-top, so the row vector is reversed here -
+    # otherwise the first row (the largest "with sampling" bar) would be
+    # drawn at the BOTTOM of the figure, the opposite of every other
+    # plot in this package.
+    ord   <- rev(seq_len(nrow(dd)))
+    total <- sum(dd$landings)
+    dmax  <- max(dd$landings)
+    # Left margin sized to the y labels actually present, not a generous
+    # constant. Right margin sized to the "With / Without ... sampling"
+    # callouts that sit past the bars - the ggplot version reserves
+    # plot.margin on the right for exactly the same text. In `compact`
+    # mode (a par(mfrow=) facet grid, where each panel is a fraction of
+    # the device) the callouts and legend are dropped, so the right
+    # margin shrinks back to a hairline - a label-sized margin on a
+    # quarter-width panel is what "figure margins too large" is.
+    lmar <- max(4, max(nchar(key)) * 0.46)
+    rmar <- if (compact) 2 else
+      max(9, max(nchar(as.character(dd$sampled))) * 0.62 + 3)
+    if (compact) lmar <- min(lmar, 8)
+    op <- graphics::par(mar = c(4, lmar, 5.5, rmar))
     on.exit(graphics::par(op), add = TRUE)
+    # xlim stops just past the longest bar and the separator line, not
+    # far enough to drown the chart in whitespace. The callout text
+    # lives in the right MARGIN (xpd = NA below), not the plot region,
+    # so the region itself is not widened to hold it.
+    xmax <- max(dd$landings) * 1.12
     bp <- graphics::barplot(dd$landings[ord], horiz = TRUE, las = 1,
                             names.arg = key[ord], cex.names = 0.7,
                             col = pal[dd$.fill[ord]], border = OUTLINE,
+                            xlim = c(0, xmax), space = 0.15,
                             xlab = sprintf("%s (t)", tools::toTitleCase(weight_label)),
                             main = "")
+    # Panel top and bottom, half a bar-pitch beyond the end bars - the
+    # separator and the vertical guide lines are clamped to this so they
+    # do not spill into the title or the x-axis label the way the raw
+    # device usr range lets them.
+    pitch <- if (nrow(bp) > 1) bp[2, 1] - bp[1, 1] else 1.2
+    y0 <- bp[1, 1] - pitch / 2
+    y1 <- bp[nrow(bp), 1] + pitch / 2
+    # Grey guide lines spanning the whole panel - the reading aid
+    # ggplot's panel.grid gives for free: a vertical line at every x
+    # tick across the full height, one faint horizontal line per bar
+    # row across the full width. Drawn first, then the bars re-drawn on
+    # top so the lines sit behind them.
+    xticks <- graphics::axTicks(1)
+    graphics::segments(xticks, y0, xticks, y1, col = "grey88", lwd = 0.7)
+    graphics::segments(0, bp, xmax, bp, col = "grey92", lwd = 0.5)
+    graphics::barplot(dd$landings[ord], horiz = TRUE, las = 1, add = TRUE,
+                      names.arg = NA, axes = FALSE, space = 0.15,
+                      col = pal[dd$.fill[ord]], border = OUTLINE)
     # box(): the same panel border every ggplot figure in this package
-    # carries by default - barplot() draws its own axis and tick marks
-    # already, but never a bounding rectangle around the plotting area.
+    # carries by default.
     graphics::box()
-    # A dashed separator between the "with" and "without" blocks, same
-    # purpose as the ggplot version's - the one piece of that layout
-    # this port keeps, since without it the two groups (sorted purely
-    # by size within each) are not visually distinguishable from a
-    # single mixed list.
-    grp <- as.character(dd$sampled[ord])
-    edge <- which(grp[-1] != grp[-length(grp)])
-    if (length(edge))
-      graphics::abline(h = bp[edge, 1] + diff(bp[c(edge, edge + 1), 1]) / 2,
-                       lty = 2, col = "grey50")
-    graphics::mtext(main, side = 3, line = 3.3, cex = 1.05, font = 2)
-    graphics::mtext(paste0(wi, "   /   ", wo), side = 3, line = 1.6,
-                    cex = 0.8, adj = 0.5, col = "grey30", font = 2)
-    if (has(fill_var)) {
+    graphics::axis(1, at = xticks, labels = FALSE, tick = TRUE)
+    # Dashed vertical separator, full height, marking where the bars end
+    # and the sampled / unsampled callouts begin - the one piece of the
+    # ggplot layout this port keeps verbatim.
+    lx <- dmax * 1.06
+    graphics::segments(lx, y0, lx, y1, lty = 2, col = "grey40")
+    # "With ... sampling (NN%)" / "Without ... sampling (NN%)" beside the
+    # separator, one per contiguous block, horizontal, in the right
+    # margin - matching the ggplot version's callouts including the
+    # per-block share of the panel total. The label for each block is
+    # read straight off the data (rle(grp)$values) at that block's own
+    # rows, NOT assumed to be "with" on top: barplot()'s bottom-to-top
+    # order combined with the size sort means either block can end up
+    # physically uppermost, and hardcoding that mapping is what an
+    # earlier pass got backwards. Skipped in compact (facet-grid) mode,
+    # which has no room for it - as the pre-rewrite faceted path also
+    # showed no per-block figure.
+    if (!compact) {
+      grp    <- as.character(dd$sampled[ord])
+      blocks <- rle(grp)
+      ends   <- cumsum(blocks$lengths)
+      starts <- ends - blocks$lengths + 1L
+      for (i in seq_along(blocks$values)) {
+        lvl  <- blocks$values[i]
+        ymid <- mean(bp[starts[i]:ends[i], 1])
+        pctb <- sum(dd$landings[dd$sampled == lvl]) / total * 100
+        graphics::text(lx + dmax * 0.04, ymid,
+                       paste0(lvl, "\n(", round(pctb), "%)"),
+                       adj = c(0, 0.5), cex = 0.7, font = 2, col = "grey30",
+                       xpd = NA)
+      }
+    }
+    # Title and subtitle left-margined (adj = 0), matching the ggplot
+    # version - base R centres the title by default, ggplot does not.
+    graphics::mtext(main, side = 3, line = 3.6, cex = 1.05, font = 2, adj = 0)
+    graphics::mtext(subtitle, side = 3, line = 2.3, cex = 0.8, adj = 0, col = "grey30")
+    if (has(fill_var) && !compact) {
       lv <- sort(unique(dd$.fill))
-      graphics::legend("bottomright", legend = lv, fill = pal[lv],
-                       cex = 0.62, bty = "o", bg = "white", box.col = "grey80",
-                       ncol = min(2, ceiling(length(lv) / 6)))
+      # Legend anchored to the bottom-right MARGIN corner, outside the
+      # bars - the way the ggplot version puts its fill guide off to the
+      # side. An in-panel "topright" (or any x inside the data) lands on
+      # top of the bars once the panel is this densely packed.
+      graphics::legend(x = xmax + dmax * 0.06, y = y0 + pitch,
+                       xjust = 0, yjust = 0, legend = lv, fill = pal[lv],
+                       cex = 0.6, bty = "n", xpd = NA,
+                       ncol = min(2, ceiling(length(lv) / 8)))
     }
   }
 
   facets <- if (has(facet_var)) sort(unique(agg$.facet)) else NA
   pct <- sum(agg$landings[agg$sampled == wi]) / sum(agg$landings) * 100
-  title_txt <- sprintf("%s with vs without %s sampling (%s%% sampled)",
-                       tools::toTitleCase(weight_label), samp_word(what),
-                       round(pct, 0))
+  # Title / subtitle split to match the ggplot version's exactly: a
+  # plain title, and a subtitle line stating the % and what it means -
+  # not both crammed into one line.
+  title_txt <- sprintf("%s with vs without %s sampling",
+                       tools::toTitleCase(weight_label), samp_word(what))
+  subtitle_txt <- sprintf("%s%% of %s weight sampled for %s", round(pct, 0),
+                          weight_label, samp_word(what))
   groups <- split_facets_to_screens(facets, n_per_screen)
   # Captured once, before the loop: dev.cur() itself changes the moment
   # the first dev.new() runs, so re-checking it each iteration would
@@ -815,16 +884,17 @@ plot_coverage_bars_base <- function(sc, y_var, fill_var = NULL,
     if (!identical(grp, "__nofacet__") && length(grp) > 1) {
       nc <- ceiling(sqrt(length(grp))); nr <- ceiling(length(grp) / nc)
       graphics::par(mfrow = c(nr, nc), oma = c(0, 0, 2, 0))
-      for (fv in grp) draw_one(agg[agg$.facet == fv, , drop = FALSE], fv)
+      for (fv in grp)
+        draw_one(agg[agg$.facet == fv, , drop = FALSE], fv, "", compact = TRUE)
       if (!is.null(facet_var))
         graphics::mtext(paste0(title_txt, "  (", facet_var, " = ",
                                paste(grp, collapse = ", "), ")"),
                         outer = TRUE, cex = 0.85, font = 2, line = 0.3)
     } else if (!identical(grp, "__nofacet__") && length(grp) == 1) {
       draw_one(agg[agg$.facet == grp, , drop = FALSE],
-               paste0(title_txt, " (", facet_var, " = ", grp, ")"))
+               paste0(title_txt, " (", facet_var, " = ", grp, ")"), subtitle_txt)
     } else {
-      draw_one(agg, title_txt)
+      draw_one(agg, title_txt, subtitle_txt)
     }
     graphics::par(op)
   }
