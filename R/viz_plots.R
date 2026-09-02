@@ -379,8 +379,7 @@ plot_heatmap_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
                        col = OUTLINE)
     }
     graphics::box()
-    graphics::axis(1, at = seq_along(xs) - 0.5, labels = xs,
-                   las = if (angle >= 45) 2 else 1, cex.axis = 0.8, tick = TRUE)
+    axis_x_cat(seq_along(xs) - 0.5, xs, angle = angle, cex = 0.8)
     graphics::axis(2, at = seq_along(ys) - 0.5, labels = ys, las = 1,
                    cex.axis = 0.8, tick = TRUE)
   }
@@ -392,6 +391,9 @@ plot_heatmap_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
   # own labels happen to be short gets a narrow margin and the next
   # panel's labels bleed into it.
   lmar <- max(6, max(nchar(as.character(d[[y_var]]))) * 0.42)
+  # Bottom margin sized the same way for the (possibly 45-degree)
+  # x labels, from the widest one anywhere in the figure.
+  bmar <- cat_axis_mar(unique(as.character(d[[x_var]])), 0.8, angle)
   groups <- split_facets_to_screens(facets, n_per_screen)
   main_txt <- sprintf("%s sampling coverage vs threshold", cov_title_what(what))
   # Captured once, before the loop: dev.cur() changes the moment the
@@ -403,7 +405,8 @@ plot_heatmap_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
     if (length(groups) > 1 && !had_device) grDevices::dev.new()
     if (!identical(grp, "__nofacet__") && length(grp) > 1) {
       nc <- ceiling(sqrt(length(grp))); nr <- ceiling(length(grp) / nc)
-      graphics::par(mfrow = c(nr, nc), mar = c(4, lmar, 2, 1), oma = c(0, 0, 3, 8))
+      graphics::par(mfrow = c(nr, nc), mar = c(min(bmar, 7), lmar, 2, 1),
+                    oma = c(0, 0, 3, 8))
       for (fv in grp)
         draw_one(d[as.character(d[[facet_var]]) == fv, , drop = FALSE], fv)
       graphics::mtext(main_txt, outer = TRUE, side = 3, cex = 1.05, font = 2, line = 1)
@@ -411,11 +414,11 @@ plot_heatmap_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
         graphics::mtext(paste(facet_var, "=", paste(grp, collapse = ", ")),
                         outer = TRUE, side = 3, cex = 0.8, line = -0.2, col = "grey30")
     } else if (!identical(grp, "__nofacet__") && length(grp) == 1) {
-      graphics::par(mar = c(4, lmar, 3, 8))
+      graphics::par(mar = c(bmar, lmar, 3, 8))
       draw_one(d[as.character(d[[facet_var]]) == grp, , drop = FALSE],
                paste0(main_txt, " (", facet_var, " = ", grp, ")"))
     } else {
-      graphics::par(mar = c(4, lmar, 3, 8))
+      graphics::par(mar = c(bmar, lmar, 3, 8))
       draw_one(d, main_txt)
     }
     legend_status_base(lk_all)
@@ -473,6 +476,77 @@ split_facets_to_screens <- function(facets, n_per_screen) {
   if (length(facets) == 1 && is.na(facets)) return(list("__nofacet__"))
   if (is.null(n_per_screen) || n_per_screen >= length(facets)) return(list(facets))
   split(facets, ceiling(seq_along(facets) / n_per_screen))
+}
+
+#' Light panel guide lines for the base-R plots
+#'
+#' The reading aid ggplot2's `panel.grid` gives for free: a faint grey
+#' line at each supplied x and y position, spanning the current plot
+#' region. Call it right after the plot region is set up and before the
+#' data marks, so the marks sit on top of the lines, not under them.
+#'
+#' @param v,h x / y positions for the vertical / horizontal lines.
+#'   Default: the axis tick positions. `NULL` or all-`NA` skips that set.
+#' @param col,lwd Line colour and width.
+#' @return `NULL`, invisibly.
+#' @keywords internal
+#' @export
+grid_base <- function(v = graphics::axTicks(1), h = graphics::axTicks(2),
+                      col = "grey92", lwd = 0.6) {
+  u <- graphics::par("usr")
+  v <- v[is.finite(v)]; h <- h[is.finite(h)]
+  if (length(v)) graphics::segments(v, u[3], v, u[4], col = col, lwd = lwd)
+  if (length(h)) graphics::segments(u[1], h, u[2], h, col = col, lwd = lwd)
+  invisible(NULL)
+}
+
+#' Bottom-margin lines a rotated categorical x axis needs
+#'
+#' `graphics::axis()` only draws tick labels parallel or perpendicular to
+#' the axis - there is no 45-degree setting - so [axis_x_cat()] draws them
+#' by hand with `text(srt = )`, and the caller has to reserve
+#' `par("mar")[1]` for them up front. This returns that reservation, in
+#' margin lines, from the longest label, its `cex` and the angle.
+#'
+#' @param labels The category labels.
+#' @param cex Their character expansion.
+#' @param angle Rotation in degrees (0, 45 or 90).
+#' @return A number of margin lines (never below 4).
+#' @keywords internal
+#' @export
+cat_axis_mar <- function(labels, cex = 0.8, angle = 45) {
+  n <- suppressWarnings(max(nchar(as.character(labels))))
+  if (!is.finite(n)) n <- 0
+  frac <- if (angle >= 90) 1 else if (angle >= 45) sin(angle * pi / 180) else 0.25
+  max(4, ceiling(n * cex * 0.62 * frac) + 2.5)
+}
+
+#' Categorical x axis, optionally at 45 degrees
+#'
+#' Ticks plus labels on side 1. `angle` 0 or 90 defers to
+#' `graphics::axis()`; any other angle (45 by default) is drawn with
+#' `text(srt = )` just below the axis, right-justified onto the tick, and
+#' spills into the bottom margin [cat_axis_mar()] was asked to reserve
+#' (so `text()` needs `xpd = NA`, which it sets).
+#'
+#' @param at,labels Tick positions and their labels.
+#' @param angle Rotation in degrees.
+#' @param cex Character expansion.
+#' @param col Label colour.
+#' @return `NULL`, invisibly.
+#' @keywords internal
+#' @export
+axis_x_cat <- function(at, labels, angle = 45, cex = 0.8, col = "grey15") {
+  graphics::axis(1, at = at, labels = FALSE, tick = TRUE)
+  if (angle %in% c(0, 90)) {
+    graphics::axis(1, at = at, labels = labels, tick = FALSE, line = -0.4,
+                   las = if (angle == 90) 2 else 1, cex.axis = cex)
+    return(invisible(NULL))
+  }
+  u <- graphics::par("usr")
+  graphics::text(x = at, y = u[3] - (u[4] - u[3]) * 0.018, labels = labels,
+                 srt = angle, adj = c(1, 1), xpd = NA, cex = cex, col = col)
+  invisible(NULL)
 }
 
 #' Coverage bubble plot
@@ -983,6 +1057,7 @@ plot_bubbles_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
     graphics::plot(NA, xlim = c(0.4, length(xs) + 0.6),
                    ylim = c(0.4, length(ys) + 0.6), axes = FALSE,
                    xlab = "", ylab = "", main = main)
+    grid_base(v = seq_along(xs), h = seq_along(ys))
     # One grid cell is 1 x-unit by 1 y-unit here; symbols(inches=FALSE)
     # takes its radius in THOSE user units directly, so a cell-relative
     # radius holds regardless of how many rows/columns, panels, or what
@@ -1012,14 +1087,14 @@ plot_bubbles_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
       graphics::text(lx, ly, dd$lab[haslab], cex = 0.55, font = 2,
                      col = "red3", adj = c(0.5, 0))
     }
-    graphics::axis(1, at = seq_along(xs), labels = xs,
-                   las = if (angle >= 45) 2 else 1, cex.axis = 0.8, tick = TRUE)
+    axis_x_cat(seq_along(xs), xs, angle = angle, cex = 0.8)
     graphics::axis(2, at = seq_along(ys), labels = ys, las = 1, cex.axis = 0.8,
                    tick = TRUE)
     graphics::box()
   }
 
   lmar <- max(6, max(nchar(as.character(d[[y_var]]))) * 0.42)
+  bmar <- cat_axis_mar(unique(as.character(d[[x_var]])), 0.8, angle)
   main_txt <- sprintf("%s coverage vs %s", cov_title_what(what), weight_label)
   lk_all <- cat_lookup(threshold, what, min_meas, min_trips)
   draw_legends <- function() {
@@ -1044,7 +1119,8 @@ plot_bubbles_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
     if (length(groups) > 1 && !had_device) grDevices::dev.new()
     if (!identical(grp, "__nofacet__") && length(grp) > 1) {
       nc <- ceiling(sqrt(length(grp))); nr <- ceiling(length(grp) / nc)
-      graphics::par(mfrow = c(nr, nc), mar = c(4, lmar, 2, 8), oma = c(0, 0, 3, 0))
+      graphics::par(mfrow = c(nr, nc), mar = c(min(bmar, 7), lmar, 2, 8),
+                    oma = c(0, 0, 3, 0))
       for (fv in grp)
         draw_one(d[as.character(d[[facet_var]]) == fv, , drop = FALSE], fv)
       graphics::mtext(main_txt, outer = TRUE, side = 3, cex = 1.05, font = 2, line = 1)
@@ -1052,11 +1128,11 @@ plot_bubbles_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
         graphics::mtext(paste(facet_var, "=", paste(grp, collapse = ", ")),
                         outer = TRUE, side = 3, cex = 0.8, line = -0.2, col = "grey30")
     } else if (!identical(grp, "__nofacet__") && length(grp) == 1) {
-      graphics::par(mar = c(4, lmar, 4, 8))
+      graphics::par(mar = c(bmar, lmar, 4, 8))
       draw_one(d[as.character(d[[facet_var]]) == grp, , drop = FALSE],
                paste0(main_txt, " (", facet_var, " = ", grp, ")"))
     } else {
-      graphics::par(mar = c(4, lmar, 4, 8))
+      graphics::par(mar = c(bmar, lmar, 4, 8))
       draw_one(d, "")
       graphics::mtext(main_txt, side = 3, line = 2.3, cex = 1.05, font = 2)
       graphics::mtext(
@@ -1676,18 +1752,23 @@ plot_dr_raw_base <- function(s, x_var, colour_var = NULL, shape_var = NULL,
 
   draw_one <- function(dd, main) {
     graphics::plot(dd$.xi, dd$.rate, xlim = c(0.5, length(xs) + 0.5),
-                   axes = FALSE, xlab = "", ylab = "Discard rate",
-                   main = main, pch = dd$.ptpch, bg = dd$.ptcol,
-                   col = OUTLINE, cex = 1.3)
+                   axes = FALSE, xlab = "", ylab = "Discard rate", type = "n",
+                   main = main)
+    grid_base(v = seq_along(xs), h = graphics::axTicks(2))
+    graphics::points(dd$.xi, dd$.rate, pch = dd$.ptpch, bg = dd$.ptcol,
+                     col = OUTLINE, cex = 1.3)
     graphics::box()
-    graphics::axis(1, at = seq_along(xs), labels = xs,
-                   las = if (angle >= 45) 2 else 1, cex.axis = 0.7)
+    axis_x_cat(seq_along(xs), xs, angle = angle, cex = 0.7)
     graphics::axis(2, at = graphics::axTicks(2),
                    labels = paste0(graphics::axTicks(2), "%"), las = 1, cex.axis = 0.8)
   }
 
   facets <- if (has(facet_var)) sort(unique(as.character(d[[facet_var]]))) else NA
   main_txt <- "Discard rate by stratum (raw, no aggregation)"
+  # Bottom margin sized to the (45-degree) x labels, so the shared
+  # x-axis title placed below them has somewhere to sit that is not on
+  # top of the labels - the collision this fixes.
+  bmar <- cat_axis_mar(xs, 0.7, angle)
   # The legend, once, whether faceted or not - it used to be drawn only
   # for the single-panel case, so a faceted figure had no key linking
   # colour to level at all.
@@ -1711,7 +1792,8 @@ plot_dr_raw_base <- function(s, x_var, colour_var = NULL, shape_var = NULL,
     rmar <- if (has(colour_var)) 9 else 2
     if (!identical(grp, "__nofacet__") && length(grp) > 1) {
       nc <- ceiling(sqrt(length(grp))); nr <- ceiling(length(grp) / nc)
-      graphics::par(mfrow = c(nr, nc), mar = c(7, 4, 2, rmar), oma = c(2, 0, 3, 1.5))
+      graphics::par(mfrow = c(nr, nc), mar = c(min(bmar, 8), 4, 2, rmar),
+                    oma = c(2, 0, 3, 1.5))
       for (fv in grp) draw_one(d[as.character(d[[facet_var]]) == fv, , drop = FALSE], fv)
       graphics::mtext(main_txt, outer = TRUE, side = 3, cex = 1.05, font = 2, line = 1)
       graphics::mtext(paste(facet_var, "=", paste(grp, collapse = ", ")),
@@ -1722,14 +1804,14 @@ plot_dr_raw_base <- function(s, x_var, colour_var = NULL, shape_var = NULL,
       # own margin too short relative to the label text underneath it.
       graphics::mtext(x_var, outer = TRUE, side = 1, cex = 0.8, line = 0.3)
     } else if (!identical(grp, "__nofacet__") && length(grp) == 1) {
-      graphics::par(mar = c(8, 4, 4, rmar))
+      graphics::par(mar = c(bmar, 4, 4, rmar))
       draw_one(d[as.character(d[[facet_var]]) == grp, , drop = FALSE],
                paste0(main_txt, " (", facet_var, " = ", grp, ")"))
-      graphics::mtext(x_var, side = 1, line = 6.5, cex = 0.85)
+      graphics::mtext(x_var, side = 1, line = bmar - 1.4, cex = 0.85)
     } else {
-      graphics::par(mar = c(8, 4, 4, rmar))
+      graphics::par(mar = c(bmar, 4, 4, rmar))
       draw_one(d, main_txt)
-      graphics::mtext(x_var, side = 1, line = 6.5, cex = 0.85)
+      graphics::mtext(x_var, side = 1, line = bmar - 1.4, cex = 0.85)
     }
     draw_legend()
     graphics::par(op)
@@ -1760,17 +1842,30 @@ plot_dr_box_base <- function(s_full, x_var, fill_var = NULL, facet_var = NULL,
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
   d$.rate <- d$discard_rate * 100
   pal <- if (has(fill_var)) var_palette(fill_var, d[[fill_var]], palette) else NULL
+  bmar   <- cat_axis_mar(unique(as.character(d[[x_var]])), 0.8, angle)
+  # A facet grid packs the panels tight; the x labels shrink there so a
+  # margin that actually holds them stays a sane fraction of each panel.
+  bmar_f <- cat_axis_mar(unique(as.character(d[[x_var]])), 0.55, angle)
 
-  draw_one <- function(dd, main) {
+  draw_one <- function(dd, main, cex_x = 0.8) {
     xs <- sort(unique(as.character(dd[[x_var]])))
     bxcol <- if (has(fill_var)) pal[as.character(dd[[fill_var]])] else PAL_BASE[1]
-    graphics::boxplot(.rate ~ .data_x, data = data.frame(.rate = dd$.rate,
-                      .data_x = factor(as.character(dd[[x_var]]), levels = xs)),
+    bxdf <- data.frame(.rate = dd$.rate,
+                       .data_x = factor(as.character(dd[[x_var]]), levels = xs))
+    # An empty frame first, then the guide lines, then the boxes on top
+    # (boxplot(add = TRUE)) - the same "grid behind the marks" order the
+    # other base-R plots use, which boxplot() drawing its own frame does
+    # not otherwise allow.
+    graphics::plot(NA, xlim = c(0.5, length(xs) + 0.5),
+                   ylim = range(c(0, dd$.rate), na.rm = TRUE), axes = FALSE,
+                   xlab = "", ylab = "Discard rate (%)", main = main)
+    grid_base(v = seq_along(xs), h = graphics::axTicks(2))
+    graphics::boxplot(.rate ~ .data_x, data = bxdf, add = TRUE, axes = FALSE,
                       col = if (has(fill_var)) "white" else PAL_BASE[1],
-                      border = OUTLINE, outline = FALSE,
-                      las = if (angle >= 45) 2 else 1, cex.axis = 0.8,
-                      ylab = "Discard rate (%)", xlab = x_var, main = main)
+                      border = OUTLINE, outline = FALSE)
     graphics::box()
+    axis_x_cat(seq_along(xs), xs, angle = angle, cex = cex_x)
+    graphics::axis(2, at = graphics::axTicks(2), las = 1, cex.axis = 0.8)
     if (isTRUE(show_points)) {
       xi <- match(as.character(dd[[x_var]]), xs)
       xi <- xi + stats::runif(length(xi), -0.15, 0.15)
@@ -1810,19 +1905,24 @@ plot_dr_box_base <- function(s_full, x_var, fill_var = NULL, facet_var = NULL,
     rmar <- if (has(fill_var)) 9 else 2
     if (!identical(grp, "__nofacet__") && length(grp) > 1) {
       nc <- ceiling(sqrt(length(grp))); nr <- ceiling(length(grp) / nc)
-      graphics::par(mfrow = c(nr, nc), mar = c(5, 4, 2, rmar), oma = c(0, 0, 3, 0))
-      for (fv in grp) draw_one(d[as.character(d[[facet_var]]) == fv, , drop = FALSE], fv)
+      graphics::par(mfrow = c(nr, nc), mar = c(bmar_f, 4, 2, rmar),
+                    oma = c(2, 0, 3, 0))
+      for (fv in grp)
+        draw_one(d[as.character(d[[facet_var]]) == fv, , drop = FALSE], fv, cex_x = 0.55)
       graphics::mtext("Discard rate by stratum", outer = TRUE, side = 3,
                       cex = 1.05, font = 2, line = 1)
       graphics::mtext(paste(facet_var, "=", paste(grp, collapse = ", ")),
                       outer = TRUE, side = 3, cex = 0.8, line = -0.2, col = "grey30")
+      graphics::mtext(x_var, outer = TRUE, side = 1, cex = 0.8, line = 0.3)
     } else if (!identical(grp, "__nofacet__") && length(grp) == 1) {
-      graphics::par(mar = c(5, 4, 3, rmar))
+      graphics::par(mar = c(bmar, 4, 3, rmar))
       draw_one(d[as.character(d[[facet_var]]) == grp, , drop = FALSE],
                paste0("Discard rate by stratum (", facet_var, " = ", grp, ")"))
+      graphics::mtext(x_var, side = 1, line = bmar - 1.4, cex = 0.85)
     } else {
-      graphics::par(mar = c(5, 4, 3, rmar))
+      graphics::par(mar = c(bmar, 4, 3, rmar))
       draw_one(d, "Discard rate by stratum")
+      graphics::mtext(x_var, side = 1, line = bmar - 1.4, cex = 0.85)
     }
     draw_legend()
     graphics::par(op)
@@ -2220,6 +2320,23 @@ plot_length_hist_base <- function(d, fill_var = NULL, facet1 = NULL,
   d$.fk <- facet_key_base(d, facet1, facet2)
   pal <- if (has(fill_var)) var_palette(fill_var, d[[fill_var]], palette) else NULL
 
+  # Guide lines behind the bars, matching the other base-R plots and
+  # ggplot's panel.grid: horizontal at the y ticks, vertical at pretty
+  # class values mapped onto barplot()'s own bar-index x scale (that
+  # scale is 1-per-bar, not the class value, so a plain abline(v = )
+  # cannot be used - the class positions are interpolated onto the bar
+  # centres instead).
+  guides <- function(bpc, classes) {
+    graphics::abline(h = graphics::axTicks(2), col = "grey92", lwd = 0.6)
+    cl <- suppressWarnings(as.numeric(as.character(classes)))
+    if (!all(is.finite(cl)) || length(cl) < 3) return(invisible(NULL))
+    tk <- pretty(cl, 6); tk <- tk[tk >= min(cl) & tk <= max(cl)]
+    if (length(tk))
+      graphics::abline(v = stats::approx(cl, bpc, xout = tk, rule = 2)$y,
+                       col = "grey92", lwd = 0.6)
+    invisible(NULL)
+  }
+
   draw_one <- function(dd, main) {
     classes <- sort(unique(dd$.class))
     ax_las <- if (angle >= 45 || length(classes) > 20) 2 else 1
@@ -2229,19 +2346,25 @@ plot_length_hist_base <- function(d, fill_var = NULL, facet1 = NULL,
       for (i in seq_len(nrow(dd)))
         m[as.character(dd[[fill_var]][i]), as.character(dd$.class[i])] <-
           m[as.character(dd[[fill_var]][i]), as.character(dd$.class[i])] + dd$number[i]
+      sp <- if (stacked) 0.1 else c(0, 1.5)
+      bp <- graphics::barplot(m, col = pal[lv], border = OUTLINE, beside = !stacked,
+                        space = sp, xlab = class_label, ylab = "Numbers",
+                        main = main, cex.names = 0.7, las = ax_las)
+      guides(if (is.matrix(bp)) colMeans(bp) else as.numeric(bp), classes)
       graphics::barplot(m, col = pal[lv], border = OUTLINE, beside = !stacked,
-                        space = if (stacked) 0.1 else c(0, 1.5),
-                        xlab = class_label, ylab = "Numbers", main = main,
-                        cex.names = 0.7, las = ax_las)
+                        space = sp, add = TRUE, axes = FALSE, axisnames = FALSE)
       graphics::legend("topright", legend = lv, fill = pal[lv], cex = 0.68,
                        bty = "o", bg = "white", box.col = "grey80")
     } else {
       v <- stats::setNames(rep(0, length(classes)), classes)
       agg <- stats::aggregate(number ~ .class, dd, sum)
       v[as.character(agg$.class)] <- agg$number
-      graphics::barplot(v, col = PAL_BASE[1], border = OUTLINE, space = 0.1,
+      bp <- graphics::barplot(v, col = PAL_BASE[1], border = OUTLINE, space = 0.1,
                         xlab = class_label, ylab = "Numbers", main = main,
                         cex.names = 0.7, las = ax_las)
+      guides(as.numeric(bp), classes)
+      graphics::barplot(v, col = PAL_BASE[1], border = OUTLINE, space = 0.1,
+                        add = TRUE, axes = FALSE, axisnames = FALSE)
     }
     graphics::box()
   }
@@ -2337,6 +2460,7 @@ plot_length_ridges_base <- function(d, group_var = NULL, facet1 = NULL,
     # a constant that assumed every curve's own height stayed small.
     graphics::plot(NA, xlim = xr, ylim = c(0.5, length(lev) + max(1.3, 1 + overlap + 0.3)),
                    axes = FALSE, xlab = class_label, ylab = "", main = main)
+    grid_base(v = graphics::axTicks(1), h = seq_along(lev))
     for (i in seq_along(lev)) {
       g <- lev[i]; cv <- curves[[g]]
       if (is.null(cv)) next
@@ -2358,6 +2482,10 @@ plot_length_ridges_base <- function(d, group_var = NULL, facet1 = NULL,
 
   facets <- if (!all(is.na(d$.fk))) sort(unique(d$.fk)) else NA
   main_txt <- sprintf("Frequency, as a smoothed density (x%.2f smoothing)", smooth)
+  # Left margin sized to the widest group label, the same way the
+  # heatmap and bubble plots do it - a fixed 6 clipped the long
+  # fleet-level names on the y axis.
+  lmar <- max(6, max(nchar(unique(d$.g))) * 0.45)
   groups <- split_facets_to_screens(facets, n_per_screen)
   had_device <- grDevices::dev.cur() > 1
   for (grp in groups) {
@@ -2365,14 +2493,14 @@ plot_length_ridges_base <- function(d, group_var = NULL, facet1 = NULL,
     if (length(groups) > 1 && !had_device) grDevices::dev.new()
     if (!identical(grp, "__nofacet__") && length(grp) > 1) {
       nc <- ceiling(sqrt(length(grp))); nr <- ceiling(length(grp) / nc)
-      graphics::par(mfrow = c(nr, nc), mar = c(4, 6, 2, 1), oma = c(0, 0, 3, 0))
+      graphics::par(mfrow = c(nr, nc), mar = c(4, lmar, 2, 1), oma = c(0, 0, 3, 0))
       for (fv in grp) draw_one(d[d$.fk == fv, , drop = FALSE], fv)
       graphics::mtext(main_txt, outer = TRUE, side = 3, cex = 1.05, font = 2, line = 1)
     } else if (!identical(grp, "__nofacet__") && length(grp) == 1) {
-      graphics::par(mar = c(4, 6, 3, 2))
+      graphics::par(mar = c(4, lmar, 3, 2))
       draw_one(d[d$.fk == grp, , drop = FALSE], paste0(main_txt, " (", grp, ")"))
     } else {
-      graphics::par(mar = c(4, 6, 3, 2))
+      graphics::par(mar = c(4, lmar, 3, 2))
       draw_one(d, main_txt)
     }
     graphics::par(op)
@@ -2417,6 +2545,7 @@ plot_length_meanweight_base <- function(d, colour_var = NULL, facet1 = NULL,
     graphics::plot(NA, xlim = range(dd$.class, na.rm = TRUE), ylim = ylim,
                    xlab = class_label, ylab = "Mean weight (g)", main = main,
                    axes = FALSE)
+    grid_base()
     graphics::box(); graphics::axis(1, cex.axis = 0.8); graphics::axis(2, cex.axis = 0.8)
     grp_lv <- if (!is.null(grp_var)) sort(unique(as.character(dd[[grp_var]]))) else "All"
     for (g in grp_lv) {
