@@ -1,53 +1,38 @@
-# Legacy suites — currently broken, kept for porting
+# dev/ — not shipped
 
-These predate the package. They `source("R_development/0_Functions_utils.R")`
-and `readLines("app.R")`, paths that no longer exist, so **every one of
-them errors immediately**.
+`.Rbuildignore`d, so nothing here is installed or checked.
 
-They are here rather than in `dev/tests/` so that `dev/check_all.sh` does
-not run them: a suite that always fails is noise, and noise is how a real
-failure gets scrolled past. They are not deleted, because the assertions
-inside them are worth keeping — several cover TAF emission and app wiring
-that nothing else does.
+| file | what |
+|---|---|
+| `setup.R` | `pkgload::load_all(".")` — develop without installing |
+| `check_ascii.R` | every text file must be 7-bit ASCII. Non-ASCII (em-dashes, arrows, box-drawing) breaks `R CMD build` on a non-UTF-8 Windows locale with an opaque error |
+| `check_syntax.R` | `parse()` every `.R` file; must print `DONE ... 0 failure(s)` |
+| `check_exports.R` | every top-level object — functions **and constants** — must be exported; must print `NOT EXPORTED : 0` |
+| `check_app.R` | sources `inst/app/app.R` against the installed package and renders the UI |
+| `check_server.R` | **runs the server function** in a test session. `check_app.R` only builds tags, so it cannot see a helper defined after the module server that calls it |
+| | Also: filter Apply round-trips every plot panel; per-tab level of detail is independent; the code/status outputs render without error (the class of bug the `mg_excl` typo was) |
+| `check_sections.R` | the discard and biology manual builders must present the same 8 numbered steps |
+| `check_parity.R` | lists the panels and controls of the two manual builders side by side, so a drift is visible rather than found by a user. Informational — it reports, it does not fail |
+| `DOC_BACKLOG.txt` | the 94 functions exported with `@noRd` — no man page yet |
+| `deploy_shinyapps.R` | shinyapps.io, with the GitHub-remote caveat spelled out |
+| `check_all.sh` | every check above, with real exit-code handling |
+| `tests/` | `test_cc_thresholds.R` (Lan/Dis split, zero-weight strata), `test_exclusion.R` (donor exclusion) |
+| `tests/legacy/` | the 10 remaining pre-package suites. **All currently error** on paths that no longer exist; quarantined so they cannot hide a real failure. See the README there. |
+| `testdata/` | `make_test_data_anchoveta.R` — synthetic CEF fixtures |
 
-Porting one means: replace the `source()` block with
-`library(rcef)`, replace `readLines("app.R")` with
-`readLines(system.file("app/app.R", package = "rcef"))`, and move it up
-to `dev/tests/`.
+## Running the tests
 
-**`test_wiring.R` has been ported** and now lives in `dev/tests/`. It was
-worth it: mutating one `output[[ns("ov")]]` to a typo makes it fail with
-the slot named, which is exactly what it exists for.
+They predate the package and still `source()` the old file names. Load the
+package first and they will find the functions on the search path:
 
-`test_app_server.R` HAS NOW BEEN MINED: its one still-valid assertion -
-it asserts on `Area1`, a dimension removed when the area levels became
-nested, and on a `test_census.csv` fixture that no longer ships. Its
-behavioural assertions have largely been absorbed into
-`dev/check_server.R`, which runs the server against a real CEF fixture
-from `inst/extdata`. the per-tab level-of-detail independence check now lives in
-`dev/check_server.R`, run against a real fixture. The rest of the file
-(Area1, test_census.csv) is dead and can be deleted whenever.
+```r
+pkgload::load_all(".")
+for (f in list.files("dev/tests", "^test_.*\\.R$", full.names = TRUE))
+  source(f)
+```
 
-`test_taf.R` cannot be fully ported: it asserted on `taf_parts_of()`
-and `TAF_STAGE`, a stage-grouped download UI ("data" / "model" /
-"output" / "report" tabs, each holding several files) that was
-abandoned for the current one-tab-per-file design (`taf_ui(part)`,
-`TAF_FILES`, `TAF_LABEL`, `TAF_BLURB` - all still live). Both were
-confirmed to have zero callers anywhere in `R/` or `inst/app/app.R` and
-were removed as dead code. The remaining assertions in `test_taf.R` -
-`taf_bundle()` producing all seven parts, `taf_write()` laying down
-seven files, `taf_zip()`, the concatenated listing - are still valid
-and worth porting; skip lines 77-82 (the `TAF_FILES`/`TAF_STAGE`/
-`taf_parts_of` block) when doing it.
+Each must print its own `DONE` marker. An R error halts a script without
+printing FAIL, so check for `DONE`, not for a zero fail count.
 
-`taf_header()` was found MISSING entirely during this pass - called
-seven times across `rcef_taf.R`, defined nowhere. `taf_bundle()` wraps
-every part in `tryCatch`, so the failure was silent: every downloaded
-script read "This script could not be generated from the current
-session" instead of real content, and nothing in `check_all.sh` caught
-it because nothing there calls the TAF emitters. `roxygenise()`'s
-"exported but not in namespace" warning is what surfaced it. This is
-the strongest argument for porting `test_taf.R` fully rather than
-leaving it archived: a suite that actually calls `taf_bundle()` and
-inspects the output would have caught this the moment it was
-introduced.
+Porting them to `testthat` under `tests/testthat/` is the next job; that is
+what turns `R CMD check` into a real gate.

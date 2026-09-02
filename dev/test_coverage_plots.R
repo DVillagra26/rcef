@@ -3,10 +3,12 @@
 ##
 ## A standalone script for trying out rcef's exploratory plots without
 ## running the Shiny app. Loads two bundled example CEF files (catches
-## + distributions) and walks through several ways to look at the same
-## data - discard coverage, length coverage, discard rate, and length
+## + distributions) and walks through every plot family the package
+## has: discard coverage, length coverage, discard rate, and length
 ## distributions - each with a few options to compare against each
-## other, ggplot2 side by side with the base-R engine where one exists.
+## other, ggplot2 side by side with the base-R engine, and demonstrates
+## the newer general-purpose arguments (auto-build from raw data,
+## verbose, palette, angle, n_per_screen).
 ##
 ## Nothing here filters the data first. The app lets you narrow a
 ## figure to a subset before drawing it (a fleet, a year, an area); this
@@ -32,43 +34,36 @@ distributions <- read.csv(fd, stringsAsFactors = FALSE)
 
 
 ## =====================================================================
-##  1. DISCARD COVERAGE - several ways to look at the same figure
+##  1. DISCARD COVERAGE - one call, no build_strata()/classify_strata()
 ## =====================================================================
 
 ## ---- 1a. the one-step call, verbose --------------------------------
-## No build_strata()/classify_strata() beforehand - plot_coverage() does
-## both internally. verbose = TRUE prints what it is about to draw: the
-## columns on each role, the threshold and min_trips actually used (or,
-## for "bars", why neither applies), and how many rows are drawn.
+## plot_coverage() builds and classifies the strata internally. verbose
+## = TRUE prints what it is about to draw: the columns on each role,
+## the threshold/min_trips actually used (or, for "bars", why neither
+## applies), and how many rows are drawn.
 p1a <- plot_coverage(catch_data, type = "bars", y = "fleetValue",
                      fill = "Country", threshold = 50, min_trips = 2,
                      verbose = TRUE)
 print(p1a)
 
-## ---- 1b. same figure, base-R engine, same colours -------------------
-## engine = "base" instead of ggplot2. Bars are coloured by the SAME
-## per-country palette the ggplot version uses (var_palette()), so the
-## two are genuinely comparable, not just structurally similar - swap
-## engine = "base" for engine = "ggplot" above and the colours line up.
-png("11a_discard_bars_base.png", width = 1200, height = 800, res = 110)
+## ---- 1b. same figure, base-R engine, same colours, colorblind palette
+## engine = "base" instead of ggplot2; palette = "colorblind" swaps in
+## the Okabe-Ito palette instead of the package default. Both engines
+## read the SAME per-level colour cache, so switching palette= changes
+## both consistently.
+png("11a_discard_bars_base.png", width = 1300, height = 800, res = 110)
 plot_coverage(catch_data, type = "bars", y = "fleetValue", fill = "Country",
-             engine = "base", verbose = TRUE)
+             engine = "base", palette = "colorblind", verbose = TRUE)
 invisible(dev.off())
 
 ## ---- 1c. threshold and min_trips genuinely do nothing for "bars" ----
-## Confirms 1a/1b's point directly: an extreme threshold changes nothing
-## about a bars plot, because it never classifies status-by-threshold in
-## the first place - only landings/discards decide which rows are drawn.
 p1c <- plot_coverage(catch_data, type = "bars", y = "fleetValue",
                      fill = "Country", threshold = 99, min_trips = 500)
 cat("1c: bars plot unchanged by an extreme threshold:",
    identical(p1a$data, p1c$data), "\n\n")
 
-## ---- 1d. heatmap and bubbles DO use the threshold -------------------
-## Left NULL here on purpose - both default to 50% / 2 trips, reported
-## by verbose = TRUE exactly like 1a did, but this time the numbers are
-## real (heatmap/bubbles colour every cell by a status the threshold
-## sets).
+## ---- 1d. heatmap, both engines - threshold left NULL, defaults to 50%
 p1d <- plot_coverage(catch_data, type = "heatmap", y = "fleetValue",
                      fill = "Country", facet = "Season", verbose = TRUE)
 print(p1d)
@@ -83,108 +78,118 @@ p1e <- plot_coverage(catch_data, type = "bubbles", y = "fleetValue",
                      fill = "Country", threshold = 50, min_trips = 2)
 print(p1e)
 
-png("11e_discard_bubbles_base.png", width = 1100, height = 750, res = 110)
+png("11e_discard_bubbles_base.png", width = 1300, height = 800, res = 110)
 plot_coverage(catch_data, type = "bubbles", y = "fleetValue", fill = "Country",
              threshold = 50, min_trips = 2, engine = "base")
 invisible(dev.off())
 
+## ---- 1f. n_per_screen - split a faceted figure across several separate
+## figures instead of one crowded one. With no device already open, this
+## opens n_per_screen-worth of SEPARATE devices (several windows/pages
+## in the plot viewer, one per group of facet values) - shown here saved
+## to one PNG per screen so it is visible without an interactive session.
+grDevices::pdf("13f_discard_heatmap_screens.pdf", width = 10, height = 7)
+plot_coverage(catch_data, type = "heatmap", y = "fleetValue", fill = "Country",
+             facet = "Season", engine = "base", n_per_screen = 2)
+invisible(dev.off())
+
 
 ## =====================================================================
-##  2. LENGTH COVERAGE - the same three options, for biology
+##  2. LENGTH COVERAGE - one call, two datasets, no biology_link() /
+##     stratum_measurements() / add_sufficiency() of your own
 ## =====================================================================
-## Length strata need more than build_strata() alone (biology_link(),
-## stratum_measurements(), add_sufficiency()), so plot_biology_coverage()
-## still expects an already-classified table - this is the one auto-
-## build plot_coverage() does NOT do for you (see its own docs for why).
-dims_len <- c("catchCategory", "metier4", "Country", "Season")
-bl  <- biology_link(catch_data, distributions, dims_len, type = "LengthTotal")
-ms  <- stratum_measurements(catch_data, distributions, dims_len, type = "LengthTotal")
-bl  <- add_sufficiency(bl, ms, 50, 100)
-bio_len <- bl %>%
-  dplyr::mutate(landings = weight, landings_with_discards = weight_measured,
-               discards = 0, discard_rate = NA_real_)
-bio_len <- classify_strata(bio_len, 50, "length", 100, 2)
+## plot_biology_coverage(catch_data, distributions, ...) runs the whole
+## pipeline internally - the same one-step convenience discard coverage
+## already had. Passing an already-built table (the old convention)
+## still works unchanged if you have one from elsewhere.
 
 ## ---- 2a. length coverage, bars, both engines ------------------------
-p2a <- plot_biology_coverage(bio_len, type = "bars", y = "metier4",
-                             fill = "Country", weight_label = "catch",
-                             verbose = TRUE)
+p2a <- plot_biology_coverage(catch_data, distributions, type = "bars",
+                             y = "fleetValue", fill = "Country",
+                             weight_label = "catch", verbose = TRUE)
 print(p2a)
 
-png("12a_length_bars_base.png", width = 1200, height = 800, res = 110)
-plot_biology_coverage(bio_len, type = "bars", y = "metier4", fill = "Country",
+png("12a_length_bars_base.png", width = 1300, height = 800, res = 110)
+plot_biology_coverage(catch_data, distributions, type = "bars",
+                      y = "fleetValue", fill = "Country",
                       weight_label = "catch", engine = "base")
 invisible(dev.off())
 
 ## ---- 2b. length coverage, heatmap, both engines ---------------------
-p2b <- plot_biology_coverage(bio_len, type = "heatmap", y = "metier4",
-                             fill = "Country", facet = "Season",
+p2b <- plot_biology_coverage(catch_data, distributions, type = "heatmap",
+                             y = "fleetValue", fill = "Country", facet = "Season",
                              threshold = 50, what = "length", min_meas = 100,
                              min_trips = 2, weight_label = "catch")
 print(p2b)
 
 png("12b_length_heatmap_base.png", width = 1400, height = 900, res = 110)
-plot_biology_coverage(bio_len, type = "heatmap", y = "metier4", fill = "Country",
-                      facet = "Season", threshold = 50, what = "length",
-                      min_meas = 100, min_trips = 2, weight_label = "catch",
-                      engine = "base")
-invisible(dev.off())
-
-## ---- 2c. length coverage, bubbles, both engines ----------------------
-p2c <- plot_biology_coverage(bio_len, type = "bubbles", y = "metier4",
-                             fill = "Country", threshold = 50, what = "length",
-                             min_meas = 100, min_trips = 2, weight_label = "catch")
-print(p2c)
-
-png("12c_length_bubbles_base.png", width = 1100, height = 750, res = 110)
-plot_biology_coverage(bio_len, type = "bubbles", y = "metier4", fill = "Country",
+plot_biology_coverage(catch_data, distributions, type = "heatmap",
+                      y = "fleetValue", fill = "Country", facet = "Season",
                       threshold = 50, what = "length", min_meas = 100,
                       min_trips = 2, weight_label = "catch", engine = "base")
 invisible(dev.off())
 
+## ---- 2c. length coverage, bubbles, both engines ----------------------
+p2c <- plot_biology_coverage(catch_data, distributions, type = "bubbles",
+                             y = "fleetValue", fill = "Country",
+                             threshold = 50, what = "length", min_meas = 100,
+                             min_trips = 2, weight_label = "catch")
+print(p2c)
+
+png("12c_length_bubbles_base.png", width = 1300, height = 800, res = 110)
+plot_biology_coverage(catch_data, distributions, type = "bubbles",
+                      y = "fleetValue", fill = "Country", threshold = 50,
+                      what = "length", min_meas = 100, min_trips = 2,
+                      weight_label = "catch", engine = "base")
+invisible(dev.off())
+
+## ---- 2d. age coverage - what = "age" instead of "length" -------------
+p2d <- plot_biology_coverage(catch_data, distributions, type = "bars",
+                             y = "fleetValue", what = "age",
+                             weight_label = "catch")
+print(p2d)
+
 
 ## =====================================================================
-##  3. DISCARD RATE - per-stratum points and a boxplot summary, both
-##     engines
+##  3. DISCARD RATE - one call, no build_strata() of your own either
 ## =====================================================================
-## From an already-built strata table (discard_rate is one of
-## build_strata()'s own columns, so no separate classification step is
-## needed here, unlike coverage).
-strata_dr <- build_strata(catch_data, c("fleetValue", "Country", "Season"))
+## plot_discard_rate(catch_data, ...) builds strata internally too -
+## detected by the absence of a discard_rate column, the same
+## auto-build convenience as the coverage functions.
 
 ## ---- 3a. one point per stratum, coloured by country -------------------
-p3a <- plot_discard_rate(strata_dr, type = "raw", x = "fleetValue",
+p3a <- plot_discard_rate(catch_data, type = "raw", x = "fleetValue",
                          colour = "Country", facet = "Season", jitter = TRUE)
 print(p3a)
 
-## ---- 3a-base. the same figure, base-R engine, same colours ------------
+## ---- 3a-base. the same figure, base-R engine, angle = 0 (horizontal
+## labels instead of the default 45 degrees) --------------------------
 png("13a_discard_rate_raw_base.png", width = 1400, height = 900, res = 110)
-plot_discard_rate(strata_dr, type = "raw", x = "fleetValue", colour = "Country",
-                  engine = "base", verbose = TRUE)
+plot_discard_rate(catch_data, type = "raw", x = "fleetValue", colour = "Country",
+                  engine = "base", angle = 45, verbose = TRUE)
 invisible(dev.off())
 
 ## ---- 3b. the same data as a boxplot, one panel per country -----------
-p3b <- plot_discard_rate(strata_dr, type = "box", x = "fleetValue",
+p3b <- plot_discard_rate(catch_data, type = "box", x = "fleetValue",
                          fill = "Season", facet = "Country",
                          show_points = TRUE, show_pooled = TRUE)
 print(p3b)
 
-## ---- 3b-base. the same boxplot, base-R engine -------------------------
-## Red diamonds are the catch-weighted pooled rate, same as the ggplot
-## version's - a useful check that a boxplot's per-stratum spread and
-## the number actually used downstream are not the same thing.
-png("13b_discard_rate_box_base.png", width = 1200, height = 800, res = 110)
-plot_discard_rate(strata_dr, type = "box", x = "fleetValue", fill = "Country",
-                  show_points = TRUE, show_pooled = TRUE, engine = "base")
+## ---- 3b-base. the same boxplot, base-R engine, faceted - the legend
+## now appears whether faceted or not (it used to be single-panel only)
+png("13b_discard_rate_box_base.png", width = 1400, height = 900, res = 110)
+plot_discard_rate(catch_data, type = "box", x = "fleetValue", fill = "Country",
+                  facet = "Season", show_points = TRUE, show_pooled = TRUE,
+                  engine = "base")
 invisible(dev.off())
 
 
 ## =====================================================================
-##  4. LENGTH DISTRIBUTION - numbers at length, and mean weight
+##  4. LENGTH DISTRIBUTION - one call, two datasets again
 ## =====================================================================
-## Also ggplot2 only. link_dist_to_strata() (not biology_link()) here -
-## it keeps every length CLASS as its own row, which a coverage figure
-## does not need but a distribution figure is built from.
+## No link_dist_to_strata() / length_numbers() / length_meanweight() of
+## your own - plot_biology_distribution(catch_data, distributions, ...)
+## does it internally.
 dims_biology <- c("catchCategory", "fleetValue", "Country", "Season")
 linked <- link_dist_to_strata(catch_data, distributions, dims_biology,
                               "Lan", "LengthTotal")
@@ -196,11 +201,11 @@ p4a <- plot_biology_distribution(d_num, quantity = "numbers", type = "histogram"
                                  class_label = "Length (cm)")
 print(p4a)
 
-## ---- 4a-base. the same histogram, base-R engine, same colours ---------
+## ---- 4a-base. the same histogram, base-R engine, colorblind palette ---
 png("14a_length_hist_base.png", width = 1300, height = 800, res = 110)
 plot_biology_distribution(d_num, quantity = "numbers", type = "histogram",
                           fill = "fleetValue", class_label = "Length (cm)",
-                          engine = "base", verbose = TRUE)
+                          engine = "base", palette = "colorblind", verbose = TRUE)
 invisible(dev.off())
 
 ## ---- 4b. the same numbers, as a smoothed density instead --------------
@@ -210,11 +215,11 @@ p4b <- plot_biology_distribution(d_num, quantity = "numbers", type = "density",
 print(p4b)
 
 ## ---- 4b-base. the same density, base-R engine -------------------------
-## Each curve is drawn as a filled, vertically offset ribbon
-## (graphics::polygon()) rather than ggplot2's geom_ribbon() - the same
-## weighted kernel density underneath, same "each curve integrates to
-## one" comparison.
-png("14b_length_density_base.png", width = 1200, height = 800, res = 110)
+## Each curve is drawn as a filled, vertically offset ribbon with a
+## black outline (graphics::polygon()), rather than ggplot2's
+## geom_ribbon() - the same weighted kernel density underneath, same
+## "each curve integrates to one" comparison.
+png("14b_length_density_base.png", width = 1200, height = 900, res = 110)
 plot_biology_distribution(d_num, quantity = "numbers", type = "density",
                           fill = "fleetValue", smooth = 0.5,
                           class_label = "Length (cm)", engine = "base")
@@ -235,4 +240,5 @@ plot_biology_distribution(d_mw, quantity = "meanweight", type = "line",
 invisible(dev.off())
 
 cat("\nDone - ggplot2 figures are in Rplots.pdf; base-R figures are the",
-   "individual PNGs written alongside this script.\n")
+   "individual PNGs (and one PDF, 13f, showing n_per_screen) written",
+   "alongside this script.\n")
