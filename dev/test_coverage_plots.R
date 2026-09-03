@@ -41,10 +41,12 @@ distributions <- read.csv(fd, stringsAsFactors = FALSE)
 ## plot_coverage() builds and classifies the strata internally. verbose
 ## = TRUE prints what it is about to draw: the columns on each role,
 ## the threshold/min_trips actually used (or, for "bars", why neither
-## applies), and how many rows are drawn.
+## applies), and how many rows are drawn. The bars plot now carries a
+## cumulative-% -of-landings staircase against a secondary top axis, and
+## "Sampled" / "Not sampled" block callouts. threshold / min_trips are
+## optional here - bars ignore them.
 p1a <- plot_coverage(catch_data, type = "bars", y = "fleetValue",
-                     fill = "Country", threshold = 50, min_trips = 2,
-                     verbose = TRUE)
+                     fill = "Country", verbose = TRUE)
 print(p1a)
 
 ## ---- 1b. same figure, base-R engine, same colours, colorblind palette
@@ -95,59 +97,68 @@ invisible(dev.off())
 
 
 ## =====================================================================
-##  2. LENGTH COVERAGE - one call, two datasets, no biology_link() /
-##     stratum_measurements() / add_sufficiency() of your own
+##  2. LENGTH / AGE COVERAGE - one call, no biology pipeline of your own
 ## =====================================================================
-## plot_biology_coverage(catch_data, distributions, ...) runs the whole
-## pipeline internally - the same one-step convenience discard coverage
-## already had. Passing an already-built table (the old convention)
-## still works unchanged if you have one from elsewhere.
+## plot_coverage() now takes `distributions` and a biology `what`
+## directly: it runs biology_link() / stratum_measurements() /
+## add_sufficiency() / classify_strata() internally. (plot_biology_coverage()
+## is kept as a thin forwarder for old call sites.) An already-built
+## classified table still short-circuits straight through.
 
-## ---- 2a. length coverage, bars, both engines ------------------------
-p2a <- plot_biology_coverage(catch_data, distributions, type = "bars",
-                             y = "fleetValue", fill = "Country",
-                             weight_label = "catch", verbose = TRUE)
+## ---- 2a. length coverage, bars - now with the cumulative-% staircase -
+p2a <- plot_coverage(catch_data, type = "bars", y = "fleetValue",
+                     fill = "Country", what = "length",
+                     distributions = distributions, weight_label = "catch",
+                     verbose = TRUE)
 print(p2a)
 
 png("12a_length_bars_base.png", width = 1300, height = 800, res = 110)
-plot_biology_coverage(catch_data, distributions, type = "bars",
-                      y = "fleetValue", fill = "Country",
-                      weight_label = "catch", engine = "base")
+plot_coverage(catch_data, type = "bars", y = "fleetValue", fill = "Country",
+              what = "length", distributions = distributions,
+              weight_label = "catch", engine = "base")
 invisible(dev.off())
 
-## ---- 2b. length coverage, heatmap, both engines ---------------------
-p2b <- plot_biology_coverage(catch_data, distributions, type = "heatmap",
-                             y = "fleetValue", fill = "Country", facet = "Season",
-                             threshold = 50, what = "length", min_meas = 100,
-                             min_trips = 2, weight_label = "catch")
+## ---- 2b. length coverage, heatmap - abbreviated status legend -------
+p2b <- plot_coverage(catch_data, type = "heatmap", y = "fleetValue",
+                     fill = "Country", facet = "Season", what = "length",
+                     distributions = distributions, threshold = 50,
+                     min_meas = 100, min_trips = 2, weight_label = "catch")
 print(p2b)
 
 png("12b_length_heatmap_base.png", width = 1400, height = 900, res = 110)
-plot_biology_coverage(catch_data, distributions, type = "heatmap",
-                      y = "fleetValue", fill = "Country", facet = "Season",
-                      threshold = 50, what = "length", min_meas = 100,
-                      min_trips = 2, weight_label = "catch", engine = "base")
+plot_coverage(catch_data, type = "heatmap", y = "fleetValue", fill = "Country",
+              facet = "Season", what = "length", distributions = distributions,
+              threshold = 50, min_meas = 100, min_trips = 2,
+              weight_label = "catch", engine = "base")
 invisible(dev.off())
 
-## ---- 2c. length coverage, bubbles, both engines ----------------------
-p2c <- plot_biology_coverage(catch_data, distributions, type = "bubbles",
-                             y = "fleetValue", fill = "Country",
-                             threshold = 50, what = "length", min_meas = 100,
-                             min_trips = 2, weight_label = "catch")
+## ---- 2c. length coverage, bubbles - trips shown on sub-threshold cells
+p2c <- plot_coverage(catch_data, type = "bubbles", y = "fleetValue",
+                     fill = "Country", what = "length",
+                     distributions = distributions, threshold = 50,
+                     min_meas = 100, min_trips = 2, weight_label = "catch")
 print(p2c)
 
 png("12c_length_bubbles_base.png", width = 1300, height = 800, res = 110)
-plot_biology_coverage(catch_data, distributions, type = "bubbles",
-                      y = "fleetValue", fill = "Country", threshold = 50,
-                      what = "length", min_meas = 100, min_trips = 2,
-                      weight_label = "catch", engine = "base")
+plot_coverage(catch_data, type = "bubbles", y = "fleetValue", fill = "Country",
+              what = "length", distributions = distributions, threshold = 50,
+              min_meas = 100, min_trips = 2, weight_label = "catch",
+              engine = "base")
 invisible(dev.off())
 
-## ---- 2d. age coverage - what = "age" instead of "length" -------------
-p2d <- plot_biology_coverage(catch_data, distributions, type = "bars",
-                             y = "fleetValue", what = "age",
-                             weight_label = "catch")
-print(p2d)
+## ---- 2d. AGE coverage - what = "age" reads the Age distribution rows -
+## Uses the pok/ age fixture if present (not shipped); skipped otherwise.
+age_c <- file.path(dirname(fx), "pok", "pok_2022_catches_CEF_v17.1.csv")
+age_d <- file.path(dirname(fd), "pok", "pok_2022_distributions_CEF_v17.1.csv")
+have_age <- file.exists(age_c) && file.exists(age_d)
+if (have_age) {
+  acatch <- derive_fields(read.csv(age_c, stringsAsFactors = FALSE))
+  adist  <- read.csv(age_d, stringsAsFactors = FALSE)
+  p2d <- plot_coverage(acatch, type = "heatmap", y = "fleetValue",
+                       fill = "Country", what = "age", distributions = adist,
+                       weight_label = "catch")
+  print(p2d)
+} else message("2d: age fixture not present (inst/extdata/.../pok/) - skipped")
 
 
 ## =====================================================================
@@ -185,59 +196,62 @@ invisible(dev.off())
 
 
 ## =====================================================================
-##  4. LENGTH DISTRIBUTION - one call, two datasets again
+##  4. LENGTH / AGE DISTRIBUTION - direct on catch + distributions
 ## =====================================================================
 ## No link_dist_to_strata() / length_numbers() / length_meanweight() of
-## your own - plot_biology_distribution(catch_data, distributions, ...)
-## does it internally.
-dims_biology <- c("catchCategory", "fleetValue", "Country", "Season")
-linked <- link_dist_to_strata(catch_data, distributions, dims_biology,
-                              "Lan", "LengthTotal")
+## your own: plot_biology_distribution(catch_data, distributions,
+##   variableType = "Number" | "WeightLive",
+##   distributionType = "LengthTotal" | "Age", ...) does it internally.
+## Numbers come out in thousands (N3), length in cm; the axis labels are
+## taken from the data's own units.
 
-## ---- 4a. numbers at length, stacked histogram by fleet ----------------
-d_num <- length_numbers(linked, "fleetValue")
-p4a <- plot_biology_distribution(d_num, quantity = "numbers", type = "histogram",
-                                 fill = "fleetValue", stacked = TRUE, smooth = 1,
-                                 class_label = "Length (cm)")
+## ---- 4a. numbers at length, stacked histogram by fleet ---------------
+p4a <- plot_biology_distribution(catch_data, distributions,
+         variableType = "Number", distributionType = "LengthTotal",
+         type = "histogram", fill = "fleetValue", stacked = TRUE)
 print(p4a)
 
-## ---- 4a-base. the same histogram, base-R engine, colorblind palette ---
+## ---- 4a-base. the same histogram, base-R engine, colorblind palette --
 png("14a_length_hist_base.png", width = 1300, height = 800, res = 110)
-plot_biology_distribution(d_num, quantity = "numbers", type = "histogram",
-                          fill = "fleetValue", class_label = "Length (cm)",
-                          engine = "base", palette = "colorblind", verbose = TRUE)
+plot_biology_distribution(catch_data, distributions, variableType = "Number",
+  distributionType = "LengthTotal", type = "histogram", fill = "fleetValue",
+  engine = "base", palette = "colorblind", verbose = TRUE)
 invisible(dev.off())
 
-## ---- 4b. the same numbers, as a smoothed density instead --------------
-p4b <- plot_biology_distribution(d_num, quantity = "numbers", type = "density",
-                                 fill = "fleetValue", smooth = 0.5,
-                                 class_label = "Length (cm)")
+## ---- 4b. the same numbers, as a smoothed density instead ------------
+p4b <- plot_biology_distribution(catch_data, distributions,
+         variableType = "Number", distributionType = "LengthTotal",
+         type = "density", fill = "fleetValue", smooth = 0.5)
 print(p4b)
 
-## ---- 4b-base. the same density, base-R engine -------------------------
-## Each curve is drawn as a filled, vertically offset ribbon with a
-## black outline (graphics::polygon()), rather than ggplot2's
-## geom_ribbon() - the same weighted kernel density underneath, same
-## "each curve integrates to one" comparison.
+## ---- 4b-base. the same density, base-R engine ----------------------
 png("14b_length_density_base.png", width = 1200, height = 900, res = 110)
-plot_biology_distribution(d_num, quantity = "numbers", type = "density",
-                          fill = "fleetValue", smooth = 0.5,
-                          class_label = "Length (cm)", engine = "base")
+plot_biology_distribution(catch_data, distributions, variableType = "Number",
+  distributionType = "LengthTotal", type = "density", fill = "fleetValue",
+  smooth = 0.5, engine = "base")
 invisible(dev.off())
 
-## ---- 4c. mean weight at length, one line per fleet ---------------------
-d_mw <- length_meanweight(linked, "fleetValue")
-p4c <- plot_biology_distribution(d_mw, quantity = "meanweight", type = "line",
-                                 colour = "fleetValue", show_points = TRUE,
-                                 class_label = "Length (cm)")
+## ---- 4c. mean weight at length, one line per fleet -----------------
+p4c <- plot_biology_distribution(catch_data, distributions,
+         variableType = "WeightLive", distributionType = "LengthTotal",
+         type = "line", colour = "fleetValue", show_points = TRUE)
 print(p4c)
 
-## ---- 4c-base. the same mean-weight line, base-R engine -----------------
+## ---- 4c-base. the same mean-weight line, base-R engine -------------
 png("14c_length_meanweight_base.png", width = 1200, height = 800, res = 110)
-plot_biology_distribution(d_mw, quantity = "meanweight", type = "line",
-                          colour = "fleetValue", show_points = TRUE,
-                          class_label = "Length (cm)", engine = "base")
+plot_biology_distribution(catch_data, distributions, variableType = "WeightLive",
+  distributionType = "LengthTotal", type = "line", colour = "fleetValue",
+  show_points = TRUE, engine = "base")
 invisible(dev.off())
+
+## ---- 4d. AGE distribution - same call, distributionType = "Age" ----
+if (have_age) {
+  png("14d_age_hist_base.png", width = 1300, height = 800, res = 110)
+  plot_biology_distribution(acatch, adist, variableType = "Number",
+    distributionType = "Age", type = "histogram", fill = "fleetValue",
+    engine = "base", verbose = TRUE)
+  invisible(dev.off())
+} else message("4d: age fixture not present - skipped")
 
 cat("\nDone - ggplot2 figures are in Rplots.pdf; base-R figures are the",
    "individual PNGs (and one PDF, 13f, showing n_per_screen) written",
