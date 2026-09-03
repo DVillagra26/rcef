@@ -50,7 +50,7 @@ ok(all(c("palette", "angle", "n_per_screen") %in%
 ## ---- 2. colorblind palette actually changes the colours used ---------
 r <- tryCatch({
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
-  plot_biology_distribution(d_num, "numbers", "histogram", fill = "fleetValue",
+  plot_biology_distribution(d_num, quantity = "numbers", type = "histogram", fill = "fleetValue",
                             engine = "base", palette = "colorblind")
   TRUE
 }, error = function(e) conditionMessage(e))
@@ -58,7 +58,7 @@ ok(isTRUE(r), paste("engine='base', palette='colorblind' runs without error:", r
 
 ## ---- 3. n_per_screen genuinely opens multiple devices -----------------
 before <- length(grDevices::dev.list())
-plot_biology_distribution(d_num, "numbers", "histogram", fill = "fleetValue",
+plot_biology_distribution(d_num, quantity = "numbers", type = "histogram", fill = "fleetValue",
                           facet1 = "Season", engine = "base", n_per_screen = 1)
 after <- length(grDevices::dev.list())
 ok(after > before, "n_per_screen opens more than one device when none was already set")
@@ -85,7 +85,7 @@ ok(isTRUE(r2), paste("a large overlap (which would have clipped before) still ru
 ## ---- 6. mean-weight line plot still works with the new parameters ----
 r3 <- tryCatch({
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
-  plot_biology_distribution(d_mw, "meanweight", "line", colour = "fleetValue",
+  plot_biology_distribution(d_mw, quantity = "meanweight", type = "line", colour = "fleetValue",
                             engine = "base", palette = "colorblind", angle = 0)
   TRUE
 }, error = function(e) conditionMessage(e))

@@ -1996,7 +1996,8 @@ plot_dr_box_base <- function(s_full, x_var, fill_var = NULL, facet_var = NULL,
 #' @export
 plot_length_hist <- function(d, fill_var = NULL, facet1 = NULL, facet2 = NULL,
                              stacked = TRUE, ncol = 2, scales = "fixed",
-                             class_label = "Length (cm)") {
+                             class_label = "Length (cm)",
+                             value_label = "Numbers") {
   if (is.null(d) || !nrow(d)) return(NULL)
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
   bw <- { u <- sort(unique(d$.class)); if (length(u) > 1) min(diff(u)) else 1 }
@@ -2017,7 +2018,7 @@ plot_length_hist <- function(d, fill_var = NULL, facet1 = NULL, facet2 = NULL,
     facet_two(facet1, facet2, ncol = ncol, scales = scales) +
     labs(title = sprintf("Numbers at %s", tolower(sub(" .*", "", class_label))),
          subtitle = if (has(fill_var)) paste0("Stacked by ", fill_var) else NULL,
-         x = class_label, y = "Numbers", fill = fill_var) +
+         x = class_label, y = value_label, fill = fill_var) +
     app_theme()
 }
 
@@ -2213,6 +2214,28 @@ plot_length_meanweight <- function(d, colour_var = NULL, facet1 = NULL,
 #  Distribution dispatcher
 # ----------------------------------------------------------
 
+#' Axis labels and presentation scale for a biology distribution plot
+#'
+#' [prep_distributions()] already normalises the length class to cm and
+#' the value to base N / g (mm and kg get converted on the way in). On
+#' top of that, numbers are presented in thousands (N3). This returns
+#' the axis labels that match, and the numbers scale factor.
+#'
+#' @param distributionType "LengthTotal" (default) or "Age".
+#' @param quantity "numbers" (default) or "meanweight".
+#' @return A list: `class_label`, `value_label`, `value_scale`.
+#' @seealso [prep_distributions()], [plot_biology_distribution()]
+#' @keywords internal
+#' @export
+biology_axis_labels <- function(distributionType = "LengthTotal",
+                                quantity = "numbers") {
+  is_age <- identical(distributionType, "Age")
+  list(class_label = if (is_age) "Age (years)" else "Length (cm)",
+       value_label = if (identical(quantity, "numbers"))
+         "Numbers (thousands)" else "Mean weight (g)",
+       value_scale = if (identical(quantity, "numbers")) 1e-3 else 1)
+}
+
 #' Numbers- or mean-weight-at-length/age distribution plot
 #'
 #' One entry point for the biology distribution views. `quantity =
@@ -2252,23 +2275,60 @@ plot_length_meanweight <- function(d, colour_var = NULL, facet1 = NULL,
 #'   drawing - see [plot_coverage()]'s `verbose` for the same idea
 #'   applied here.
 #' @export
-plot_biology_distribution <- function(data,
+plot_biology_distribution <- function(data, distributions = NULL,
+                                      variableType = NULL,
+                                      distributionType = NULL,
                                       quantity = c("numbers", "meanweight"),
                                       type = c("histogram", "density", "line"),
                                       fill = NULL, colour = NULL,
                                       facet1 = NULL, facet2 = NULL, shape = NULL,
+                                      dims = NULL, catch_category = "Lan",
                                       stacked = TRUE, smooth = 1,
                                       show_points = TRUE, show_spread = TRUE,
                                       ncol = 2, scales = "fixed",
-                                      class_label = "Length (cm)",
+                                      class_label = NULL, value_label = NULL,
                                       engine = c("ggplot", "base"),
                                       verbose = FALSE,
                                       palette = c("default", "colorblind"),
                                       angle = 45, n_per_screen = NULL) {
-  quantity <- match.arg(quantity)
   type <- match.arg(type)
   engine <- match.arg(engine)
   palette <- match.arg(palette)
+  # variableType, when given, decides the quantity: Number -> numbers,
+  # WeightLive -> meanweight. Otherwise fall back to `quantity`.
+  quantity <- if (!is.null(variableType))
+    (if (identical(variableType, "WeightLive")) "meanweight" else "numbers")
+  else match.arg(quantity)
+  distributionType <- distributionType %||%
+    (if (identical(quantity, "meanweight")) "LengthTotal" else "LengthTotal")
+
+  # Direct-call form: raw catch data + a distributions table. Link and
+  # summarise here so a caller need not run link_dist_to_strata() /
+  # length_numbers() / length_meanweight() by hand. `data` that is
+  # already a prepared numbers / mean-weight table (no `distributions`)
+  # takes the original path unchanged.
+  lab <- biology_axis_labels(distributionType, quantity)
+  if (!is.null(distributions)) {
+    has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+    grp <- unique(c(if (has(fill)) fill, if (has(colour)) colour,
+                    if (has(facet1)) facet1, if (has(facet2)) facet2,
+                    if (has(shape)) shape))
+    if (is.null(dims))
+      dims <- unique(c("catchCategory", "fleetValue", "Country", "Season", grp))
+    dims <- intersect(dims, names(as.data.frame(data)))
+    linked <- link_dist_to_strata(data, distributions, dims, catch_category,
+                                  type = distributionType)
+    data <- if (identical(quantity, "numbers"))
+      length_numbers(linked, grp) else length_meanweight(linked, grp)
+    # Numbers presented in thousands (N3); length already in cm, age as
+    # is - prep_distributions() did the unit normalisation, this is the
+    # presentation scale on top.
+    if (!is.null(data) && nrow(data) && identical(quantity, "numbers"))
+      data$number <- data$number * lab$value_scale
+  }
+  class_label <- class_label %||% lab$class_label
+  value_label <- value_label %||% lab$value_label
+
   if (isTRUE(verbose)) {
     cat("-- plot_biology_distribution(): quantity = \"", quantity,
         "\", type = \"", type, "\", engine = \"", engine, "\" --\n", sep = "")
@@ -2291,8 +2351,9 @@ plot_biology_distribution <- function(data,
                                 angle = angle, n_per_screen = n_per_screen)
       else
         plot_length_hist_base(data, fill, facet1, facet2, stacked = stacked,
-                              class_label = class_label, palette = palette,
-                              angle = angle, n_per_screen = n_per_screen)
+                              class_label = class_label, value_label = value_label,
+                              palette = palette, angle = angle,
+                              n_per_screen = n_per_screen)
     } else {
       plot_length_meanweight_base(data, colour, facet1, facet2, shape,
                                   show_points = show_points,
@@ -2307,7 +2368,8 @@ plot_biology_distribution <- function(data,
                          ncol = ncol, scales = scales, class_label = class_label)
     else
       plot_length_hist(data, fill, facet1, facet2, stacked = stacked,
-                       ncol = ncol, scales = scales, class_label = class_label)
+                       ncol = ncol, scales = scales, class_label = class_label,
+                       value_label = value_label)
   } else {
     plot_length_meanweight(data, colour, facet1, facet2, shape,
                            show_points = show_points, show_spread = show_spread,
@@ -2354,6 +2416,7 @@ facet_key_base <- function(d, facet1 = NULL, facet2 = NULL) {
 plot_length_hist_base <- function(d, fill_var = NULL, facet1 = NULL,
                                   facet2 = NULL, stacked = TRUE,
                                   class_label = "Length (cm)",
+                                  value_label = "Numbers",
                                   palette = c("default", "colorblind"),
                                   angle = 45, n_per_screen = NULL) {
   palette <- match.arg(palette)
@@ -2390,7 +2453,7 @@ plot_length_hist_base <- function(d, fill_var = NULL, facet1 = NULL,
           m[as.character(dd[[fill_var]][i]), as.character(dd$.class[i])] + dd$number[i]
       sp <- if (stacked) 0.1 else c(0, 1.5)
       bp <- graphics::barplot(m, col = pal[lv], border = OUTLINE, beside = !stacked,
-                        space = sp, xlab = class_label, ylab = "Numbers",
+                        space = sp, xlab = class_label, ylab = value_label,
                         main = main, cex.names = 0.7, las = ax_las)
       guides(if (is.matrix(bp)) colMeans(bp) else as.numeric(bp), classes)
       graphics::barplot(m, col = pal[lv], border = OUTLINE, beside = !stacked,
@@ -2402,7 +2465,7 @@ plot_length_hist_base <- function(d, fill_var = NULL, facet1 = NULL,
       agg <- stats::aggregate(number ~ .class, dd, sum)
       v[as.character(agg$.class)] <- agg$number
       bp <- graphics::barplot(v, col = PAL_BASE[1], border = OUTLINE, space = 0.1,
-                        xlab = class_label, ylab = "Numbers", main = main,
+                        xlab = class_label, ylab = value_label, main = main,
                         cex.names = 0.7, las = ax_las)
       guides(as.numeric(bp), classes)
       graphics::barplot(v, col = PAL_BASE[1], border = OUTLINE, space = 0.1,
