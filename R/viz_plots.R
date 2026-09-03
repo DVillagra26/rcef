@@ -1192,6 +1192,247 @@ plot_bubbles_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
   invisible(NULL)
 }
 
+# ----------------------------------------------------------
+#  Data-availability scatter (before any raising)
+# ----------------------------------------------------------
+
+#' Axis label for a coverage-scatter metric
+#'
+#' Maps the `y` / `size` column name used by [plot_coverage_scatter()] to
+#' a readable axis / legend label; `what` tunes the coverage wording.
+#'
+#' @param metric Column name ("coverage", "n_measurements", "numTrips",
+#'   "discard_rate", or anything else - returned unchanged).
+#' @param what "discard", "length" or "age".
+#' @return A single string.
+#' @keywords internal
+#' @export
+scatter_axis_label <- function(metric, what = "discard") {
+  cov_txt <- if (what %in% c("length", "age"))
+    sprintf("%% of catch with a %s", if (what == "age") "age" else "length")
+  else "% of landings sampled"
+  switch(metric,
+         coverage       = cov_txt,
+         n_measurements = "Fish measured (n)",
+         numTrips       = "Sampled trips (n)",
+         discard_rate   = "Discard rate",
+         metric)
+}
+
+#' Data-availability scatter: sampling vs weight per stratum
+#'
+#' One point per stratum: its landed/caught weight on a log x axis, a
+#' chosen sampling metric on y (coverage %, measurements, trips, ...),
+#' the point sized by a second metric (trips by default, measurements
+#' for biology), coloured by sampling status. A dashed line marks the
+#' relevant threshold. Only the heaviest not-yet-safe strata are
+#' labelled, so the picture stays readable with many strata - these are
+#' the ones worth grouping or chasing a sample for.
+#'
+#' It answers "where is the catch, and where is the sampling" in one
+#' view, from the data alone - before any donor pool or raising is
+#' decided. A lower-level builder behind [plot_coverage()]
+#' (`type = "scatter"`); call it directly for full control of `x` / `y`
+#' / `size`.
+#'
+#' @param sc Classified stratum table (or anything with the `x`/`y`
+#'   columns and, optionally, `Status`).
+#' @param x,y,size Column names: weight on x (log), the sampling metric
+#'   on y, a second metric for point size. Defaults `"landings"`,
+#'   `"coverage"`, `"numTrips"`.
+#' @param facet_var Optional facet column.
+#' @param threshold,min_meas,min_trips Bars the status colours and the
+#'   dashed reference line are drawn against.
+#' @param what "discard", "length" or "age" - only tunes wording.
+#' @param weight_label Word for the weight on x.
+#' @param label_n How many strata to label (heaviest non-safe first).
+#' @param palette Passed through for signature symmetry; status colours
+#'   are fixed.
+#' @return A ggplot object, or `NULL` when there is nothing to draw.
+#' @seealso [plot_coverage()]
+#' @family coverage plots
+#' @export
+plot_coverage_scatter <- function(sc, x = "landings", y = "coverage",
+                                  size = "numTrips", facet_var = NULL,
+                                  threshold = 50, what = "discard",
+                                  weight_label = "landings", min_meas = 0,
+                                  min_trips = 2, label_n = 8,
+                                  palette = c("default", "colorblind")) {
+  palette <- match.arg(palette)
+  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+  miss <- setdiff(c(x, y), names(sc))
+  if (length(miss))
+    stop("plot_coverage_scatter(): column(s) not in the table: ",
+         paste(miss, collapse = ", "))
+  d <- sc %>% filter(is.finite(.data[[x]]), .data[[x]] > 0, is.finite(.data[[y]]))
+  if (!nrow(d)) return(NULL)
+  d$.x <- d[[x]]; d$.y <- d[[y]]
+  d$.sz <- if (size %in% names(d)) suppressWarnings(as.numeric(d[[size]])) else NA_real_
+  if (all(is.na(d$.sz))) d$.sz <- 1
+  # label with just the first key (fleet / metier), not the full
+  # "fleet | country | season" id - it has to sit next to a point.
+  d$.lab <- if ("stratum_id" %in% names(d))
+    sub(" \\| .*$", "", as.character(d$stratum_id)) else as.character(seq_len(nrow(d)))
+  fillable <- "Status" %in% names(d)
+
+  lab_d <- d
+  if (fillable) lab_d <- lab_d %>% filter(!grepl("^SAFE", Status))
+  # one label per fleet/metier name (its heaviest stratum), then the
+  # `label_n` heaviest of those - so a dozen near-identical strata do
+  # not all get the same tag stacked on each other.
+  lab_d <- lab_d %>% arrange(desc(.x)) %>% filter(!duplicated(.lab)) %>%
+    slice_max(.x, n = label_n, with_ties = FALSE)
+
+  ylab  <- scatter_axis_label(y, what)
+  szlab <- scatter_axis_label(size, what)
+  p <- ggplot(d, aes(.x, .y))
+  if (identical(y, "coverage"))
+    p <- p + geom_hline(yintercept = threshold, linetype = "dashed",
+                        colour = "grey50")
+  if (identical(y, "n_measurements") && min_meas > 0)
+    p <- p + geom_hline(yintercept = min_meas, linetype = "dashed",
+                        colour = "grey50")
+  p <- p +
+    (if (fillable)
+       geom_point(aes(fill = Status, size = .sz), shape = 21, colour = OUTLINE,
+                  alpha = 0.9, stroke = 0.6)
+     else geom_point(aes(size = .sz), shape = 21, fill = PAL_BASE[1],
+                     colour = OUTLINE, alpha = 0.9)) +
+    ggrepel::geom_text_repel(data = lab_d, aes(label = .lab), size = 2.5,
+                             colour = "grey20", box.padding = 0.5,
+                             min.segment.length = 0, segment.size = 0.2,
+                             segment.colour = "grey55", max.overlaps = Inf) +
+    scale_x_log10(labels = scales::comma) +
+    scale_size_area(name = szlab, max_size = 9) +
+    maybe_facet(facet_var) +
+    labs(title = sprintf("Sampling vs %s weight per stratum",
+                         tools::toTitleCase(weight_label)),
+         subtitle = sprintf("x = %s (log) | y = %s | size = %s | %d labelled",
+                            weight_label, ylab, szlab, nrow(lab_d)),
+         x = sprintf("%s (t, log scale)", tools::toTitleCase(weight_label)),
+         y = ylab) +
+    app_theme()
+  if (fillable)
+    p <- p + scale_fill_manual(
+      values = status_palette(threshold, what, min_meas, min_trips),
+      limits = names(status_palette(threshold, what, min_meas, min_trips)),
+      labels = status_abbr(threshold, what, min_meas, min_trips),
+      drop = FALSE, name = "Sampling status",
+      guide = guide_legend(override.aes = list(size = 4)))
+  p
+}
+
+#' Data-availability scatter, drawn with base R graphics
+#'
+#' Base-R port of [plot_coverage_scatter()] - same log-x weight axis,
+#' status colours, threshold line and sparse labelling, drawn with
+#' `graphics::plot()`/`points()`. Called through
+#' `plot_coverage(..., type = "scatter", engine = "base")`.
+#'
+#' @inheritParams plot_coverage_scatter
+#' @param angle,n_per_screen As in the other base-R coverage plots.
+#' @return `NULL`, invisibly - drawn on the current graphics device.
+#' @seealso [plot_coverage_scatter()], [plot_coverage()]
+#' @keywords internal
+#' @export
+plot_coverage_scatter_base <- function(sc, x = "landings", y = "coverage",
+                                       size = "numTrips", facet_var = NULL,
+                                       threshold = 50, what = "discard",
+                                       weight_label = "landings", min_meas = 0,
+                                       min_trips = 2, label_n = 8,
+                                       palette = c("default", "colorblind"),
+                                       angle = 45, n_per_screen = NULL) {
+  palette <- match.arg(palette)
+  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+  miss <- setdiff(c(x, y), names(sc))
+  if (length(miss))
+    stop("plot_coverage_scatter_base(): column(s) not in the table: ",
+         paste(miss, collapse = ", "))
+  d <- sc[is.finite(sc[[x]]) & sc[[x]] > 0 & is.finite(sc[[y]]), , drop = FALSE]
+  if (!nrow(d)) { message("Nothing to plot."); return(invisible(NULL)) }
+  d$.x <- d[[x]]; d$.y <- d[[y]]
+  d$.sz <- if (size %in% names(d)) suppressWarnings(as.numeric(d[[size]])) else NA_real_
+  d$.lab <- if ("stratum_id" %in% names(d))
+    sub(" \\| .*$", "", as.character(d$stratum_id)) else as.character(seq_len(nrow(d)))
+  d$.facet <- if (has(facet_var)) as.character(d[[facet_var]]) else NA
+  has_stat <- "Status" %in% names(d)
+  pal <- if (has_stat) status_palette(threshold, what, min_meas, min_trips) else NULL
+  lk  <- if (has_stat) cat_lookup(threshold, what, min_meas, min_trips) else NULL
+  ylab <- scatter_axis_label(y, what)
+
+  rad <- function(v) {
+    v[!is.finite(v) | v <= 0] <- NA
+    if (all(is.na(v))) return(rep(1.1, length(v)))
+    r <- sqrt(v); r <- r / max(r, na.rm = TRUE)
+    r[is.na(r)] <- min(r, na.rm = TRUE) * 0.4
+    0.7 + r * 2.0
+  }
+  draw_one <- function(dd, main) {
+    yl <- range(c(if (identical(y, "coverage")) c(0, 100), dd$.y), na.rm = TRUE)
+    graphics::plot(dd$.x, dd$.y, log = "x", type = "n", axes = FALSE,
+                   xlab = "", ylab = ylab, main = main, ylim = yl)
+    grid_base()
+    if (identical(y, "coverage"))
+      graphics::abline(h = threshold, lty = 2, col = "grey50")
+    if (identical(y, "n_measurements") && min_meas > 0)
+      graphics::abline(h = min_meas, lty = 2, col = "grey50")
+    cols <- if (has_stat) pal[as.character(dd$Status)] else rep(PAL_BASE[1], nrow(dd))
+    cols[is.na(cols)] <- "#CCCCCC"
+    graphics::points(dd$.x, dd$.y, pch = 21, bg = cols, col = OUTLINE,
+                     cex = rad(dd$.sz), lwd = 0.7)
+    lab <- dd
+    if (has_stat) lab <- lab[!grepl("^SAFE", lab$Status), , drop = FALSE]
+    lab <- lab[order(-lab$.x), , drop = FALSE]
+    lab <- utils::head(lab[!duplicated(lab$.lab), , drop = FALSE], min(label_n, 6L))
+    if (nrow(lab)) {
+      ymid <- mean(range(dd$.y, na.rm = TRUE))
+      graphics::text(lab$.x, lab$.y, lab$.lab,
+                     pos = ifelse(lab$.y > ymid, 1, 3), offset = 0.6,
+                     cex = 0.5, col = "grey20", xpd = NA)
+    }
+    graphics::box(); graphics::axis(1); graphics::axis(2, las = 1)
+  }
+  draw_legend <- function() {
+    if (!has_stat) return(invisible(NULL))
+    graphics::par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0),
+                 new = TRUE)
+    graphics::plot.new()
+    graphics::legend("right", legend = lk$abbr, fill = lk$colour, cex = 0.8,
+                     bty = "o", bg = "white", box.col = "grey80",
+                     title = "Status", xpd = NA, y.intersp = 1.1,
+                     inset = c(0.001, 0))
+  }
+  facets <- if (has(facet_var)) sort(unique(d$.facet)) else NA
+  main_txt <- sprintf("Sampling vs %s weight per stratum",
+                      tools::toTitleCase(weight_label))
+  xlab <- sprintf("%s (t, log scale)", tools::toTitleCase(weight_label))
+  groups <- split_facets_to_screens(facets, n_per_screen)
+  had_device <- grDevices::dev.cur() > 1
+  for (grp in groups) {
+    op <- graphics::par(no.readonly = TRUE); on.exit(graphics::par(op), add = TRUE)
+    if (length(groups) > 1 && !had_device) grDevices::dev.new()
+    rmar <- if (has_stat) 12 else 3
+    if (!identical(grp, "__nofacet__") && length(grp) > 1) {
+      nc <- ceiling(sqrt(length(grp))); nr <- ceiling(length(grp) / nc)
+      graphics::par(mfrow = c(nr, nc), mar = c(4, 5, 3, 1), oma = c(2, 0, 3, rmar))
+      for (fv in grp) draw_one(d[d$.facet == fv, , drop = FALSE], fv)
+      graphics::mtext(main_txt, outer = TRUE, side = 3, cex = 1.05, font = 2, line = 1)
+      graphics::mtext(xlab, outer = TRUE, side = 1, line = 0.4, cex = 0.85)
+    } else if (!identical(grp, "__nofacet__") && length(grp) == 1) {
+      graphics::par(mar = c(5, 5, 4, rmar))
+      draw_one(d[d$.facet == grp, , drop = FALSE], paste0(main_txt, " (", grp, ")"))
+      graphics::mtext(xlab, side = 1, line = 3, cex = 0.85)
+    } else {
+      graphics::par(mar = c(5, 5, 4, rmar))
+      draw_one(d, main_txt)
+      graphics::mtext(xlab, side = 1, line = 3, cex = 0.85)
+    }
+    draw_legend()
+    graphics::par(op)
+  }
+  invisible(NULL)
+}
+
 
 
 #' Sampling-coverage plot (heatmap, bubbles or bars)
@@ -1307,17 +1548,29 @@ plot_bubbles_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
 #' @family coverage plots
 #' @export
 plot_coverage <- function(strata,
-                          type = c("heatmap", "bubbles", "bars"),
-                          y, fill = NULL, facet = NULL,
+                          type = c("heatmap", "bubbles", "bars", "scatter"),
+                          y = NULL, fill = NULL, facet = NULL,
                           threshold = NULL, what = "discard",
                           weight_label = "landings", ncol = 2, min_meas = 0,
                           min_trips = NULL, dims = NULL, distributions = NULL,
+                          scatter_y = "coverage", scatter_size = "numTrips",
+                          label_n = 8,
                           engine = c("ggplot", "base"), verbose = FALSE,
                           palette = c("default", "colorblind"), angle = 45,
                           n_per_screen = NULL, show_fill_in_labels = FALSE) {
   type    <- match.arg(type)
   engine  <- match.arg(engine)
   palette <- match.arg(palette)
+  if (!identical(type, "scatter") &&
+        (is.null(y) || !nzchar(y)))
+    stop("`y` is required for type = \"", type, "\"")
+  # scatter has numeric axes, not a category on y - infer a stratum
+  # resolution from fill/facet (or fall back to fleet x country) so the
+  # raw-catch auto-build still works without a `y`.
+  if (identical(type, "scatter") && is.null(dims))
+    dims <- unique(c("fleetValue", "Country",
+                     if (!is.null(fill)  && nzchar(fill))  fill,
+                     if (!is.null(facet) && nzchar(facet)) facet))
   # "bars" never uses either bar: the ggplot version filters on
   # cat_key != "none" only, which landings/discards alone decide, and
   # colours by the fill variable, not by status - a threshold or a
@@ -1360,6 +1613,13 @@ plot_coverage <- function(strata,
       bubbles = plot_bubbles_base(strata, y, fill, facet, threshold_used, what,
                                   weight_label, min_meas, min_trips_used,
                                   palette = palette, angle = angle,
+                                  n_per_screen = n_per_screen),
+      scatter = plot_coverage_scatter_base(strata, y = scatter_y,
+                                  size = scatter_size, facet_var = facet,
+                                  threshold = threshold_used, what = what,
+                                  weight_label = weight_label, min_meas = min_meas,
+                                  min_trips = min_trips_used, label_n = label_n,
+                                  palette = palette, angle = angle,
                                   n_per_screen = n_per_screen))))
   }
   switch(type,
@@ -1367,7 +1627,12 @@ plot_coverage <- function(strata,
                            weight_label, min_meas, min_trips_used),
     bubbles = plot_bubbles(strata, y, fill, facet, threshold_used, what,
                            weight_label, min_meas, min_trips_used),
-    bars    = plot_coverage_bars(strata, y, fill, facet, ncol, what, weight_label))
+    bars    = plot_coverage_bars(strata, y, fill, facet, ncol, what, weight_label),
+    scatter = plot_coverage_scatter(strata, y = scatter_y, size = scatter_size,
+                           facet_var = facet, threshold = threshold_used,
+                           what = what, weight_label = weight_label,
+                           min_meas = min_meas, min_trips = min_trips_used,
+                           label_n = label_n, palette = palette))
 }
 
 #' Build and classify strata only if `strata` looks like raw catch data
@@ -1445,7 +1710,8 @@ coverage_verbose_summary <- function(strata, type, engine, y, fill, facet,
   line <- function(...) cat(..., "\n", sep = "")
   line("-- plot_coverage(): ", cov_title_what(what), " coverage, type = \"",
        type, "\", engine = \"", engine, "\" --")
-  line("  y      : ", y)
+  line("  y      : ", if (has(y)) y else if (identical(type, "scatter"))
+                        "(numeric - see the scatter y/size metrics)" else "(none)")
   line("  fill   : ", if (has(fill))  fill  else "(none)")
   line("  facet  : ", if (has(facet)) facet else "(none)")
   line("  weight : ", weight_label)

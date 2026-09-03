@@ -85,6 +85,26 @@ plot_coverage(catch_data, type = "bubbles", y = "fleetValue", fill = "Country",
              threshold = 50, min_trips = 2, engine = "base")
 invisible(dev.off())
 
+## ---- 1g. data-availability scatter - "where is the catch vs where is
+## the sampling", from the data alone, before any raising. One point per
+## stratum: weight on a log x, coverage % on y (dashed line = threshold),
+## point size = sampled trips, colour = status. Only the heaviest
+## not-yet-safe strata are labelled. No `y` needed - scatter has numeric
+## axes; `scatter_y` / `scatter_size` pick the metrics (biology can use
+## "n_measurements").
+p1g <- plot_coverage(catch_data, type = "scatter", verbose = TRUE)
+print(p1g)
+
+png("11g_discard_scatter_base.png", width = 1250, height = 780, res = 110)
+plot_coverage(catch_data, type = "scatter", engine = "base")
+invisible(dev.off())
+
+png("11h_length_scatter_meas_base.png", width = 1250, height = 780, res = 110)
+plot_coverage(catch_data, type = "scatter", what = "length",
+              distributions = distributions, scatter_y = "n_measurements",
+              scatter_size = "numTrips", min_meas = 100, engine = "base")
+invisible(dev.off())
+
 ## ---- 1f. n_per_screen - split a faceted figure across several separate
 ## figures instead of one crowded one. With no device already open, this
 ## opens n_per_screen-worth of SEPARATE devices (several windows/pages
