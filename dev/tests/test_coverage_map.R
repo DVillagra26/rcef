@@ -1,5 +1,6 @@
-## plot_coverage_map(): one sampled/not-sampled pie per ICES area, or
-## per (area x group) with the group pies on a ring; both engines;
+## plot_coverage_map(): one sampled/not-sampled pie per ICES area, or -
+## with group_var - a labelled box per area holding a grid of pies (one
+## per group level), overlapping boxes nudged apart. Both engines;
 ## auto-build from raw catch; biology via distributions.
 
 if (!requireNamespace("maps", quietly = TRUE)) {
@@ -76,6 +77,10 @@ ok(grepl('requireNamespace("maps"', body_ns, fixed = TRUE),
    "the maps dependency is guarded")
 ok(grepl('c(sampled="#41AE76",unsampled="grey80")', body_ns, fixed = TRUE),
    "pie slices are the sampled / not-sampled shares")
+ok(grepl("boxed<-has(group_var)&&ngrp>1", body_ns, fixed = TRUE),
+   "a group_var with >1 level triggers the boxed grid layout")
+ok(grepl("ox<-(hwl[i]+hwl[j]+gap)-abs(ac$bx[i]-ac$bx[j])", body_ns, fixed = TRUE),
+   "overlapping boxes are separated")
 
 cat("\nDONE ", FAIL, "failure(s)", "\n")
 }

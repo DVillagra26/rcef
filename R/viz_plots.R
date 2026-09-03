@@ -1513,8 +1513,9 @@ ices_area_centroid <- function(codes) {
 #' radius is the area's landed/caught weight, and the pie is split into
 #' the sampled and the not-sampled share of that weight. With
 #' `group_var` (e.g. `"Season"`, `"Country"`, `"metier4"`) each area
-#' gets several pies, one per group level, placed on a small ring around
-#' the area's centroid and keyed by a coloured dot.
+#' gets a labelled box holding a tidy grid of pies, one per group level;
+#' overlapping boxes are nudged apart and a thin leader keeps each box
+#' tied to its area's true centroid.
 #'
 #' Auto-builds from raw catch data (and `distributions` for a biology
 #' `what`) exactly like [plot_coverage()]; an already-classified table is
@@ -1523,15 +1524,18 @@ ices_area_centroid <- function(codes) {
 #' @param sc Classified stratum table, or raw catch data.
 #' @param area_var Column holding the ICES area code. Default
 #'   `"areaValue"`.
-#' @param group_var Optional column - one pie per level, per area.
+#' @param group_var Optional column - one boxed grid of pies per area,
+#'   one pie per level.
 #' @param weight_var,covered_var The total weight and its sampled part
 #'   (`"landings"` / `"landings_with_discards"` by default).
 #' @param what,threshold,min_meas,min_trips,dims,distributions As in
 #'   [plot_coverage()] - only used when `sc` is raw and has to be built.
 #' @param weight_label Word for the weight (title only).
-#' @param bubble_scale Multiplies every pie radius.
+#' @param bubble_scale Multiplies every pie radius (and, when grouped,
+#'   the box grid cell size).
 #' @param engine `"base"` (default) or `"ggplot"`.
-#' @param palette Palette for the `group_var` key colours.
+#' @param palette Accepted for signature symmetry with the other
+#'   coverage plots; not used here.
 #' @param verbose Print a one-line summary before drawing.
 #' @return `NULL` invisibly (`engine = "base"`) or a ggplot object.
 #' @seealso [plot_coverage()], [ices_area_centroid()]
@@ -1571,40 +1575,86 @@ plot_coverage_map <- function(sc, area_var = "areaValue", group_var = NULL,
   if (!nrow(agg)) { message("plot_coverage_map(): no mappable areas."); return(invisible(NULL)) }
   agg$frac <- pmin(1, pmax(0, agg$cov / agg$w))
 
-  gpal <- NULL; lev <- NULL
-  ngrp <- 1L
+  lev <- NULL; ngrp <- 1L
   if (has(group_var)) {
     lev  <- sort(unique(as.character(agg[[group_var]])))
     ngrp <- length(lev)
-    gpal <- var_palette(group_var, lev, palette)
   }
-  # Pie radius in latitude-degrees: sqrt(weight) scaled so the biggest
-  # area's pie is `max_rad`, with a small floor so a tiny area is still
-  # visible. Pies shrink when an area carries several (grouped) pies.
-  max_rad <- bubble_scale * (if (ngrp > 3) 0.55 else if (ngrp > 1) 0.7 else 0.95)
+  # Single-pie radius (no group): sqrt(weight) to `max_rad`, small floor.
+  max_rad <- bubble_scale * 0.95
   min_rad <- max_rad * 0.28
-  agg$rad <- pmax(min_rad, max_rad * sqrt(agg$w) / sqrt(max(agg$w)))
-  if (has(group_var) && ngrp > 1) {
-    ang <- stats::setNames(
-      (90 - seq(0, 360 - 360 / ngrp, length.out = ngrp)) * pi / 180, lev)
-    off <- max_rad * 2.6 + 0.4        # ring radius: clears the pies
-    gi  <- as.character(agg[[group_var]])
-    agg$lon <- agg$lon + off * cos(ang[gi]) / cos(agg$lat * pi / 180)
-    agg$lat <- agg$lat + off * sin(ang[gi])
-  }
-  pad <- function(z, p) c(min(z, na.rm = TRUE) - p, max(z, na.rm = TRUE) + p)
-  xlim <- pad(agg$lon, 3.5); ylim <- pad(agg$lat, 2.5)
+  boxed <- has(group_var) && ngrp > 1
   fills <- c(sampled = "#41AE76", unsampled = "grey80")
-  ttl <- sprintf("%s coverage by %s%s", cov_title_what(what), area_var,
-                 if (has(group_var)) paste0(" and ", group_var) else "")
+  gmax  <- max(agg$w, na.rm = TRUE)
+  # Without a group it is one pie at the centroid. With a group the
+  # area's pies go in a tidy grid inside a labelled box: one cell per
+  # level, left to right then top to bottom. Pie radius is sqrt(weight)
+  # scaled so the busiest (area x level) cell anywhere fills its cell.
   ac <- ices_area_centroid(unique(agg[[area_var]]))
   ac <- ac[!is.na(ac$lon), , drop = FALSE]
+  cs  <- 0.46 * bubble_scale                 # half a grid cell, lat-deg
+  nc  <- if (boxed) ceiling(sqrt(ngrp)) else 1L
+  nr  <- if (boxed) ceiling(ngrp / nc) else 1L
+  bhw <- nc * cs + 0.16                      # box half-width  (lat-deg)
+  bhh <- nr * cs + 0.16                      # box half-height (lat-deg)
+
+  boxes <- NULL
+  if (boxed) {
+    # Nudge overlapping boxes apart, then place the pies relative to the
+    # nudged box centre (a thin leader keeps each box tied to its area).
+    ac$bx <- ac$lon; ac$by <- ac$lat
+    hwl <- bhw / cos(ac$lat * pi / 180); hhl <- rep(bhh, nrow(ac))
+    for (t in seq_len(80)) {
+      moved <- FALSE
+      gap <- 0.25
+      if (nrow(ac) > 1) for (i in 1:(nrow(ac) - 1)) for (j in (i + 1):nrow(ac)) {
+        ox <- (hwl[i] + hwl[j] + gap) - abs(ac$bx[i] - ac$bx[j])
+        oy <- (hhl[i] + hhl[j] + gap) - abs(ac$by[i] - ac$by[j])
+        if (ox > 0 && oy > 0) {
+          moved <- TRUE
+          if (ox <= oy) {
+            s <- sign(ac$bx[i] - ac$bx[j]); if (s == 0) s <- 1
+            ac$bx[i] <- ac$bx[i] + s * ox / 2; ac$bx[j] <- ac$bx[j] - s * ox / 2
+          } else {
+            s <- sign(ac$by[i] - ac$by[j]); if (s == 0) s <- 1
+            ac$by[i] <- ac$by[i] + s * oy / 2; ac$by[j] <- ac$by[j] - s * oy / 2
+          }
+        }
+      }
+      if (!moved) break
+    }
+    boxes <- data.frame(area = ac$area,
+                        x0 = ac$bx - hwl, x1 = ac$bx + hwl,
+                        y0 = ac$by - bhh, y1 = ac$by + bhh,
+                        cx0 = ac$lon, cy0 = ac$lat, bx = ac$bx, by = ac$by,
+                        lx = ac$bx - hwl + 0.1, ly = ac$by + bhh - 0.16,
+                        stringsAsFactors = FALSE)
+  }
+
+  agg$k   <- if (boxed) match(as.character(agg[[group_var]]), lev) else 1L
+  col_i   <- ((agg$k - 1) %% nc) + 1
+  row_i   <- ((agg$k - 1) %/% nc) + 1
+  bx <- if (boxed) boxes$bx[match(as.character(agg[[area_var]]), boxes$area)] else agg$lon
+  by <- if (boxed) boxes$by[match(as.character(agg[[area_var]]), boxes$area)] else agg$lat
+  agg$cx  <- if (boxed) bx + (col_i - (nc + 1) / 2) * 2 * cs / cos(by * pi / 180) else bx
+  agg$cy  <- if (boxed) by + ((nr + 1) / 2 - row_i) * 2 * cs else by
+  agg$rad <- if (boxed) pmax(cs * 0.22, cs * 0.92 * sqrt(agg$w / gmax))
+             else       pmax(min_rad, max_rad * sqrt(agg$w / gmax))
+  agg$glab <- if (boxed) as.character(agg[[group_var]]) else NA_character_
+
+  pad  <- function(z, p) c(min(z, na.rm = TRUE) - p, max(z, na.rm = TRUE) + p)
+  allx <- c(agg$cx, if (boxed) c(boxes$x0, boxes$x1) else agg$lon)
+  ally <- c(agg$cy, if (boxed) c(boxes$y0, boxes$y1 + 0.5) else agg$lat)
+  xlim <- pad(allx, 2.5); ylim <- pad(ally, 1.8)
+  ttl  <- sprintf("%s coverage by %s%s", cov_title_what(what), area_var,
+                  if (has(group_var)) paste0(" and ", group_var) else "")
 
   if (isTRUE(verbose))
-    cat(sprintf("-- plot_coverage_map(): %s | area = %s%s | %d pies over %d areas | engine = %s\n",
+    cat(sprintf("-- plot_coverage_map(): %s | area = %s%s | %d pies over %d areas | %s | engine = %s\n",
                 cov_title_what(what), area_var,
                 if (has(group_var)) paste0(" x ", group_var) else "",
-                nrow(agg), nrow(ac), engine))
+                nrow(agg), nrow(ac), if (boxed) sprintf("%dx%d boxes", nc, nr) else "single pies",
+                engine))
 
   slice_xy <- function(cx, cy, r, a0, a1) {
     asp <- 1 / cos(cy * pi / 180)
@@ -1613,55 +1663,74 @@ plot_coverage_map <- function(sc, area_var = "areaValue", group_var = NULL,
   }
 
   if (identical(engine, "base")) {
-    op <- graphics::par(mar = c(2, 2, 3, if (has(group_var)) 7 else 2))
-    on.exit(graphics::par(op), add = TRUE)
+    op <- graphics::par(mar = c(2, 2, 3, 2)); on.exit(graphics::par(op), add = TRUE)
     suppressWarnings(maps::map("world", xlim = xlim, ylim = ylim, fill = TRUE,
                                col = "grey93", border = "grey75"))
     graphics::box(); graphics::title(ttl)
+    if (boxed) {
+      graphics::segments(boxes$cx0, boxes$cy0, boxes$bx, boxes$by,
+                         col = "grey60", lwd = 0.6)
+      graphics::points(boxes$cx0, boxes$cy0, pch = 20, cex = 0.7, col = "grey45")
+      for (b in seq_len(nrow(boxes))) {
+        graphics::rect(boxes$x0[b], boxes$y0[b], boxes$x1[b], boxes$y1[b],
+                       col = grDevices::adjustcolor("white", 0.78),
+                       border = "grey55", lwd = 0.8)
+        graphics::text(boxes$lx[b], boxes$ly[b], boxes$area[b], cex = 0.66,
+                       font = 2, col = "grey20", adj = c(0, 0.5))
+      }
+    } else
+      graphics::text(ac$lon, ac$lat, ac$area, cex = 0.62, font = 2, col = "grey20")
     for (i in seq_len(nrow(agg))) {
       f <- agg$frac[i] * 2 * pi
-      s1 <- slice_xy(agg$lon[i], agg$lat[i], agg$rad[i], pi / 2, pi / 2 - f)
-      s2 <- slice_xy(agg$lon[i], agg$lat[i], agg$rad[i], pi / 2 - f, pi / 2 - 2 * pi)
+      s1 <- slice_xy(agg$cx[i], agg$cy[i], agg$rad[i], pi / 2, pi / 2 - f)
+      s2 <- slice_xy(agg$cx[i], agg$cy[i], agg$rad[i], pi / 2 - f, pi / 2 - 2 * pi)
       graphics::polygon(s1$x, s1$y, col = fills["sampled"],   border = OUTLINE, lwd = 0.6)
       graphics::polygon(s2$x, s2$y, col = fills["unsampled"], border = OUTLINE, lwd = 0.6)
-      if (has(group_var))
-        graphics::points(agg$lon[i], agg$lat[i] + agg$rad[i] + 0.18, pch = 19,
-                         cex = 0.7, col = gpal[as.character(agg[[group_var]][i])])
+      if (boxed)
+        graphics::text(agg$cx[i], agg$cy[i] - cs * 0.98, agg$glab[i], cex = 0.5,
+                       col = "grey25")
     }
-    graphics::text(ac$lon, ac$lat, ac$area, cex = 0.62, font = 2, col = "grey20")
     graphics::legend("bottomleft", bg = "white", box.col = "grey80", fill = fills,
                      legend = c("sampled", "not sampled"), cex = 0.85)
-    if (has(group_var))
-      graphics::legend(graphics::par("usr")[2], graphics::par("usr")[4], xpd = NA,
-                       bty = "n", pch = 19, col = gpal[lev], legend = lev,
-                       title = group_var, cex = 0.85)
     return(invisible(NULL))
   }
 
   polys <- do.call(rbind, lapply(seq_len(nrow(agg)), function(i) {
     f <- agg$frac[i] * 2 * pi
-    s1 <- slice_xy(agg$lon[i], agg$lat[i], agg$rad[i], pi / 2, pi / 2 - f)
-    s2 <- slice_xy(agg$lon[i], agg$lat[i], agg$rad[i], pi / 2 - f, pi / 2 - 2 * pi)
+    s1 <- slice_xy(agg$cx[i], agg$cy[i], agg$rad[i], pi / 2, pi / 2 - f)
+    s2 <- slice_xy(agg$cx[i], agg$cy[i], agg$rad[i], pi / 2 - f, pi / 2 - 2 * pi)
     rbind(data.frame(x = s1$x, y = s1$y, pid = i, slice = "sampled"),
           data.frame(x = s2$x, y = s2$y, pid = i, slice = "unsampled"))
   }))
-  key_pts <- if (has(group_var))
-    data.frame(lon = agg$lon, lat = agg$lat + agg$rad + 0.2,
-               g = as.character(agg[[group_var]])) else NULL
   p <- ggplot() +
-    borders("world", xlim = xlim, ylim = ylim, fill = "grey93", colour = "grey75") +
+    borders("world", xlim = xlim, ylim = ylim, fill = "grey93", colour = "grey75")
+  if (boxed)
+    p <- p +
+      geom_segment(data = boxes, aes(x = cx0, y = cy0, xend = bx, yend = by),
+                   colour = "grey60", linewidth = 0.3, inherit.aes = FALSE) +
+      geom_point(data = boxes, aes(cx0, cy0), colour = "grey45", size = 0.9,
+                 inherit.aes = FALSE) +
+      geom_rect(data = boxes,
+                aes(xmin = x0, xmax = x1, ymin = y0, ymax = y1),
+                fill = "white", alpha = 0.78, colour = "grey55",
+                linewidth = 0.3, inherit.aes = FALSE)
+  p <- p +
     geom_polygon(data = polys,
                  aes(x, y, group = interaction(pid, slice), fill = slice),
                  colour = OUTLINE, linewidth = 0.2) +
-    geom_text(data = ac, aes(lon, lat, label = area), size = 2.3, fontface = 2,
-              colour = "grey20") +
     scale_fill_manual(values = fills, name = NULL,
                       labels = c(sampled = "sampled", unsampled = "not sampled")) +
     coord_quickmap(xlim = xlim, ylim = ylim) +
     labs(title = ttl, x = NULL, y = NULL) + app_theme()
-  if (!is.null(key_pts))
-    p <- p + geom_point(data = key_pts, aes(lon, lat, colour = g), size = 1.6) +
-      scale_colour_manual(values = gpal, name = group_var)
+  if (boxed)
+    p <- p +
+      geom_text(data = boxes, aes(lx, ly, label = area), size = 2.3, hjust = 0,
+                fontface = 2, colour = "grey20", inherit.aes = FALSE) +
+      geom_text(data = agg, aes(cx, cy - cs * 0.98, label = glab), size = 1.9,
+                colour = "grey25", inherit.aes = FALSE)
+  else
+    p <- p + geom_text(data = ac, aes(lon, lat, label = area), size = 2.3,
+                       fontface = 2, colour = "grey20")
   p
 }
 
