@@ -735,44 +735,68 @@ plot_coverage_bars <- function(sc, y_var, fill_var = NULL, facet_var = NULL,
     group_by(.facet) %>%
     mutate(y_num = row_number(), facet_total = sum(landings)) %>% ungroup()
 
-  x_edge <- max(d$landings, na.rm = TRUE) * 1.05
+  gmax   <- max(d$landings, na.rm = TRUE)
+  x_edge <- gmax * 1.05
   pct <- sum(d$landings[d$sampled == wi]) / sum(d$landings) * 100
   br <- d %>% group_by(.facet, sampled) %>%
     summarise(y_min = min(y_num) - 0.5, y_max = max(y_num) + 0.5,
               y_mid = (min(y_num) + max(y_num)) / 2,
               pctg = sum(landings) / first(facet_total) * 100, .groups = "drop") %>%
-    mutate(x_pos = x_edge)
+    mutate(x_pos = x_edge,
+           disp = ifelse(sampled == wi, "Sampled", "Not sampled"))
   both <- intersect(d$.facet[d$sampled == wo], d$.facet[d$sampled == wi])
   sep <- if (length(both)) {
     d %>% filter(sampled == wo, .facet %in% both) %>%
       group_by(.facet) %>% summarise(sep_y = max(y_num) + 0.5, .groups = "drop")
   } else data.frame(.facet = character(0), sep_y = numeric(0))
 
+  # Cumulative % of landings walking DOWN from the top row (largest
+  # sampled stratum) to the bottom - a Lorenz-style staircase read
+  # against the secondary top axis. Where it crosses the sampled /
+  # not-sampled block boundary is the sampled fraction. Per facet, its
+  # own total, mapped onto the shared weight x by the global max.
+  stair <- d %>% arrange(.facet, desc(y_num)) %>%
+    group_by(.facet) %>%
+    mutate(cum = cumsum(landings) / first(facet_total) * 100,
+           x_map = cum / 100 * gmax) %>%
+    ungroup() %>% select(.facet, y_num, x_map)
+  stair <- bind_rows(
+    d %>% group_by(.facet) %>%
+      summarise(y_num = max(y_num) + 0.5, x_map = 0, .groups = "drop"),
+    stair) %>% arrange(.facet, desc(y_num))
+
   ggplot(d, aes(x = landings, y = .key, fill = .fill)) +
+    geom_vline(xintercept = c(0.9, 0.95, 1) * gmax, colour = "grey85",
+               linewidth = 0.3) +
     geom_col(width = 0.72, colour = OUTLINE) +
+    geom_step(data = stair, aes(x = x_map, y = y_num), direction = "vh",
+              inherit.aes = FALSE, colour = "grey20", linewidth = 0.5) +
     geom_segment(data = br, aes(x = x_pos, xend = x_pos, y = y_min, yend = y_max),
                  inherit.aes = FALSE, linewidth = 0.6, colour = "grey30") +
     geom_text(data = br, aes(x = x_pos * 1.02, y = y_mid,
-                             label = paste0(sampled, "\n(", round(pctg, 0), "%)")),
+                             label = paste0(disp, "\n(", round(pctg, 0), "%)")),
               inherit.aes = FALSE, hjust = 0, size = 3, fontface = "bold",
               colour = OUTLINE) +
     geom_segment(data = sep, aes(x = 0, xend = x_edge, y = sep_y, yend = sep_y),
                  inherit.aes = FALSE, linetype = "dashed", colour = "grey50") +
     scale_y_discrete(labels = setNames(d$.lab, as.character(d$.key))) +
     scale_x_continuous(labels = scales::comma,
-                       expand = expansion(mult = c(0, 0.34))) +
+                       expand = expansion(mult = c(0, 0.34)),
+                       sec.axis = sec_axis(~ . / gmax * 100,
+                                           name = "Cumulative % of landings",
+                                           breaks = c(0, 25, 50, 75, 100))) +
     scale_fill_var(if (has(fill_var)) fill_var else y_var, d$.fill,
                    name = if (has(fill_var)) fill_var else y_var) +
     (if (has(facet_var)) facet_wrap(vars(.facet), scales = "free_y", ncol = ncol)
      else NULL) +
-    labs(title = sprintf("%s with vs without %s sampling",
+    labs(title = sprintf("%s sampled vs not sampled for %s",
                          tools::toTitleCase(weight_label), samp_word(what)),
-         subtitle = sprintf("%s%% of %s weight sampled for %s",
+         subtitle = sprintf("%s%% of %s weight sampled for %s; staircase = cumulative %% of landings",
                             round(pct, 0), weight_label, samp_word(what)),
          x = sprintf("%s (t)", tools::toTitleCase(weight_label)), y = NULL,
          fill = if (has(fill_var)) fill_var else y_var) +
     coord_cartesian(clip = "off") + app_theme() +
-    theme(plot.margin = margin(10, 115, 10, 10))
+    theme(plot.margin = margin(10, 120, 10, 10))
 }
 
 #' Sampled-vs-unsampled weight bars, drawn with base R graphics
@@ -849,79 +873,92 @@ plot_coverage_bars_base <- function(sc, y_var, fill_var = NULL,
     # margin shrinks back to a hairline - a label-sized margin on a
     # quarter-width panel is what "figure margins too large" is.
     lmar <- max(4, max(nchar(key)) * 0.46)
-    rmar <- if (compact) 2 else
-      max(9, max(nchar(as.character(dd$sampled))) * 0.62 + 3)
+    rmar <- if (compact) 2 else 11
     if (compact) lmar <- min(lmar, 8)
-    op <- graphics::par(mar = c(4, lmar, 5.5, rmar))
+    tmar <- if (compact) 2.5 else 7
+    op <- graphics::par(mar = c(4, lmar, tmar, rmar))
     on.exit(graphics::par(op), add = TRUE)
-    # xlim stops just past the longest bar and the separator line, not
-    # far enough to drown the chart in whitespace. The callout text
-    # lives in the right MARGIN (xpd = NA below), not the plot region,
-    # so the region itself is not widened to hold it.
-    xmax <- max(dd$landings) * 1.12
+    # The plot region runs well past the longest bar: the cumulative-%
+    # staircase tops out at 100% == max(landings), the block callouts
+    # sit past that, and the whole right third is read against the
+    # secondary top axis, so it is deliberately generous here.
+    dmax <- max(dd$landings)
+    xmax <- dmax * 1.30
+    mx   <- function(p) p / 100 * dmax          # % of landings -> x
     bp <- graphics::barplot(dd$landings[ord], horiz = TRUE, las = 1,
                             names.arg = key[ord], cex.names = 0.7,
                             col = pal[dd$.fill[ord]], border = OUTLINE,
                             xlim = c(0, xmax), space = 0.15,
                             xlab = sprintf("%s (t)", tools::toTitleCase(weight_label)),
                             main = "")
-    # Panel top and bottom, half a bar-pitch beyond the end bars - the
-    # separator and the vertical guide lines are clamped to this so they
-    # do not spill into the title or the x-axis label the way the raw
-    # device usr range lets them.
     pitch <- if (nrow(bp) > 1) bp[2, 1] - bp[1, 1] else 1.2
     y0 <- bp[1, 1] - pitch / 2
     y1 <- bp[nrow(bp), 1] + pitch / 2
-    # Grey guide lines spanning the whole panel - the reading aid
-    # ggplot's panel.grid gives for free: a vertical line at every x
-    # tick across the full height, one faint horizontal line per bar
-    # row across the full width. Drawn first, then the bars re-drawn on
-    # top so the lines sit behind them.
+    # Guide lines behind the bars: x ticks full height, one per row full
+    # width, plus faint 90 / 95 / 100 % markers for the staircase.
     xticks <- graphics::axTicks(1)
     graphics::segments(xticks, y0, xticks, y1, col = "grey88", lwd = 0.7)
     graphics::segments(0, bp, xmax, bp, col = "grey92", lwd = 0.5)
+    if (!compact)
+      graphics::segments(mx(c(90, 95, 100)), y0, mx(c(90, 95, 100)), y1,
+                         col = "grey85", lwd = 0.6)
     graphics::barplot(dd$landings[ord], horiz = TRUE, las = 1, add = TRUE,
                       names.arg = NA, axes = FALSE, space = 0.15,
                       col = pal[dd$.fill[ord]], border = OUTLINE)
-    # box(): the same panel border every ggplot figure in this package
-    # carries by default.
     graphics::box()
     graphics::axis(1, at = xticks, labels = FALSE, tick = TRUE)
-    # Dashed vertical separator, full height, marking where the bars end
-    # and the sampled / unsampled callouts begin - the one piece of the
-    # ggplot layout this port keeps verbatim.
+    # Y-axis tick marks (barplot draws the names but no ticks).
+    graphics::axis(2, at = bp, labels = FALSE, tick = TRUE)
+
+    grp    <- as.character(dd$sampled[ord])
+    blocks <- rle(grp)
+    ends   <- cumsum(blocks$lengths)
+    starts <- ends - blocks$lengths + 1L
+    # Horizontal dashed separator between the sampled and not-sampled
+    # blocks - the piece the base port was missing (ggplot keeps its
+    # `sep` segment).
+    if (length(blocks$lengths) > 1) {
+      yb <- mean(c(bp[ends[1], 1], bp[ends[1] + 1L, 1]))
+      graphics::segments(0, yb, xmax, yb, lty = 2, col = "grey50")
+    }
+    # Cumulative % of landings walking down from the top row, as a step
+    # line read against the secondary top axis (0-100 %). Its crossing
+    # of the block separator is the sampled fraction.
+    if (!compact) {
+      cumv <- cumsum(dd$landings) / total * 100     # dd row 1 = top bar
+      y_by_row <- rev(bp[, 1])                      # dd row i -> this y
+      graphics::lines(c(0, mx(cumv)), c(y1, y_by_row), type = "s",
+                      col = "grey20", lwd = 0.9)
+      graphics::axis(3, at = mx(c(0, 25, 50, 75, 100)),
+                     labels = c("0", "25", "50", "75", "100"), cex.axis = 0.72,
+                     mgp = c(3, 0.5, 0))
+      graphics::mtext("Cumulative % of landings", side = 3, line = 1.8,
+                      cex = 0.72, col = "grey30")
+    }
+    # Dashed vertical line where the bars' own weight ends and the
+    # callout column begins.
     lx <- dmax * 1.06
     graphics::segments(lx, y0, lx, y1, lty = 2, col = "grey40")
-    # "With ... sampling (NN%)" / "Without ... sampling (NN%)" beside the
-    # separator, one per contiguous block, horizontal, in the right
-    # margin - matching the ggplot version's callouts including the
-    # per-block share of the panel total. The label for each block is
-    # read straight off the data (rle(grp)$values) at that block's own
-    # rows, NOT assumed to be "with" on top: barplot()'s bottom-to-top
-    # order combined with the size sort means either block can end up
-    # physically uppermost, and hardcoding that mapping is what an
-    # earlier pass got backwards. Skipped in compact (facet-grid) mode,
-    # which has no room for it - as the pre-rewrite faceted path also
-    # showed no per-block figure.
+    # "Sampled (NN%)" / "Not sampled (NN%)" beside that line, one per
+    # contiguous block. Label read from the data (rle over the draw
+    # order), not assumed to be sampled-on-top.
     if (!compact) {
-      grp    <- as.character(dd$sampled[ord])
-      blocks <- rle(grp)
-      ends   <- cumsum(blocks$lengths)
-      starts <- ends - blocks$lengths + 1L
       for (i in seq_along(blocks$values)) {
         lvl  <- blocks$values[i]
+        disp <- if (identical(lvl, wo)) "Not sampled" else "Sampled"
         ymid <- mean(bp[starts[i]:ends[i], 1])
         pctb <- sum(dd$landings[dd$sampled == lvl]) / total * 100
         graphics::text(lx + dmax * 0.04, ymid,
-                       paste0(lvl, "\n(", round(pctb), "%)"),
-                       adj = c(0, 0.5), cex = 0.7, font = 2, col = "grey30",
+                       paste0(disp, "\n(", round(pctb), "%)"),
+                       adj = c(0, 0.5), cex = 0.72, font = 2, col = "grey30",
                        xpd = NA)
       }
     }
-    # Title and subtitle left-margined (adj = 0), matching the ggplot
-    # version - base R centres the title by default, ggplot does not.
-    graphics::mtext(main, side = 3, line = 3.6, cex = 1.05, font = 2, adj = 0)
-    graphics::mtext(subtitle, side = 3, line = 2.3, cex = 0.8, adj = 0, col = "grey30")
+    graphics::mtext(main, side = 3, line = if (compact) 0.5 else 5.1,
+                    cex = if (compact) 0.9 else 1.05, font = 2, adj = 0)
+    if (!compact)
+      graphics::mtext(subtitle, side = 3, line = 3.9, cex = 0.8, adj = 0,
+                      col = "grey30")
     if (has(fill_var) && !compact) {
       lv <- sort(unique(dd$.fill))
       # Legend anchored to the bottom-right MARGIN corner, outside the
@@ -940,10 +977,11 @@ plot_coverage_bars_base <- function(sc, y_var, fill_var = NULL,
   # Title / subtitle split to match the ggplot version's exactly: a
   # plain title, and a subtitle line stating the % and what it means -
   # not both crammed into one line.
-  title_txt <- sprintf("%s with vs without %s sampling",
+  title_txt <- sprintf("%s sampled vs not sampled for %s",
                        tools::toTitleCase(weight_label), samp_word(what))
-  subtitle_txt <- sprintf("%s%% of %s weight sampled for %s", round(pct, 0),
-                          weight_label, samp_word(what))
+  subtitle_txt <- sprintf(
+    "%s%% of %s weight sampled for %s; staircase = cumulative %% of landings",
+    round(pct, 0), weight_label, samp_word(what))
   groups <- split_facets_to_screens(facets, n_per_screen)
   # Captured once, before the loop: dev.cur() itself changes the moment
   # the first dev.new() runs, so re-checking it each iteration would
