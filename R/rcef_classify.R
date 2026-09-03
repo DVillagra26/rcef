@@ -123,6 +123,19 @@ cat_lookup <- function(threshold, what = "discard", min_meas = 0,
                    "Raise with own strata",
                    borrow, borrow, borrow, borrow, borrow, borrow, borrow,
                    "Excluded: no data"),
+      # compact legend codes - c = coverage vs threshold, t = trips vs
+      # min_trips, m = measurements vs min_meas; ">=" clears the bar,
+      # "<" fails it. Same order as status/cat_key above.
+      abbr = c(
+        sprintf("100%% cov, >%st, >=%sm", min_trips, min_meas),
+        sprintf(">=%s%% cov, >=%st, >=%sm", threshold, min_trips, min_meas),
+        sprintf("<%s%% cov, >=%st, >=%sm", threshold, min_trips, min_meas),
+        sprintf(">=%s%% cov, >=%st, <%sm", threshold, min_trips, min_meas),
+        sprintf(">=%s%% cov, >=%sm, <%st", threshold, min_meas, min_trips),
+        sprintf(">=%s%% cov, <%st, <%sm", threshold, min_trips, min_meas),
+        sprintf("<%s%% cov, >=%st, <%sm", threshold, min_trips, min_meas),
+        sprintf("<%s%% cov, <%st, >=%sm", threshold, min_trips, min_meas),
+        "all three fail", "no catch"),
       # dark green, green, yellow-green, yellow, yellow-orange,
       # three distinguishable oranges (light / medium / dark), red,
       # then the same near-white used for the discard side's "no
@@ -158,6 +171,15 @@ cat_lookup <- function(threshold, what = "discard", min_meas = 0,
                  "BORROW: find similar strata",
                  "No raising needed (all catch discarded)",
                  "Excluded: no data"),
+    # compact legend codes - cov vs threshold, t vs min_trips.
+    abbr = c(
+      sprintf("100%% cov, >%st", min_trips),
+      sprintf(">=%s%% cov, >=%st", threshold, min_trips),
+      sprintf("<%s%% cov, >=%st", threshold, min_trips),
+      sprintf(">=%s%% cov, <%st", threshold, min_trips),
+      "no discard sampled",
+      "discards only, no landings",
+      "no landings / no discards"),
     colour = c("#00441B", "#41AE76", "#FFD92F", "#FDAE61", "#D7191C",
                "#4292C6", "#F0F1F1"),
     stringsAsFactors = FALSE
@@ -180,6 +202,22 @@ status_palette <- function(threshold, what = "discard", min_meas = 0,
   lk <- cat_lookup(threshold, what, min_meas, min_trips)
   # Map status text directly to colors as named vector
   setNames(lk$colour, lk$status)
+}
+
+#' Named short-label vector for the sampling statuses
+#'
+#' The `status -> abbr` map from [cat_lookup()], for
+#' `ggplot2::scale_fill_manual(labels = )` or a base-R legend that needs
+#' the compact codes rather than the full sentences.
+#'
+#' @inheritParams cat_lookup
+#' @return A character vector of short codes named by full status label.
+#' @seealso [status_palette()], [cat_lookup()]
+#' @export
+status_abbr <- function(threshold, what = "discard", min_meas = 0,
+                        min_trips = 2) {
+  lk <- cat_lookup(threshold, what, min_meas, min_trips)
+  setNames(lk$abbr, lk$status)
 }
 
 #' Build the stratum table from CEF catch data

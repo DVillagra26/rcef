@@ -297,6 +297,7 @@ plot_heatmap <- function(sc, y_var, x_var = NULL, facet_var = NULL,
     scale_fill_manual(values = status_palette(threshold, what, min_meas, min_trips),
                       limits = names(status_palette(threshold, what, min_meas,
                                                     min_trips)),
+                      labels = status_abbr(threshold, what, min_meas, min_trips),
                       drop = FALSE, name = "Sampling status") +
     maybe_facet(facet_var) +
     labs(title = sprintf("%s sampling coverage vs threshold",
@@ -406,7 +407,7 @@ plot_heatmap_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
     if (!identical(grp, "__nofacet__") && length(grp) > 1) {
       nc <- ceiling(sqrt(length(grp))); nr <- ceiling(length(grp) / nc)
       graphics::par(mfrow = c(nr, nc), mar = c(min(bmar, 7), lmar, 2, 1),
-                    oma = c(0, 0, 3, 8))
+                    oma = c(0, 0, 3, 13))
       for (fv in grp)
         draw_one(d[as.character(d[[facet_var]]) == fv, , drop = FALSE], fv)
       graphics::mtext(main_txt, outer = TRUE, side = 3, cex = 1.05, font = 2, line = 1)
@@ -414,11 +415,11 @@ plot_heatmap_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
         graphics::mtext(paste(facet_var, "=", paste(grp, collapse = ", ")),
                         outer = TRUE, side = 3, cex = 0.8, line = -0.2, col = "grey30")
     } else if (!identical(grp, "__nofacet__") && length(grp) == 1) {
-      graphics::par(mar = c(bmar, lmar, 3, 8))
+      graphics::par(mar = c(bmar, lmar, 3, 13))
       draw_one(d[as.character(d[[facet_var]]) == grp, , drop = FALSE],
                paste0(main_txt, " (", facet_var, " = ", grp, ")"))
     } else {
-      graphics::par(mar = c(bmar, lmar, 3, 8))
+      graphics::par(mar = c(bmar, lmar, 3, 13))
       draw_one(d, main_txt)
     }
     legend_status_base(lk_all)
@@ -443,18 +444,13 @@ legend_status_base <- function(lk_all) {
   graphics::par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0),
                new = TRUE)
   graphics::plot.new()
-  wrap <- function(s, w = 26) {
-    words <- strsplit(s, " ")[[1]]; out <- character(0); cur <- ""
-    for (w2 in words) {
-      cand <- if (nzchar(cur)) paste(cur, w2) else w2
-      if (nchar(cand) > w) { out <- c(out, cur); cur <- w2 } else cur <- cand
-    }
-    c(out, cur)
-  }
-  labs <- vapply(lk_all$status, function(s) wrap(s)[1], character(1))
-  graphics::legend("right", legend = labs, fill = lk_all$colour, cex = 0.55,
+  # The compact codes from cat_lookup()$abbr (cov / trip / meas vs their
+  # thresholds) rather than the full sentences - short enough to read at
+  # a legible size instead of being shrunk to fit.
+  labs <- if ("abbr" %in% names(lk_all)) lk_all$abbr else lk_all$status
+  graphics::legend("right", legend = labs, fill = lk_all$colour, cex = 0.8,
                    bty = "o", bg = "white", box.col = "grey80", title = "Status",
-                   xpd = NA, inset = c(0.001, 0))
+                   xpd = NA, inset = c(0.001, 0), y.intersp = 1.1)
   invisible(NULL)
 }
 
@@ -590,6 +586,10 @@ plot_bubbles <- function(sc, y_var, x_var = NULL, facet_var = NULL,
     mea_bit <- ifelse(!is.na(d$n_measurements) & d$n_measurements < min_meas,
                       paste0("n=", format(round(d$n_measurements),
                                           big.mark = ",", trim = TRUE)), "")
+    trp_bit <- if ("numTrips" %in% names(d))
+      ifelse(!is.na(d$numTrips) & d$numTrips < min_trips,
+             paste0(round(d$numTrips), " trip",
+                    ifelse(round(d$numTrips) == 1, "", "s")), "") else ""
     # Label only the cells a reader has to ACT on. Two exclusions:
     #   - the SAFE categories, which need no explanation;
     #   - "coverage, trips and measurements all fail" (cat_key "red"),
@@ -604,13 +604,22 @@ plot_bubbles <- function(sc, y_var, x_var = NULL, facet_var = NULL,
     d$lab <- ifelse(lab_me,
                     paste0(cov_bit,
                            ifelse(nzchar(cov_bit) & nzchar(mea_bit), "\n", ""),
-                           mea_bit),
+                           mea_bit,
+                           ifelse(nzchar(trp_bit) &
+                                    (nzchar(cov_bit) | nzchar(mea_bit)),
+                                  "\n", ""),
+                           trp_bit),
                     "")
   } else {
+    trp_bit <- if ("numTrips" %in% names(d))
+      ifelse(!is.na(d$numTrips) & d$numTrips < min_trips,
+             paste0(round(d$numTrips), " trip",
+                    ifelse(round(d$numTrips) == 1, "", "s")), "") else ""
     d$lab <- with(d, case_when(
       cat_key == "disc_only" ~ "100%\nDisc",
       cat_key %in% c("warn_lowcov", "warn_lowtrip") ~
-        paste0(round(coverage, 1), "%"),
+        paste0(round(coverage, 1), "%",
+               ifelse(nzchar(trp_bit), paste0("\n", trp_bit), "")),
       TRUE ~ ""))
   }
   # A bubble plot says two things at once: status in the colour, weight in
@@ -645,6 +654,7 @@ plot_bubbles <- function(sc, y_var, x_var = NULL, facet_var = NULL,
     scale_fill_manual(values = status_palette(threshold, what, min_meas, min_trips),
                       limits = names(status_palette(threshold, what, min_meas,
                                                     min_trips)),
+                      labels = status_abbr(threshold, what, min_meas, min_trips),
                       drop = FALSE, name = "Sampling status",
                       guide = guide_legend(override.aes = list(size = 5))) +
     scale_x_discrete(expand = expansion(0.2)) +
@@ -653,12 +663,6 @@ plot_bubbles <- function(sc, y_var, x_var = NULL, facet_var = NULL,
          subtitle = if (any(d$n_strata > 1, na.rm = TRUE))
            sprintf("Each bubble aggregates every stratum at this grouping (up to %d per cell)",
                    max(d$n_strata, na.rm = TRUE)) else NULL,
-         caption = if (what == "discard")
-           "Cross (X) = discards present with zero official landings"
-         else sprintf(paste("Labels = coverage %% below the %s%% threshold",
-                            "and/or n measurements below %s |",
-                            "unsampled cells are left unlabelled"),
-                      threshold, min_meas),
          x = if (x_var == ".x") NULL else x_var, y = y_var) +
     app_theme() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
   # key = "point": circles in the legend, like the bubbles in the panel.
@@ -1009,6 +1013,10 @@ plot_bubbles_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
   d$plot_size <- ifelse(d$cat_key == "disc_only", smallest, d$landings)
   pal <- status_palette(threshold, what, min_meas, min_trips)
 
+  trp_bit <- if ("numTrips" %in% names(d))
+    ifelse(!is.na(d$numTrips) & d$numTrips < min_trips,
+           paste0(round(d$numTrips), " trip",
+                  ifelse(round(d$numTrips) == 1, "", "s")), "") else ""
   if (what %in% c("length", "age")) {
     cov_bit <- ifelse(!is.na(d$coverage) & d$coverage < threshold,
                       paste0(round(d$coverage, 1), "%"), "")
@@ -1020,12 +1028,16 @@ plot_bubbles_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
                                "orange_lowcovtrip")
     d$lab <- ifelse(lab_me,
                     paste0(cov_bit, ifelse(nzchar(cov_bit) & nzchar(mea_bit),
-                                           " ", ""), mea_bit), "")
+                                           " ", ""), mea_bit,
+                           ifelse(nzchar(trp_bit) &
+                                    (nzchar(cov_bit) | nzchar(mea_bit)),
+                                  "\n", ""), trp_bit), "")
   } else {
     d$lab <- dplyr::case_when(
       d$cat_key == "disc_only" ~ "100% Disc",
       d$cat_key %in% c("warn_lowcov", "warn_lowtrip") ~
-        paste0(round(d$coverage, 1), "%"),
+        paste0(round(d$coverage, 1), "%",
+               ifelse(nzchar(trp_bit), paste0("\n", trp_bit), "")),
       TRUE ~ "")
   }
 
@@ -1119,8 +1131,8 @@ plot_bubbles_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
     if (length(groups) > 1 && !had_device) grDevices::dev.new()
     if (!identical(grp, "__nofacet__") && length(grp) > 1) {
       nc <- ceiling(sqrt(length(grp))); nr <- ceiling(length(grp) / nc)
-      graphics::par(mfrow = c(nr, nc), mar = c(min(bmar, 7), lmar, 2, 8),
-                    oma = c(0, 0, 3, 0))
+      graphics::par(mfrow = c(nr, nc), mar = c(min(bmar, 7), lmar, 2, 3),
+                    oma = c(0, 0, 3, 13))
       for (fv in grp)
         draw_one(d[as.character(d[[facet_var]]) == fv, , drop = FALSE], fv)
       graphics::mtext(main_txt, outer = TRUE, side = 3, cex = 1.05, font = 2, line = 1)
@@ -1128,19 +1140,13 @@ plot_bubbles_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
         graphics::mtext(paste(facet_var, "=", paste(grp, collapse = ", ")),
                         outer = TRUE, side = 3, cex = 0.8, line = -0.2, col = "grey30")
     } else if (!identical(grp, "__nofacet__") && length(grp) == 1) {
-      graphics::par(mar = c(bmar, lmar, 4, 8))
+      graphics::par(mar = c(bmar, lmar, 4, 13))
       draw_one(d[as.character(d[[facet_var]]) == grp, , drop = FALSE],
                paste0(main_txt, " (", facet_var, " = ", grp, ")"))
     } else {
-      graphics::par(mar = c(bmar, lmar, 4, 8))
+      graphics::par(mar = c(bmar, lmar, 4, 13))
       draw_one(d, "")
-      graphics::mtext(main_txt, side = 3, line = 2.3, cex = 1.05, font = 2)
-      graphics::mtext(
-        if (what == "discard")
-          "Cross (X) = discards present with zero official landings"
-        else sprintf("Labels = coverage below %s%% and/or n below %s",
-                    threshold, min_meas),
-        side = 3, line = 0.8, cex = 0.72, col = "grey30")
+      graphics::mtext(main_txt, side = 3, line = 1.2, cex = 1.05, font = 2)
     }
     draw_legends()
     graphics::par(op)
@@ -1531,7 +1537,9 @@ plot_dr_raw <- function(s, x_var, colour_var = NULL, shape_var = NULL,
          fill = if (has(colour_var)) colour_var else NULL,
          shape = if (has(shape_var)) shape_var else NULL) +
     app_theme() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.text = element_text(size = 11),
+          legend.key.size = unit(1.1, "lines"))
 }
 
 #' Discard rate as a boxplot over a grouping
@@ -1597,14 +1605,23 @@ plot_dr_box <- function(s_full, x_var, fill_var = NULL, facet_var = NULL,
   if (has(fill_var))
     p <- p + scale_fill_var(fill_var, d[[fill_var]], name = fill_var)
 
-  p + scale_y_continuous(labels = function(z) paste0(z, "%")) +
+  # Y always from 0 to at least 100%, expanding only if some stratum's
+  # rate is genuinely higher - so a set of low rates is not magnified
+  # into looking spread out.
+  y_top <- max(100, max(d$discard_rate * 100, na.rm = TRUE))
+  p + scale_y_continuous(labels = function(z) paste0(z, "%"),
+                         limits = c(0, y_top),
+                         expand = expansion(mult = c(0, 0.03))) +
     maybe_facet(facet_var, free_y = FALSE, ncol = ncol) +
     labs(title = paste("Discard rate by", x_var,
                        if (has(fill_var)) paste("and", fill_var) else ""),
          subtitle = paste("Box + points = individual strata at full resolution;",
                           "red diamond = catch-weighted pooled rate"),
          y = "Discard rate", x = x_var, fill = fill_var) +
-    app_theme() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    app_theme() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.text = element_text(size = 11),
+          legend.key.size = unit(1.1, "lines"))
 }
 
 # ----------------------------------------------------------
@@ -1779,9 +1796,9 @@ plot_dr_raw_base <- function(s, x_var, colour_var = NULL, shape_var = NULL,
                  new = TRUE)
     graphics::plot.new()
     graphics::legend("right", title = colour_var, legend = lv,
-                     pt.bg = pal[lv], pch = 21, cex = 0.62, bty = "o",
-                     bg = "white", box.col = "grey80", xpd = NA,
-                     inset = c(0.001, 0))
+                     pt.bg = pal[lv], pch = 21, pt.cex = 1.4, cex = 0.9,
+                     bty = "o", bg = "white", box.col = "grey80", xpd = NA,
+                     y.intersp = 1.15, inset = c(0.001, 0))
   }
 
   groups <- split_facets_to_screens(facets, n_per_screen)
@@ -1856,9 +1873,12 @@ plot_dr_box_base <- function(s_full, x_var, fill_var = NULL, facet_var = NULL,
     # (boxplot(add = TRUE)) - the same "grid behind the marks" order the
     # other base-R plots use, which boxplot() drawing its own frame does
     # not otherwise allow.
-    graphics::plot(NA, xlim = c(0.5, length(xs) + 0.5),
-                   ylim = range(c(0, dd$.rate), na.rm = TRUE), axes = FALSE,
-                   xlab = "", ylab = "Discard rate (%)", main = main)
+    # Y always spans 0 to at least 100% - a boxplot of rates that all
+    # sit near a few percent otherwise zooms in and reads as if the
+    # spread were large.
+    ymax <- max(100, suppressWarnings(max(dd$.rate, na.rm = TRUE)), na.rm = TRUE)
+    graphics::plot(NA, xlim = c(0.5, length(xs) + 0.5), ylim = c(0, ymax),
+                   axes = FALSE, xlab = "", ylab = "Discard rate (%)", main = main)
     grid_base(v = seq_along(xs), h = graphics::axTicks(2))
     graphics::boxplot(.rate ~ .data_x, data = bxdf, add = TRUE, axes = FALSE,
                       col = if (has(fill_var)) "white" else PAL_BASE[1],
@@ -1891,9 +1911,9 @@ plot_dr_box_base <- function(s_full, x_var, fill_var = NULL, facet_var = NULL,
                  new = TRUE)
     graphics::plot.new()
     graphics::legend("right", title = fill_var, legend = lv,
-                     pt.bg = pal[lv], pch = 21, cex = 0.62, bty = "o",
-                     bg = "white", box.col = "grey80", xpd = NA,
-                     inset = c(0.001, 0))
+                     pt.bg = pal[lv], pch = 21, pt.cex = 1.4, cex = 0.9,
+                     bty = "o", bg = "white", box.col = "grey80", xpd = NA,
+                     y.intersp = 1.15, inset = c(0.001, 0))
   }
 
   facets <- if (has(facet_var)) sort(unique(as.character(d[[facet_var]]))) else NA
