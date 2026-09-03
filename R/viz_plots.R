@@ -1272,7 +1272,14 @@ plot_bubbles_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
 #' @param threshold Coverage threshold (%), used to classify raw data
 #'   into a sampling status. Ignored for `type = "bars"` (see Details).
 #'   Defaults to 50 when `NULL` and the type needs it.
-#' @param what "discard" (default), "length" or "age".
+#' @param what "discard" (default), "length" or "age". For "length" /
+#'   "age", either pass an already-classified biology table as `strata`,
+#'   or pass raw catch data together with `distributions` and the whole
+#'   biology pipeline (`biology_link()`, `stratum_measurements()`,
+#'   `add_sufficiency()`, `classify_strata()`) runs internally.
+#' @param distributions A distributions table, needed only to auto-build
+#'   a `what = "length"`/`"age"` figure from raw catch data. `"age"`
+#'   reads the `Age` rows, otherwise `LengthTotal`.
 #' @param weight_label Axis/legend label for the weight measure.
 #' @param ncol Facet columns, for the "bars" type.
 #' @param min_meas,min_trips Sufficiency floors used to classify raw
@@ -1304,7 +1311,7 @@ plot_coverage <- function(strata,
                           y, fill = NULL, facet = NULL,
                           threshold = NULL, what = "discard",
                           weight_label = "landings", ncol = 2, min_meas = 0,
-                          min_trips = NULL, dims = NULL,
+                          min_trips = NULL, dims = NULL, distributions = NULL,
                           engine = c("ggplot", "base"), verbose = FALSE,
                           palette = c("default", "colorblind"), angle = 45,
                           n_per_screen = NULL, show_fill_in_labels = FALSE) {
@@ -1334,7 +1341,7 @@ plot_coverage <- function(strata,
 
   strata <- resolve_coverage_strata(strata, dims, y, fill, facet,
                                     classify_threshold, what, min_meas,
-                                    classify_min_trips)
+                                    classify_min_trips, distributions)
 
   if (isTRUE(verbose)) coverage_verbose_summary(
     strata, type, engine, y, fill, facet, threshold_used, what,
@@ -1379,24 +1386,38 @@ plot_coverage <- function(strata,
 #'   `fill`, `facet` when `NULL`.
 #' @param y,fill,facet,threshold,what,min_meas,min_trips As in
 #'   [plot_coverage()].
+#' @param distributions A distributions table - required to auto-build a
+#'   `what = "length"`/`"age"` table from raw catch data; ignored when
+#'   `strata` is already classified or `what = "discard"`.
 #' @return A classified strata table.
 #' @keywords internal
 #' @export
 resolve_coverage_strata <- function(strata, dims, y, fill, facet,
-                                    threshold, what, min_meas, min_trips) {
+                                    threshold, what, min_meas, min_trips,
+                                    distributions = NULL) {
   if (!is.null(strata) && "cat_key" %in% names(strata)) return(strata)
-  if (!identical(what, "discard"))
-    stop('"strata" must already be a classified length/age table for ',
-         'what = "', what, '" - build_strata() alone does not carry the ',
-         "distributions a biology stratum needs (biology_link(), ",
-         "stratum_measurements(), add_sufficiency()). Auto-building from ",
-         'raw catch data is only supported for what = "discard".')
-  if (is.null(dims)) {
-    has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+  if (is.null(dims))
     dims <- unique(c(y, if (has(fill)) fill, if (has(facet)) facet))
-  }
-  classify_strata(build_strata(strata, dims), threshold, what,
-                  min_meas, min_trips)
+  if (identical(what, "discard"))
+    return(classify_strata(build_strata(strata, dims), threshold, what,
+                           min_meas, min_trips))
+  # length / age: the full biology pipeline, which needs the
+  # distributions table (build_strata() alone cannot do it).
+  if (is.null(distributions))
+    stop('for what = "', what, '", pass either an already-classified ',
+         'length/age table as `strata`, or raw catch data together with ',
+         '`distributions` - build_strata() alone does not carry what a ',
+         "biology stratum needs (biology_link(), stratum_measurements(), ",
+         "add_sufficiency()).")
+  dist_type <- if (identical(what, "age")) "Age" else "LengthTotal"
+  bl  <- biology_link(strata, distributions, dims, type = dist_type)
+  ms  <- stratum_measurements(strata, distributions, dims, type = dist_type)
+  bl  <- add_sufficiency(bl, ms, threshold, min_meas)
+  bio <- bl %>% mutate(landings = weight,
+                       landings_with_discards = weight_measured,
+                       discards = 0, discard_rate = NA_real_)
+  classify_strata(bio, threshold, what, min_meas, min_trips)
 }
 
 #' Print a plain-language summary of a coverage plot before drawing it
@@ -1449,33 +1470,17 @@ coverage_verbose_summary <- function(strata, type, engine, y, fill, facet,
   invisible(NULL)
 }
 
-#' Length- or age-sampling coverage plot
+#' Length- or age-sampling coverage plot (back-compat wrapper)
 #'
-#' Thin wrapper over [plot_coverage()] for biology sampling: it shares the
-#' identical heatmap/bubbles/bars engine, so a length- or age-coverage panel
-#' looks like a discard-coverage one, with only the wording and the status
-#' scheme changed. Here "covered" means a length/age distribution exists for
-#' the stratum, and the status also reflects the number of fish measured.
-#'
-#' `strata` can be either:
-#'   - a data frame already run through the full biology pipeline
-#'     ([biology_link()], [stratum_measurements()], [add_sufficiency()],
-#'     [classify_strata()]) - the original calling convention, still
-#'     fully supported - or
-#'   - raw catch data, with `distributions` also supplied, in which
-#'     case the whole pipeline runs internally: `dims` (or the union of
-#'     `y`, `fill`, `facet` when `dims` is `NULL`), `what` (translated
-#'     to `distributionType`: "length" -> "LengthTotal", "age" ->
-#'     "Age"), and `threshold`/`min_meas`/`min_trips` (defaulting the
-#'     same way [plot_coverage()] does) drive every step. One call
-#'     instead of four, matching the discard side's own convenience.
+#' Kept for existing call sites. [plot_coverage()] now takes `distributions`
+#' and a biology `what` directly, so
+#' `plot_coverage(catch, distributions = dist, what = "length", ...)` is
+#' the same call in one place. This wrapper just forwards, with
+#' `weight_label` defaulting to "catch".
 #'
 #' @inheritParams plot_coverage
-#' @param distributions The distributions table, required only when
-#'   `strata` is raw catch data rather than an already-built table.
 #' @param what "length" or "age".
-#' @param weight_label Defaults to "catch".
-#' @return A ggplot object, or `NULL`.
+#' @return A ggplot object, or `NULL` (base engine draws and returns `NULL`).
 #' @seealso [plot_coverage()], [biology_link()]
 #' @family coverage plots
 #' @export
@@ -1486,32 +1491,11 @@ plot_biology_coverage <- function(strata, distributions = NULL,
                                   weight_label = "catch", ncol = 2, min_meas = 0,
                                   min_trips = NULL, dims = NULL,
                                   engine = c("ggplot", "base"), verbose = FALSE) {
-  type   <- match.arg(type)
-  engine <- match.arg(engine)
-  # Raw catch data never carries cat_key - classify_strata() is what
-  # adds it, at the end of a pipeline build_strata() alone cannot do
-  # for biology (it needs the distributions table too). A caller
-  # passing an already-classified table (has cat_key) is used exactly
-  # as before, distributions or not.
-  if (!is.null(distributions) && !("cat_key" %in% names(strata))) {
-    has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
-    if (is.null(dims))
-      dims <- unique(c(y, if (has(fill)) fill, if (has(facet)) facet))
-    dist_type <- if (identical(what, "age")) "Age" else "LengthTotal"
-    thr    <- if (is.null(threshold) || is.na(threshold)) 50 else threshold
-    mtrips <- if (is.null(min_trips) || is.na(min_trips)) 2 else min_trips
-    bl <- biology_link(strata, distributions, dims, type = dist_type)
-    ms <- stratum_measurements(strata, distributions, dims, type = dist_type)
-    bl <- add_sufficiency(bl, ms, thr, min_meas)
-    bio <- bl %>% mutate(landings = weight, landings_with_discards = weight_measured,
-                         discards = 0, discard_rate = NA_real_)
-    strata <- classify_strata(bio, thr, what, min_meas, mtrips)
-  }
-  plot_coverage(strata, type = type, y = y, fill = fill, facet = facet,
-                threshold = threshold, what = what,
+  plot_coverage(strata, type = match.arg(type), y = y, fill = fill,
+                facet = facet, threshold = threshold, what = what,
                 weight_label = weight_label, ncol = ncol, min_meas = min_meas,
-                min_trips = min_trips, dims = dims,
-                engine = engine, verbose = verbose)
+                min_trips = min_trips, dims = dims, distributions = distributions,
+                engine = match.arg(engine), verbose = verbose)
 }
 
 # ----------------------------------------------------------
