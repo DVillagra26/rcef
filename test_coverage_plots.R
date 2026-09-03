@@ -87,44 +87,64 @@ invisible(dev.off())
 
 ## ---- 1g. data-availability scatter - "where is the catch vs where is
 ## the sampling", from the data alone, before any raising. One point per
-## stratum: weight on a log x, coverage % on y (dashed line = threshold),
-## point size = sampled trips, colour = status. Only the heaviest
-## not-yet-safe strata are labelled. No `y` needed - scatter has numeric
-## axes; `scatter_y` / `scatter_size` pick the metrics (biology can use
-## "n_measurements").
+## stratum: weight on a log x, a sampling metric on y (dashed line =
+## threshold), point size = a second metric, colour = status. Only the
+## heaviest not-yet-safe strata are labelled. No `y` needed - scatter
+## has numeric axes; `scatter_y` / `scatter_size` pick the metrics
+## (biology can use "n_measurements"). BOTH engines each time.
 p1g <- plot_coverage(catch_data, type = "scatter", verbose = TRUE)
 print(p1g)
-
 png("11g_discard_scatter_base.png", width = 1250, height = 780, res = 110)
 plot_coverage(catch_data, type = "scatter", engine = "base")
 invisible(dev.off())
 
+## ---- 1h. same, biology: y = fish measured, size = trips -------------
+p1h <- plot_coverage(catch_data, type = "scatter", what = "length",
+                     distributions = distributions, scatter_y = "n_measurements",
+                     scatter_size = "numTrips", min_meas = 100)
+print(p1h)
 png("11h_length_scatter_meas_base.png", width = 1250, height = 780, res = 110)
 plot_coverage(catch_data, type = "scatter", what = "length",
               distributions = distributions, scatter_y = "n_measurements",
               scatter_size = "numTrips", min_meas = 100, engine = "base")
 invisible(dev.off())
 
-## ---- 1i. coverage map - one sampled/not-sampled pie per ICES area,
-## radius = landings. With group_var each area gets a ring of pies, one
-## per level (Season / Country / metier4). Needs the suggested `maps`
+## ---- 1i-1k. coverage map - one sampled/not-sampled pie per ICES area,
+## radius = landings. With group_var each area gets a labelled box
+## holding a grid of pies, one per level (Season / Country / metier4).
+## Every variant is drawn in BOTH engines. Needs the suggested `maps`
 ## package; skipped if it is not installed.
 if (requireNamespace("maps", quietly = TRUE)) {
+  ## 1i. one pie per area
   p1i <- plot_coverage_map(catch_data, engine = "ggplot", verbose = TRUE)
   print(p1i)
-
   png("11i_coverage_map_base.png", width = 1000, height = 950, res = 110)
-  plot_coverage_map(catch_data)
+  plot_coverage_map(catch_data, engine = "base")
   invisible(dev.off())
 
+  ## 1j. boxed grid, one pie per Season per area
+  p1j <- plot_coverage_map(catch_data, group_var = "Season", engine = "ggplot")
+  print(p1j)
   png("11j_coverage_map_season_base.png", width = 1050, height = 1000, res = 110)
-  plot_coverage_map(catch_data, group_var = "Season")
+  plot_coverage_map(catch_data, group_var = "Season", engine = "base")
   invisible(dev.off())
 
+  ## 1k. boxed grid by Country
+  p1k <- plot_coverage_map(catch_data, group_var = "Country", engine = "ggplot")
+  print(p1k)
   png("11k_coverage_map_country_base.png", width = 1050, height = 1000, res = 110)
-  plot_coverage_map(catch_data, group_var = "Country")
+  plot_coverage_map(catch_data, group_var = "Country", engine = "base")
   invisible(dev.off())
-} else message("1i: 'maps' not installed - coverage map skipped")
+
+  ## 1l. biology coverage on the map (length), by Season
+  p1l <- plot_coverage_map(catch_data, what = "length", distributions = distributions,
+                           group_var = "Season", engine = "ggplot")
+  print(p1l)
+  png("11l_length_map_season_base.png", width = 1050, height = 1000, res = 110)
+  plot_coverage_map(catch_data, what = "length", distributions = distributions,
+                    group_var = "Season", engine = "base")
+  invisible(dev.off())
+} else message("1i-1l: 'maps' not installed - coverage map skipped")
 
 ## ---- 1f. n_per_screen - split a faceted figure across several separate
 ## figures instead of one crowded one. With no device already open, this
