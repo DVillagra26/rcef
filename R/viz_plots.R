@@ -1433,6 +1433,238 @@ plot_coverage_scatter_base <- function(sc, x = "landings", y = "coverage",
   invisible(NULL)
 }
 
+# ----------------------------------------------------------
+#  Coverage map (ICES-area pies)
+# ----------------------------------------------------------
+
+#' Approximate centroids of the common NE Atlantic ICES areas
+#'
+#' `lon` / `lat` for the ICES divisions and subdivisions that a stock
+#' assessment in this region normally uses - enough to place one bubble
+#' per area on a map. Codes are stored WITHOUT the leading `"27."`;
+#' [ices_area_centroid()] accepts either form.
+#'
+#' @format A data frame with columns `area`, `lon`, `lat`.
+#' @seealso [ices_area_centroid()], [plot_coverage_map()]
+#' @keywords internal
+#' @export
+ICES_AREA_CENTROID <- data.frame(
+  area = c("1", "2.a", "2.b",
+           "3.a", "3.a.20", "3.a.21",
+           "3.b.23", "3.c.22", "3.d.24", "3.d.25", "3.d.26", "3.d.27",
+           "3.d.28", "3.d.29", "3.d.30", "3.d.31", "3.d.32",
+           "4", "4.a", "4.b", "4.c",
+           "5.a", "5.b",
+           "6", "6.a", "6.b",
+           "7", "7.a", "7.b", "7.c", "7.d", "7.e", "7.f", "7.g", "7.h",
+           "7.j", "7.k",
+           "8", "8.a", "8.b", "8.c", "8.d", "8.e",
+           "9", "9.a", "9.b",
+           "10.a", "12", "14.a", "14.b"),
+  lon = c(20.0, 5.0, 0.0,
+          10.5, 10.2, 11.6,
+          10.7, 12.5, 12.0, 16.5, 19.0, 18.5,
+          20.0, 20.5, 20.0, 23.0, 25.0,
+          2.5, 1.0, 2.5, 3.2,
+          -19.0, -7.0,
+          -8.5, -8.0, -13.0,
+          -8.0, -5.3, -10.5, -14.0, 0.5, -4.0, -5.2, -7.7, -7.7,
+          -11.0, -14.0,
+          -5.0, -3.0, -2.5, -4.2, -6.0, -10.0,
+          -10.0, -9.5, -11.0,
+          -28.0, -10.0, -35.0, -25.0),
+  lat = c(73.0, 68.0, 64.0,
+          57.5, 58.2, 56.9,
+          55.2, 55.5, 55.0, 55.6, 55.6, 58.0,
+          57.5, 59.5, 62.0, 64.5, 60.0,
+          56.5, 58.6, 55.6, 53.6,
+          64.0, 62.0,
+          57.5, 57.5, 57.5,
+          51.0, 53.6, 53.6, 52.0, 50.2, 49.8, 51.3, 51.0, 49.6,
+          50.6, 49.6,
+          45.5, 46.4, 45.0, 44.0, 45.6, 45.5,
+          39.0, 40.0, 38.0,
+          46.0, 74.0, 60.0, 62.0),
+  stringsAsFactors = FALSE)
+
+#' Look up ICES-area centroids
+#'
+#' @param codes ICES area codes, with or without the `"27."` prefix.
+#'   Anything past a recognised division/subdivision is ignored.
+#' @return A data frame `area`, `lon`, `lat` aligned to `codes`; `lon` /
+#'   `lat` are `NA` for a code with no centroid (a warning names them).
+#' @seealso [ICES_AREA_CENTROID], [plot_coverage_map()]
+#' @keywords internal
+#' @export
+ices_area_centroid <- function(codes) {
+  key <- sub("^27\\.", "", trimws(as.character(codes)))
+  m <- ICES_AREA_CENTROID[match(key, ICES_AREA_CENTROID$area), c("lon", "lat")]
+  bad <- unique(key[is.na(m$lon) & nzchar(key)])
+  if (length(bad))
+    warning("no centroid for ICES area(s): ", paste(bad, collapse = ", "),
+            " - dropped from the map", call. = FALSE)
+  data.frame(area = as.character(codes), lon = m$lon, lat = m$lat,
+             stringsAsFactors = FALSE)
+}
+
+#' Coverage map: one pie per ICES area (optionally per group level)
+#'
+#' A map of the fishing area with one small pie per ICES division: pie
+#' radius is the area's landed/caught weight, and the pie is split into
+#' the sampled and the not-sampled share of that weight. With
+#' `group_var` (e.g. `"Season"`, `"Country"`, `"metier4"`) each area
+#' gets several pies, one per group level, placed on a small ring around
+#' the area's centroid and keyed by a coloured dot.
+#'
+#' Auto-builds from raw catch data (and `distributions` for a biology
+#' `what`) exactly like [plot_coverage()]; an already-classified table is
+#' used as-is. Needs the suggested `maps` package.
+#'
+#' @param sc Classified stratum table, or raw catch data.
+#' @param area_var Column holding the ICES area code. Default
+#'   `"areaValue"`.
+#' @param group_var Optional column - one pie per level, per area.
+#' @param weight_var,covered_var The total weight and its sampled part
+#'   (`"landings"` / `"landings_with_discards"` by default).
+#' @param what,threshold,min_meas,min_trips,dims,distributions As in
+#'   [plot_coverage()] - only used when `sc` is raw and has to be built.
+#' @param weight_label Word for the weight (title only).
+#' @param bubble_scale Multiplies every pie radius.
+#' @param engine `"base"` (default) or `"ggplot"`.
+#' @param palette Palette for the `group_var` key colours.
+#' @param verbose Print a one-line summary before drawing.
+#' @return `NULL` invisibly (`engine = "base"`) or a ggplot object.
+#' @seealso [plot_coverage()], [ices_area_centroid()]
+#' @family coverage plots
+#' @export
+plot_coverage_map <- function(sc, area_var = "areaValue", group_var = NULL,
+                              weight_var = "landings",
+                              covered_var = "landings_with_discards",
+                              what = "discard", threshold = NULL, min_meas = 0,
+                              min_trips = NULL, dims = NULL, distributions = NULL,
+                              weight_label = "landings", bubble_scale = 1,
+                              engine = c("base", "ggplot"),
+                              palette = c("default", "colorblind"),
+                              verbose = FALSE) {
+  engine  <- match.arg(engine)
+  palette <- match.arg(palette)
+  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+  if (!requireNamespace("maps", quietly = TRUE))
+    stop("plot_coverage_map() needs the 'maps' package: install.packages(\"maps\")")
+  thr <- if (is.null(threshold) || is.na(threshold)) 50 else threshold
+  mtr <- if (is.null(min_trips)  || is.na(min_trips))  2 else min_trips
+  if (is.null(dims))
+    dims <- unique(c(area_var, if (has(group_var)) group_var))
+  sc <- resolve_coverage_strata(sc, dims, NULL, NULL, NULL, thr, what, min_meas,
+                                mtr, distributions)
+  for (v in c(area_var, weight_var, covered_var))
+    if (!v %in% names(sc)) stop("plot_coverage_map(): no column '", v, "'")
+
+  keys <- c(area_var, if (has(group_var)) group_var)
+  agg <- sc %>% group_by(across(all_of(keys))) %>%
+    summarise(w   = sum(.data[[weight_var]],  na.rm = TRUE),
+              cov = sum(.data[[covered_var]], na.rm = TRUE), .groups = "drop") %>%
+    filter(w > 0) %>% as.data.frame()
+  cen <- ices_area_centroid(agg[[area_var]])
+  agg$lon <- cen$lon; agg$lat <- cen$lat
+  agg <- agg[!is.na(agg$lon), , drop = FALSE]
+  if (!nrow(agg)) { message("plot_coverage_map(): no mappable areas."); return(invisible(NULL)) }
+  agg$frac <- pmin(1, pmax(0, agg$cov / agg$w))
+
+  gpal <- NULL; lev <- NULL
+  ngrp <- 1L
+  if (has(group_var)) {
+    lev  <- sort(unique(as.character(agg[[group_var]])))
+    ngrp <- length(lev)
+    gpal <- var_palette(group_var, lev, palette)
+  }
+  # Pie radius in latitude-degrees: sqrt(weight) scaled so the biggest
+  # area's pie is `max_rad`, with a small floor so a tiny area is still
+  # visible. Pies shrink when an area carries several (grouped) pies.
+  max_rad <- bubble_scale * (if (ngrp > 3) 0.55 else if (ngrp > 1) 0.7 else 0.95)
+  min_rad <- max_rad * 0.28
+  agg$rad <- pmax(min_rad, max_rad * sqrt(agg$w) / sqrt(max(agg$w)))
+  if (has(group_var) && ngrp > 1) {
+    ang <- stats::setNames(
+      (90 - seq(0, 360 - 360 / ngrp, length.out = ngrp)) * pi / 180, lev)
+    off <- max_rad * 2.6 + 0.4        # ring radius: clears the pies
+    gi  <- as.character(agg[[group_var]])
+    agg$lon <- agg$lon + off * cos(ang[gi]) / cos(agg$lat * pi / 180)
+    agg$lat <- agg$lat + off * sin(ang[gi])
+  }
+  pad <- function(z, p) c(min(z, na.rm = TRUE) - p, max(z, na.rm = TRUE) + p)
+  xlim <- pad(agg$lon, 3.5); ylim <- pad(agg$lat, 2.5)
+  fills <- c(sampled = "#41AE76", unsampled = "grey80")
+  ttl <- sprintf("%s coverage by %s%s", cov_title_what(what), area_var,
+                 if (has(group_var)) paste0(" and ", group_var) else "")
+  ac <- ices_area_centroid(unique(agg[[area_var]]))
+  ac <- ac[!is.na(ac$lon), , drop = FALSE]
+
+  if (isTRUE(verbose))
+    cat(sprintf("-- plot_coverage_map(): %s | area = %s%s | %d pies over %d areas | engine = %s\n",
+                cov_title_what(what), area_var,
+                if (has(group_var)) paste0(" x ", group_var) else "",
+                nrow(agg), nrow(ac), engine))
+
+  slice_xy <- function(cx, cy, r, a0, a1) {
+    asp <- 1 / cos(cy * pi / 180)
+    th  <- seq(a0, a1, length.out = 48)
+    list(x = cx + c(0, r * asp * cos(th)), y = cy + c(0, r * sin(th)))
+  }
+
+  if (identical(engine, "base")) {
+    op <- graphics::par(mar = c(2, 2, 3, if (has(group_var)) 7 else 2))
+    on.exit(graphics::par(op), add = TRUE)
+    suppressWarnings(maps::map("world", xlim = xlim, ylim = ylim, fill = TRUE,
+                               col = "grey93", border = "grey75"))
+    graphics::box(); graphics::title(ttl)
+    for (i in seq_len(nrow(agg))) {
+      f <- agg$frac[i] * 2 * pi
+      s1 <- slice_xy(agg$lon[i], agg$lat[i], agg$rad[i], pi / 2, pi / 2 - f)
+      s2 <- slice_xy(agg$lon[i], agg$lat[i], agg$rad[i], pi / 2 - f, pi / 2 - 2 * pi)
+      graphics::polygon(s1$x, s1$y, col = fills["sampled"],   border = OUTLINE, lwd = 0.6)
+      graphics::polygon(s2$x, s2$y, col = fills["unsampled"], border = OUTLINE, lwd = 0.6)
+      if (has(group_var))
+        graphics::points(agg$lon[i], agg$lat[i] + agg$rad[i] + 0.18, pch = 19,
+                         cex = 0.7, col = gpal[as.character(agg[[group_var]][i])])
+    }
+    graphics::text(ac$lon, ac$lat, ac$area, cex = 0.62, font = 2, col = "grey20")
+    graphics::legend("bottomleft", bg = "white", box.col = "grey80", fill = fills,
+                     legend = c("sampled", "not sampled"), cex = 0.85)
+    if (has(group_var))
+      graphics::legend(graphics::par("usr")[2], graphics::par("usr")[4], xpd = NA,
+                       bty = "n", pch = 19, col = gpal[lev], legend = lev,
+                       title = group_var, cex = 0.85)
+    return(invisible(NULL))
+  }
+
+  polys <- do.call(rbind, lapply(seq_len(nrow(agg)), function(i) {
+    f <- agg$frac[i] * 2 * pi
+    s1 <- slice_xy(agg$lon[i], agg$lat[i], agg$rad[i], pi / 2, pi / 2 - f)
+    s2 <- slice_xy(agg$lon[i], agg$lat[i], agg$rad[i], pi / 2 - f, pi / 2 - 2 * pi)
+    rbind(data.frame(x = s1$x, y = s1$y, pid = i, slice = "sampled"),
+          data.frame(x = s2$x, y = s2$y, pid = i, slice = "unsampled"))
+  }))
+  key_pts <- if (has(group_var))
+    data.frame(lon = agg$lon, lat = agg$lat + agg$rad + 0.2,
+               g = as.character(agg[[group_var]])) else NULL
+  p <- ggplot() +
+    borders("world", xlim = xlim, ylim = ylim, fill = "grey93", colour = "grey75") +
+    geom_polygon(data = polys,
+                 aes(x, y, group = interaction(pid, slice), fill = slice),
+                 colour = OUTLINE, linewidth = 0.2) +
+    geom_text(data = ac, aes(lon, lat, label = area), size = 2.3, fontface = 2,
+              colour = "grey20") +
+    scale_fill_manual(values = fills, name = NULL,
+                      labels = c(sampled = "sampled", unsampled = "not sampled")) +
+    coord_quickmap(xlim = xlim, ylim = ylim) +
+    labs(title = ttl, x = NULL, y = NULL) + app_theme()
+  if (!is.null(key_pts))
+    p <- p + geom_point(data = key_pts, aes(lon, lat, colour = g), size = 1.6) +
+      scale_colour_manual(values = gpal, name = group_var)
+  p
+}
+
 
 
 #' Sampling-coverage plot (heatmap, bubbles or bars)

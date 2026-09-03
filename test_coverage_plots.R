@@ -105,6 +105,27 @@ plot_coverage(catch_data, type = "scatter", what = "length",
               scatter_size = "numTrips", min_meas = 100, engine = "base")
 invisible(dev.off())
 
+## ---- 1i. coverage map - one sampled/not-sampled pie per ICES area,
+## radius = landings. With group_var each area gets a ring of pies, one
+## per level (Season / Country / metier4). Needs the suggested `maps`
+## package; skipped if it is not installed.
+if (requireNamespace("maps", quietly = TRUE)) {
+  p1i <- plot_coverage_map(catch_data, engine = "ggplot", verbose = TRUE)
+  print(p1i)
+
+  png("11i_coverage_map_base.png", width = 1000, height = 950, res = 110)
+  plot_coverage_map(catch_data)
+  invisible(dev.off())
+
+  png("11j_coverage_map_season_base.png", width = 1050, height = 1000, res = 110)
+  plot_coverage_map(catch_data, group_var = "Season")
+  invisible(dev.off())
+
+  png("11k_coverage_map_country_base.png", width = 1050, height = 1000, res = 110)
+  plot_coverage_map(catch_data, group_var = "Country")
+  invisible(dev.off())
+} else message("1i: 'maps' not installed - coverage map skipped")
+
 ## ---- 1f. n_per_screen - split a faceted figure across several separate
 ## figures instead of one crowded one. With no device already open, this
 ## opens n_per_screen-worth of SEPARATE devices (several windows/pages
