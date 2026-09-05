@@ -2,35 +2,59 @@
 ## test_coverage_plots.R
 ##
 ## A standalone script for trying out rcef's exploratory plots without
-## running the Shiny app. Loads two bundled example CEF files (catches
-## + distributions) and walks through every plot family the package
-## has: discard coverage, length coverage, discard rate, and length
-## distributions - each with a few options to compare against each
-## other, ggplot2 side by side with the base-R engine, and demonstrates
-## the newer general-purpose arguments (auto-build from raw data,
+## running the Shiny app. It walks through every plot family the package
+## has - discard coverage, length coverage, AGE coverage, discard rate,
+## length distributions and age distributions - each with a few options
+## to compare against each other, ggplot2 side by side with the base-R
+## engine, and the general-purpose arguments (auto-build from raw data,
 ## verbose, palette, angle, n_per_screen).
+##
+## Data (both loaded up front):
+##   bll  turbot, a LengthTotal distribution table - used for the
+##        DISCARD and LENGTH views (`catch_data` / `distributions`).
+##   pok  saithe, an Age distribution table - used for the AGE views
+##        (`age_catch` / `age_dist`). The pok/ folder is git-ignored and
+##        not shipped in the tarball; when it is absent every age block
+##        is skipped with a note and the rest of the script still runs.
 ##
 ## Nothing here filters the data first. The app lets you narrow a
 ## figure to a subset before drawing it (a fleet, a year, an area); this
 ## script always plots everything in the loaded table. If you want a
-## subset, filter catch_data / distributions yourself before the calls
-## below - every function here takes a plain data frame, so a
+## subset, filter the catch / distributions frame yourself before the
+## calls below - every function here takes a plain data frame, so a
 ## dplyr::filter() upstream is all that is needed.
 ## ===========================================================
 
 library(dplyr)
 library(rcef)
 
-## ---- Load two example tables --------------------------------------
+## ---- Load the example tables ------------------------------------
 ## Bundled with the package, so this runs with no local paths to edit.
-## Swap these two lines for your own CEF files to try the same figures
-## on real data - everything below is unchanged either way.
-fx <- system.file("extdata", "data_CEF_format",
-                  "bll_2025_1catches_CEF_v17.1.csv", package = "rcef")
-fd <- system.file("extdata", "data_CEF_format",
-                  "bll_2025_1distributions_CEF_v17.1.csv", package = "rcef")
-catch_data    <- derive_fields(read.csv(fx, stringsAsFactors = FALSE))
-distributions <- read.csv(fd, stringsAsFactors = FALSE)
+## Swap the read.csv() paths for your own CEF files to try the same
+## figures on real data - everything below is unchanged either way.
+ext <- system.file("extdata", "data_CEF_format", package = "rcef")
+
+## bll: discard + length
+catch_data    <- derive_fields(read.csv(
+  file.path(ext, "bll_2025_1catches_CEF_v17.1.csv"), stringsAsFactors = FALSE))
+distributions <- read.csv(
+  file.path(ext, "bll_2025_1distributions_CEF_v17.1.csv"),
+  stringsAsFactors = FALSE)
+
+## pok: age (git-ignored pok/ subfolder; skipped cleanly if missing)
+age_catch_f <- file.path(ext, "pok", "pok_2022_catches_CEF_v17.1.csv")
+age_dist_f  <- file.path(ext, "pok", "pok_2022_distributions_CEF_v17.1.csv")
+have_age    <- file.exists(age_catch_f) && file.exists(age_dist_f)
+if (have_age) {
+  age_catch <- derive_fields(read.csv(age_catch_f, stringsAsFactors = FALSE))
+  age_dist  <- read.csv(age_dist_f, stringsAsFactors = FALSE)
+  cat(sprintf("age data: pok, %d catch rows, %d Age distribution rows\n",
+              nrow(age_catch), nrow(age_dist)))
+} else {
+  age_catch <- age_dist <- NULL
+  message("NOTE: pok age data not present at ", dirname(age_catch_f),
+          " - every AGE block below is skipped.")
+}
 
 
 ## =====================================================================
@@ -161,13 +185,15 @@ invisible(dev.off())
 
 
 ## =====================================================================
-##  2. LENGTH / AGE COVERAGE - one call, no biology pipeline of your own
+##  2. LENGTH & AGE COVERAGE - one call, no biology pipeline of your own
 ## =====================================================================
-## plot_coverage() now takes `distributions` and a biology `what`
-## directly: it runs biology_link() / stratum_measurements() /
-## add_sufficiency() / classify_strata() internally. (plot_biology_coverage()
-## is kept as a thin forwarder for old call sites.) An already-built
-## classified table still short-circuits straight through.
+## plot_coverage() takes `distributions` and a biology `what` directly:
+## it runs biology_link() / stratum_measurements() / add_sufficiency() /
+## classify_strata() internally. (plot_biology_coverage() is kept as a
+## thin forwarder for old call sites.) An already-built classified table
+## still short-circuits straight through.
+##   2a-2c  LENGTH coverage (bll)  - bars, heatmap, bubbles
+##   2d-2h  AGE coverage    (pok)  - bars, heatmap, bubbles, scatter, map
 
 ## ---- 2a. length coverage, bars - now with the cumulative-% staircase -
 p2a <- plot_coverage(catch_data, type = "bars", y = "fleetValue",
@@ -210,19 +236,76 @@ plot_coverage(catch_data, type = "bubbles", y = "fleetValue", fill = "Country",
               engine = "base")
 invisible(dev.off())
 
-## ---- 2d. AGE coverage - what = "age" reads the Age distribution rows -
-## Uses the pok/ age fixture if present (not shipped); skipped otherwise.
-age_c <- file.path(dirname(fx), "pok", "pok_2022_catches_CEF_v17.1.csv")
-age_d <- file.path(dirname(fd), "pok", "pok_2022_distributions_CEF_v17.1.csv")
-have_age <- file.exists(age_c) && file.exists(age_d)
+## ---- 2d-2h. AGE coverage - the same four coverage views + the map,
+## `what = "age"` so plot_coverage() reads the Age distribution rows and
+## classifies each stratum on its age-reading sufficiency. pok data,
+## both engines each time. Skipped as a block if the pok/ folder is
+## absent.
 if (have_age) {
-  acatch <- derive_fields(read.csv(age_c, stringsAsFactors = FALSE))
-  adist  <- read.csv(age_d, stringsAsFactors = FALSE)
-  p2d <- plot_coverage(acatch, type = "heatmap", y = "fleetValue",
-                       fill = "Country", what = "age", distributions = adist,
-                       weight_label = "catch")
+
+  ## 2d. age coverage, bars (+ cumulative-% staircase)
+  p2d <- plot_coverage(age_catch, type = "bars", y = "fleetValue",
+                       fill = "Country", what = "age", distributions = age_dist,
+                       weight_label = "catch", verbose = TRUE)
   print(p2d)
-} else message("2d: age fixture not present (inst/extdata/.../pok/) - skipped")
+  png("12d_age_bars_base.png", width = 1300, height = 800, res = 110)
+  plot_coverage(age_catch, type = "bars", y = "fleetValue", fill = "Country",
+                what = "age", distributions = age_dist, weight_label = "catch",
+                engine = "base")
+  invisible(dev.off())
+
+  ## 2e. age coverage, heatmap (age-sufficiency status scheme)
+  p2e <- plot_coverage(age_catch, type = "heatmap", y = "fleetValue",
+                       fill = "Country", facet = "Season", what = "age",
+                       distributions = age_dist, threshold = 50, min_meas = 50,
+                       min_trips = 2, weight_label = "catch")
+  print(p2e)
+  png("12e_age_heatmap_base.png", width = 1400, height = 900, res = 110)
+  plot_coverage(age_catch, type = "heatmap", y = "fleetValue", fill = "Country",
+                facet = "Season", what = "age", distributions = age_dist,
+                threshold = 50, min_meas = 50, min_trips = 2,
+                weight_label = "catch", engine = "base")
+  invisible(dev.off())
+
+  ## 2f. age coverage, bubbles (age readings shown on sub-threshold cells)
+  p2f <- plot_coverage(age_catch, type = "bubbles", y = "fleetValue",
+                       fill = "Country", what = "age", distributions = age_dist,
+                       threshold = 50, min_meas = 50, min_trips = 2,
+                       weight_label = "catch")
+  print(p2f)
+  png("12f_age_bubbles_base.png", width = 1300, height = 800, res = 110)
+  plot_coverage(age_catch, type = "bubbles", y = "fleetValue", fill = "Country",
+                what = "age", distributions = age_dist, threshold = 50,
+                min_meas = 50, min_trips = 2, weight_label = "catch",
+                engine = "base")
+  invisible(dev.off())
+
+  ## 2g. age data-availability scatter (y = age readings, size = trips)
+  p2g <- plot_coverage(age_catch, type = "scatter", what = "age",
+                       distributions = age_dist, scatter_y = "n_measurements",
+                       scatter_size = "numTrips", min_meas = 50,
+                       weight_label = "catch")
+  print(p2g)
+  png("12g_age_scatter_base.png", width = 1250, height = 780, res = 110)
+  plot_coverage(age_catch, type = "scatter", what = "age",
+                distributions = age_dist, scatter_y = "n_measurements",
+                scatter_size = "numTrips", min_meas = 50, weight_label = "catch",
+                engine = "base")
+  invisible(dev.off())
+
+  ## 2h. age coverage on the ICES-area map, boxed grid by Season
+  if (requireNamespace("maps", quietly = TRUE)) {
+    p2h <- plot_coverage_map(age_catch, what = "age", distributions = age_dist,
+                             group_var = "Season", weight_label = "catch",
+                             engine = "ggplot")
+    print(p2h)
+    png("12h_age_map_season_base.png", width = 1050, height = 1000, res = 110)
+    plot_coverage_map(age_catch, what = "age", distributions = age_dist,
+                      group_var = "Season", weight_label = "catch",
+                      engine = "base")
+    invisible(dev.off())
+  }
+} else message("2d-2h: age blocks skipped (no pok data)")
 
 
 ## =====================================================================
@@ -260,14 +343,16 @@ invisible(dev.off())
 
 
 ## =====================================================================
-##  4. LENGTH / AGE DISTRIBUTION - direct on catch + distributions
+##  4. LENGTH & AGE DISTRIBUTION - direct on catch + distributions
 ## =====================================================================
 ## No link_dist_to_strata() / length_numbers() / length_meanweight() of
-## your own: plot_biology_distribution(catch_data, distributions,
+## your own: plot_biology_distribution(catch, distributions,
 ##   variableType = "Number" | "WeightLive",
 ##   distributionType = "LengthTotal" | "Age", ...) does it internally.
-## Numbers come out in thousands (N3), length in cm; the axis labels are
-## taken from the data's own units.
+## Numbers come out in thousands (N3), length in cm, age in years; the
+## axis labels are taken from the data's own units.
+##   4a-4c  LENGTH distribution (bll) - histogram, density, mean weight
+##   4d-4f  AGE distribution    (pok) - histogram, density, mean weight
 
 ## ---- 4a. numbers at length, stacked histogram by fleet ---------------
 p4a <- plot_biology_distribution(catch_data, distributions,
@@ -308,14 +393,43 @@ plot_biology_distribution(catch_data, distributions, variableType = "WeightLive"
   show_points = TRUE, engine = "base")
 invisible(dev.off())
 
-## ---- 4d. AGE distribution - same call, distributionType = "Age" ----
+## ---- 4d-4f. AGE distribution - the same three views, distributionType
+## = "Age" so the class axis is age in years. pok data, both engines.
 if (have_age) {
+
+  ## 4d. numbers at age, stacked histogram by fleet
+  p4d <- plot_biology_distribution(age_catch, age_dist, variableType = "Number",
+           distributionType = "Age", type = "histogram", fill = "fleetValue",
+           stacked = TRUE)
+  print(p4d)
   png("14d_age_hist_base.png", width = 1300, height = 800, res = 110)
-  plot_biology_distribution(acatch, adist, variableType = "Number",
+  plot_biology_distribution(age_catch, age_dist, variableType = "Number",
     distributionType = "Age", type = "histogram", fill = "fleetValue",
-    engine = "base", verbose = TRUE)
+    engine = "base", palette = "colorblind", verbose = TRUE)
   invisible(dev.off())
-} else message("4d: age fixture not present - skipped")
+
+  ## 4e. numbers at age, smoothed density
+  p4e <- plot_biology_distribution(age_catch, age_dist, variableType = "Number",
+           distributionType = "Age", type = "density", fill = "fleetValue",
+           smooth = 0.6)
+  print(p4e)
+  png("14e_age_density_base.png", width = 1200, height = 900, res = 110)
+  plot_biology_distribution(age_catch, age_dist, variableType = "Number",
+    distributionType = "Age", type = "density", fill = "fleetValue",
+    smooth = 0.6, engine = "base")
+  invisible(dev.off())
+
+  ## 4f. mean weight at age, one line per fleet (+ sd ribbon)
+  p4f <- plot_biology_distribution(age_catch, age_dist,
+           variableType = "WeightLive", distributionType = "Age", type = "line",
+           colour = "fleetValue", show_points = TRUE, show_spread = TRUE)
+  print(p4f)
+  png("14f_age_meanweight_base.png", width = 1200, height = 800, res = 110)
+  plot_biology_distribution(age_catch, age_dist, variableType = "WeightLive",
+    distributionType = "Age", type = "line", colour = "fleetValue",
+    show_points = TRUE, engine = "base")
+  invisible(dev.off())
+} else message("4d-4f: age blocks skipped (no pok data)")
 
 ## =====================================================================
 ##  5. ARGUMENT REACTIONS - deliberately wrong / partial calls
@@ -394,6 +508,10 @@ try_show(plot_discard_rate(catch_data, type = "box", x = "fleetValue",
   fill = "Country", show_points = TRUE, show_pooled = TRUE))
 try_show(plot_biology_distribution(catch_data, distributions,
   variableType = "Number", type = "density", fill = "fleetValue", smooth = 0.6))
+if (have_age)
+  try_show(plot_biology_distribution(age_catch, age_dist,
+    variableType = "WeightLive", distributionType = "Age", type = "line",
+    colour = "fleetValue"))
 cat("  (no 'warning:' lines in section m = correct)\n")
 
 ## angle / palette that now genuinely reach the ggplot engine
@@ -407,5 +525,7 @@ print(p5o)
 invisible(grDevices::dev.off())
 
 cat("\nDone - ggplot2 figures are in Rplots.pdf; base-R figures are the",
-   "individual PNGs (and one PDF, 13f, showing n_per_screen) written",
-   "alongside this script.\n")
+   "individual PNGs written alongside this script:\n",
+   "  11* discard coverage | 12* length + age coverage | 13* discard rate\n",
+   "  14* length + age distribution | one PDF, 13f, for n_per_screen\n",
+   if (!have_age) "  (age blocks were skipped - no pok data)\n" else "")
