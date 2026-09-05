@@ -765,7 +765,9 @@ plot_bubbles <- function(sc, y_var, x_var = NULL, facet_var = NULL,
 #' @export
 plot_coverage_bars <- function(sc, y_var, fill_var = NULL, facet_var = NULL,
                                ncol = 2, what = "discard",
-                               weight_label = "landings") {
+                               weight_label = "landings",
+                               palette = c("default", "colorblind")) {
+  palette <- match.arg(palette)
   d <- sc %>% filter(cat_key != "none", landings > 0)
   if (!nrow(d)) return(NULL)
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
@@ -856,7 +858,8 @@ plot_coverage_bars <- function(sc, y_var, fill_var = NULL, facet_var = NULL,
                                            name = "Cumulative % of landings",
                                            breaks = c(0, 25, 50, 75, 100))) +
     scale_fill_var(if (has(fill_var)) fill_var else y_var, d$.fill,
-                   name = if (has(fill_var)) fill_var else y_var) +
+                   name = if (has(fill_var)) fill_var else y_var,
+                   palette = palette) +
     (if (has(facet_var)) facet_wrap(vars(.facet), scales = "free_y", ncol = ncol)
      else NULL) +
     labs(title = sprintf("%s sampled vs not sampled for %s",
@@ -1605,17 +1608,24 @@ ices_area_centroid <- function(codes) {
 #'   the box grid cell size).
 #' @param engine `"base"` (default) or `"ggplot"`.
 #' @param palette Accepted for signature symmetry with the other
-#'   coverage plots; not used here.
+#'   coverage plots; the pies are always the fixed sampled / not-sampled
+#'   colours, so setting `"colorblind"` warns and is ignored.
 #' @param verbose Print a one-line summary before drawing.
 #' @return `NULL` invisibly (`engine = "base"`) or a ggplot object.
 #' @seealso [plot_coverage()], [ices_area_centroid()]
 #' @family coverage plots
 #' @export
-plot_coverage_map <- function(sc, area_var = "areaValue", group_var = NULL,
+plot_coverage_map <- function(sc,
+                              ## -- roles --
+                              area_var = "areaValue", group_var = NULL,
                               weight_var = "landings",
                               covered_var = "landings_with_discards",
+                              ## -- classification (raw catch only) --
                               what = "discard", threshold = NULL, min_meas = 0,
-                              min_trips = NULL, dims = NULL, distributions = NULL,
+                              min_trips = NULL,
+                              ## -- raw-catch auto-build --
+                              dims = NULL, distributions = NULL,
+                              ## -- rendering --
                               weight_label = "landings", bubble_scale = 1,
                               engine = c("base", "ggplot"),
                               palette = c("default", "colorblind"),
@@ -1625,6 +1635,9 @@ plot_coverage_map <- function(sc, area_var = "areaValue", group_var = NULL,
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
   if (!requireNamespace("maps", quietly = TRUE))
     stop("plot_coverage_map() needs the 'maps' package: install.packages(\"maps\")")
+  if (identical(palette, "colorblind"))
+    warning("plot_coverage_map(): the pies use fixed sampled / not-sampled ",
+            "colours; palette is ignored", call. = FALSE)
   thr <- if (is.null(threshold) || is.na(threshold)) 50 else threshold
   mtr <- if (is.null(min_trips)  || is.na(min_trips))  2 else min_trips
   if (is.null(dims))
@@ -1649,6 +1662,10 @@ plot_coverage_map <- function(sc, area_var = "areaValue", group_var = NULL,
   if (has(group_var)) {
     lev  <- sort(unique(as.character(agg[[group_var]])))
     ngrp <- length(lev)
+    if (ngrp <= 1)
+      warning("plot_coverage_map(): group_var = \"", group_var,
+              "\" has a single level in the data; drawing one pie per area",
+              call. = FALSE)
   }
   # Single-pie radius (no group): sqrt(weight) to `max_rad`, small floor.
   max_rad <- bubble_scale * 0.95
@@ -1915,22 +1932,51 @@ plot_coverage_map <- function(sc, area_var = "areaValue", group_var = NULL,
 #'   and how many strata rows are being drawn. Meant for exploring at
 #'   the console, not for a script that already knows what it asked for
 #'   - default `FALSE`.
+#' @section Arguments by scenario:
+#' \describe{
+#'   \item{Discard heatmap / bubbles}{\code{type}, \code{y}, \code{fill},
+#'     \code{facet}, \code{threshold}, \code{min_trips}}
+#'   \item{Coverage bars}{\code{type = "bars"}, \code{y}, \code{fill},
+#'     \code{show_fill_in_labels}; \code{threshold} / \code{min_trips} are
+#'     ignored (a warning if you set them)}
+#'   \item{Data-availability scatter}{\code{type = "scatter"},
+#'     \code{scatter_y}, \code{scatter_size}, \code{label_n}, \code{facet},
+#'     \code{threshold}, \code{min_trips}; \code{y} is ignored}
+#'   \item{Length / age coverage}{add \code{what = "length"} or
+#'     \code{"age"}, and \code{min_meas}}
+#'   \item{From raw catch}{add \code{dims}; for length / age also
+#'     \code{distributions}}
+#'   \item{Rendering (any scenario)}{\code{engine}, \code{palette}
+#'     (fill-coloured types only), \code{angle} (categorical x only),
+#'     \code{ncol} (bars only), \code{n_per_screen} (base engine only),
+#'     \code{verbose}}
+#' }
 #' @return A ggplot object (`engine = "ggplot"`), or `NULL` invisibly
 #'   after drawing to the current device (`engine = "base"`).
 #' @seealso [build_strata()], [classify_strata()], [plot_biology_coverage()]
 #' @family coverage plots
 #' @export
 plot_coverage <- function(strata,
+                          ## -- what to draw --
                           type = c("heatmap", "bubbles", "bars", "scatter"),
+                          what = "discard",
+                          ## -- role columns --
                           y = NULL, fill = NULL, facet = NULL,
-                          threshold = NULL, what = "discard",
-                          weight_label = "landings", ncol = 2, min_meas = 0,
-                          min_trips = NULL, dims = NULL, distributions = NULL,
+                          ## -- classification (heatmap / bubbles / scatter colour) --
+                          threshold = NULL, min_trips = NULL, min_meas = 0,
+                          ## -- raw-catch auto-build --
+                          dims = NULL, distributions = NULL,
+                          weight_label = "landings",
+                          ## -- type = "scatter" only --
                           scatter_y = "coverage", scatter_size = "numTrips",
                           label_n = 8,
-                          engine = c("ggplot", "base"), verbose = FALSE,
-                          palette = c("default", "colorblind"), angle = 45,
-                          n_per_screen = NULL, show_fill_in_labels = FALSE) {
+                          ## -- type = "bars" only --
+                          show_fill_in_labels = FALSE,
+                          ## -- rendering --
+                          engine = c("ggplot", "base"),
+                          palette = c("default", "colorblind"),
+                          angle = 45, ncol = 2, n_per_screen = NULL,
+                          verbose = FALSE) {
   type    <- match.arg(type)
   engine  <- match.arg(engine)
   palette <- match.arg(palette)
@@ -1965,13 +2011,37 @@ plot_coverage <- function(strata,
   classify_threshold <- if (is.na(threshold_used)) 50 else threshold_used
   classify_min_trips <- if (is.na(min_trips_used)) 2 else min_trips_used
 
+  scatter_set <- !identical(scatter_y, "coverage") ||
+    !identical(scatter_size, "numTrips") || !identical(label_n, 8)
+  plot_arg_report("plot_coverage", list(
+    list(bad = !identical(type, "scatter") && scatter_set,
+         msg = "scatter_y / scatter_size / label_n only apply to type = \"scatter\"; ignored"),
+    list(bad = !identical(type, "bars") && isTRUE(show_fill_in_labels),
+         msg = "show_fill_in_labels only applies to type = \"bars\"; ignored"),
+    list(bad = identical(type, "bars") &&
+           (!is.null(threshold) || !is.null(min_trips)),
+         msg = "threshold / min_trips do not affect type = \"bars\" (it shows sampled vs unsampled weight); ignored"),
+    list(bad = identical(type, "scatter") && !is.null(y) && nzchar(y),
+         msg = "y is ignored for type = \"scatter\" (numeric axes); use scatter_y"),
+    list(bad = identical(palette, "colorblind") &&
+           type %in% c("heatmap", "bubbles"),
+         msg = "palette does not recolour type = \"heatmap\" / \"bubbles\" (cells are coloured by sampling status, a fixed scale)"),
+    list(bad = identical(type, "bars") && !identical(angle, 45),
+         msg = "angle rotates the categorical x labels; type = \"bars\" has a numeric x axis, ignored"),
+    list(bad = identical(engine, "ggplot") && !is.null(n_per_screen),
+         msg = "n_per_screen is a base-engine option; the ggplot engine draws one figure"),
+    list(bad = identical(engine, "ggplot") && !identical(type, "bars") &&
+           !identical(ncol, 2),
+         msg = "ncol only affects type = \"bars\"")))
+
   strata <- resolve_coverage_strata(strata, dims, y, fill, facet,
                                     classify_threshold, what, min_meas,
                                     classify_min_trips, distributions)
 
   if (isTRUE(verbose)) coverage_verbose_summary(
     strata, type, engine, y, fill, facet, threshold_used, what,
-    weight_label, min_meas, min_trips_used)
+    weight_label, min_meas, min_trips_used, palette, angle, n_per_screen,
+    scatter_y, scatter_size, label_n)
 
   if (identical(engine, "base")) {
     return(invisible(switch(type,
@@ -1995,17 +2065,26 @@ plot_coverage <- function(strata,
                                   palette = palette, angle = angle,
                                   n_per_screen = n_per_screen))))
   }
-  switch(type,
+  p <- switch(type,
     heatmap = plot_heatmap(strata, y, fill, facet, threshold_used, what,
                            weight_label, min_meas, min_trips_used),
     bubbles = plot_bubbles(strata, y, fill, facet, threshold_used, what,
                            weight_label, min_meas, min_trips_used),
-    bars    = plot_coverage_bars(strata, y, fill, facet, ncol, what, weight_label),
+    bars    = plot_coverage_bars(strata, y, fill, facet, ncol, what,
+                                 weight_label, palette = palette),
     scatter = plot_coverage_scatter(strata, y = scatter_y, size = scatter_size,
                            facet_var = facet, threshold = threshold_used,
                            what = what, weight_label = weight_label,
                            min_meas = min_meas, min_trips = min_trips_used,
                            label_n = label_n, palette = palette))
+  # angle: the ggplot heatmap / bubble / scatter builders hard-set a 45
+  # degree x axis; a later theme() wins, so only touch it when the caller
+  # asked for something other than the default.
+  if (!is.null(p) && !identical(angle, 45) &&
+        type %in% c("heatmap", "bubbles", "scatter"))
+    p <- p + theme(axis.text.x = element_text(
+      angle = angle, hjust = if (angle > 0) 1 else 0.5, vjust = 1))
+  p
 }
 
 #' Build and classify strata only if `strata` looks like raw catch data
@@ -2058,6 +2137,33 @@ resolve_coverage_strata <- function(strata, dims, y, fill, facet,
   classify_strata(bio, threshold, what, min_meas, min_trips)
 }
 
+#' Warn about arguments that do not fit the requested plot
+#'
+#' The plotting dispatchers accept a wide, shared set of arguments, only
+#' some of which apply to any one `type` / `engine` / `quantity`. This
+#' turns a list of "this argument was set but does nothing here" checks
+#' into `warning()`s, so a caller who sets, say, `fill =` on a
+#' discard-rate "raw" plot or `type = "histogram"` on a mean-weight plot
+#' hears about it instead of quietly getting something else.
+#'
+#' Each check is a `list(bad = <logical>, msg = <character>)`; only the
+#' ones whose `bad` is `TRUE` are reported. A dispatcher builds the list
+#' so that `bad` is `TRUE` only when the argument is at a NON-default
+#' value and does not apply - leaving an inapplicable argument alone
+#' never warns.
+#'
+#' @param fn The calling function's name, for the message prefix.
+#' @param checks A list of `list(bad, msg)` entries.
+#' @return The character vector of emitted messages, invisibly.
+#' @keywords internal
+#' @export
+plot_arg_report <- function(fn, checks) {
+  bad <- Filter(function(ch) isTRUE(ch$bad), checks)
+  msgs <- vapply(bad, function(ch) as.character(ch$msg), character(1))
+  for (m in msgs) warning(fn, "(): ", m, call. = FALSE)
+  invisible(msgs)
+}
+
 #' Print a plain-language summary of a coverage plot before drawing it
 #'
 #' What `plot_coverage(..., verbose = TRUE)` prints: the type and
@@ -2078,7 +2184,11 @@ resolve_coverage_strata <- function(strata, dims, y, fill, facet,
 #' @export
 coverage_verbose_summary <- function(strata, type, engine, y, fill, facet,
                                      threshold, what, weight_label,
-                                     min_meas, min_trips) {
+                                     min_meas, min_trips,
+                                     palette = "default", angle = 45,
+                                     n_per_screen = NULL,
+                                     scatter_y = "coverage",
+                                     scatter_size = "numTrips", label_n = 8) {
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
   line <- function(...) cat(..., "\n", sep = "")
   line("-- plot_coverage(): ", cov_title_what(what), " coverage, type = \"",
@@ -2088,6 +2198,9 @@ coverage_verbose_summary <- function(strata, type, engine, y, fill, facet,
   line("  fill   : ", if (has(fill))  fill  else "(none)")
   line("  facet  : ", if (has(facet)) facet else "(none)")
   line("  weight : ", weight_label)
+  if (identical(type, "scatter"))
+    line("  scatter: y = ", scatter_y, ", size = ", scatter_size,
+         ", label_n = ", label_n)
   if (identical(type, "bars")) {
     line("  threshold / min_trips: not used by type = \"bars\" - it shows ",
          "sampled vs unsampled weight, which neither one affects. Any ",
@@ -2098,6 +2211,10 @@ coverage_verbose_summary <- function(strata, type, engine, y, fill, facet,
   }
   if (!is.na(min_meas) && min_meas > 0)
     line("  min_meas   : ", min_meas)
+  line("  render : engine = ", engine, ", palette = ", palette,
+       ", angle = ", angle,
+       if (!is.null(n_per_screen)) paste0(", n_per_screen = ", n_per_screen)
+       else "")
   n <- if (is.null(strata)) 0L else nrow(strata)
   line("  strata rows being drawn: ", n)
   if (n > 0 && "Status" %in% names(strata)) {
@@ -2124,17 +2241,27 @@ coverage_verbose_summary <- function(strata, type, engine, y, fill, facet,
 #' @family coverage plots
 #' @export
 plot_biology_coverage <- function(strata, distributions = NULL,
-                                  type = c("heatmap", "bubbles", "bars"),
-                                  y, fill = NULL, facet = NULL,
-                                  threshold = NULL, what = "length",
-                                  weight_label = "catch", ncol = 2, min_meas = 0,
-                                  min_trips = NULL, dims = NULL,
-                                  engine = c("ggplot", "base"), verbose = FALSE) {
-  plot_coverage(strata, type = match.arg(type), y = y, fill = fill,
-                facet = facet, threshold = threshold, what = what,
-                weight_label = weight_label, ncol = ncol, min_meas = min_meas,
-                min_trips = min_trips, dims = dims, distributions = distributions,
-                engine = match.arg(engine), verbose = verbose)
+                                  type = c("heatmap", "bubbles", "bars", "scatter"),
+                                  y = NULL, fill = NULL, facet = NULL,
+                                  threshold = NULL, min_trips = NULL, min_meas = 0,
+                                  dims = NULL, what = "length",
+                                  weight_label = "catch",
+                                  scatter_y = "coverage",
+                                  scatter_size = "numTrips", label_n = 8,
+                                  show_fill_in_labels = FALSE,
+                                  engine = c("ggplot", "base"),
+                                  palette = c("default", "colorblind"),
+                                  angle = 45, ncol = 2, n_per_screen = NULL,
+                                  verbose = FALSE) {
+  plot_coverage(strata, type = match.arg(type), what = what, y = y, fill = fill,
+                facet = facet, threshold = threshold, min_trips = min_trips,
+                min_meas = min_meas, dims = dims, distributions = distributions,
+                weight_label = weight_label, scatter_y = scatter_y,
+                scatter_size = scatter_size, label_n = label_n,
+                show_fill_in_labels = show_fill_in_labels,
+                engine = match.arg(engine), palette = match.arg(palette),
+                angle = angle, ncol = ncol, n_per_screen = n_per_screen,
+                verbose = verbose)
 }
 
 # ----------------------------------------------------------
@@ -2158,7 +2285,9 @@ plot_biology_coverage <- function(strata, distributions = NULL,
 #' @family discard-rate plots
 #' @export
 plot_dr_raw <- function(s, x_var, colour_var = NULL, shape_var = NULL,
-                        facet_var = NULL, jitter = TRUE) {
+                        facet_var = NULL, jitter = TRUE,
+                        palette = c("default", "colorblind")) {
+  palette <- match.arg(palette)
   d <- sampled_for_discards(s)
   if (!nrow(d)) return(NULL)
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
@@ -2187,7 +2316,8 @@ plot_dr_raw <- function(s, x_var, colour_var = NULL, shape_var = NULL,
       override.aes = list(fill = "grey45", size = 3.5, alpha = 1)))
   # one colour per level of this variable, shared with every other plot
   if (has(colour_var))
-    p <- p + scale_fill_var(colour_var, s[[colour_var]], name = colour_var)
+    p <- p + scale_fill_var(colour_var, s[[colour_var]], name = colour_var,
+                            palette = palette)
 
   p +
     scale_y_continuous(labels = function(z) paste0(z, "%")) +
@@ -2222,7 +2352,9 @@ plot_dr_raw <- function(s, x_var, colour_var = NULL, shape_var = NULL,
 #' @family discard-rate plots
 #' @export
 plot_dr_box <- function(s_full, x_var, fill_var = NULL, facet_var = NULL,
-                        show_points = TRUE, show_pooled = TRUE, ncol = 2) {
+                        show_points = TRUE, show_pooled = TRUE, ncol = 2,
+                        palette = c("default", "colorblind")) {
+  palette <- match.arg(palette)
   d <- sampled_for_discards(s_full)
   if (!nrow(d)) return(NULL)
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
@@ -2264,7 +2396,8 @@ plot_dr_box <- function(s_full, x_var, fill_var = NULL, facet_var = NULL,
   }
 
   if (has(fill_var))
-    p <- p + scale_fill_var(fill_var, d[[fill_var]], name = fill_var)
+    p <- p + scale_fill_var(fill_var, d[[fill_var]], name = fill_var,
+                            palette = palette)
 
   # Y always from 0 to at least 100%, expanding only if some stratum's
   # rate is genuinely higher - so a set of low rates is not magnified
@@ -2329,19 +2462,50 @@ plot_dr_box <- function(s_full, x_var, fill_var = NULL, facet_var = NULL,
 #' @param verbose If `TRUE`, prints a short console summary before
 #'   drawing - see [plot_coverage()]'s `verbose` for the same idea
 #'   applied here.
+#' @section Arguments by scenario:
+#' \describe{
+#'   \item{Raw points}{\code{type = "raw"}, \code{x}, \code{colour},
+#'     \code{shape}, \code{facet}, \code{jitter}}
+#'   \item{Box summary}{\code{type = "box"}, \code{x}, \code{fill},
+#'     \code{facet}, \code{show_points}, \code{show_pooled}}
+#'   \item{From raw catch}{add \code{dims}}
+#'   \item{Rendering (any scenario)}{\code{engine}, \code{palette},
+#'     \code{angle}, \code{ncol} (ggplot only), \code{n_per_screen}
+#'     (base only), \code{verbose}}
+#' }
 #' @export
 plot_discard_rate <- function(strata,
                               type = c("raw", "box"),
-                              x, colour = NULL, shape = NULL, facet = NULL,
-                              jitter = TRUE, fill = NULL,
-                              show_points = TRUE, show_pooled = TRUE, ncol = 2,
+                              x, facet = NULL,
+                              ## -- type = "raw" only --
+                              colour = NULL, shape = NULL, jitter = TRUE,
+                              ## -- type = "box" only --
+                              fill = NULL, show_points = TRUE,
+                              show_pooled = TRUE,
+                              ## -- raw-catch auto-build --
                               dims = NULL,
-                              engine = c("ggplot", "base"), verbose = FALSE,
-                              palette = c("default", "colorblind"), angle = 45,
-                              n_per_screen = NULL) {
+                              ## -- rendering --
+                              engine = c("ggplot", "base"),
+                              palette = c("default", "colorblind"),
+                              angle = 45, ncol = 2, n_per_screen = NULL,
+                              verbose = FALSE) {
   type    <- match.arg(type)
   engine  <- match.arg(engine)
   palette <- match.arg(palette)
+  has_ <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+  plot_arg_report("plot_discard_rate", list(
+    list(bad = identical(type, "raw") && has_(fill),
+         msg = "fill is a type = \"box\" option; for raw points use colour"),
+    list(bad = identical(type, "raw") && (!missing(show_points) || !missing(show_pooled)),
+         msg = "show_points / show_pooled only apply to type = \"box\""),
+    list(bad = identical(type, "box") && (has_(colour) || has_(shape)),
+         msg = "colour / shape are type = \"raw\" options; box fill is set with fill"),
+    list(bad = identical(type, "box") && !missing(jitter),
+         msg = "jitter only applies to type = \"raw\""),
+    list(bad = identical(engine, "ggplot") && !is.null(n_per_screen),
+         msg = "n_per_screen is a base-engine option"),
+    list(bad = identical(engine, "base") && !identical(ncol, 2),
+         msg = "ncol only affects the ggplot engine")))
   # Raw catch data never carries discard_rate - build_strata() is what
   # adds it. A caller passing an already-built table (has the column)
   # is used exactly as before; nothing here changes for it.
@@ -2365,6 +2529,10 @@ plot_discard_rate <- function(strata,
       cat("  show_points/show_pooled: ", show_points, " / ", show_pooled, "\n", sep = "")
     }
     cat("  facet  : ", if (!is.null(facet)) facet else "(none)", "\n", sep = "")
+    cat("  render : engine = ", engine, ", palette = ", palette,
+        ", angle = ", angle,
+        if (!is.null(n_per_screen)) paste0(", n_per_screen = ", n_per_screen)
+        else "", "\n", sep = "")
     d <- sampled_for_discards(strata)
     cat("  strata rows with a discard rate: ", nrow(d), "\n", sep = "")
   }
@@ -2378,10 +2546,15 @@ plot_discard_rate <- function(strata,
                        palette = palette, angle = angle,
                        n_per_screen = n_per_screen)))
   }
-  if (type == "box")
-    plot_dr_box(strata, x, fill, facet, show_points, show_pooled, ncol)
+  p <- if (type == "box")
+    plot_dr_box(strata, x, fill, facet, show_points, show_pooled, ncol,
+                palette = palette)
   else
-    plot_dr_raw(strata, x, colour, shape, facet, jitter)
+    plot_dr_raw(strata, x, colour, shape, facet, jitter, palette = palette)
+  if (!is.null(p) && !identical(angle, 45))
+    p <- p + theme(axis.text.x = element_text(
+      angle = angle, hjust = if (angle > 0) 1 else 0.5, vjust = 1))
+  p
 }
 
 #' Discard rate by stratum, drawn with base R graphics
@@ -2630,7 +2803,9 @@ plot_dr_box_base <- function(s_full, x_var, fill_var = NULL, facet_var = NULL,
 plot_length_hist <- function(d, fill_var = NULL, facet1 = NULL, facet2 = NULL,
                              stacked = TRUE, ncol = 2, scales = "fixed",
                              class_label = "Length (cm)",
-                             value_label = "Numbers") {
+                             value_label = "Numbers",
+                             palette = c("default", "colorblind")) {
+  palette <- match.arg(palette)
   if (is.null(d) || !nrow(d)) return(NULL)
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
   bw <- { u <- sort(unique(d$.class)); if (length(u) > 1) min(diff(u)) else 1 }
@@ -2644,7 +2819,8 @@ plot_length_hist <- function(d, fill_var = NULL, facet1 = NULL, facet2 = NULL,
                 linewidth = OUTLINE_LW)
 
   if (has(fill_var))
-    p <- p + scale_fill_var(fill_var, d[[fill_var]], name = fill_var)
+    p <- p + scale_fill_var(fill_var, d[[fill_var]], name = fill_var,
+                            palette = palette)
 
   p +
     scale_y_continuous(labels = scales::comma) +
@@ -2679,7 +2855,9 @@ plot_length_hist <- function(d, fill_var = NULL, facet1 = NULL, facet2 = NULL,
 plot_length_ridges <- function(d, group_var, facet1 = NULL, facet2 = NULL,
                                overlap = 0.75, smooth = 1, ncol = 2,
                                scales = "fixed",
-                               class_label = "Length (cm)") {
+                               class_label = "Length (cm)",
+                               palette = c("default", "colorblind")) {
+  palette <- match.arg(palette)
   if (is.null(d) || !nrow(d)) return(NULL)
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
   if (!has(group_var)) { d$.g <- "All"; group_var <- ".g" }
@@ -2746,8 +2924,8 @@ plot_length_ridges <- function(d, group_var, facet1 = NULL, facet2 = NULL,
                  linewidth = 0.25) +
     scale_y_continuous(breaks = seq_along(lev), labels = lev,
                        expand = expansion(mult = c(0.02, 0.12))) +
-    scale_fill_var(group_var, d$.g, name = group_var) +
-    scale_colour_var(group_var, d$.g, name = group_var) +
+    scale_fill_var(group_var, d$.g, name = group_var, palette = palette) +
+    scale_colour_var(group_var, d$.g, name = group_var, palette = palette) +
     facet_two(facet1, facet2, ncol = ncol, scales = scales) +
     labs(title = "Frequency, as a smoothed density",
          subtitle = sprintf(paste("Each curve integrates to one, so strata of",
@@ -2785,7 +2963,9 @@ plot_length_meanweight <- function(d, colour_var = NULL, facet1 = NULL,
                                    facet2 = NULL, shape_var = NULL,
                                    show_points = TRUE, show_spread = TRUE,
                                    ncol = 2, scales = "fixed",
-                                   class_label = "Length (cm)") {
+                                   class_label = "Length (cm)",
+                                   palette = c("default", "colorblind")) {
+  palette <- match.arg(palette)
   if (is.null(d) || !nrow(d)) return(NULL)
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
 
@@ -2824,8 +3004,11 @@ plot_length_meanweight <- function(d, colour_var = NULL, facet1 = NULL,
   }
 
   if (has(colour_var))
-    p <- p + scale_colour_var(colour_var, d[[colour_var]], name = colour_var) +
-             scale_fill_var(colour_var, d[[colour_var]], name = colour_var)
+    p <- p +
+      scale_colour_var(colour_var, d[[colour_var]], name = colour_var,
+                       palette = palette) +
+      scale_fill_var(colour_var, d[[colour_var]], name = colour_var,
+                     palette = palette)
 
   sub <- if (has(shape_var))
     paste0("Each stratum shown separately by ", shape_var)
@@ -2907,33 +3090,101 @@ biology_axis_labels <- function(distributionType = "LengthTotal",
 #' @param verbose If `TRUE`, prints a short console summary before
 #'   drawing - see [plot_coverage()]'s `verbose` for the same idea
 #'   applied here.
+#' @section Arguments by scenario:
+#' \describe{
+#'   \item{Numbers at length / age, histogram}{\code{variableType = "Number"}
+#'     (or \code{quantity = "numbers"}), \code{type = "histogram"},
+#'     \code{fill}, \code{stacked}}
+#'   \item{Numbers, smoothed density}{as above with \code{type = "density"}
+#'     and \code{smooth}}
+#'   \item{Mean weight at length / age}{\code{variableType = "WeightLive"}
+#'     (or \code{quantity = "meanweight"}), \code{colour}, \code{shape},
+#'     \code{show_points}, \code{show_spread} - \code{type} is always a line}
+#'   \item{From raw catch}{pass \code{distributions} and
+#'     \code{distributionType = "LengthTotal"} / \code{"Age"}; also
+#'     \code{dims}, \code{catch_category}}
+#'   \item{Facets / labels}{\code{facet1}, \code{facet2}, \code{ncol},
+#'     \code{scales}, \code{class_label}, \code{value_label}}
+#'   \item{Rendering}{\code{engine}, \code{palette}, \code{angle},
+#'     \code{n_per_screen} (base only), \code{verbose}}
+#' }
 #' @export
 plot_biology_distribution <- function(data, distributions = NULL,
+                                      ## -- what to draw --
                                       variableType = NULL,
                                       distributionType = NULL,
                                       quantity = c("numbers", "meanweight"),
                                       type = c("histogram", "density", "line"),
+                                      ## -- role columns --
                                       fill = NULL, colour = NULL,
                                       facet1 = NULL, facet2 = NULL, shape = NULL,
+                                      ## -- raw catch + distributions link --
                                       dims = NULL, catch_category = "Lan",
+                                      ## -- quantity = "numbers" --
                                       stacked = TRUE, smooth = 1,
+                                      ## -- quantity = "meanweight" --
                                       show_points = TRUE, show_spread = TRUE,
-                                      ncol = 2, scales = "fixed",
+                                      ## -- labels / facet layout --
                                       class_label = NULL, value_label = NULL,
+                                      ncol = 2, scales = "fixed",
+                                      ## -- rendering --
                                       engine = c("ggplot", "base"),
-                                      verbose = FALSE,
                                       palette = c("default", "colorblind"),
-                                      angle = 45, n_per_screen = NULL) {
+                                      angle = 45, n_per_screen = NULL,
+                                      verbose = FALSE) {
+  typed_type <- !missing(type)
+  typed_disttype <- !missing(distributionType)
   type <- match.arg(type)
   engine <- match.arg(engine)
   palette <- match.arg(palette)
   # variableType, when given, decides the quantity: Number -> numbers,
   # WeightLive -> meanweight. Otherwise fall back to `quantity`.
+  if (!is.null(variableType) &&
+        !variableType %in% c("Number", "WeightLive")) {
+    warning("plot_biology_distribution(): variableType = \"", variableType,
+            "\" is not \"Number\" or \"WeightLive\"; using quantity instead",
+            call. = FALSE)
+    variableType <- NULL
+  }
   quantity <- if (!is.null(variableType))
     (if (identical(variableType, "WeightLive")) "meanweight" else "numbers")
   else match.arg(quantity)
-  distributionType <- distributionType %||%
-    (if (identical(quantity, "meanweight")) "LengthTotal" else "LengthTotal")
+  distributionType <- distributionType %||% "LengthTotal"
+
+  # Effective type: mean weight is always a line; numbers is a histogram
+  # or a density. A `type` that contradicts the quantity is honoured as
+  # far as it can be and the caller is told what was actually drawn.
+  eff_type <- type
+  if (identical(quantity, "meanweight")) {
+    if (typed_type && !identical(type, "line"))
+      warning("plot_biology_distribution(): type = \"", type,
+              "\" does not apply to a mean-weight plot; drawing a line",
+              call. = FALSE)
+    eff_type <- "line"
+  } else {
+    if (identical(type, "line")) {
+      warning("plot_biology_distribution(): type = \"line\" is a mean-weight ",
+              "view; for numbers use \"histogram\" or \"density\". Drawing a ",
+              "histogram.", call. = FALSE)
+      eff_type <- "histogram"
+    }
+  }
+  has_ <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+  plot_arg_report("plot_biology_distribution", list(
+    list(bad = identical(quantity, "numbers") && (has_(colour) || has_(shape)),
+         msg = "for numbers use fill; colour / shape are mean-weight options"),
+    list(bad = identical(quantity, "meanweight") && has_(fill),
+         msg = "for mean weight use colour; fill is a numbers option"),
+    list(bad = identical(quantity, "meanweight") &&
+           (!missing(stacked) || !missing(smooth)),
+         msg = "stacked / smooth are numbers options; ignored for mean weight"),
+    list(bad = is.null(distributions) &&
+           (!is.null(variableType) || typed_disttype),
+         msg = "variableType / distributionType only matter with the raw-catch form (distributions supplied); data is used as an already-prepared table"),
+    list(bad = identical(engine, "ggplot") && !is.null(n_per_screen),
+         msg = "n_per_screen is a base-engine option"),
+    list(bad = identical(engine, "base") && !identical(scales, "fixed"),
+         msg = "scales is a ggplot facet option; the base engine uses one grid")))
 
   # Direct-call form: raw catch data + a distributions table. Link and
   # summarise here so a caller need not run link_dist_to_strata() /
@@ -2964,8 +3215,13 @@ plot_biology_distribution <- function(data, distributions = NULL,
 
   if (isTRUE(verbose)) {
     cat("-- plot_biology_distribution(): quantity = \"", quantity,
-        "\", type = \"", type, "\", engine = \"", engine, "\" --\n", sep = "")
+        "\", type = \"", eff_type, "\", engine = \"", engine, "\" --\n", sep = "")
+    if (!is.null(variableType))
+      cat("  variableType = \"", variableType, "\" -> quantity = \"", quantity,
+          "\"\n", sep = "")
+    cat("  distributionType : ", distributionType, "\n", sep = "")
     cat("  class_label : ", class_label, "\n", sep = "")
+    cat("  value_label : ", value_label, "\n", sep = "")
     if (identical(quantity, "numbers"))
       cat("  fill  : ", if (!is.null(fill)) fill else "(none)", "\n", sep = "")
     else {
@@ -2974,11 +3230,15 @@ plot_biology_distribution <- function(data, distributions = NULL,
     }
     cat("  facet1 / facet2: ", if (!is.null(facet1)) facet1 else "(none)", " / ",
         if (!is.null(facet2)) facet2 else "(none)", "\n", sep = "")
+    cat("  render : engine = ", engine, ", palette = ", palette, ", angle = ",
+        angle, ", scales = ", scales, ", ncol = ", ncol,
+        if (!is.null(n_per_screen)) paste0(", n_per_screen = ", n_per_screen)
+        else "", "\n", sep = "")
     cat("  rows: ", if (is.null(data)) 0L else nrow(data), "\n", sep = "")
   }
   if (identical(engine, "base")) {
     return(invisible(if (quantity == "numbers") {
-      if (type == "density")
+      if (eff_type == "density")
         plot_length_ridges_base(data, fill, facet1, facet2, smooth = smooth,
                                 class_label = class_label, palette = palette,
                                 angle = angle, n_per_screen = n_per_screen)
@@ -2995,19 +3255,25 @@ plot_biology_distribution <- function(data, distributions = NULL,
                                   angle = angle, n_per_screen = n_per_screen)
     }))
   }
-  if (quantity == "numbers") {
-    if (type == "density")
+  p <- if (quantity == "numbers") {
+    if (eff_type == "density")
       plot_length_ridges(data, fill, facet1, facet2, smooth = smooth,
-                         ncol = ncol, scales = scales, class_label = class_label)
+                         ncol = ncol, scales = scales, class_label = class_label,
+                         palette = palette)
     else
       plot_length_hist(data, fill, facet1, facet2, stacked = stacked,
                        ncol = ncol, scales = scales, class_label = class_label,
-                       value_label = value_label)
+                       value_label = value_label, palette = palette)
   } else {
     plot_length_meanweight(data, colour, facet1, facet2, shape,
                            show_points = show_points, show_spread = show_spread,
-                           ncol = ncol, scales = scales, class_label = class_label)
+                           ncol = ncol, scales = scales, class_label = class_label,
+                           palette = palette)
   }
+  if (!is.null(p) && !identical(angle, 45))
+    p <- p + theme(axis.text.x = element_text(
+      angle = angle, hjust = if (angle > 0) 1 else 0.5, vjust = 1))
+  p
 }
 
 #' Facet key combining up to two facet columns into one grid of panels

@@ -199,13 +199,15 @@ reset_palettes <- function() rm(list = ls(.LEVEL_COLOURS), envir = .LEVEL_COLOUR
 #' @param var Name of the variable being coloured.
 #' @param values The levels present.
 #' @param name Legend title; defaults to `var`.
+#' @param palette "default" or "colorblind" - passed to [var_palette()].
 #' @param ... Passed to [ggplot2::scale_fill_manual()].
 #' @return A ggplot fill scale.
 #' @seealso [var_palette()]
 #' @export
-scale_fill_var <- function(var, values, name = var, ...)
-  scale_fill_manual(values = var_palette(var, values), name = name,
-                    na.value = "grey85", ...)
+scale_fill_var <- function(var, values, name = var,
+                           palette = c("default", "colorblind"), ...)
+  scale_fill_manual(values = var_palette(var, values, match.arg(palette)),
+                    name = name, na.value = "grey85", ...)
 
 #' Colour scale using the stable per-level colours
 #'
@@ -216,9 +218,10 @@ scale_fill_var <- function(var, values, name = var, ...)
 #' @return A ggplot colour scale.
 #' @seealso [var_palette()], [scale_fill_var()]
 #' @export
-scale_colour_var <- function(var, values, name = var, ...)
-  scale_colour_manual(values = var_palette(var, values), name = name,
-                      na.value = "grey70", ...)
+scale_colour_var <- function(var, values, name = var,
+                             palette = c("default", "colorblind"), ...)
+  scale_colour_manual(values = var_palette(var, values, match.arg(palette)),
+                      name = name, na.value = "grey70", ...)
 
 #' Distinct colours for a set of group ids
 #'

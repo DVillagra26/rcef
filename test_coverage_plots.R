@@ -60,8 +60,11 @@ plot_coverage(catch_data, type = "bars", y = "fleetValue", fill = "Country",
 invisible(dev.off())
 
 ## ---- 1c. threshold and min_trips genuinely do nothing for "bars" ----
-p1c <- plot_coverage(catch_data, type = "bars", y = "fleetValue",
-                     fill = "Country", threshold = 99, min_trips = 500)
+## (setting them on a bars plot now warns - see section 5f; suppressed
+## here since the point of 1c is only that the DATA is identical)
+p1c <- suppressWarnings(plot_coverage(catch_data, type = "bars",
+                     y = "fleetValue", fill = "Country",
+                     threshold = 99, min_trips = 500))
 cat("1c: bars plot unchanged by an extreme threshold:",
    identical(p1a$data, p1c$data), "\n\n")
 
@@ -313,6 +316,95 @@ if (have_age) {
     engine = "base", verbose = TRUE)
   invisible(dev.off())
 } else message("4d: age fixture not present - skipped")
+
+## =====================================================================
+##  5. ARGUMENT REACTIONS - deliberately wrong / partial calls
+## =====================================================================
+## Every plot dispatcher now warns (always, not only under verbose) when
+## an argument is set that does not fit the requested plot - e.g. a
+## mean-weight "histogram", a discard-rate "raw" plot given a box-only
+## `fill`, a "bars" plot given a threshold. It still draws the closest
+## sensible figure. Each call below is wrapped so the walkthrough runs to
+## the end and prints the warning inline; watch the "  warning: " lines.
+
+say <- function(label) cat("\n---- 5", label, "----\n")
+try_show <- function(expr) withCallingHandlers(
+  { force(expr); invisible(NULL) },
+  warning = function(w) {
+    message("  warning: ", conditionMessage(w)); invokeRestart("muffleWarning")
+  })
+
+grDevices::pdf(tempfile())   # soak the figures; we only want the messages here
+
+say("a. mean weight asked for as a histogram -> warns, draws a line")
+try_show(plot_biology_distribution(catch_data, distributions,
+  variableType = "WeightLive", type = "histogram", verbose = TRUE))
+
+say("b. numbers asked for as a line -> warns, draws a histogram")
+try_show(plot_biology_distribution(catch_data, distributions,
+  quantity = "numbers", type = "line"))
+
+say("c. mean weight given a numbers-only `fill` -> warns")
+try_show(plot_biology_distribution(catch_data, distributions,
+  variableType = "WeightLive", type = "line", fill = "Country"))
+
+say("d. numbers given a mean-weight-only `colour` -> warns")
+try_show(plot_biology_distribution(catch_data, distributions,
+  variableType = "Number", type = "histogram", colour = "Country"))
+
+say("e. distributionType set but no distributions table -> warns")
+n5 <- length_numbers(
+  link_dist_to_strata(catch_data, distributions, "fleetValue", "Lan",
+                      type = "LengthTotal"), "fleetValue")
+try_show(plot_biology_distribution(n5, quantity = "numbers",
+  distributionType = "Age", fill = "fleetValue"))
+
+say("f. bars given a threshold / min_trips -> warns (bars ignore them)")
+try_show(plot_coverage(catch_data, type = "bars", y = "fleetValue",
+  threshold = 80, min_trips = 5))
+
+say("g. non-scatter type given scatter_y -> warns")
+try_show(plot_coverage(catch_data, type = "heatmap", y = "fleetValue",
+  scatter_y = "n_measurements"))
+
+say("h. scatter given a `y` -> warns (scatter has numeric axes)")
+try_show(plot_coverage(catch_data, type = "scatter", y = "fleetValue"))
+
+say("i. ggplot heatmap given palette = colorblind -> warns (status colours fixed)")
+try_show(plot_coverage(catch_data, type = "heatmap", y = "fleetValue",
+  engine = "ggplot", palette = "colorblind"))
+
+say("j. discard-rate raw given a box-only `fill` -> warns")
+try_show(plot_discard_rate(catch_data, type = "raw", x = "fleetValue",
+  fill = "Country"))
+
+say("k. discard-rate box given a raw-only `colour` -> warns")
+try_show(plot_discard_rate(catch_data, type = "box", x = "fleetValue",
+  colour = "Country"))
+
+say("l. coverage map given palette = colorblind -> warns")
+try_show(plot_coverage_map(catch_data, palette = "colorblind"))
+
+say("m. GOOD CALLS - these must print NO warning")
+try_show(plot_coverage(catch_data, type = "bars", y = "fleetValue",
+  fill = "Country"))
+try_show(plot_coverage(catch_data, type = "scatter", what = "length",
+  distributions = distributions, scatter_y = "n_measurements"))
+try_show(plot_discard_rate(catch_data, type = "box", x = "fleetValue",
+  fill = "Country", show_points = TRUE, show_pooled = TRUE))
+try_show(plot_biology_distribution(catch_data, distributions,
+  variableType = "Number", type = "density", fill = "fleetValue", smooth = 0.6))
+cat("  (no 'warning:' lines in section m = correct)\n")
+
+## angle / palette that now genuinely reach the ggplot engine
+say("n. ggplot heatmap, angle = 90 + a real recolour target (bars) - drawn, no warning")
+p5n <- plot_coverage(catch_data, type = "heatmap", y = "fleetValue",
+  fill = "Country", engine = "ggplot", angle = 90)
+print(p5n)
+p5o <- plot_coverage(catch_data, type = "bars", y = "fleetValue",
+  fill = "Country", engine = "ggplot", palette = "colorblind")
+print(p5o)
+invisible(grDevices::dev.off())
 
 cat("\nDone - ggplot2 figures are in Rplots.pdf; base-R figures are the",
    "individual PNGs (and one PDF, 13f, showing n_per_screen) written",

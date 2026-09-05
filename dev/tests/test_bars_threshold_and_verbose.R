@@ -39,16 +39,29 @@ strata_raw <- data.frame(
 strata <- classify_strata(strata_raw, 50, min_trips = 2)
 
 ## ---- 1. threshold/min_trips are ignored for type = "bars" -----------
-p1 <- plot_coverage(strata, type = "bars", y = "metier4", fill = "Country",
-                    threshold = 20)
-p2 <- plot_coverage(strata, type = "bars", y = "metier4", fill = "Country",
-                    threshold = 95, min_trips = 100)
+p1 <- suppressWarnings(plot_coverage(strata, type = "bars", y = "metier4",
+                                     fill = "Country", threshold = 20))
+p2 <- suppressWarnings(plot_coverage(strata, type = "bars", y = "metier4",
+                                     fill = "Country", threshold = 95,
+                                     min_trips = 100))
 ok(identical(p1$data, p2$data),
    "changing threshold/min_trips does not change the bars plot's data at all")
 
-out <- capture.output(
+## setting threshold / min_trips on a bars plot now warns (always, not
+## just under verbose); leaving them alone does not.
+w_set <- tryCatch(plot_coverage(strata, type = "bars", y = "metier4",
+                                fill = "Country", threshold = 42),
+                  warning = function(w) conditionMessage(w))
+ok(is.character(w_set) && grepl("do not affect type = \"bars\"", w_set),
+   "type = \"bars\" with a threshold set raises a warning")
+w_none <- tryCatch({
+  plot_coverage(strata, type = "bars", y = "metier4", fill = "Country"); NA
+}, warning = function(w) conditionMessage(w))
+ok(is.na(w_none), "type = \"bars\" with no threshold set raises no warning")
+
+out <- capture.output(suppressWarnings(
   plot_coverage(strata, type = "bars", y = "metier4", fill = "Country",
-               threshold = 42, verbose = TRUE))
+               threshold = 42, verbose = TRUE)))
 ok(any(grepl("not used by type", out)),
    "a verbose bars run states the threshold is not used")
 ok(!any(grepl("42", out)),
@@ -62,9 +75,9 @@ ok(any(grepl("min_trips  : 2", out2, fixed = TRUE)),
    "and the real, resolved min_trips (defaulted to 2)")
 
 ## ---- 2. verbose reports the plot shape accurately --------------------
-out3 <- capture.output(
+out3 <- capture.output(suppressWarnings(
   plot_coverage(strata, type = "bars", y = "metier4", fill = "Country",
-               verbose = TRUE))
+               verbose = TRUE)))
 ok(any(grepl('type = "bars"', out3, fixed = TRUE)) &&
      any(grepl("fill   : Country", out3, fixed = TRUE)),
    "verbose correctly names the type and the fill column used")
