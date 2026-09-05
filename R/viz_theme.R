@@ -273,7 +273,18 @@ app_theme <- function(base = 11) {
                                       colour = "grey15",
                                       margin = margin(t = 3, b = 4)),
       panel.spacing    = unit(0.6, "lines"),
-      legend.key       = element_blank(),
-      legend.title     = element_text(face = "bold", size = base - 2),
-      legend.text      = element_text(size = base - 2))
+      # Legend: a touch bigger than before, and sat inside the panel in
+      # the bottom-right corner on a semi-opaque box rather than taking a
+      # column of its own down the right-hand side. A builder that needs
+      # it elsewhere (or gone) still overrides this - app_theme() is
+      # applied before those local theme() calls.
+      legend.key           = element_blank(),
+      legend.key.size      = unit(1.1, "lines"),
+      legend.title         = element_text(face = "bold", size = base - 1),
+      legend.text          = element_text(size = base - 1),
+      legend.background    = element_rect(fill = scales::alpha("white", 0.85),
+                                          colour = "grey70", linewidth = 0.3),
+      legend.margin        = margin(3, 5, 3, 5),
+      legend.position      = c(0.995, 0.005),
+      legend.justification = c(1, 0))
 }

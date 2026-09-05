@@ -381,8 +381,7 @@ plot_heatmap_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
     }
     graphics::box()
     axis_x_cat(seq_along(xs) - 0.5, xs, angle = angle, cex = 0.8)
-    graphics::axis(2, at = seq_along(ys) - 0.5, labels = ys, las = 1,
-                   cex.axis = 0.8, tick = TRUE)
+    axis_y_cat(seq_along(ys) - 0.5, ys, cex = 0.8)
   }
 
   facets <- if (!is.null(facet_var) && facet_var %in% names(d))
@@ -405,9 +404,9 @@ plot_heatmap_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
     op <- graphics::par(no.readonly = TRUE); on.exit(graphics::par(op), add = TRUE)
     if (length(groups) > 1 && !had_device) grDevices::dev.new()
     if (!identical(grp, "__nofacet__") && length(grp) > 1) {
-      nc <- ceiling(sqrt(length(grp))); nr <- ceiling(length(grp) / nc)
+      gd <- facet_grid_dims(length(grp)); nr <- gd[1L]; nc <- gd[2L]
       graphics::par(mfrow = c(nr, nc), mar = c(min(bmar, 7), lmar, 2, 1),
-                    oma = c(0, 0, 3, 13))
+                    oma = c(0, 0, 3, 1))
       for (fv in grp)
         draw_one(d[as.character(d[[facet_var]]) == fv, , drop = FALSE], fv)
       graphics::mtext(main_txt, outer = TRUE, side = 3, cex = 1.05, font = 2, line = 1)
@@ -415,11 +414,11 @@ plot_heatmap_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
         graphics::mtext(paste(facet_var, "=", paste(grp, collapse = ", ")),
                         outer = TRUE, side = 3, cex = 0.8, line = -0.2, col = "grey30")
     } else if (!identical(grp, "__nofacet__") && length(grp) == 1) {
-      graphics::par(mar = c(bmar, lmar, 3, 13))
+      graphics::par(mar = c(bmar, lmar, 3, 1.5))
       draw_one(d[as.character(d[[facet_var]]) == grp, , drop = FALSE],
                paste0(main_txt, " (", facet_var, " = ", grp, ")"))
     } else {
-      graphics::par(mar = c(bmar, lmar, 3, 13))
+      graphics::par(mar = c(bmar, lmar, 3, 1.5))
       draw_one(d, main_txt)
     }
     legend_status_base(lk_all)
@@ -432,25 +431,24 @@ plot_heatmap_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
 #'
 #' Shared by the base-R heatmap and bubble plots: every possible status
 #' from [cat_lookup()], not just the ones present in this particular
-#' figure - drawn in the outer margin so it does not have to compete
-#' for space with the plotting area itself. Needs `oma`/`mar` room
-#' already reserved on the right (both callers set one).
+#' figure - drawn as an overlay in the bottom-right corner of the figure,
+#' on top of the panels, with a semi-opaque background so the marks behind
+#' it stay faintly visible.
 #'
 #' @param lk_all A [cat_lookup()] data frame.
 #' @return `NULL`, invisibly.
 #' @keywords internal
 #' @export
 legend_status_base <- function(lk_all) {
-  graphics::par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0),
-               new = TRUE)
-  graphics::plot.new()
   # The compact codes from cat_lookup()$abbr (cov / trip / meas vs their
   # thresholds) rather than the full sentences - short enough to read at
   # a legible size instead of being shrunk to fit.
   labs <- if ("abbr" %in% names(lk_all)) lk_all$abbr else lk_all$status
-  graphics::legend("right", legend = labs, fill = lk_all$colour, cex = 0.8,
-                   bty = "o", bg = "white", box.col = "grey80", title = "Status",
-                   xpd = NA, inset = c(0.001, 0), y.intersp = 1.1)
+  legend_overlay("bottomright", legend = labs, fill = lk_all$colour,
+                 cex = 0.95, bty = "o",
+                 bg = grDevices::adjustcolor("white", 0.9),
+                 box.col = "grey65", title = "Status",
+                 inset = c(0.02, 0.02), y.intersp = 1.15)
   invisible(NULL)
 }
 
@@ -542,6 +540,78 @@ axis_x_cat <- function(at, labels, angle = 45, cex = 0.8, col = "grey15") {
   u <- graphics::par("usr")
   graphics::text(x = at, y = u[3] - (u[4] - u[3]) * 0.018, labels = labels,
                  srt = angle, adj = c(1, 1), xpd = NA, cex = cex, col = col)
+  invisible(NULL)
+}
+
+#' Facet grid dimensions, capped at two columns
+#'
+#' Every base-R plot lays its facets out with `par(mfrow = )`. A square-ish
+#' grid (`ceiling(sqrt(n))` columns) makes each panel small and its y-axis
+#' labels unreadable once there are more than a few facets. This keeps the
+#' grid to at most `max_col` columns - two by default - so the panels stay
+#' wide and the figure simply grows downward.
+#'
+#' @param n Number of facets.
+#' @param max_col Maximum columns (default 2).
+#' @return `c(nrow, ncol)`.
+#' @keywords internal
+#' @export
+facet_grid_dims <- function(n, max_col = 2L) {
+  nc <- max(1L, min(as.integer(max_col), as.integer(n)))
+  c(ceiling(n / nc), nc)
+}
+
+#' Categorical y axis with every label shown
+#'
+#' `graphics::axis()` silently drops tick labels that would overlap, so a
+#' y axis with many categories loses rows and there is no telling which bar
+#' or tile is which. This draws the ticks with `axis()` but every label
+#' with `graphics::mtext()` (which never thins), shrinking the text just
+#' enough to fit the panel height when the categories are dense - down to
+#' `min_cex`, past which it stops and the panel is simply too short for
+#' that many rows.
+#'
+#' @param at,labels Tick positions and their labels.
+#' @param cex Target character expansion; the drawn size may be smaller.
+#' @param col Label colour.
+#' @param min_cex Floor on the shrink.
+#' @param line Margin line the labels sit on.
+#' @return `NULL`, invisibly.
+#' @keywords internal
+#' @export
+axis_y_cat <- function(at, labels, cex = 0.8, col = "grey15",
+                       min_cex = 0.45, line = 0.5) {
+  graphics::axis(2, at = at, labels = FALSE, tick = TRUE)
+  labels <- as.character(labels)
+  n <- length(labels)
+  if (!n) return(invisible(NULL))
+  usr_h <- diff(graphics::par("usr")[3:4])
+  need  <- n * graphics::strheight("Mg", units = "user", cex = cex) * 1.28
+  use   <- if (is.finite(need) && need > usr_h)
+    max(min_cex, cex * usr_h / need) else cex
+  graphics::mtext(labels, side = 2, at = at, line = line, las = 1,
+                  cex = use, col = col, adj = 1)
+  invisible(NULL)
+}
+
+#' Draw a legend as an overlay in a figure corner
+#'
+#' Switches to a whole-figure coordinate system and drops a legend into
+#' `pos` (`"bottomright"` for these plots), on top of the panels instead of
+#' in a wide reserved outer margin. `...` goes straight to
+#' [graphics::legend()]; callers pass their own `bg` / `box.col` / `cex` so
+#' the box stays semi-opaque and the marks behind it stay faintly visible.
+#'
+#' @param pos A [graphics::legend()] keyword position.
+#' @param ... Passed to [graphics::legend()].
+#' @return `NULL`, invisibly.
+#' @keywords internal
+#' @export
+legend_overlay <- function(pos, ...) {
+  graphics::par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0),
+                new = TRUE)
+  graphics::plot.new()
+  graphics::legend(pos, ..., xpd = NA)
   invisible(NULL)
 }
 
@@ -886,7 +956,7 @@ plot_coverage_bars_base <- function(sc, y_var, fill_var = NULL,
     xmax <- dmax * 1.30
     mx   <- function(p) p / 100 * dmax          # % of landings -> x
     bp <- graphics::barplot(dd$landings[ord], horiz = TRUE, las = 1,
-                            names.arg = key[ord], cex.names = 0.7,
+                            names.arg = NA, axisnames = FALSE,
                             col = pal[dd$.fill[ord]], border = OUTLINE,
                             xlim = c(0, xmax), space = 0.15,
                             xlab = sprintf("%s (t)", tools::toTitleCase(weight_label)),
@@ -907,8 +977,10 @@ plot_coverage_bars_base <- function(sc, y_var, fill_var = NULL,
                       col = pal[dd$.fill[ord]], border = OUTLINE)
     graphics::box()
     graphics::axis(1, at = xticks, labels = FALSE, tick = TRUE)
-    # Y-axis tick marks (barplot draws the names but no ticks).
-    graphics::axis(2, at = bp, labels = FALSE, tick = TRUE)
+    # Y axis: ticks plus EVERY row label (barplot's own names.arg is
+    # thinned once the rows are dense - axis_y_cat() shrinks the text to
+    # fit instead of dropping labels).
+    axis_y_cat(bp[, 1], key[ord], cex = 0.7)
 
     grp    <- as.character(dd$sampled[ord])
     blocks <- rle(grp)
@@ -961,14 +1033,14 @@ plot_coverage_bars_base <- function(sc, y_var, fill_var = NULL,
                       col = "grey30")
     if (has(fill_var) && !compact) {
       lv <- sort(unique(dd$.fill))
-      # Legend anchored to the bottom-right MARGIN corner, outside the
-      # bars - the way the ggplot version puts its fill guide off to the
-      # side. An in-panel "topright" (or any x inside the data) lands on
-      # top of the bars once the panel is this densely packed.
-      graphics::legend(x = xmax + dmax * 0.06, y = y0 + pitch,
-                       xjust = 0, yjust = 0, legend = lv, fill = pal[lv],
-                       cex = 0.6, bty = "n", xpd = NA,
-                       ncol = min(2, ceiling(length(lv) / 8)))
+      # Legend inside the panel, bottom-right corner, on a semi-opaque
+      # box - the right margin is reserved for the "Sampled / Not sampled
+      # (NN%)" callouts, not the fill key.
+      graphics::legend("bottomright", legend = lv, fill = pal[lv],
+                       cex = 0.8, bty = "o",
+                       bg = grDevices::adjustcolor("white", 0.85),
+                       box.col = "grey65", xpd = NA, inset = c(0.02, 0.02),
+                       ncol = min(2, ceiling(length(lv) / 10)))
     }
   }
 
@@ -998,7 +1070,7 @@ plot_coverage_bars_base <- function(sc, y_var, fill_var = NULL,
     # panels squeezed onto one.
     if (length(groups) > 1 && !had_device) grDevices::dev.new()
     if (!identical(grp, "__nofacet__") && length(grp) > 1) {
-      nc <- ceiling(sqrt(length(grp))); nr <- ceiling(length(grp) / nc)
+      gd <- facet_grid_dims(length(grp)); nr <- gd[1L]; nc <- gd[2L]
       graphics::par(mfrow = c(nr, nc), oma = c(0, 0, 2, 0))
       for (fv in grp)
         draw_one(agg[agg$.facet == fv, , drop = FALSE], fv, "", compact = TRUE)
@@ -1138,8 +1210,7 @@ plot_bubbles_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
                      col = "red3", adj = c(0.5, 0))
     }
     axis_x_cat(seq_along(xs), xs, angle = angle, cex = 0.8)
-    graphics::axis(2, at = seq_along(ys), labels = ys, las = 1, cex.axis = 0.8,
-                   tick = TRUE)
+    axis_y_cat(seq_along(ys), ys, cex = 0.8)
     graphics::box()
   }
 
@@ -1154,11 +1225,12 @@ plot_bubbles_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
       graphics::par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0),
                    new = TRUE)
       graphics::plot.new()
-      graphics::legend("bottomright", title = sprintf("%s (t)", weight_label),
+      graphics::legend("topright", title = sprintf("%s (t)", weight_label),
                        legend = format(ref, big.mark = ","),
                        pch = 21, pt.cex = c(0.9, 1.4, 2), pt.bg = "grey70",
-                       col = OUTLINE, cex = 0.6, bty = "o", bg = "white",
-                       box.col = "grey80", xpd = NA, inset = c(0.001, 0))
+                       col = OUTLINE, cex = 0.8, bty = "o",
+                       bg = grDevices::adjustcolor("white", 0.88),
+                       box.col = "grey65", xpd = NA, inset = c(0.02, 0.02))
     }
   }
 
@@ -1168,9 +1240,9 @@ plot_bubbles_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
     op <- graphics::par(no.readonly = TRUE); on.exit(graphics::par(op), add = TRUE)
     if (length(groups) > 1 && !had_device) grDevices::dev.new()
     if (!identical(grp, "__nofacet__") && length(grp) > 1) {
-      nc <- ceiling(sqrt(length(grp))); nr <- ceiling(length(grp) / nc)
-      graphics::par(mfrow = c(nr, nc), mar = c(min(bmar, 7), lmar, 2, 3),
-                    oma = c(0, 0, 3, 13))
+      gd <- facet_grid_dims(length(grp)); nr <- gd[1L]; nc <- gd[2L]
+      graphics::par(mfrow = c(nr, nc), mar = c(min(bmar, 7), lmar, 2, 1.5),
+                    oma = c(0, 0, 3, 1))
       for (fv in grp)
         draw_one(d[as.character(d[[facet_var]]) == fv, , drop = FALSE], fv)
       graphics::mtext(main_txt, outer = TRUE, side = 3, cex = 1.05, font = 2, line = 1)
@@ -1178,11 +1250,11 @@ plot_bubbles_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
         graphics::mtext(paste(facet_var, "=", paste(grp, collapse = ", ")),
                         outer = TRUE, side = 3, cex = 0.8, line = -0.2, col = "grey30")
     } else if (!identical(grp, "__nofacet__") && length(grp) == 1) {
-      graphics::par(mar = c(bmar, lmar, 4, 13))
+      graphics::par(mar = c(bmar, lmar, 4, 1.5))
       draw_one(d[as.character(d[[facet_var]]) == grp, , drop = FALSE],
                paste0(main_txt, " (", facet_var, " = ", grp, ")"))
     } else {
-      graphics::par(mar = c(bmar, lmar, 4, 13))
+      graphics::par(mar = c(bmar, lmar, 4, 1.5))
       draw_one(d, "")
       graphics::mtext(main_txt, side = 3, line = 1.2, cex = 1.05, font = 2)
     }
@@ -1394,13 +1466,11 @@ plot_coverage_scatter_base <- function(sc, x = "landings", y = "coverage",
   }
   draw_legend <- function() {
     if (!has_stat) return(invisible(NULL))
-    graphics::par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0),
-                 new = TRUE)
-    graphics::plot.new()
-    graphics::legend("right", legend = lk$abbr, fill = lk$colour, cex = 0.8,
-                     bty = "o", bg = "white", box.col = "grey80",
-                     title = "Status", xpd = NA, y.intersp = 1.1,
-                     inset = c(0.001, 0))
+    legend_overlay("bottomright", legend = lk$abbr, fill = lk$colour,
+                   cex = 0.95, bty = "o",
+                   bg = grDevices::adjustcolor("white", 0.9),
+                   box.col = "grey65", title = "Status", y.intersp = 1.15,
+                   inset = c(0.02, 0.02))
   }
   facets <- if (has(facet_var)) sort(unique(d$.facet)) else NA
   main_txt <- sprintf("Sampling vs %s weight per stratum",
@@ -1411,9 +1481,9 @@ plot_coverage_scatter_base <- function(sc, x = "landings", y = "coverage",
   for (grp in groups) {
     op <- graphics::par(no.readonly = TRUE); on.exit(graphics::par(op), add = TRUE)
     if (length(groups) > 1 && !had_device) grDevices::dev.new()
-    rmar <- if (has_stat) 12 else 3
+    rmar <- 3
     if (!identical(grp, "__nofacet__") && length(grp) > 1) {
-      nc <- ceiling(sqrt(length(grp))); nr <- ceiling(length(grp) / nc)
+      gd <- facet_grid_dims(length(grp)); nr <- gd[1L]; nc <- gd[2L]
       graphics::par(mfrow = c(nr, nc), mar = c(4, 5, 3, 1), oma = c(2, 0, 3, rmar))
       for (fv in grp) draw_one(d[d$.facet == fv, , drop = FALSE], fv)
       graphics::mtext(main_txt, outer = TRUE, side = 3, cex = 1.05, font = 2, line = 1)
@@ -1690,8 +1760,10 @@ plot_coverage_map <- function(sc, area_var = "areaValue", group_var = NULL,
         graphics::text(agg$cx[i], agg$cy[i] - cs * 0.98, agg$glab[i], cex = 0.5,
                        col = "grey25")
     }
-    graphics::legend("bottomleft", bg = "white", box.col = "grey80", fill = fills,
-                     legend = c("sampled", "not sampled"), cex = 0.85)
+    graphics::legend("bottomright", bg = grDevices::adjustcolor("white", 0.88),
+                     box.col = "grey65", fill = fills,
+                     legend = c("sampled", "not sampled"), cex = 0.95,
+                     inset = c(0.02, 0.02))
     return(invisible(NULL))
   }
 
@@ -2381,13 +2453,10 @@ plot_dr_raw_base <- function(s, x_var, colour_var = NULL, shape_var = NULL,
   draw_legend <- function() {
     if (!has(colour_var)) return(invisible(NULL))
     lv <- sort(unique(as.character(d[[colour_var]])))
-    graphics::par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0),
-                 new = TRUE)
-    graphics::plot.new()
-    graphics::legend("right", title = colour_var, legend = lv,
-                     pt.bg = pal[lv], pch = 21, pt.cex = 1.4, cex = 0.9,
-                     bty = "o", bg = "white", box.col = "grey80", xpd = NA,
-                     y.intersp = 1.15, inset = c(0.001, 0))
+    legend_overlay("bottomright", title = colour_var, legend = lv,
+                   pt.bg = pal[lv], pch = 21, pt.cex = 1.5, cex = 0.95,
+                   bty = "o", bg = grDevices::adjustcolor("white", 0.9),
+                   box.col = "grey65", y.intersp = 1.15, inset = c(0.02, 0.02))
   }
 
   groups <- split_facets_to_screens(facets, n_per_screen)
@@ -2395,9 +2464,9 @@ plot_dr_raw_base <- function(s, x_var, colour_var = NULL, shape_var = NULL,
   for (grp in groups) {
     op <- graphics::par(no.readonly = TRUE); on.exit(graphics::par(op), add = TRUE)
     if (length(groups) > 1 && !had_device) grDevices::dev.new()
-    rmar <- if (has(colour_var)) 9 else 2
+    rmar <- 2
     if (!identical(grp, "__nofacet__") && length(grp) > 1) {
-      nc <- ceiling(sqrt(length(grp))); nr <- ceiling(length(grp) / nc)
+      gd <- facet_grid_dims(length(grp)); nr <- gd[1L]; nc <- gd[2L]
       graphics::par(mfrow = c(nr, nc), mar = c(min(bmar, 8), 4, 2, rmar),
                     oma = c(2, 0, 3, 1.5))
       for (fv in grp) draw_one(d[as.character(d[[facet_var]]) == fv, , drop = FALSE], fv)
@@ -2496,13 +2565,10 @@ plot_dr_box_base <- function(s_full, x_var, fill_var = NULL, facet_var = NULL,
   draw_legend <- function() {
     if (!has(fill_var)) return(invisible(NULL))
     lv <- sort(unique(as.character(d[[fill_var]])))
-    graphics::par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0),
-                 new = TRUE)
-    graphics::plot.new()
-    graphics::legend("right", title = fill_var, legend = lv,
-                     pt.bg = pal[lv], pch = 21, pt.cex = 1.4, cex = 0.9,
-                     bty = "o", bg = "white", box.col = "grey80", xpd = NA,
-                     y.intersp = 1.15, inset = c(0.001, 0))
+    legend_overlay("bottomright", title = fill_var, legend = lv,
+                   pt.bg = pal[lv], pch = 21, pt.cex = 1.5, cex = 0.95,
+                   bty = "o", bg = grDevices::adjustcolor("white", 0.9),
+                   box.col = "grey65", y.intersp = 1.15, inset = c(0.02, 0.02))
   }
 
   facets <- if (has(facet_var)) sort(unique(as.character(d[[facet_var]]))) else NA
@@ -2511,9 +2577,9 @@ plot_dr_box_base <- function(s_full, x_var, fill_var = NULL, facet_var = NULL,
   for (grp in groups) {
     op <- graphics::par(no.readonly = TRUE); on.exit(graphics::par(op), add = TRUE)
     if (length(groups) > 1 && !had_device) grDevices::dev.new()
-    rmar <- if (has(fill_var)) 9 else 2
+    rmar <- 2
     if (!identical(grp, "__nofacet__") && length(grp) > 1) {
-      nc <- ceiling(sqrt(length(grp))); nr <- ceiling(length(grp) / nc)
+      gd <- facet_grid_dims(length(grp)); nr <- gd[1L]; nc <- gd[2L]
       graphics::par(mfrow = c(nr, nc), mar = c(bmar_f, 4, 2, rmar),
                     oma = c(2, 0, 3, 0))
       for (fv in grp)
@@ -3025,8 +3091,9 @@ plot_length_hist_base <- function(d, fill_var = NULL, facet1 = NULL,
       guides(if (is.matrix(bp)) colMeans(bp) else as.numeric(bp), classes)
       graphics::barplot(m, col = pal[lv], border = OUTLINE, beside = !stacked,
                         space = sp, add = TRUE, axes = FALSE, axisnames = FALSE)
-      graphics::legend("topright", legend = lv, fill = pal[lv], cex = 0.68,
-                       bty = "o", bg = "white", box.col = "grey80")
+      graphics::legend("bottomright", legend = lv, fill = pal[lv], cex = 0.9,
+                       bty = "o", bg = grDevices::adjustcolor("white", 0.88),
+                       box.col = "grey65", inset = c(0.02, 0.02))
     } else {
       v <- stats::setNames(rep(0, length(classes)), classes)
       agg <- stats::aggregate(number ~ .class, dd, sum)
@@ -3049,7 +3116,7 @@ plot_length_hist_base <- function(d, fill_var = NULL, facet1 = NULL,
     op <- graphics::par(no.readonly = TRUE); on.exit(graphics::par(op), add = TRUE)
     if (length(groups) > 1 && !had_device) grDevices::dev.new()
     if (!identical(grp, "__nofacet__") && length(grp) > 1) {
-      nc <- ceiling(sqrt(length(grp))); nr <- ceiling(length(grp) / nc)
+      gd <- facet_grid_dims(length(grp)); nr <- gd[1L]; nc <- gd[2L]
       graphics::par(mfrow = c(nr, nc), mar = c(4, 4, 2, 1), oma = c(0, 0, 3, 0))
       for (fv in grp) draw_one(d[d$.fk == fv, , drop = FALSE], fv)
       graphics::mtext(main_txt, outer = TRUE, side = 3, cex = 1.05, font = 2, line = 1)
@@ -3149,7 +3216,7 @@ plot_length_ridges_base <- function(d, group_var = NULL, facet1 = NULL,
     }
     graphics::box()
     graphics::axis(1, cex.axis = 0.8)
-    graphics::axis(2, at = seq_along(lev), labels = lev, las = 1, cex.axis = 0.8)
+    axis_y_cat(seq_along(lev), lev, cex = 0.8)
   }
 
   facets <- if (!all(is.na(d$.fk))) sort(unique(d$.fk)) else NA
@@ -3164,7 +3231,7 @@ plot_length_ridges_base <- function(d, group_var = NULL, facet1 = NULL,
     op <- graphics::par(no.readonly = TRUE); on.exit(graphics::par(op), add = TRUE)
     if (length(groups) > 1 && !had_device) grDevices::dev.new()
     if (!identical(grp, "__nofacet__") && length(grp) > 1) {
-      nc <- ceiling(sqrt(length(grp))); nr <- ceiling(length(grp) / nc)
+      gd <- facet_grid_dims(length(grp)); nr <- gd[1L]; nc <- gd[2L]
       graphics::par(mfrow = c(nr, nc), mar = c(4, lmar, 2, 1), oma = c(0, 0, 3, 0))
       for (fv in grp) draw_one(d[d$.fk == fv, , drop = FALSE], fv)
       graphics::mtext(main_txt, outer = TRUE, side = 3, cex = 1.05, font = 2, line = 1)
@@ -3257,11 +3324,12 @@ plot_length_meanweight_base <- function(d, colour_var = NULL, facet1 = NULL,
     }
     if (!is.null(grp_var) && length(grp_lv) > 1) {
       pch_leg <- if (has(shape_var)) pch_lv[seq_along(grp_lv)] else rep(21, length(grp_lv))
-      graphics::legend("topright", title = grp_var, legend = grp_lv,
+      graphics::legend("bottomright", title = grp_var, legend = grp_lv,
                        col = if (has(colour_var)) pal[grp_lv] else PAL_BASE[1],
                        pt.bg = if (has(colour_var)) pal[grp_lv] else PAL_BASE[1],
-                       pch = pch_leg, lwd = 1.8, cex = 0.68, bty = "o",
-                       bg = "white", box.col = "grey80")
+                       pch = pch_leg, lwd = 1.8, cex = 0.9, bty = "o",
+                       bg = grDevices::adjustcolor("white", 0.88),
+                       box.col = "grey65", inset = c(0.02, 0.02))
     }
   }
 
@@ -3273,7 +3341,7 @@ plot_length_meanweight_base <- function(d, colour_var = NULL, facet1 = NULL,
     op <- graphics::par(no.readonly = TRUE); on.exit(graphics::par(op), add = TRUE)
     if (length(groups) > 1 && !had_device) grDevices::dev.new()
     if (!identical(grp, "__nofacet__") && length(grp) > 1) {
-      nc <- ceiling(sqrt(length(grp))); nr <- ceiling(length(grp) / nc)
+      gd <- facet_grid_dims(length(grp)); nr <- gd[1L]; nc <- gd[2L]
       graphics::par(mfrow = c(nr, nc), mar = c(4, 4, 2, 1), oma = c(0, 0, 3, 0))
       for (fv in grp) draw_one(d[d$.fk == fv, , drop = FALSE], fv)
       graphics::mtext(main_txt, outer = TRUE, side = 3, cex = 1.05, font = 2, line = 1)
