@@ -41,19 +41,43 @@ distributions <- read.csv(
   file.path(ext, "bll_2025_1distributions_CEF_v17.1.csv"),
   stringsAsFactors = FALSE)
 
-## pok: age (git-ignored pok/ subfolder; skipped cleanly if missing)
-age_catch_f <- file.path(ext, "pok", "pok_2022_catches_CEF_v17.1.csv")
-age_dist_f  <- file.path(ext, "pok", "pok_2022_distributions_CEF_v17.1.csv")
-have_age    <- file.exists(age_catch_f) && file.exists(age_dist_f)
+## pok: age. The Age CEF table lives in a git-ignored pok/ subfolder and
+## is NOT in the package tarball, so `system.file()` only finds it from a
+## source checkout, never from an installed / install_github() build.
+## Rather than test one fixed path, probe the likely spots (plus an
+## RCEF_AGE_DIR override) and, for each, confirm the distributions file
+## really carries Age rows - the top-level pok_2022_*.csv that IS shipped
+## is length data, not age, so "the file exists" is not enough.
+find_age_data <- function() {
+  dirs <- c(Sys.getenv("RCEF_AGE_DIR"),
+            file.path(ext, "pok"),
+            file.path("inst", "extdata", "data_CEF_format", "pok"),
+            file.path("..", "inst", "extdata", "data_CEF_format", "pok"))
+  for (d in dirs[nzchar(dirs)]) {
+    cf <- file.path(d, "pok_2022_catches_CEF_v17.1.csv")
+    df <- file.path(d, "pok_2022_distributions_CEF_v17.1.csv")
+    if (!file.exists(cf) || !file.exists(df)) next
+    dd <- tryCatch(read.csv(df, stringsAsFactors = FALSE),
+                   error = function(e) NULL)
+    if (!is.null(dd) && "Age" %in% dd$distributionType)
+      return(list(catch = cf, dist = dd, dir = d))
+  }
+  NULL
+}
+age_src  <- find_age_data()
+have_age <- !is.null(age_src)
 if (have_age) {
-  age_catch <- derive_fields(read.csv(age_catch_f, stringsAsFactors = FALSE))
-  age_dist  <- read.csv(age_dist_f, stringsAsFactors = FALSE)
-  cat(sprintf("age data: pok, %d catch rows, %d Age distribution rows\n",
-              nrow(age_catch), nrow(age_dist)))
+  age_catch <- derive_fields(read.csv(age_src$catch, stringsAsFactors = FALSE))
+  age_dist  <- age_src$dist
+  cat(sprintf("age data: pok (%s), %d catch rows, %d Age distribution rows\n",
+              age_src$dir, nrow(age_catch),
+              sum(age_dist$distributionType == "Age")))
 } else {
   age_catch <- age_dist <- NULL
-  message("NOTE: pok age data not present at ", dirname(age_catch_f),
-          " - every AGE block below is skipped.")
+  message("NOTE: no pok Age CEF data found (git-ignored pok/ subfolder, ",
+          "not in the tarball). Set RCEF_AGE_DIR to a folder holding ",
+          "pok_2022_{catches,distributions}_CEF_v17.1.csv to enable the ",
+          "AGE blocks; they are skipped for now.")
 }
 
 
