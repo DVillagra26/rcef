@@ -6,41 +6,41 @@
 \usage{
 coverage_verbose_summary(
   strata,
-  type,
+  view,
   engine,
   y,
-  fill,
+  x,
   facet,
   threshold,
   what,
   weight_label,
   min_meas,
   min_trips,
+  catchCategory = NULL,
   palette = "default",
   angle = 45,
-  n_per_screen = NULL,
-  scatter_y = "coverage",
-  scatter_size = "numTrips",
-  label_n = 8
+  n_per_screen = NULL
 )
 }
 \arguments{
-\item{strata}{The (already classified) strata table about to be
-plotted.}
+\item{strata}{The already-classified strata table about to be plotted.}
 
-\item{type, engine, y, fill, facet, threshold, what, weight_label, min_meas, min_trips}{As resolved inside [plot_coverage()] - `threshold`/`min_trips` are
-already `NA` here when `type = "bars"`, not the raw arguments the
-caller passed.}
+\item{view}{`"heat"`, `"bubble"` or `"bar"`.}
+
+\item{engine, y, x, facet, threshold, what, weight_label, min_meas, min_trips}{As resolved inside [coverage_dispatch()].}
+
+\item{catchCategory}{`"Lan"` / `"Dis"` / `"BMS"` or `NULL`.}
+
+\item{palette, angle, n_per_screen}{Rendering options, echoed back.}
 }
 \value{
 `NULL`, invisibly - printed as a side effect.
 }
 \description{
-What `plot_coverage(..., verbose = TRUE)` prints: the type and
-engine, which columns are on which role, whether a threshold applies
-here and what it resolved to, and how many strata rows are about to
-be drawn. Meant to answer "what exactly am I looking at" at the
-console without having to read the call back to yourself - not a
-log, and not shown unless asked for.
+What `plot_coverage_heat(..., verbose = TRUE)` (and the bubble / bar
+siblings) prints: the view and engine, which columns are on which
+role, the threshold / min_trips in force (or, for bars, that they do
+not apply), the catch part for a length / age figure, and how many
+strata rows are about to be drawn.
 }
 \keyword{internal}

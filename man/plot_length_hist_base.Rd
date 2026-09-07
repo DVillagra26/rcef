@@ -37,9 +37,9 @@ Same data as [plot_length_hist()] - bars of numbers over the length
 or age classes, coloured by `fill_var` via [var_palette()] (the same
 per-level colours the ggplot engine uses), stacked or side-by-side -
 drawn with `graphics::barplot()` instead of ggplot2. Called through
-`plot_biology_distribution(..., engine = "base")`, not directly.
+the distribution plots' `engine = "base"`, not directly.
 }
 \seealso{
-[plot_length_hist()], [plot_biology_distribution()]
+[plot_length_hist()], [plot_numbers_at_length_age()]
 }
 \keyword{internal}

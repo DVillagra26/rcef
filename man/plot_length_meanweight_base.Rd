@@ -43,9 +43,9 @@ Same data as [plot_length_meanweight()] - mean weight per class as a
 line with points, coloured by `colour_var` via [var_palette()], with
 an optional +/- 1 sd ribbon - drawn with `graphics::plot()`/`lines()`
 instead of ggplot2. Called through
-`plot_biology_distribution(..., engine = "base")`, not directly.
+the distribution plots' `engine = "base"`, not directly.
 }
 \seealso{
-[plot_length_meanweight()], [plot_biology_distribution()]
+[plot_length_meanweight()], [plot_numbers_at_length_age()]
 }
 \keyword{internal}

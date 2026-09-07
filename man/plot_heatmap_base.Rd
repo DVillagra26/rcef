@@ -42,9 +42,9 @@ plot_heatmap_base(
 \description{
 Same data and the same colour-by-status scheme as [plot_heatmap()],
 drawn with `graphics::image()`/`graphics::rect()` instead of ggplot2.
-Called through `plot_coverage(..., engine = "base")`, not directly.
+Called through the coverage plots' `engine = "base"`, not directly.
 }
 \seealso{
-[plot_heatmap()], [plot_coverage()]
+[plot_heatmap()], [coverage-plots]
 }
 \keyword{internal}

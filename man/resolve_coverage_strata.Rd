@@ -14,7 +14,8 @@ resolve_coverage_strata(
   what,
   min_meas,
   min_trips,
-  distributions = NULL
+  distributions = NULL,
+  catch_category = NULL
 )
 }
 \arguments{
@@ -23,12 +24,17 @@ resolve_coverage_strata(
 \item{dims}{Columns to build on; defaults to the union of `y`,
 `fill`, `facet` when `NULL`.}
 
-\item{y, fill, facet, threshold, what, min_meas, min_trips}{As in
-[plot_coverage()].}
+\item{y, fill, facet, threshold, what, min_meas, min_trips}{As in the
+coverage plots.}
 
 \item{distributions}{A distributions table - required to auto-build a
 `what = "length"`/`"age"` table from raw catch data; ignored when
 `strata` is already classified or `what = "discard"`.}
+
+\item{catch_category}{For `what = "length"`/`"age"` built from raw
+catch: which catch part the distribution is linked to - `"Lan"`
+(default), `"Dis"` or `"BMS"`. Ignored for `what = "discard"` and
+for an already-classified table.}
 }
 \value{
 A classified strata table.

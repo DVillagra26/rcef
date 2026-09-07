@@ -42,9 +42,9 @@ Bars are grouped by `fill_var` within each `y_var` category when
 two-block layout with separator lines and percentage callouts -
 the same two numbers (sampled weight, unsampled weight) are all
 still there, shown a plainer way. Called through
-`plot_coverage(..., engine = "base")`, not directly.
+the coverage plots' `engine = "base"`, not directly.
 }
 \seealso{
-[plot_coverage_bars()], [plot_coverage()]
+[plot_coverage_bars()], [coverage-plots]
 }
 \keyword{internal}

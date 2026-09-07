@@ -41,9 +41,9 @@ per `group_var` level, each integrating to one so groups of very
 different size compare on shape alone - drawn as filled, vertically
 offset ribbons with `graphics::polygon()` instead of ggplot2's
 `geom_ribbon()`. Called through
-`plot_biology_distribution(..., engine = "base")`, not directly.
+the distribution plots' `engine = "base"`, not directly.
 }
 \seealso{
-[plot_length_ridges()], [plot_biology_distribution()]
+[plot_length_ridges()], [plot_numbers_at_length_age()]
 }
 \keyword{internal}

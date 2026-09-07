@@ -1,4 +1,5 @@
-## plot_biology_distribution(..., engine = "base") - all three types:
+## plot_numbers_at_length_age() / plot_meanweight_at_length_age(),
+## engine = "base" - histogram, density and the mean-weight line:
 ## histogram, density (ridges), and meanweight line. Completes the
 ## base-R port of every plotting function in the package.
 
@@ -25,7 +26,7 @@ d_mw <- data.frame(
 ## ---- 1. all three types run without error -----------------------------
 r1 <- tryCatch({
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
-  plot_biology_distribution(d_num, quantity = "numbers", type = "histogram", fill = "fleetValue",
+  plot_numbers_at_length_age(d_num, type = "histogram", fill = "fleetValue",
                             engine = "base")
   TRUE
 }, error = function(e) conditionMessage(e))
@@ -33,7 +34,7 @@ ok(isTRUE(r1), paste("histogram runs:", r1))
 
 r2 <- tryCatch({
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
-  plot_biology_distribution(d_num, quantity = "numbers", type = "density", fill = "fleetValue",
+  plot_numbers_at_length_age(d_num, type = "density", fill = "fleetValue",
                             smooth = 1, engine = "base")
   TRUE
 }, error = function(e) conditionMessage(e))
@@ -41,7 +42,7 @@ ok(isTRUE(r2), paste("density runs:", r2))
 
 r3 <- tryCatch({
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
-  plot_biology_distribution(d_mw, quantity = "meanweight", type = "line", colour = "fleetValue",
+  plot_meanweight_at_length_age(d_mw, colour = "fleetValue",
                             engine = "base")
   TRUE
 }, error = function(e) conditionMessage(e))
@@ -62,7 +63,7 @@ d_num2 <- d_num
 d_num2$Season <- rep(c("1", "2", "3"), length.out = nrow(d_num2))
 r4 <- tryCatch({
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
-  plot_biology_distribution(d_num2, quantity = "numbers", type = "histogram", fill = "fleetValue",
+  plot_numbers_at_length_age(d_num2, type = "histogram", fill = "fleetValue",
                             facet1 = "Season", engine = "base")
   TRUE
 }, error = function(e) conditionMessage(e))
@@ -71,8 +72,8 @@ ok(isTRUE(r4), paste("faceted histogram runs:", r4))
 ## ---- 4. no fill/colour still works (single series) --------------------
 r5 <- tryCatch({
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
-  plot_biology_distribution(d_num, quantity = "numbers", type = "histogram", engine = "base")
-  plot_biology_distribution(d_mw, quantity = "meanweight", type = "line", engine = "base")
+  plot_numbers_at_length_age(d_num, type = "histogram", engine = "base")
+  plot_meanweight_at_length_age(d_mw, engine = "base")
   TRUE
 }, error = function(e) conditionMessage(e))
 ok(isTRUE(r5), paste("no grouping column given still runs:", r5))
@@ -87,13 +88,13 @@ for (fn in c("plot_length_hist_base", "plot_length_ridges_base",
 
 ## ---- 6. verbose reports correctly for each quantity/type ---------------
 out_h <- capture.output(
-  plot_biology_distribution(d_num, quantity = "numbers", type = "histogram", fill = "fleetValue",
+  plot_numbers_at_length_age(d_num, type = "histogram", fill = "fleetValue",
                             verbose = TRUE))
 ok(any(grepl("fill  : fleetValue", out_h, fixed = TRUE)),
    "verbose reports the fill column for numbers/histogram")
 
 out_mw <- capture.output(
-  plot_biology_distribution(d_mw, quantity = "meanweight", type = "line", colour = "fleetValue",
+  plot_meanweight_at_length_age(d_mw, colour = "fleetValue",
                             verbose = TRUE))
 ok(any(grepl("colour: fleetValue", out_mw, fixed = TRUE)),
    "verbose reports the colour column for meanweight/line")

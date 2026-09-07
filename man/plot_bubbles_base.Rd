@@ -49,9 +49,9 @@ bubble rather than steered clear of neighbours the way
 `ggrepel::geom_text_repel()` does in the ggplot version - the one
 piece of the original this port does not reproduce, since base R has
 no built-in overlap-avoidance layout. Called through
-`plot_coverage(..., engine = "base")`, not directly.
+the coverage plots' `engine = "base"`, not directly.
 }
 \seealso{
-[plot_bubbles()], [plot_coverage()]
+[plot_bubbles()], [coverage-plots]
 }
 \keyword{internal}

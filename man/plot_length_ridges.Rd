@@ -43,14 +43,15 @@ A ggplot object, or `NULL`.
 One area-normalised, weight-smoothed density curve per group, offset
 vertically so many groups stay readable. Each curve integrates to one, so
 groups of very different size are compared on shape alone. A lower-level
-builder behind [plot_biology_distribution()].
+builder behind [plot_numbers_at_length_age()].
 }
 \seealso{
-[plot_biology_distribution()]
+[plot_numbers_at_length_age()]
 
 Other distribution plots: 
-\code{\link{plot_biology_distribution}()},
 \code{\link{plot_length_hist}()},
-\code{\link{plot_length_meanweight}()}
+\code{\link{plot_length_meanweight}()},
+\code{\link{plot_meanweight_at_length_age}()},
+\code{\link{plot_numbers_at_length_age}()}
 }
 \concept{distribution plots}

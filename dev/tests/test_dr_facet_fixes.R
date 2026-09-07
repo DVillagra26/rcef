@@ -43,18 +43,6 @@ ok(grepl("draw_legend <- function", body_raw, fixed = TRUE) &&
 ok(!grepl("!(length(facets) > 1)", body_raw, fixed = TRUE),
    "the old 'only when NOT faceted' guard on the legend is gone")
 
-## ---- 2. faceted "box" draws without error too, same fix mirrored ------
-r2 <- tryCatch({
-  grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
-  plot_dr_box_base(strata, "fleetValue", fill_var = "Country", facet_var = "Season")
-  TRUE
-}, error = function(e) conditionMessage(e))
-ok(isTRUE(r2), paste("faceted box plot runs without error:", r2))
-
-body_box <- paste(deparse(body(plot_dr_box_base)), collapse = "\n")
-ok(grepl("draw_legend <- function", body_box, fixed = TRUE),
-   "plot_dr_box_base() got the same legend-when-faceted fix")
-
 ## ---- 3. the x-axis title moved to the outer margin for multi-panel ----
 ok(grepl('mtext(x_var, outer = TRUE, side = 1', body_raw, fixed = TRUE),
    "the multi-panel case draws the x-axis title ONCE, in the outer margin")
@@ -62,15 +50,13 @@ ok(!grepl("line = 4.2", body_raw, fixed = TRUE),
    "the old fixed line=4.2 offset (the source of the collision) is gone")
 
 ## ---- 4. n_per_screen / palette / angle actually accepted and used -----
-for (fn in c("plot_dr_raw_base", "plot_dr_box_base")) {
-  f <- get(fn)
-  ok(all(c("palette", "angle", "n_per_screen") %in% names(formals(f))),
-     paste(fn, "accepts palette, angle and n_per_screen"))
-}
+ok(all(c("palette", "angle", "n_per_screen") %in%
+         names(formals(plot_dr_raw_base))),
+   "plot_dr_raw_base() accepts palette, angle and n_per_screen")
 
 r3 <- tryCatch({
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
-  plot_discard_rate(strata, type = "raw", x = "fleetValue", colour = "Country",
+  plot_discard_rate(strata, x = "fleetValue", colour = "Country",
                     engine = "base", palette = "colorblind", angle = 0)
   TRUE
 }, error = function(e) conditionMessage(e))

@@ -43,14 +43,15 @@ for (fn in c("plot_length_hist_base", "plot_length_ridges_base",
   ok(all(c("palette", "angle", "n_per_screen") %in% names(formals(f))),
      paste(fn, "accepts palette, angle and n_per_screen"))
 }
-ok(all(c("palette", "angle", "n_per_screen") %in%
-        names(formals(plot_biology_distribution))),
-   "plot_biology_distribution() accepts all three too, and threads them through")
+for (fn in c("plot_numbers_at_length_age", "plot_meanweight_at_length_age"))
+  ok(all(c("palette", "angle", "n_per_screen") %in%
+          names(formals(get(fn)))),
+     paste(fn, "accepts all three too, and threads them through"))
 
 ## ---- 2. colorblind palette actually changes the colours used ---------
 r <- tryCatch({
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
-  plot_biology_distribution(d_num, quantity = "numbers", type = "histogram", fill = "fleetValue",
+  plot_numbers_at_length_age(d_num, type = "histogram", fill = "fleetValue",
                             engine = "base", palette = "colorblind")
   TRUE
 }, error = function(e) conditionMessage(e))
@@ -58,7 +59,7 @@ ok(isTRUE(r), paste("engine='base', palette='colorblind' runs without error:", r
 
 ## ---- 3. n_per_screen genuinely opens multiple devices -----------------
 before <- length(grDevices::dev.list())
-plot_biology_distribution(d_num, quantity = "numbers", type = "histogram", fill = "fleetValue",
+plot_numbers_at_length_age(d_num, type = "histogram", fill = "fleetValue",
                           facet1 = "Season", engine = "base", n_per_screen = 1)
 after <- length(grDevices::dev.list())
 ok(after > before, "n_per_screen opens more than one device when none was already set")
@@ -85,7 +86,7 @@ ok(isTRUE(r2), paste("a large overlap (which would have clipped before) still ru
 ## ---- 6. mean-weight line plot still works with the new parameters ----
 r3 <- tryCatch({
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
-  plot_biology_distribution(d_mw, quantity = "meanweight", type = "line", colour = "fleetValue",
+  plot_meanweight_at_length_age(d_mw, colour = "fleetValue",
                             engine = "base", palette = "colorblind", angle = 0)
   TRUE
 }, error = function(e) conditionMessage(e))

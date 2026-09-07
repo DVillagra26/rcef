@@ -1,19 +1,13 @@
-## Two real gaps in plot_coverage(), reported directly against generated
-## figures:
+## plot_coverage_bar(): threshold / min_trips do not apply, and the base
+## engine colours the bars by the fill variable.
 ##
-## 1. type = "bars" doesn't use threshold or min_trips at all - the
-##    ggplot version filters on cat_key != "none" (landings/discards
-##    alone decide that) and colours by the fill variable, not status.
-##    Passing either in was accepted and silently ignored before, which
-##    let a caller believe a value they set was doing something. Now
-##    forced to NA and reported as such when verbose = TRUE.
-##
-## 2. plot_coverage_bars_base() coloured bars green/grey for sampled
-##    status, ignoring the fill variable entirely - so a Country-filled
-##    bars plot showed no country colour at all, unlike its ggplot
-##    counterpart. Fixed to use var_palette(), the SAME per-level colour
-##    assignment the ggplot engine uses, so the two engines are
-##    genuinely comparable rather than only structurally similar.
+## 1. A bar chart shows sampled vs unsampled weight; a threshold or a
+##    trip floor changes nothing it draws. Passing either is now a hard
+##    ERROR with a message that points at plot_coverage_heat() /
+##    plot_coverage_bubble(), not a silent ignore.
+## 2. plot_coverage_bars_base() colours by var_palette() - the SAME
+##    per-level assignment the ggplot engine uses - not a fixed
+##    sampled/unsampled pair.
 
 FAIL <- 0L
 ok <- function(cond, what) {
@@ -31,75 +25,60 @@ strata_raw <- data.frame(
   discard_rate = c(0.09, 0.09, 0.09, 0.09, 0.09, NA),
   n_measurements = 0, numTrips = c(3, 3, 1, 3, 1, 0),
   stringsAsFactors = FALSE)
-## Already stratum-level (aggregated), not raw catch data - classified
-## directly so resolve_coverage_strata() recognises it (via cat_key) as
-## already built, rather than trying to re-aggregate it with
-## build_strata(), which expects row-level CEF columns this fixture
-## does not have.
+## Already stratum-level - classified directly so resolve_coverage_strata()
+## recognises it (via cat_key) as already built.
 strata <- classify_strata(strata_raw, 50, min_trips = 2)
 
-## ---- 1. threshold/min_trips are ignored for type = "bars" -----------
-p1 <- suppressWarnings(plot_coverage(strata, type = "bars", y = "metier4",
-                                     fill = "Country", threshold = 20))
-p2 <- suppressWarnings(plot_coverage(strata, type = "bars", y = "metier4",
-                                     fill = "Country", threshold = 95,
-                                     min_trips = 100))
-ok(identical(p1$data, p2$data),
-   "changing threshold/min_trips does not change the bars plot's data at all")
+## ---- 1. threshold / min_trips are an error for the bar chart --------
+e1 <- tryCatch({
+  plot_coverage_bar(strata, y = "metier4", fill = "Country", threshold = 42)
+  NA
+}, error = function(e) conditionMessage(e))
+ok(is.character(e1) && grepl("threshold / min_trips do not apply", e1),
+   "plot_coverage_bar() with `threshold` set is an error")
+ok(grepl("plot_coverage_heat", e1),
+   "and the message points at the threshold-based views")
 
-## setting threshold / min_trips on a bars plot now warns (always, not
-## just under verbose); leaving them alone does not.
-w_set <- tryCatch(plot_coverage(strata, type = "bars", y = "metier4",
-                                fill = "Country", threshold = 42),
-                  warning = function(w) conditionMessage(w))
-ok(is.character(w_set) && grepl("do not affect type = \"bars\"", w_set),
-   "type = \"bars\" with a threshold set raises a warning")
-w_none <- tryCatch({
-  plot_coverage(strata, type = "bars", y = "metier4", fill = "Country"); NA
-}, warning = function(w) conditionMessage(w))
-ok(is.na(w_none), "type = \"bars\" with no threshold set raises no warning")
+e2 <- tryCatch({
+  plot_coverage_bar(strata, y = "metier4", min_trips = 3); NA
+}, error = function(e) conditionMessage(e))
+ok(is.character(e2) && grepl("threshold / min_trips do not apply", e2),
+   "min_trips is an error too")
 
-out <- capture.output(suppressWarnings(
-  plot_coverage(strata, type = "bars", y = "metier4", fill = "Country",
-               threshold = 42, verbose = TRUE)))
-ok(any(grepl("not used by type", out)),
-   "a verbose bars run states the threshold is not used")
-ok(!any(grepl("42", out)),
-   "and does not echo the ignored value back as if it mattered")
+grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
+p_ok <- tryCatch(plot_coverage_bar(strata, y = "metier4", fill = "Country"),
+                 error = function(e) e)
+ok(inherits(p_ok, "ggplot"),
+   "plot_coverage_bar() with no threshold / min_trips builds normally")
+
+## ---- 2. verbose names the view and the fill column -----------------
+out <- capture.output(
+  plot_coverage_bar(strata, y = "metier4", fill = "Country", verbose = TRUE))
+ok(any(grepl("plot_coverage_bar", out)), "verbose names the function")
+ok(any(grepl("fill   : Country", out)), "verbose reports the fill column")
+ok(any(grepl("not used by a bar chart", out)),
+   "verbose still says threshold / min_trips do not apply here")
+ok(any(grepl("strata rows being drawn", out)),
+   "verbose reports how many rows are drawn")
 
 out2 <- capture.output(
-  plot_coverage(strata, type = "heatmap", y = "metier4", verbose = TRUE))
+  plot_coverage_heat(strata, y = "metier4", verbose = TRUE))
 ok(any(grepl("threshold  : 50", out2, fixed = TRUE)),
-   "a verbose heatmap run reports the real, resolved threshold (defaulted to 50)")
+   "a verbose heatmap run reports the resolved threshold (default 50)")
 ok(any(grepl("min_trips  : 2", out2, fixed = TRUE)),
-   "and the real, resolved min_trips (defaulted to 2)")
+   "and the resolved min_trips (default 2)")
 
-## ---- 2. verbose reports the plot shape accurately --------------------
-out3 <- capture.output(suppressWarnings(
-  plot_coverage(strata, type = "bars", y = "metier4", fill = "Country",
-               verbose = TRUE)))
-ok(any(grepl('type = "bars"', out3, fixed = TRUE)) &&
-     any(grepl("fill   : Country", out3, fixed = TRUE)),
-   "verbose correctly names the type and the fill column used")
-ok(any(grepl("strata rows being drawn", out3)),
-   "verbose reports how many rows are actually drawn")
-
-## ---- 3. the base engine's bars plot colours by the fill variable -----
+## ---- 3. base bars colour by the fill variable ---------------------
 reset_palettes()
-pal_ref <- var_palette("Country", c("BE", "FR"))
+invisible(var_palette("Country", c("BE", "FR")))
 r <- tryCatch({
-  grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
-  plot_coverage(strata, type = "bars", y = "metier4", fill = "Country",
-               engine = "base")
+  plot_coverage_bar(strata, y = "metier4", fill = "Country", engine = "base")
   TRUE
 }, error = function(e) conditionMessage(e))
-ok(isTRUE(r), paste("the base engine's bars plot runs without error:", r))
+ok(isTRUE(r), paste("the base engine's bar chart runs:", r))
 
 body_txt <- paste(deparse(body(plot_coverage_bars_base)), collapse = "\n")
 ok(grepl("var_palette(", body_txt, fixed = TRUE),
-   paste("plot_coverage_bars_base() uses var_palette() - the SAME colour",
-         "assignment the ggplot engine uses, not a fixed sampled/unsampled pair"))
-ok(!grepl('col=c("#41AE76","#D9D9D9")', gsub(" ", "", body_txt), fixed = TRUE),
-   "the old fixed two-colour scheme (ignoring the fill variable) is gone")
+   "plot_coverage_bars_base() uses var_palette()")
 
 cat("\nDONE ", FAIL, "failure(s)", "\n")

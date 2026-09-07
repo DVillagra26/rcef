@@ -39,14 +39,15 @@ A ggplot object, or `NULL`.
 \description{
 Bars of numbers over the length or age classes, stacked or dodged on an
 optional fill, with up to two facet variables. A lower-level builder
-behind [plot_biology_distribution()].
+behind [plot_numbers_at_length_age()].
 }
 \seealso{
-[plot_biology_distribution()]
+[plot_numbers_at_length_age()]
 
 Other distribution plots: 
-\code{\link{plot_biology_distribution}()},
 \code{\link{plot_length_meanweight}()},
-\code{\link{plot_length_ridges}()}
+\code{\link{plot_length_ridges}()},
+\code{\link{plot_meanweight_at_length_age}()},
+\code{\link{plot_numbers_at_length_age}()}
 }
 \concept{distribution plots}

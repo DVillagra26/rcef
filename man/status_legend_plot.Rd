@@ -54,15 +54,13 @@ a `"status_legend"` attribute, so a caller that shows the legend in its own
 panel can construct it on demand without carrying a second plot around.
 }
 \seealso{
-[plot_coverage()], [cat_lookup()]
+[coverage-plots], [cat_lookup()]
 
 Other coverage plots: 
-\code{\link{plot_biology_coverage}()},
+\code{\link{coverage-plots}},
 \code{\link{plot_bubbles}()},
-\code{\link{plot_coverage}()},
 \code{\link{plot_coverage_bars}()},
 \code{\link{plot_coverage_map}()},
-\code{\link{plot_coverage_scatter}()},
 \code{\link{plot_heatmap}()}
 }
 \concept{coverage plots}

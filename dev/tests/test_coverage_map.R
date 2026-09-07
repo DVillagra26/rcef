@@ -49,17 +49,17 @@ ok(identical(draws(plot_coverage_map(raw, engine = "ggplot")), "gg"),
    "ggplot engine returns a ggplot")
 
 ## ---- 3. group_var = several pies per area --------------------
-ok(identical(draws(plot_coverage_map(raw, group_var = "Season")), "base"),
+ok(identical(draws(plot_coverage_map(raw, group = "Season")), "base"),
    "group_var = Season (base)")
-ok(identical(draws(plot_coverage_map(raw, group_var = "Country",
+ok(identical(draws(plot_coverage_map(raw, group = "Country",
                                      engine = "ggplot")), "gg"),
    "group_var = Country (ggplot)")
-ok(identical(draws(plot_coverage_map(raw, group_var = "metier4")), "base"),
+ok(identical(draws(plot_coverage_map(raw, group = "metier4")), "base"),
    "group_var = metier4 (base)")
 
 ## ---- 4. already-classified table + explicit weight columns ---
 sc <- classify_strata(build_strata(raw, c("areaValue", "Season")), 50, min_trips = 2)
-ok(identical(draws(plot_coverage_map(sc, group_var = "Season")), "base"),
+ok(identical(draws(plot_coverage_map(sc, group = "Season")), "base"),
    "an already-classified table is used as-is")
 
 ## ---- 5. bogus-only areas -> nothing to map ------------------

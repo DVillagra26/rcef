@@ -39,7 +39,7 @@ A ggplot object, or `NULL`.
 \description{
 One bubble per cell, sized by weight and filled by sampling status, with
 the coverage percent labelled on partly-covered cells. A lower-level
-builder behind [plot_coverage()].
+builder behind [coverage-plots].
 }
 \details{
 Two guides come out of this: the status colours and, through the
@@ -50,14 +50,12 @@ bare, since its numbers are always 0% / n=0 and labelling it drowns the
 borderline cells in text.
 }
 \seealso{
-[plot_coverage()]
+[coverage-plots]
 
 Other coverage plots: 
-\code{\link{plot_biology_coverage}()},
-\code{\link{plot_coverage}()},
+\code{\link{coverage-plots}},
 \code{\link{plot_coverage_bars}()},
 \code{\link{plot_coverage_map}()},
-\code{\link{plot_coverage_scatter}()},
 \code{\link{plot_heatmap}()},
 \code{\link{status_legend_plot}()}
 }

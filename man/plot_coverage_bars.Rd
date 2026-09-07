@@ -38,17 +38,15 @@ For each cell, splits the weight into the part that carries a
 distribution / discard estimate and the part that does not, drawing the
 two as separate bars grouped into "with" and "without" sampling sections.
 Because the split is by weight, the sampled fraction is identical whatever
-the grouping variable. A lower-level builder behind [plot_coverage()].
+the grouping variable. A lower-level builder behind [coverage-plots].
 }
 \seealso{
-[plot_coverage()]
+[coverage-plots]
 
 Other coverage plots: 
-\code{\link{plot_biology_coverage}()},
+\code{\link{coverage-plots}},
 \code{\link{plot_bubbles}()},
-\code{\link{plot_coverage}()},
 \code{\link{plot_coverage_map}()},
-\code{\link{plot_coverage_scatter}()},
 \code{\link{plot_heatmap}()},
 \code{\link{status_legend_plot}()}
 }

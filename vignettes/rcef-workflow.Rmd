@@ -183,23 +183,22 @@ strata <- classify_strata(strata, threshold = 50)
 This is where you decide how to group, so it is worth doing properly.
 
 ```{r}
-plot_coverage(strata, type = "heatmap", y = "metier4", fill = "ICESDivision")
-plot_discard_rate(strata, type = "box", x = "metier4")
+plot_coverage_heat(strata, y = "metier4", x = "ICESDivision")
+plot_discard_rate(strata, x = "metier4")
 ```
 
-Mean weight at class has **two** plots rather than one plot with a
-switch, because they answer different questions and should not silently
-swap places:
+Coverage has one function per view -- `plot_coverage_heat()`,
+`plot_coverage_bubble()`, `plot_coverage_bar()` and `plot_coverage_map()`
+-- each carrying only the arguments that view needs. `what = "length"` /
+`"age"` plus `distributions` switches to biology-sampling coverage, and
+`catchCategory` (`"Lan"` / `"Dis"` / `"BMS"`) picks which catch part to
+look at.
+
+Mean weight at class is its own function, drawn as a line:
 
 ```{r}
-plot_length_meanweight(mw)          # what IS the mean weight at this class
-plot_length_meanweight_box(mw_raw)  # how much did the strata averaged into it disagree
+plot_meanweight_at_length_age(mw, colour = "metier4")
 ```
-
-The second takes [`length_meanweight_raw()`], the values *before* the
-collapse, and draws a box wherever more than one stratum contributes. Add
-enough facets that only one stratum lands in each cell and it draws
-points and says so -- no fake boxes around single values.
 
 In the app the filter sits **beside the axis pickers on each figure tab**,
 so the loop is: put `metier4` on the Y axis, see the spread, pin
@@ -213,7 +212,7 @@ Here, subset the **catches**, not the strata, and rebuild:
 explore_data <- apply_filters(catch_data, list(metier4 = "TBB"))
 
 explore_strata <- classify_strata(build_strata(explore_data, dims), 50)
-plot_discard_rate(explore_strata, type = "box", x = "ICESDivision")
+plot_discard_rate(explore_strata, x = "ICESDivision")
 ```
 
 `apply_filters()` combines columns with AND and values within a column

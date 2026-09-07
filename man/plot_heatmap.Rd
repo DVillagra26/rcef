@@ -39,18 +39,16 @@ A ggplot object, or `NULL` when there is nothing to draw.
 \description{
 One tile per cell, filled by sampling status and labelled with the cell's
 weight. Cells are collapsed to a single value first (see
-[collapse_cells()]). A lower-level builder behind [plot_coverage()].
+[collapse_cells()]). A lower-level builder behind [coverage-plots].
 }
 \seealso{
-[plot_coverage()]
+[coverage-plots]
 
 Other coverage plots: 
-\code{\link{plot_biology_coverage}()},
+\code{\link{coverage-plots}},
 \code{\link{plot_bubbles}()},
-\code{\link{plot_coverage}()},
 \code{\link{plot_coverage_bars}()},
 \code{\link{plot_coverage_map}()},
-\code{\link{plot_coverage_scatter}()},
 \code{\link{status_legend_plot}()}
 }
 \concept{coverage plots}

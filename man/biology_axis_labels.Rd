@@ -21,6 +21,6 @@ top of that, numbers are presented in thousands (N3). This returns
 the axis labels that match, and the numbers scale factor.
 }
 \seealso{
-[prep_distributions()], [plot_biology_distribution()]
+[prep_distributions()], [plot_numbers_at_length_age()]
 }
 \keyword{internal}

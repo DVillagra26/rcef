@@ -39,7 +39,6 @@ and shaped by grouping variables. A lower-level builder behind
 [plot_discard_rate()]
 
 Other discard-rate plots: 
-\code{\link{plot_discard_rate}()},
-\code{\link{plot_dr_box}()}
+\code{\link{plot_discard_rate}()}
 }
 \concept{discard-rate plots}

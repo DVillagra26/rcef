@@ -1,11 +1,10 @@
-## plot_discard_rate(..., engine = "base") - both types ("raw", "box").
-## The real bug caught while building this: colour/shape were looked up
-## by matching rownames() between the full table and a facet subset,
-## which silently returns NA (an invisible point, pch = NA) the moment
-## rownames do not line up between the two - only one of 106 points
-## rendered in the "raw" type before this was fixed. Now attached as
-## columns of the data itself, which subsetting always carries along
-## correctly.
+## plot_discard_rate(..., engine = "base") - the raw per-stratum view
+## (the only view now; the boxplot was dropped). The real bug caught
+## while building this: colour/shape were looked up by matching
+## rownames() between the full table and a facet subset, which silently
+## returns NA (an invisible point) the moment rownames do not line up -
+## only one of 106 points rendered before the fix. Now attached as
+## columns of the data itself.
 
 FAIL <- 0L
 ok <- function(cond, what) {
@@ -31,8 +30,7 @@ r <- tryCatch({
 ok(isTRUE(r), paste("plot_dr_raw_base() runs without error:", r))
 
 ## checked at the source: colour/shape must be columns of d, not a
-## rownames()-keyed lookup into a separately computed vector - the
-## exact pattern that silently dropped 105 of 106 points
+## rownames()-keyed lookup into a separately computed vector
 body_txt <- paste(deparse(body(plot_dr_raw_base)), collapse = "\n")
 ok(grepl("d$.ptcol", body_txt, fixed = TRUE) &&
      grepl("d$.ptpch", body_txt, fixed = TRUE),
@@ -40,44 +38,27 @@ ok(grepl("d$.ptcol", body_txt, fixed = TRUE) &&
 ok(!grepl("match(rownames(dd)", body_txt, fixed = TRUE),
    "the old rownames()-keyed lookup is gone")
 
-## ---- 2. the box type runs, with points and pooled overlay -------------
-r2 <- tryCatch({
-  grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
-  plot_dr_box_base(strata, "fleetValue", fill_var = "Country",
-                   show_points = TRUE, show_pooled = TRUE)
-  TRUE
-}, error = function(e) conditionMessage(e))
-ok(isTRUE(r2), paste("plot_dr_box_base() runs without error:", r2))
-
-## ---- 3. plot_discard_rate() dispatches to both correctly ---------------
+## ---- 2. plot_discard_rate() dispatches to the base engine ------------
 r3 <- tryCatch({
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
-  plot_discard_rate(strata, type = "raw", x = "fleetValue",
-                    colour = "Country", engine = "base")
-  plot_discard_rate(strata, type = "box", x = "fleetValue",
-                    fill = "Country", engine = "base")
+  plot_discard_rate(strata, x = "fleetValue", colour = "Country",
+                    engine = "base")
   TRUE
 }, error = function(e) conditionMessage(e))
-ok(isTRUE(r3), paste("plot_discard_rate(..., engine='base') dispatches both types:", r3))
+ok(isTRUE(r3), paste("plot_discard_rate(engine='base') runs:", r3))
 
-## ---- 4. verbose reports correctly for each type -------------------------
+## ---- 3. verbose reports the roles ----------------------------------
 out_raw <- capture.output(
-  plot_discard_rate(strata, type = "raw", x = "fleetValue", colour = "Country",
+  plot_discard_rate(strata, x = "fleetValue", colour = "Country",
                     verbose = TRUE))
 ok(any(grepl("colour : Country", out_raw, fixed = TRUE)),
-   "verbose reports the colour column for type='raw'")
+   "verbose reports the colour column")
+ok(any(grepl("plot_discard_rate", out_raw)),
+   "verbose names the function")
 
-out_box <- capture.output(
-  plot_discard_rate(strata, type = "box", x = "fleetValue", fill = "Country",
-                    verbose = TRUE))
-ok(any(grepl("fill   : Country", out_box, fixed = TRUE)),
-   "verbose reports the fill column for type='box'")
-
-## ---- 5. box() and real ticks, matching the coverage plots' fix --------
-for (fn in c("plot_dr_raw_base", "plot_dr_box_base")) {
-  bt <- paste(deparse(body(get(fn))), collapse = "\n")
-  ok(grepl("box()", bt, fixed = TRUE),
-     paste(fn, "draws a box() around the plotting area"))
-}
+## ---- 4. box() around the plotting area ---------------------------
+bt <- paste(deparse(body(plot_dr_raw_base)), collapse = "\n")
+ok(grepl("box()", bt, fixed = TRUE),
+   "plot_dr_raw_base() draws a box() around the plotting area")
 
 cat("\nDONE ", FAIL, "failure(s)", "\n")

@@ -278,20 +278,12 @@ coverage_ui <- function() tagList(
 
 drates_ui <- function() tagList(
   control_deck("dr", label = "Discard rate controls",
-    options = tagList(
-      pick_bar("dr_type", list(raw = "Raw strata", box = "Boxplot"), "raw")),
     settings = tagList(
-      conditionalPanel("input.dr_type != 'box'",
-        role_chips("dr", c(x = "X axis", fill = "Colour", shape = "Shape",
-                           facet = "Facet"),
-                   c("metier4", "ICESDivision", "Season", "Country"),
-                   stacked = TRUE),
-        checkboxInput("dr_jitter", "Jitter", TRUE)),
-      conditionalPanel("input.dr_type == 'box'",
-        role_chips("box", c(x = "X axis", fill = "Fill", facet = "Facet"),
-                   c("Country", "ICESDivision", ""), stacked = TRUE),
-        checkboxInput("box_points", "Show individual strata", TRUE),
-        checkboxInput("box_pooled", "Show catch-weighted pooled rate", TRUE))),
+      role_chips("dr", c(x = "X axis", fill = "Colour", shape = "Shape",
+                         facet = "Facet"),
+                 c("metier4", "ICESDivision", "Season", "Country"),
+                 stacked = TRUE),
+      checkboxInput("dr_jitter", "Jitter", TRUE)),
     ),
   deck_page(
     picker = NULL,
@@ -469,9 +461,7 @@ len_meanw_ui <- function(p, type = "LengthTotal") {
   tagList(
     control_deck(paste0(p, "_w"), label = "Mean weight controls",
       options = tagList(
-        len_cc_filter(ns),
-        pick_bar(ns("type"),
-                 list(linedot = "Line + dots", box = "Boxplot"), "linedot")),
+        len_cc_filter(ns)),
       settings = tagList(
         role_chips(ns("r"), c(fill = "Colour", facet = "Facet",
                               shape = "Facet 2"),
@@ -2546,6 +2536,43 @@ server <- function(input, output, session) {
   # Returns a reactive() of the resolved column names. Called once per
   # strata-definition box; the id passed here must match the one given
   # to strata_def_ui().
+
+  # One place that maps a coverage "view" (heatmap / bubbles / bars) onto
+  # its split function, for the live plot (emit = FALSE) and the emitted
+  # script line (emit = TRUE). `second` is the x column for heat / bubble
+  # and the fill column for bars; threshold / min_trips / min_meas apply
+  # to heat / bubble only. `strata` is a classified table (or, for emit,
+  # the name of one) - no catchCategory here, that was chosen upstream.
+  coverage_call <- function(strata, view, y, second, facet,
+                            what = "discard", weight_label = NULL,
+                            threshold = 50, min_trips = 2, min_meas = 0,
+                            emit = FALSE) {
+    fn  <- switch(view, bars = "plot_coverage_bar",
+                  bubbles = "plot_coverage_bubble", "plot_coverage_heat")
+    is_bar <- identical(view, "bars")
+    role   <- if (is_bar) "fill" else "x"
+    if (isTRUE(emit)) {
+      a <- list(strata, y = taf_q(y))
+      a[[role]] <- taf_q(second)
+      a$facet <- taf_q(facet)
+      if (!identical(what, "discard")) {
+        a$what <- taf_q(what); a$weight_label <- taf_q(weight_label)
+      }
+      if (!is_bar) {
+        a$threshold <- threshold; a$min_trips <- min_trips
+        if (min_meas) a$min_meas <- min_meas
+      }
+      return(taf_call(fn, a))
+    }
+    a <- list(strata, y = y, facet = facet)
+    a[[role]] <- second
+    if (!identical(what, "discard")) { a$what <- what
+      a$weight_label <- weight_label }
+    if (!is_bar) { a$threshold <- threshold; a$min_trips <- min_trips
+      a$min_meas <- min_meas }
+    do.call(fn, a)
+  }
+
   strata_def_server <- function(p) {
     ns <- function(x) paste0(p, "_", x)
     observe({
@@ -2752,7 +2779,7 @@ server <- function(input, output, session) {
   # the filtered table for one tab
   # "Nothing to plot." on a filtered panel is the wrong message: it reads
   # as a fault in the data when it is usually a filter that went one step
-  # too far. plot_coverage() drops strata with no landings, so filtering
+  # too far. The coverage plots drop strata with no landings, so filtering
   # to a single thin stratum legitimately leaves nothing to draw - and the
   # user, seeing the plot replaced by a bare sentence, reports that Apply
   # "did nothing".
@@ -3518,7 +3545,7 @@ server <- function(input, output, session) {
     n_live <- reactive(i_("n_type"))
     w_sig <- reactive(c(list(i_("w_cc"), i_("w_r_fill"), i_("w_r_facet"),
                              i_("w_r_shape"), i_("w_pt"), i_("w_points"),
-                             i_("w_freex"), i_("w_freey"), i_("w_type"),
+                             i_("w_freex"), i_("w_freey"),
                              flt_sig("w")),
                         lv_sig()))
     dist_ref <- reactive(rv$dist)
@@ -3620,9 +3647,9 @@ server <- function(input, output, session) {
       y <- rc("cov", "y"); f <- rc("cov", "fill"); fc <- rc("cov", "facet")
       validate(need(!is.null(y), "Pick a Y axis."))
       wl <- cc_word("cov"); th <- thr_cov()
-      plot_biology_coverage(sc, type = input[[paste0(p, "_cov_type")]] %||% "heatmap",
-        y = y, fill = f, facet = fc, threshold = th, what = what_word,
-        weight_label = wl, min_meas = thr_meas(), min_trips = thr_trips()) },
+      coverage_call(sc, input[[paste0(p, "_cov_type")]] %||% "heatmap",
+        y = y, second = f, facet = fc, what = what_word, weight_label = wl,
+        threshold = th, min_trips = thr_trips(), min_meas = thr_meas()) },
       live = cov_live)
 
     # how many rows the plot will actually draw, so the panel grows with them
@@ -3676,13 +3703,12 @@ server <- function(input, output, session) {
         tools::toTitleCase(cc_word("cov")), paste0(thr_cov(), "%"),
         thr_trips(), thr_meas(), paste(len_dims(p), collapse = ", "), ""),
       prep = function() bio_prep("cov"),
-      call = function() taf_call("plot_biology_coverage", list(
-        "bio_sc",
-        type = taf_q(input[[paste0(p, "_cov_type")]] %||% "heatmap"),
-        y = taf_q(rc("cov", "y")), fill = taf_q(rc("cov", "fill")),
-        facet = taf_q(rc("cov", "facet")), threshold = thr_cov(),
-        what = taf_q(what_word), weight_label = taf_q(cc_word("cov")),
-        min_meas = thr_meas(), min_trips = thr_trips())))
+      call = function() coverage_call("bio_sc",
+        input[[paste0(p, "_cov_type")]] %||% "heatmap",
+        y = rc("cov", "y"), second = rc("cov", "fill"),
+        facet = rc("cov", "facet"), what = what_word,
+        weight_label = cc_word("cov"), threshold = thr_cov(),
+        min_trips = thr_trips(), min_meas = thr_meas(), emit = TRUE))
 
     # ---- view 2: numbers at length ------------------------------
     num_data <- reactive({
@@ -3693,7 +3719,7 @@ server <- function(input, output, session) {
     num_obj <- gated(n_gate, {
       d <- num_data()
       validate(need(!is.null(d) && nrow(d), "No numbers-at-length rows."))
-      plot_biology_distribution(d, quantity = "numbers",
+      plot_numbers_at_length_age(d,
         type = if (identical(input[[paste0(p, "_n_type")]], "ridge"))
                  "density" else "histogram",
         fill = rc("n","fill"), facet1 = rc("n","facet"), facet2 = rc("n","shape"),
@@ -3733,8 +3759,8 @@ server <- function(input, output, session) {
         sprintf("d_num <- length_numbers(linked, %s)",
                 fmt_vals(unique(na.omit(c(rc("n","fill"), rc("n","facet"),
                                           rc("n","shape"))))))),
-      call = function() taf_call("plot_biology_distribution", list(
-        "d_num", quantity = '"numbers"',
+      call = function() taf_call("plot_numbers_at_length_age", list(
+        "d_num",
         type = if (identical(input[[paste0(p, "_n_type")]], "ridge"))
                  '"density"' else '"histogram"',
         fill = taf_q(rc("n","fill")), facet1 = taf_q(rc("n","facet")),
@@ -3750,41 +3776,18 @@ server <- function(input, output, session) {
       pt <- len_dim_col(p, input[[paste0(p, "_w_pt")]])
       gv <- unique(na.omit(c(rc("w","fill"), rc("w","facet"), rc("w","shape"), pt)))
       length_meanweight(lk, gv) })
-    mw_type <- reactive(input[[paste0(p, "_w_type")]] %||% "linedot")
-
-    # The boxes need the values BEFORE the collapse, so this is a
-    # different table, not a different geom on the same one.
-    mw_raw <- reactive({
-      lk <- linked_for("w")
-      validate(need(!is.null(lk) && nrow(lk), "No length distributions."))
-      pt <- len_dim_col(p, input[[paste0(p, "_w_pt")]])
-      gv <- unique(na.omit(c(rc("w","fill"), rc("w","facet"), rc("w","shape"), pt)))
-      length_meanweight_raw(lk, gv) })
 
     mw_obj <- gated(w_gate, {
-      if (identical(mw_type(), "box")) {
-        d <- mw_raw()
-        validate(need(!is.null(d) && nrow(d), "No mean-weight rows."))
-        plot_length_meanweight_box(d,
-          colour_var = rc("w","fill"), facet1 = rc("w","facet"),
-          facet2 = rc("w","shape"),
-          shape_var = len_dim_col(p, input[[paste0(p, "_w_pt")]]),
-          show_points = isTRUE(input[[paste0(p, "_w_points")]]),
-          scales = facet_scales(isTRUE(input[[paste0(p, "_w_freex")]]),
-                                isTRUE(input[[paste0(p, "_w_freey")]])),
-          class_label = class_axis_label(type))
-      } else {
-        d <- mw_data()
-        validate(need(!is.null(d) && nrow(d), "No mean-weight rows."))
-        plot_biology_distribution(d, quantity = "meanweight", type = "line",
-          colour = rc("w","fill"), facet1 = rc("w","facet"),
-          facet2 = rc("w","shape"),
-          shape = len_dim_col(p, input[[paste0(p, "_w_pt")]]),
-          show_points = isTRUE(input[[paste0(p, "_w_points")]]),
-          scales = facet_scales(isTRUE(input[[paste0(p, "_w_freex")]]),
-                                isTRUE(input[[paste0(p, "_w_freey")]])),
-          class_label = class_axis_label(type))
-      } })
+      d <- mw_data()
+      validate(need(!is.null(d) && nrow(d), "No mean-weight rows."))
+      plot_meanweight_at_length_age(d,
+        colour = rc("w","fill"), facet1 = rc("w","facet"),
+        facet2 = rc("w","shape"),
+        shape = len_dim_col(p, input[[paste0(p, "_w_pt")]]),
+        show_points = isTRUE(input[[paste0(p, "_w_points")]]),
+        scales = facet_scales(isTRUE(input[[paste0(p, "_w_freex")]]),
+                              isTRUE(input[[paste0(p, "_w_freey")]])),
+        class_label = class_axis_label(type)) })
     output[[paste0(p, "_w_plot_ui")]] <- renderUI({
       w_gate$now()
       d <- tryCatch(isolate(mw_data()), error = function(e) NULL)
@@ -3811,8 +3814,8 @@ server <- function(input, output, session) {
                 fmt_vals(unique(na.omit(c(rc("w","fill"), rc("w","facet"),
                           rc("w","shape"),
                           len_dim_col(p, input[[paste0(p, "_w_pt")]]))))))),
-      call = function() taf_call("plot_biology_distribution", list(
-        "d_mw", quantity = '"meanweight"', type = '"line"',
+      call = function() taf_call("plot_meanweight_at_length_age", list(
+        "d_mw",
         colour = taf_q(rc("w","fill")), facet1 = taf_q(rc("w","facet")),
         facet2 = taf_q(rc("w","shape")),
         shape = taf_q(len_dim_col(p, input[[paste0(p, "_w_pt")]])),
@@ -6437,19 +6440,16 @@ server <- function(input, output, session) {
   active_plots <- reactive({
     r <- function(v) if (is.null(v) || !nzchar(v)) "NULL" else sprintf('"%s"', v)
     list(
-      sprintf('plot_discard_rate(strata, type = "raw", x = %s, colour = %s, shape = %s, facet = %s)',
+      sprintf('plot_discard_rate(strata, x = %s, colour = %s, shape = %s, facet = %s)',
               r(role("dr","x")), r(role("dr","fill")),
               r(role("dr","shape")), r(role("dr","facet"))),
-      sprintf('plot_discard_rate(strata, type = "box", x = %s, fill = %s, facet = %s)',
-              r(col_of("dr", input$box_x)), r(col_of("dr", input$box_fill)),
-              r(col_of("dr", input$box_facet))),
-      sprintf('plot_coverage(classify_strata(strata, %s), type = "heatmap", y = %s, fill = %s, facet = %s, threshold = %s)',
-              input$threshold %||% 50, r(col_of("hm", input$hm_y)),
-              r(col_of("hm", input$hm_x)), r(col_of("hm", input$hm_facet)),
+      sprintf('plot_coverage_heat(classify_strata(strata, %s), y = %s, x = %s, facet = %s, threshold = %s)',
+              input$threshold %||% 50, r(col_of("cov", input$cov_y)),
+              r(col_of("cov", input$cov_fill)), r(col_of("cov", input$cov_facet)),
               input$threshold %||% 50),
-      sprintf('plot_coverage(classify_strata(strata, %s), type = "bars", y = %s, fill = %s, facet = %s)',
-              input$threshold %||% 50, r(col_of("cb", input$cb_y)),
-              r(col_of("cb", input$cb_fill)), r(col_of("cb", input$cb_facet)))) })
+      sprintf('plot_coverage_bar(classify_strata(strata, %s), y = %s, fill = %s, facet = %s)',
+              input$threshold %||% 50, r(col_of("cov", input$cov_y)),
+              r(col_of("cov", input$cov_fill)), r(col_of("cov", input$cov_facet)))) })
 
   # =========================================================
   #  Merged coverage plot (heatmap / bubbles / bars share one menu)
@@ -6496,8 +6496,8 @@ server <- function(input, output, session) {
   cov_plot_obj <- gated(cov_g, {
     y <- col_of("cov", input$cov_y); f <- col_of("cov", input$cov_fill)
     fc <- col_of("cov", input$cov_facet)
-    plot_coverage(cov_sc(), type = cov_type_eff(), y = y, fill = f,
-                  facet = fc, threshold = input$threshold, what = "discard",
+    coverage_call(cov_sc(), cov_type_eff(), y = y, second = f, facet = fc,
+                  threshold = input$threshold %||% 50,
                   min_trips = input$cov_trips %||% 2) },
     live = cov_live)
 
@@ -6532,47 +6532,29 @@ server <- function(input, output, session) {
       sprintf("strata_cov <- classify_strata(build_strata(catch_data, %s), %s, min_trips = %s)",
               fmt_vals(panel_dims("cov")), input$threshold %||% 50,
               input$cov_trips %||% 2)),
-    call = function() taf_call("plot_coverage", list(
-      "strata_cov", type = taf_q(cov_type_eff()),
-      y = taf_q(col_of("cov", input$cov_y)),
-      fill = taf_q(col_of("cov", input$cov_fill)),
-      facet = taf_q(col_of("cov", input$cov_facet)),
-      threshold = input$threshold %||% 50, what = '"discard"',
-      min_trips = input$cov_trips %||% 2)))
+    call = function() coverage_call("strata_cov", cov_type_eff(),
+      y = col_of("cov", input$cov_y), second = col_of("cov", input$cov_fill),
+      facet = col_of("cov", input$cov_facet),
+      threshold = input$threshold %||% 50,
+      min_trips = input$cov_trips %||% 2, emit = TRUE))
 
-  # merged discard-rate plot
-  # same for the raw/boxplot toggle
+  # discard-rate plot (one view: raw per-stratum points)
   dr_sig <- reactive(list(input$dr_x, input$dr_fill,
                           input$dr_shape, input$dr_facet, input$dr_jitter,
-                          input$box_x, input$box_fill, input$box_facet,
-                          input$box_points, input$box_pooled,
                           input$dr_fleet, input$dr_area,
                           flt_inputs("dr")))
-  dr_live <- reactive(input$dr_type)
-  dr_g <- gate_of("dr", dr_sig, live = dr_live)
+  dr_g <- gate_of("dr", dr_sig)
 
   dr_plot_obj <- gated(dr_g, {
-    if (identical(input$dr_type, "box")) {
-      req(isTruthy(input$box_x))
-      plot_discard_rate(strata_x("dr"), type = "box",
-                  x = col_of("dr", input$box_x),
-                  fill = col_of("dr", input$box_fill),
-                  facet = col_of("dr", input$box_facet),
-                  show_points = input$box_points, show_pooled = input$box_pooled)
-    } else
-      plot_discard_rate(strata_x("dr"), type = "raw",
-                  x = role("dr","x"), colour = role("dr","fill"),
-                  shape = role("dr","shape"), facet = role("dr","facet"),
-                  jitter = input$dr_jitter) },
-    live = dr_live)
+    plot_discard_rate(strata_x("dr"),
+                x = role("dr","x"), colour = role("dr","fill"),
+                shape = role("dr","shape"), facet = role("dr","facet"),
+                jitter = input$dr_jitter) })
 
   output$dr_plot_ui <- renderUI({
-    dr_g$now(); dr_live()
+    dr_g$now()
     plotOutput("dr_plot", height = paste0(isolate(
-      hgt("dr", if (identical(input$dr_type, "box")) input$box_facet
-                else input$dr_facet,
-          y_sel = if (identical(input$dr_type, "box")) input$box_x
-                  else input$dr_x)), "px")) })
+      hgt("dr", input$dr_facet, y_sel = input$dr_x)), "px")) })
 
   output$dr_plot <- renderPlot({
     p <- dr_plot_obj()
@@ -6585,22 +6567,14 @@ server <- function(input, output, session) {
 
   keep_plot("dr_plot", dr_plot_obj, gate = dr_g,
     section = "model_explore_discards",
-    title = function() sprintf("Discard rate - %s",
-      if (identical(input$dr_type, "box")) "boxplot" else "per stratum"),
+    title = function() "Discard rate - per stratum",
     note = function() sprintf("fleet = %s, area = %s",
       paste(panel_dims("dr"), collapse = ", "), ""),
     prep = function()
       sprintf("strata_dr <- build_strata(catch_data, %s)",
               fmt_vals(panel_dims("dr"))),
-    call = function() if (identical(input$dr_type, "box"))
-      taf_call("plot_discard_rate", list(
-        "strata_dr", type = '"box"', x = taf_q(col_of("dr", input$box_x)),
-        fill = taf_q(col_of("dr", input$box_fill)),
-        facet = taf_q(col_of("dr", input$box_facet)),
-        show_points = if (isTRUE(input$box_points)) "TRUE" else "FALSE",
-        show_pooled = if (isTRUE(input$box_pooled)) "TRUE" else "FALSE"))
-    else taf_call("plot_discard_rate", list(
-        "strata_dr", type = '"raw"', x = taf_q(role("dr", "x")),
+    call = function() taf_call("plot_discard_rate", list(
+        "strata_dr", x = taf_q(role("dr", "x")),
         colour = taf_q(role("dr", "fill")), shape = taf_q(role("dr", "shape")),
         facet = taf_q(role("dr", "facet")),
         jitter = if (isTRUE(input$dr_jitter)) "TRUE" else "FALSE")))

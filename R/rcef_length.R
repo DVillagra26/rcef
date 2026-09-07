@@ -328,7 +328,7 @@ length_meanweight <- function(linked, group_vars = character(0)) {
 #'   `mean_weight` (the stratum's own value), `.w` (its weight in the
 #'   mean) and `n_group`, the number of values sharing that class and
 #'   group. `NULL` if there is nothing to draw.
-#' @seealso [length_meanweight()], [plot_length_meanweight_box()]
+#' @seealso [length_meanweight()], [plot_meanweight_at_length_age()]
 #' @export
 length_meanweight_raw <- function(linked, group_vars = character(0)) {
   if (is.null(linked) || !nrow(linked)) return(NULL)

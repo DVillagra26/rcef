@@ -23,17 +23,15 @@ strata <- data.frame(
   stringsAsFactors = FALSE)
 sc <- classify_strata(strata, 50, min_trips = 2)
 
-## ---- 1. plot_coverage(..., type="bubbles", engine="base") works -----
-ok(!"bubbles" %in% names(formals(plot_bubbles_base)$type %||% list()) ||
-     TRUE, "sanity: formals introspection doesn't error")
+## ---- 1. plot_coverage_bubble(..., engine="base") works --------------
 r <- tryCatch({
   grDevices::pdf(NULL)
   on.exit(grDevices::dev.off(), add = TRUE)
-  plot_coverage(sc, type = "bubbles", y = "metier4", fill = "Country",
+  plot_coverage_bubble(sc, y = "metier4", x = "Country",
                threshold = 50, min_trips = 2, engine = "base")
   TRUE
 }, error = function(e) conditionMessage(e))
-ok(isTRUE(r), paste("plot_coverage(..., engine='base') no longer refuses bubbles:", r))
+ok(isTRUE(r), paste("plot_coverage_bubble(engine='base') runs:", r))
 
 ## ---- 2. runs with a facet, and with no fill/facet at all -------------
 r3 <- tryCatch({

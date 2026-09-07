@@ -2,19 +2,15 @@
 % Please edit documentation in R/viz_plots.R
 \name{plot_discard_rate}
 \alias{plot_discard_rate}
-\title{Discard-rate plot (raw strata or boxplot)}
+\title{Discard rate per stratum}
 \usage{
 plot_discard_rate(
   strata,
-  type = c("raw", "box"),
   x,
-  facet = NULL,
   colour = NULL,
   shape = NULL,
+  facet = NULL,
   jitter = TRUE,
-  fill = NULL,
-  show_points = TRUE,
-  show_pooled = TRUE,
   dims = NULL,
   engine = c("ggplot", "base"),
   palette = c("default", "colorblind"),
@@ -25,79 +21,56 @@ plot_discard_rate(
 )
 }
 \arguments{
-\item{strata}{Stratum table with `discard_rate`, `discards`,
-`landings_with_discards` and the grouping columns. For "box", pass the
-full-resolution table so each box shows real spread.}
-
-\item{type}{"raw" or "box".}
+\item{strata}{A stratum table with `discard_rate` and the grouping
+columns, or raw CEF catch data.}
 
 \item{x}{Column on the x axis.}
 
+\item{colour}{Column mapped to point fill.}
+
+\item{shape}{Column mapped to point shape.}
+
 \item{facet}{Optional facet column.}
 
-\item{colour}{(raw) column mapped to point fill.}
+\item{jitter}{Jitter the points horizontally.}
 
-\item{shape}{(raw) column mapped to point shape.}
+\item{dims}{Columns to build the strata on when `strata` is raw catch.
+Defaults to the union of `x`, `colour` and `facet`.}
 
-\item{jitter}{(raw) jitter the points horizontally.}
+\item{engine}{`"ggplot"` (default) or `"base"`.}
 
-\item{fill}{(box) column mapped to box fill.}
+\item{palette}{`"default"` or `"colorblind"` (the point colours, via
+[var_palette()] - the same assignment every other plot uses).}
 
-\item{show_points}{(box) overlay the individual strata.}
+\item{angle}{Rotation of the categorical x labels.}
 
-\item{show_pooled}{(box) add the catch-weighted pooled rate.}
+\item{ncol}{Facet columns (ggplot).}
 
-\item{dims}{Columns to build the strata on, when `strata` is raw
-catch data. Defaults to the union of `x`, `colour`/`fill` and
-`facet` - the same convenience [plot_coverage()] offers, so a
-discard-rate figure needs no `build_strata()` call of its own
-either.}
+\item{n_per_screen}{Base engine: split a faceted figure across this
+many devices.}
 
-\item{engine}{"ggplot" (default) or "base" - draws with base R
-graphics instead of ggplot2. Same data, same per-level colours
-(via [var_palette()], the same assignment the ggplot engine uses),
-same faceting.}
-
-\item{ncol}{Facet columns.}
-
-\item{verbose}{If `TRUE`, prints a short console summary before
-drawing - see [plot_coverage()]'s `verbose` for the same idea
-applied here.}
+\item{verbose}{Print a short summary before drawing.}
 }
 \value{
-A ggplot object, or `NULL`.
+A ggplot object, or `NULL` invisibly (base engine).
 }
 \description{
-Two views of the discard rate. "raw" draws one point per sampled stratum;
-"box" summarises the spread over a grouping. Both drop strata with no
-discard estimate (see [sampled_for_discards()]): a rate is a property of
-sampled strata only.
+One point per sampled stratum, its discard rate on the y axis, drawn
+from an already-built stratum table or straight from raw CEF catch
+data (auto-detected: raw catch has no `discard_rate` column, so it is
+run through [build_strata()] first). Strata with no discard estimate
+are dropped - a rate is a property of sampled strata only (see
+[sampled_for_discards()]).
 }
-\section{Arguments by scenario}{
-
-\describe{
-  \item{Raw points}{\code{type = "raw"}, \code{x}, \code{colour},
-    \code{shape}, \code{facet}, \code{jitter}}
-  \item{Box summary}{\code{type = "box"}, \code{x}, \code{fill},
-    \code{facet}, \code{show_points}, \code{show_pooled}}
-  \item{From raw catch}{add \code{dims}}
-  \item{Rendering (any scenario)}{\code{engine}, \code{palette},
-    \code{angle}, \code{ncol} (ggplot only), \code{n_per_screen}
-    (base only), \code{verbose}}
-}
-}
-
 \examples{
 \dontrun{
-plot_discard_rate(catch_data, "raw", x = "Season", colour = "metier4")
-plot_discard_rate(catch_data, "box", x = "metier4", fill = "Country")
+plot_discard_rate(catch_data, x = "Season", colour = "metier4")
 }
 }
 \seealso{
-[plot_dr_raw()], [plot_dr_box()]
+[plot_dr_raw()], [sampled_for_discards()], [build_strata()]
 
 Other discard-rate plots: 
-\code{\link{plot_dr_box}()},
 \code{\link{plot_dr_raw}()}
 }
 \concept{discard-rate plots}

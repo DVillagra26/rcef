@@ -46,14 +46,15 @@ A ggplot object, or `NULL`.
 Mean weight at length or age as a line with points. A +/- 1 sd ribbon
 shows the spread hidden by grouping; setting `shape_var` instead draws
 each stratum separately and drops the ribbon. A lower-level builder behind
-[plot_biology_distribution()].
+[plot_numbers_at_length_age()].
 }
 \seealso{
-[plot_biology_distribution()]
+[plot_numbers_at_length_age()]
 
 Other distribution plots: 
-\code{\link{plot_biology_distribution}()},
 \code{\link{plot_length_hist}()},
-\code{\link{plot_length_ridges}()}
+\code{\link{plot_length_ridges}()},
+\code{\link{plot_meanweight_at_length_age}()},
+\code{\link{plot_numbers_at_length_age}()}
 }
 \concept{distribution plots}

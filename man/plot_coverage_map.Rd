@@ -5,49 +5,40 @@
 \title{Coverage map: one pie per ICES area (optionally per group level)}
 \usage{
 plot_coverage_map(
-  sc,
-  area_var = "areaValue",
-  group_var = NULL,
-  weight_var = "landings",
-  covered_var = "landings_with_discards",
+  strata,
+  area = "areaValue",
+  group = NULL,
   what = "discard",
-  threshold = NULL,
+  catchCategory = NULL,
+  threshold = 50,
+  min_trips = 2,
   min_meas = 0,
-  min_trips = NULL,
-  dims = NULL,
   distributions = NULL,
-  weight_label = "landings",
-  bubble_scale = 1,
+  dims = NULL,
+  weight_label = NULL,
+  scale = 1,
   engine = c("base", "ggplot"),
-  palette = c("default", "colorblind"),
   verbose = FALSE
 )
 }
 \arguments{
-\item{sc}{Classified stratum table, or raw catch data.}
+\item{strata}{Classified stratum table, or raw CEF catch data.}
 
-\item{area_var}{Column holding the ICES area code. Default
-`"areaValue"`.}
+\item{area}{Column holding the ICES area code. Default `"areaValue"`.}
 
-\item{group_var}{Optional column - one boxed grid of pies per area,
-one pie per level.}
+\item{group}{Optional column - one boxed grid of pies per area, one
+pie per level.}
 
-\item{weight_var, covered_var}{The total weight and its sampled part
-(`"landings"` / `"landings_with_discards"` by default).}
+\item{what, catchCategory, threshold, min_trips, min_meas, dims, distributions}{As in [coverage-plots] - only used when `strata` is raw and has to
+be built.}
 
-\item{what, threshold, min_meas, min_trips, dims, distributions}{As in
-[plot_coverage()] - only used when `sc` is raw and has to be built.}
+\item{weight_label}{Word for the weight (title only). `NULL` derives
+it from `what` and `catchCategory`.}
 
-\item{weight_label}{Word for the weight (title only).}
-
-\item{bubble_scale}{Multiplies every pie radius (and, when grouped,
-the box grid cell size).}
+\item{scale}{Multiplies every pie radius (and, when grouped, the box
+grid cell size).}
 
 \item{engine}{`"base"` (default) or `"ggplot"`.}
-
-\item{palette}{Accepted for signature symmetry with the other
-coverage plots; the pies are always the fixed sampled / not-sampled
-colours, so setting `"colorblind"` warns and is ignored.}
 
 \item{verbose}{Print a one-line summary before drawing.}
 }
@@ -57,26 +48,25 @@ colours, so setting `"colorblind"` warns and is ignored.}
 \description{
 A map of the fishing area with one small pie per ICES division: pie
 radius is the area's landed/caught weight, and the pie is split into
-the sampled and the not-sampled share of that weight. With
-`group_var` (e.g. `"Season"`, `"Country"`, `"metier4"`) each area
-gets a labelled box holding a tidy grid of pies, one per group level;
-overlapping boxes are nudged apart and a thin leader keeps each box
-tied to its area's true centroid.
+the sampled and the not-sampled share of that weight. With `group`
+(e.g. `"Season"`, `"Country"`, `"metier4"`) each area gets a labelled
+box holding a tidy grid of pies, one per group level; overlapping
+boxes are nudged apart and a thin leader keeps each box tied to its
+area's true centroid.
 }
 \details{
-Auto-builds from raw catch data (and `distributions` for a biology
-`what`) exactly like [plot_coverage()]; an already-classified table is
-used as-is. Needs the suggested `maps` package.
+Auto-builds from raw catch data (and `distributions` + `catchCategory`
+for a biology `what`) exactly like [coverage-plots]; an
+already-classified table is used as-is. Needs the suggested `maps`
+package.
 }
 \seealso{
-[plot_coverage()], [ices_area_centroid()]
+[coverage-plots], [ices_area_centroid()]
 
 Other coverage plots: 
-\code{\link{plot_biology_coverage}()},
+\code{\link{coverage-plots}},
 \code{\link{plot_bubbles}()},
-\code{\link{plot_coverage}()},
 \code{\link{plot_coverage_bars}()},
-\code{\link{plot_coverage_scatter}()},
 \code{\link{plot_heatmap}()},
 \code{\link{status_legend_plot}()}
 }

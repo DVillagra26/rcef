@@ -1,5 +1,5 @@
 # =====================================================================
-#  viz_plots.R   (plot_coverage(), plot_biology_coverage(), plot_discard_rate(), plot_biology_distribution())
+#  viz_plots.R   (coverage / discard-rate / biology-distribution plots)
 #
 #  ORIGIN: this project (ILVO / RCEF Workbench). Freely refactorable.
 #  Was: R_development/0_Functions_plots.R
@@ -17,22 +17,20 @@
 #  prepared data frame and returns a ggplot object (or NULL when there is
 #  nothing to draw), so the same call works at the console and in the app.
 #
-#  PUBLIC API (four dispatchers, one per exploratory question):
-#    plot_coverage()             heatmap / bubbles / bars - how well a set of
-#                                strata is sampled (discards).
-#    plot_biology_coverage()     the same three views for length or age
-#                                sampling (shares the engine; wording and the
-#                                status scheme differ).
-#    plot_discard_rate()         raw per-stratum points, or a boxplot of the
-#                                spread over a grouping.
-#    plot_biology_distribution() numbers at length/age (histogram or smoothed
-#                                density) and mean weight (line + points).
+#  PUBLIC API (one function per view, one exploratory question each):
+#    plot_coverage_heat/_bubble/_bar/_map  how well a set of strata is
+#                                sampled - `what` switches discard / length /
+#                                age, `catchCategory` the landings / discards
+#                                part for length & age.
+#    plot_discard_rate()         raw per-stratum discard-rate points.
+#    plot_numbers_at_length_age()   numbers at length/age (histogram or
+#                                smoothed density).
+#    plot_meanweight_at_length_age() mean weight at length/age (line + points).
 #
-#  Each dispatcher wraps small, single-purpose builder functions
-#  (plot_heatmap(), plot_bubbles(), plot_coverage_bars(), plot_dr_raw(),
-#  plot_dr_box(), plot_length_hist(), plot_length_ridges(),
-#  plot_length_meanweight()), which stay exported so a caller who wants
-#  exactly one view can reach it directly.
+#  Each wraps small, single-purpose builder functions (plot_heatmap(),
+#  plot_bubbles(), plot_coverage_bars(), plot_dr_raw(), plot_length_hist(),
+#  plot_length_ridges(), plot_length_meanweight()), which stay exported so a
+#  caller who wants exactly one view can reach it directly.
 #
 #  PACKAGE DEPENDENCIES
 #    Imports: ggplot2, dplyr, tidyr, ggrepel, scales, rlang, stats, tools
@@ -247,7 +245,7 @@ normalize_what <- function(what) {
 #'   from, so a key circle is drawn at exactly the diameter that value has in
 #'   the plot and can be read off it.
 #' @return A ggplot object; only its legend is meant to be used.
-#' @seealso [plot_coverage()], [cat_lookup()]
+#' @seealso [coverage-plots], [cat_lookup()]
 #' @family coverage plots
 #' @export
 status_legend_plot <- function(threshold, what = "discard", min_meas = 0,
@@ -289,7 +287,7 @@ status_legend_plot <- function(threshold, what = "discard", min_meas = 0,
 #'
 #' One tile per cell, filled by sampling status and labelled with the cell's
 #' weight. Cells are collapsed to a single value first (see
-#' [collapse_cells()]). A lower-level builder behind [plot_coverage()].
+#' [collapse_cells()]). A lower-level builder behind [coverage-plots].
 #'
 #' @param sc Classified stratum table (output of `classify_strata()`).
 #' @param y_var Column on the y axis.
@@ -300,7 +298,7 @@ status_legend_plot <- function(threshold, what = "discard", min_meas = 0,
 #' @param weight_label Word for the weight shown in the tile labels.
 #' @param min_meas Measurement threshold, for length/age status.
 #' @return A ggplot object, or `NULL` when there is nothing to draw.
-#' @seealso [plot_coverage()]
+#' @seealso [coverage-plots]
 #' @family coverage plots
 #' @export
 plot_heatmap <- function(sc, y_var, x_var = NULL, facet_var = NULL,
@@ -346,11 +344,11 @@ plot_heatmap <- function(sc, y_var, x_var = NULL, facet_var = NULL,
 #'
 #' Same data and the same colour-by-status scheme as [plot_heatmap()],
 #' drawn with `graphics::image()`/`graphics::rect()` instead of ggplot2.
-#' Called through `plot_coverage(..., engine = "base")`, not directly.
+#' Called through the coverage plots' `engine = "base"`, not directly.
 #'
 #' @inheritParams plot_heatmap
 #' @return `NULL`, invisibly - drawn on the current graphics device.
-#' @seealso [plot_heatmap()], [plot_coverage()]
+#' @seealso [plot_heatmap()], [coverage-plots]
 #' @keywords internal
 #' @export
 plot_heatmap_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
@@ -644,7 +642,7 @@ legend_overlay <- function(pos, ...) {
 #'
 #' One bubble per cell, sized by weight and filled by sampling status, with
 #' the coverage percent labelled on partly-covered cells. A lower-level
-#' builder behind [plot_coverage()].
+#' builder behind [coverage-plots].
 #'
 #' Two guides come out of this: the status colours and, through the
 #' `"status_legend"` attribute, a size key giving the weight each diameter
@@ -655,7 +653,7 @@ legend_overlay <- function(pos, ...) {
 #'
 #' @inheritParams plot_heatmap
 #' @return A ggplot object, or `NULL`.
-#' @seealso [plot_coverage()]
+#' @seealso [coverage-plots]
 #' @family coverage plots
 #' @export
 plot_bubbles <- function(sc, y_var, x_var = NULL, facet_var = NULL,
@@ -775,7 +773,7 @@ plot_bubbles <- function(sc, y_var, x_var = NULL, facet_var = NULL,
 #' distribution / discard estimate and the part that does not, drawing the
 #' two as separate bars grouped into "with" and "without" sampling sections.
 #' Because the split is by weight, the sampled fraction is identical whatever
-#' the grouping variable. A lower-level builder behind [plot_coverage()].
+#' the grouping variable. A lower-level builder behind [coverage-plots].
 #'
 #' @param sc Classified stratum table.
 #' @param y_var Column on the y axis.
@@ -785,7 +783,7 @@ plot_bubbles <- function(sc, y_var, x_var = NULL, facet_var = NULL,
 #' @param what "discard", "length" or "age".
 #' @param weight_label Word for the weight on the x axis.
 #' @return A ggplot object, or `NULL`.
-#' @seealso [plot_coverage()]
+#' @seealso [coverage-plots]
 #' @family coverage plots
 #' @export
 plot_coverage_bars <- function(sc, y_var, fill_var = NULL, facet_var = NULL,
@@ -908,11 +906,11 @@ plot_coverage_bars <- function(sc, y_var, fill_var = NULL, facet_var = NULL,
 #' two-block layout with separator lines and percentage callouts -
 #' the same two numbers (sampled weight, unsampled weight) are all
 #' still there, shown a plainer way. Called through
-#' `plot_coverage(..., engine = "base")`, not directly.
+#' the coverage plots' `engine = "base"`, not directly.
 #'
 #' @inheritParams plot_coverage_bars
 #' @return `NULL`, invisibly - drawn on the current graphics device.
-#' @seealso [plot_coverage_bars()], [plot_coverage()]
+#' @seealso [plot_coverage_bars()], [coverage-plots]
 #' @keywords internal
 #' @export
 plot_coverage_bars_base <- function(sc, y_var, fill_var = NULL,
@@ -1131,11 +1129,11 @@ plot_coverage_bars_base <- function(sc, y_var, fill_var = NULL,
 #' `ggrepel::geom_text_repel()` does in the ggplot version - the one
 #' piece of the original this port does not reproduce, since base R has
 #' no built-in overlap-avoidance layout. Called through
-#' `plot_coverage(..., engine = "base")`, not directly.
+#' the coverage plots' `engine = "base"`, not directly.
 #'
 #' @inheritParams plot_bubbles
 #' @return `NULL`, invisibly - drawn on the current graphics device.
-#' @seealso [plot_bubbles()], [plot_coverage()]
+#' @seealso [plot_bubbles()], [coverage-plots]
 #' @keywords internal
 #' @export
 plot_bubbles_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
@@ -1296,245 +1294,6 @@ plot_bubbles_base <- function(sc, y_var, x_var = NULL, facet_var = NULL,
 }
 
 # ----------------------------------------------------------
-#  Data-availability scatter (before any raising)
-# ----------------------------------------------------------
-
-#' Axis label for a coverage-scatter metric
-#'
-#' Maps the `y` / `size` column name used by [plot_coverage_scatter()] to
-#' a readable axis / legend label; `what` tunes the coverage wording.
-#'
-#' @param metric Column name ("coverage", "n_measurements", "numTrips",
-#'   "discard_rate", or anything else - returned unchanged).
-#' @param what "discard", "length" or "age".
-#' @return A single string.
-#' @keywords internal
-#' @export
-scatter_axis_label <- function(metric, what = "discard") {
-  cov_txt <- if (what %in% c("length", "age"))
-    sprintf("%% of catch with a %s", if (what == "age") "age" else "length")
-  else "% of landings sampled"
-  switch(metric,
-         coverage       = cov_txt,
-         n_measurements = "Fish measured (n)",
-         numTrips       = "Sampled trips (n)",
-         discard_rate   = "Discard rate",
-         metric)
-}
-
-#' Data-availability scatter: sampling vs weight per stratum
-#'
-#' One point per stratum: its landed/caught weight on a log x axis, a
-#' chosen sampling metric on y (coverage %, measurements, trips, ...),
-#' the point sized by a second metric (trips by default, measurements
-#' for biology), coloured by sampling status. A dashed line marks the
-#' relevant threshold. Only the heaviest not-yet-safe strata are
-#' labelled, so the picture stays readable with many strata - these are
-#' the ones worth grouping or chasing a sample for.
-#'
-#' It answers "where is the catch, and where is the sampling" in one
-#' view, from the data alone - before any donor pool or raising is
-#' decided. A lower-level builder behind [plot_coverage()]
-#' (`type = "scatter"`); call it directly for full control of `x` / `y`
-#' / `size`.
-#'
-#' @param sc Classified stratum table (or anything with the `x`/`y`
-#'   columns and, optionally, `Status`).
-#' @param x,y,size Column names: weight on x (log), the sampling metric
-#'   on y, a second metric for point size. Defaults `"landings"`,
-#'   `"coverage"`, `"numTrips"`.
-#' @param facet_var Optional facet column.
-#' @param threshold,min_meas,min_trips Bars the status colours and the
-#'   dashed reference line are drawn against.
-#' @param what "discard", "length" or "age" - only tunes wording.
-#' @param weight_label Word for the weight on x.
-#' @param label_n How many strata to label (heaviest non-safe first).
-#' @param palette Passed through for signature symmetry; status colours
-#'   are fixed.
-#' @return A ggplot object, or `NULL` when there is nothing to draw.
-#' @seealso [plot_coverage()]
-#' @family coverage plots
-#' @export
-plot_coverage_scatter <- function(sc, x = "landings", y = "coverage",
-                                  size = "numTrips", facet_var = NULL,
-                                  threshold = 50, what = "discard",
-                                  weight_label = "landings", min_meas = 0,
-                                  min_trips = 2, label_n = 8,
-                                  palette = c("default", "colorblind")) {
-  palette <- match.arg(palette)
-  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
-  miss <- setdiff(c(x, y), names(sc))
-  if (length(miss))
-    stop("plot_coverage_scatter(): column(s) not in the table: ",
-         paste(miss, collapse = ", "))
-  d <- sc %>% filter(is.finite(.data[[x]]), .data[[x]] > 0, is.finite(.data[[y]]))
-  if (!nrow(d)) return(NULL)
-  d$.x <- d[[x]]; d$.y <- d[[y]]
-  d$.sz <- if (size %in% names(d)) suppressWarnings(as.numeric(d[[size]])) else NA_real_
-  if (all(is.na(d$.sz))) d$.sz <- 1
-  # label with just the first key (fleet / metier), not the full
-  # "fleet | country | season" id - it has to sit next to a point.
-  d$.lab <- if ("stratum_id" %in% names(d))
-    sub(" \\| .*$", "", as.character(d$stratum_id)) else as.character(seq_len(nrow(d)))
-  fillable <- "Status" %in% names(d)
-
-  lab_d <- d
-  if (fillable) lab_d <- lab_d %>% filter(!grepl("^SAFE", Status))
-  # one label per fleet/metier name (its heaviest stratum), then the
-  # `label_n` heaviest of those - so a dozen near-identical strata do
-  # not all get the same tag stacked on each other.
-  lab_d <- lab_d %>% arrange(desc(.x)) %>% filter(!duplicated(.lab)) %>%
-    slice_max(.x, n = label_n, with_ties = FALSE)
-
-  ylab  <- scatter_axis_label(y, what)
-  szlab <- scatter_axis_label(size, what)
-  p <- ggplot(d, aes(.x, .y))
-  if (identical(y, "coverage"))
-    p <- p + geom_hline(yintercept = threshold, linetype = "dashed",
-                        colour = "grey50")
-  if (identical(y, "n_measurements") && min_meas > 0)
-    p <- p + geom_hline(yintercept = min_meas, linetype = "dashed",
-                        colour = "grey50")
-  p <- p +
-    (if (fillable)
-       geom_point(aes(fill = Status, size = .sz), shape = 21, colour = OUTLINE,
-                  alpha = 0.9, stroke = 0.6)
-     else geom_point(aes(size = .sz), shape = 21, fill = PAL_BASE[1],
-                     colour = OUTLINE, alpha = 0.9)) +
-    ggrepel::geom_text_repel(data = lab_d, aes(label = .lab), size = 2.5,
-                             colour = "grey20", box.padding = 0.5,
-                             min.segment.length = 0, segment.size = 0.2,
-                             segment.colour = "grey55", max.overlaps = Inf) +
-    scale_x_log10(labels = scales::comma) +
-    scale_size_area(name = szlab, max_size = 9) +
-    maybe_facet(facet_var) +
-    labs(title = sprintf("Sampling vs %s weight per stratum",
-                         tools::toTitleCase(weight_label)),
-         subtitle = sprintf("x = %s (log) | y = %s | size = %s | %d labelled",
-                            weight_label, ylab, szlab, nrow(lab_d)),
-         x = sprintf("%s (t, log scale)", tools::toTitleCase(weight_label)),
-         y = ylab) +
-    app_theme()
-  if (fillable)
-    p <- p + scale_fill_manual(
-      values = status_palette(threshold, what, min_meas, min_trips),
-      limits = names(status_palette(threshold, what, min_meas, min_trips)),
-      labels = status_abbr(threshold, what, min_meas, min_trips),
-      drop = FALSE, name = "Sampling status",
-      guide = guide_legend(override.aes = list(size = 4)))
-  p
-}
-
-#' Data-availability scatter, drawn with base R graphics
-#'
-#' Base-R port of [plot_coverage_scatter()] - same log-x weight axis,
-#' status colours, threshold line and sparse labelling, drawn with
-#' `graphics::plot()`/`points()`. Called through
-#' `plot_coverage(..., type = "scatter", engine = "base")`.
-#'
-#' @inheritParams plot_coverage_scatter
-#' @param angle,n_per_screen As in the other base-R coverage plots.
-#' @return `NULL`, invisibly - drawn on the current graphics device.
-#' @seealso [plot_coverage_scatter()], [plot_coverage()]
-#' @keywords internal
-#' @export
-plot_coverage_scatter_base <- function(sc, x = "landings", y = "coverage",
-                                       size = "numTrips", facet_var = NULL,
-                                       threshold = 50, what = "discard",
-                                       weight_label = "landings", min_meas = 0,
-                                       min_trips = 2, label_n = 8,
-                                       palette = c("default", "colorblind"),
-                                       angle = 45, n_per_screen = NULL) {
-  palette <- match.arg(palette)
-  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
-  miss <- setdiff(c(x, y), names(sc))
-  if (length(miss))
-    stop("plot_coverage_scatter_base(): column(s) not in the table: ",
-         paste(miss, collapse = ", "))
-  d <- sc[is.finite(sc[[x]]) & sc[[x]] > 0 & is.finite(sc[[y]]), , drop = FALSE]
-  if (!nrow(d)) { message("Nothing to plot."); return(invisible(NULL)) }
-  d$.x <- d[[x]]; d$.y <- d[[y]]
-  d$.sz <- if (size %in% names(d)) suppressWarnings(as.numeric(d[[size]])) else NA_real_
-  d$.lab <- if ("stratum_id" %in% names(d))
-    sub(" \\| .*$", "", as.character(d$stratum_id)) else as.character(seq_len(nrow(d)))
-  d$.facet <- if (has(facet_var)) as.character(d[[facet_var]]) else NA
-  has_stat <- "Status" %in% names(d)
-  pal <- if (has_stat) status_palette(threshold, what, min_meas, min_trips) else NULL
-  lk  <- if (has_stat) cat_lookup(threshold, what, min_meas, min_trips) else NULL
-  ylab <- scatter_axis_label(y, what)
-
-  rad <- function(v) {
-    v[!is.finite(v) | v <= 0] <- NA
-    if (all(is.na(v))) return(rep(1.1, length(v)))
-    r <- sqrt(v); r <- r / max(r, na.rm = TRUE)
-    r[is.na(r)] <- min(r, na.rm = TRUE) * 0.4
-    0.7 + r * 2.0
-  }
-  draw_one <- function(dd, main) {
-    yl <- range(c(if (identical(y, "coverage")) c(0, 100), dd$.y), na.rm = TRUE)
-    graphics::plot(dd$.x, dd$.y, log = "x", type = "n", axes = FALSE,
-                   xlab = "", ylab = ylab, main = main, ylim = yl)
-    grid_base()
-    if (identical(y, "coverage"))
-      graphics::abline(h = threshold, lty = 2, col = "grey50")
-    if (identical(y, "n_measurements") && min_meas > 0)
-      graphics::abline(h = min_meas, lty = 2, col = "grey50")
-    cols <- if (has_stat) pal[as.character(dd$Status)] else rep(PAL_BASE[1], nrow(dd))
-    cols[is.na(cols)] <- "#CCCCCC"
-    graphics::points(dd$.x, dd$.y, pch = 21, bg = cols, col = OUTLINE,
-                     cex = rad(dd$.sz), lwd = 0.7)
-    lab <- dd
-    if (has_stat) lab <- lab[!grepl("^SAFE", lab$Status), , drop = FALSE]
-    lab <- lab[order(-lab$.x), , drop = FALSE]
-    lab <- utils::head(lab[!duplicated(lab$.lab), , drop = FALSE], min(label_n, 6L))
-    if (nrow(lab)) {
-      ymid <- mean(range(dd$.y, na.rm = TRUE))
-      graphics::text(lab$.x, lab$.y, lab$.lab,
-                     pos = ifelse(lab$.y > ymid, 1, 3), offset = 0.6,
-                     cex = 0.5, col = "grey20", xpd = NA)
-    }
-    graphics::box(); graphics::axis(1); graphics::axis(2, las = 1)
-  }
-  draw_legend <- function() {
-    if (!has_stat) return(invisible(NULL))
-    legend_overlay("bottomright", legend = lk$abbr, fill = lk$colour,
-                   cex = 0.95, bty = "o",
-                   bg = grDevices::adjustcolor("white", 0.9),
-                   box.col = "grey65", title = "Status", y.intersp = 1.15,
-                   inset = c(0.02, 0.02))
-  }
-  facets <- if (has(facet_var)) sort(unique(d$.facet)) else NA
-  main_txt <- sprintf("Sampling vs %s weight per stratum",
-                      tools::toTitleCase(weight_label))
-  xlab <- sprintf("%s (t, log scale)", tools::toTitleCase(weight_label))
-  groups <- split_facets_to_screens(facets, n_per_screen)
-  had_device <- grDevices::dev.cur() > 1
-  for (grp in groups) {
-    op <- graphics::par(no.readonly = TRUE); on.exit(graphics::par(op), add = TRUE)
-    if (length(groups) > 1 && !had_device) grDevices::dev.new()
-    rmar <- 3
-    if (!identical(grp, "__nofacet__") && length(grp) > 1) {
-      gd <- facet_grid_dims(length(grp)); nr <- gd[1L]; nc <- gd[2L]
-      graphics::par(mfrow = c(nr, nc), mar = c(4, 5, 3, 1), oma = c(2, 0, 3, rmar))
-      for (fv in grp) draw_one(d[d$.facet == fv, , drop = FALSE], fv)
-      graphics::mtext(main_txt, outer = TRUE, side = 3, cex = 1.05, font = 2, line = 1)
-      graphics::mtext(xlab, outer = TRUE, side = 1, line = 0.4, cex = 0.85)
-    } else if (!identical(grp, "__nofacet__") && length(grp) == 1) {
-      graphics::par(mar = c(5, 5, 4, rmar))
-      draw_one(d[d$.facet == grp, , drop = FALSE], paste0(main_txt, " (", grp, ")"))
-      graphics::mtext(xlab, side = 1, line = 3, cex = 0.85)
-    } else {
-      graphics::par(mar = c(5, 5, 4, rmar))
-      draw_one(d, main_txt)
-      graphics::mtext(xlab, side = 1, line = 3, cex = 0.85)
-    }
-    draw_legend()
-    graphics::par(op)
-  }
-  invisible(NULL)
-}
-
-# ----------------------------------------------------------
 #  Coverage map (ICES-area pies)
 # ----------------------------------------------------------
 
@@ -1612,67 +1371,62 @@ ices_area_centroid <- function(codes) {
 #'
 #' A map of the fishing area with one small pie per ICES division: pie
 #' radius is the area's landed/caught weight, and the pie is split into
-#' the sampled and the not-sampled share of that weight. With
-#' `group_var` (e.g. `"Season"`, `"Country"`, `"metier4"`) each area
-#' gets a labelled box holding a tidy grid of pies, one per group level;
-#' overlapping boxes are nudged apart and a thin leader keeps each box
-#' tied to its area's true centroid.
+#' the sampled and the not-sampled share of that weight. With `group`
+#' (e.g. `"Season"`, `"Country"`, `"metier4"`) each area gets a labelled
+#' box holding a tidy grid of pies, one per group level; overlapping
+#' boxes are nudged apart and a thin leader keeps each box tied to its
+#' area's true centroid.
 #'
-#' Auto-builds from raw catch data (and `distributions` for a biology
-#' `what`) exactly like [plot_coverage()]; an already-classified table is
-#' used as-is. Needs the suggested `maps` package.
+#' Auto-builds from raw catch data (and `distributions` + `catchCategory`
+#' for a biology `what`) exactly like [coverage-plots]; an
+#' already-classified table is used as-is. Needs the suggested `maps`
+#' package.
 #'
-#' @param sc Classified stratum table, or raw catch data.
-#' @param area_var Column holding the ICES area code. Default
-#'   `"areaValue"`.
-#' @param group_var Optional column - one boxed grid of pies per area,
-#'   one pie per level.
-#' @param weight_var,covered_var The total weight and its sampled part
-#'   (`"landings"` / `"landings_with_discards"` by default).
-#' @param what,threshold,min_meas,min_trips,dims,distributions As in
-#'   [plot_coverage()] - only used when `sc` is raw and has to be built.
-#' @param weight_label Word for the weight (title only).
-#' @param bubble_scale Multiplies every pie radius (and, when grouped,
-#'   the box grid cell size).
+#' @param strata Classified stratum table, or raw CEF catch data.
+#' @param area Column holding the ICES area code. Default `"areaValue"`.
+#' @param group Optional column - one boxed grid of pies per area, one
+#'   pie per level.
+#' @param what,catchCategory,threshold,min_trips,min_meas,dims,distributions
+#'   As in [coverage-plots] - only used when `strata` is raw and has to
+#'   be built.
+#' @param weight_label Word for the weight (title only). `NULL` derives
+#'   it from `what` and `catchCategory`.
+#' @param scale Multiplies every pie radius (and, when grouped, the box
+#'   grid cell size).
 #' @param engine `"base"` (default) or `"ggplot"`.
-#' @param palette Accepted for signature symmetry with the other
-#'   coverage plots; the pies are always the fixed sampled / not-sampled
-#'   colours, so setting `"colorblind"` warns and is ignored.
 #' @param verbose Print a one-line summary before drawing.
 #' @return `NULL` invisibly (`engine = "base"`) or a ggplot object.
-#' @seealso [plot_coverage()], [ices_area_centroid()]
+#' @seealso [coverage-plots], [ices_area_centroid()]
 #' @family coverage plots
 #' @export
-plot_coverage_map <- function(sc,
-                              ## -- roles --
-                              area_var = "areaValue", group_var = NULL,
-                              weight_var = "landings",
-                              covered_var = "landings_with_discards",
-                              ## -- classification (raw catch only) --
-                              what = "discard", threshold = NULL, min_meas = 0,
-                              min_trips = NULL,
-                              ## -- raw-catch auto-build --
-                              dims = NULL, distributions = NULL,
-                              ## -- rendering --
-                              weight_label = "landings", bubble_scale = 1,
-                              engine = c("base", "ggplot"),
-                              palette = c("default", "colorblind"),
-                              verbose = FALSE) {
-  engine  <- match.arg(engine)
-  palette <- match.arg(palette)
-  what    <- normalize_what(what)
+plot_coverage_map <- function(strata, area = "areaValue", group = NULL,
+                              what = "discard", catchCategory = NULL,
+                              threshold = 50, min_trips = 2, min_meas = 0,
+                              distributions = NULL, dims = NULL,
+                              weight_label = NULL, scale = 1,
+                              engine = c("base", "ggplot"), verbose = FALSE) {
+  engine <- match.arg(engine)
+  what   <- normalize_what(what)
+  area_var <- area; group_var <- group; bubble_scale <- scale
+  weight_var <- "landings"; covered_var <- "landings_with_discards"
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
   if (!requireNamespace("maps", quietly = TRUE))
     stop("plot_coverage_map() needs the 'maps' package: install.packages(\"maps\")")
-  if (identical(palette, "colorblind"))
-    warning("plot_coverage_map(): the pies use fixed sampled / not-sampled ",
-            "colours; palette is ignored", call. = FALSE)
-  thr <- if (is.null(threshold) || is.na(threshold)) 50 else threshold
-  mtr <- if (is.null(min_trips)  || is.na(min_trips))  2 else min_trips
+  if (identical(what, "discard")) {
+    if (!is.null(catchCategory))
+      stop("plot_coverage_map(): catchCategory does not apply to ",
+           "what = \"discard\"", call. = FALSE)
+    cc <- NULL
+  } else {
+    cc <- if (is.null(catchCategory)) "Lan"
+          else match.arg(catchCategory, c("Lan", "Dis", "BMS"))
+  }
+  weight_label <- weight_label %||% default_weight_label(what, cc)
+  thr <- threshold; mtr <- min_trips
   if (is.null(dims))
     dims <- unique(c(area_var, if (has(group_var)) group_var))
-  sc <- resolve_coverage_strata(sc, dims, NULL, NULL, NULL, thr, what, min_meas,
-                                mtr, distributions)
+  sc <- resolve_coverage_strata(strata, dims, NULL, NULL, NULL, thr, what,
+                                min_meas, mtr, distributions, cc)
   for (v in c(area_var, weight_var, covered_var))
     if (!v %in% names(sc)) stop("plot_coverage_map(): no column '", v, "'")
 
@@ -1854,268 +1608,238 @@ plot_coverage_map <- function(sc,
 
 
 
-#' Sampling-coverage plot (heatmap, bubbles or bars)
+#' Coverage: which strata are sampled well enough
 #'
-#' One view of how well a set of strata is sampled, from a classified
-#' stratum table. The same engine serves discard coverage and, through
-#' `what`, length/age coverage, so a biology-coverage panel reads exactly
-#' like a discard one.
+#' Three views of how well a set of strata is sampled - a heatmap
+#' ([plot_coverage_heat()]), a weighted bubble grid
+#' ([plot_coverage_bubble()]) and a sampled-vs-unsampled weight bar chart
+#' ([plot_coverage_bar()]) - plus a map ([plot_coverage_map()]). All four
+#' take either an already-classified stratum table (the output of
+#' [classify_strata()], or the biology equivalent) or raw CEF catch data,
+#' which they build and classify internally.
 #'
-#' @param strata Classified stratum table: the output of `classify_strata()`,
-#'   carrying at least `landings`, `landings_with_discards`, `discards`,
-#'   `coverage`, `cat_key` and `Status`.
-#' @param type "heatmap", "bubbles" or "bars".
-#' @param y Column on the y axis (rows).
-#' @param fill Second dimension: the x axis for heatmap/bubbles, the bar fill
-#'   for bars. `NULL` collapses it away.
+#' `what` selects what "sampled" means: `"discard"` (a discard estimate
+#' exists), `"length"` or `"age"` (a length / age distribution exists).
+#' For `"length"` / `"age"` from raw catch, pass `distributions` and, with
+#' `catchCategory`, choose whether to look at the sampling of the landings
+#' (`"Lan"`, the default), the discards (`"Dis"`) or BMS (`"BMS"`).
+#'
+#' @param strata An already-classified stratum table, or raw CEF catch
+#'   data (auto-detected: a classified table carries `cat_key`).
+#' @param y Row category. Required.
+#' @param x Column category - the second axis of the heatmap / bubble
+#'   grid. `NULL` collapses to a single column.
+#' @param fill Bar fill category (bars only). `NULL` uses `y`.
 #' @param facet Optional facet column.
-#' @param threshold Coverage threshold in percent; drives the status colours.
-#' @param what "discard" (default), "length" or "age". Changes titles and,
-#'   for biology, the status scheme; never the computation.
-#' @param weight_label Word for the weight shown, e.g. "landings" or "catch".
-#' @param ncol Facet columns (bars only).
-#' @param min_meas Measurement threshold for length/age status.
-#' @return A ggplot object, or `NULL`.
-#' @seealso [plot_biology_coverage()], [plot_discard_rate()], [plot_heatmap()],
-#'   [plot_bubbles()], [plot_coverage_bars()]
+#' @param what `"discard"` (default), `"length"` or `"age"`. Plural and
+#'   mixed case are accepted (`"discards"`, `"Length"`, ...).
+#' @param catchCategory For `what = "length"`/`"age"`: `"Lan"` (default),
+#'   `"Dis"` or `"BMS"` - which catch part the distribution is linked to.
+#'   Not valid for `what = "discard"` (an error), and informational only
+#'   when `strata` is already classified (the part was fixed upstream).
+#' @param threshold Coverage threshold in percent (heat / bubble only).
+#' @param min_trips Trip-count floor (heat / bubble only).
+#' @param min_meas Measurement floor for `what = "length"`/`"age"`.
+#' @param distributions A CEF distributions table - needed only to build a
+#'   `what = "length"`/`"age"` figure from raw catch.
+#' @param dims Columns to build the strata on when `strata` is raw.
+#'   Defaults to the union of the role columns.
+#' @param weight_label Word for the weight (axis / legend). `NULL` derives
+#'   it from `what` and `catchCategory`.
+#' @param show_fill_in_labels Bars only: append the fill level to each row
+#'   label.
+#' @param engine `"ggplot"` (default) or `"base"`.
+#' @param palette `"default"` or `"colorblind"` - recolours the bar fill.
+#'   The heatmap / bubble status colours are a fixed semantic scale;
+#'   asking for `"colorblind"` there warns.
+#' @param angle Rotation of the categorical x labels (heat / bubble).
+#' @param ncol Facet columns (bars, ggplot).
+#' @param n_per_screen Base engine: split a faceted figure across this
+#'   many devices.
+#' @param verbose Print a short summary before drawing.
+#' @return A ggplot object (`engine = "ggplot"`) or `NULL` invisibly
+#'   (`engine = "base"`).
+#' @seealso [classify_strata()], [plot_discard_rate()],
+#'   [plot_numbers_at_length_age()]
+#' @name coverage-plots
 #' @family coverage plots
 #' @examples
 #' \dontrun{
 #' sc <- classify_strata(build_strata(catch, c("metier4", "Season")), 50)
-#' plot_coverage(sc, "heatmap", y = "metier4", fill = "Season")
-#' plot_coverage(sc, "bars", y = "metier4")
+#' plot_coverage_heat(sc, y = "metier4", x = "Season")
+#' plot_coverage_bar(sc, y = "metier4", fill = "Season")
+#' plot_coverage_heat(catch, y = "fleetValue", what = "length",
+#'                    catchCategory = "Dis", distributions = dist)
 #' }
-#' @export
-#' Discard- or biology-sampling coverage plot
-#'
-#' Draws a coverage figure directly from raw catch data, or from an
-#' already-built and classified strata table - whichever is handed in.
-#'
-#' `strata` can be either:
-#'   - a data frame already run through [build_strata()] and
-#'     [classify_strata()] (the original calling convention, still fully
-#'     supported - every existing caller keeps working unchanged), or
-#'   - raw catch data (whatever [build_strata()] itself expects), in
-#'     which case `plot_coverage()` builds and classifies it internally,
-#'     using `dims` (or, if `dims` is not given, the union of `y`,
-#'     `fill` and `facet`) and the `threshold` / `min_meas` / `min_trips`
-#'     already being passed in for the plot.
-#'
-#' The second form is the point: previously a caller always had to write
-#' `build_strata()` and `classify_strata()` themselves before calling a
-#' plot function, passing the SAME threshold and resolution to both
-#' steps by hand and risking the two disagreeing. Now one call is
-#' enough, and the strata table matches the figure by construction.
-#'
-#' `threshold` and `min_trips` are used differently by the three types.
-#' "heatmap" and "bubbles" colour every cell by its sampling STATUS,
-#' which is a verdict against these two bars - they are genuinely
-#' required, and default to 50 / 2 (the same defaults `classify_strata()`
-#' itself uses) whenever left `NULL`. "bars" shows the SAME split
-#' (sampled vs unsampled weight) regardless of what either bar is set
-#' to - the only thing that changes which rows are drawn at all is
-#' whether a stratum has any landings or discards, which neither
-#' threshold nor min_trips affects. Passing either in for `type =
-#' "bars"` is therefore accepted but ignored - both are forced to `NA`
-#' internally, and a `verbose` run says so, rather than silently
-#' pretending the value you set was used for something.
-#'
-#' @param strata Raw catch data, or an already-classified strata table
-#'   (see Details).
-#' @param dims Columns to build the strata on, when `strata` is raw
-#'   data. Defaults to the union of `y`, `fill` and `facet` - enough for
-#'   the figure itself, though a caller building strata for reuse
-#'   elsewhere may want to pass a wider set explicitly.
-#' @param type "heatmap", "bubbles" or "bars".
-#' @param y,fill,facet Column names for the plot's roles. `y` is
-#'   required; `fill`/`facet` may be `NULL`.
-#' @param threshold Coverage threshold (%), used to classify raw data
-#'   into a sampling status. Ignored for `type = "bars"` (see Details).
-#'   Defaults to 50 when `NULL` and the type needs it.
-#' @param what "discard" (default), "length" or "age". For "length" /
-#'   "age", either pass an already-classified biology table as `strata`,
-#'   or pass raw catch data together with `distributions` and the whole
-#'   biology pipeline (`biology_link()`, `stratum_measurements()`,
-#'   `add_sufficiency()`, `classify_strata()`) runs internally.
-#' @param distributions A distributions table, needed only to auto-build
-#'   a `what = "length"`/`"age"` figure from raw catch data. `"age"`
-#'   reads the `Age` rows, otherwise `LengthTotal`.
-#' @param weight_label Axis/legend label for the weight measure.
-#' @param ncol Facet columns, for the "bars" type.
-#' @param min_meas,min_trips Sufficiency floors used to classify raw
-#'   data. `min_trips` is ignored for `type = "bars"` (see Details);
-#'   defaults to 2 when `NULL` and the type needs it. `min_meas`
-#'   defaults to 0 (no measurement floor) regardless of type.
-#' @param engine "ggplot" (default, unchanged) or "base" - draws with
-#'   base R graphics instead of ggplot2. Same data, same colour-by-status
-#'   scheme, same faceting, all three types ("heatmap", "bubbles",
-#'   "bars"); a lighter-weight rendering for a script that would rather
-#'   not depend on ggplot2, at the cost of some of the ggplot version's
-#'   finer annotation (exact separator lines, precise percentage
-#'   callouts, ggrepel's automatic label-overlap avoidance on the
-#'   bubble plot - labels there are placed just above each bubble
-#'   instead).
-#' @param verbose If `TRUE`, prints a short summary to the console
-#'   before drawing: the plot type and engine, which columns feed y /
-#'   fill / facet, whether a threshold applies and what it resolved to,
-#'   and how many strata rows are being drawn. Meant for exploring at
-#'   the console, not for a script that already knows what it asked for
-#'   - default `FALSE`.
-#' @section Arguments by scenario:
-#' \describe{
-#'   \item{Discard heatmap / bubbles}{\code{type}, \code{y}, \code{fill},
-#'     \code{facet}, \code{threshold}, \code{min_trips}}
-#'   \item{Coverage bars}{\code{type = "bars"}, \code{y}, \code{fill},
-#'     \code{show_fill_in_labels}; \code{threshold} / \code{min_trips} are
-#'     ignored (a warning if you set them)}
-#'   \item{Data-availability scatter}{\code{type = "scatter"},
-#'     \code{scatter_y}, \code{scatter_size}, \code{label_n}, \code{facet},
-#'     \code{threshold}, \code{min_trips}; \code{y} is ignored}
-#'   \item{Length / age coverage}{add \code{what = "length"} or
-#'     \code{"age"}, and \code{min_meas}}
-#'   \item{From raw catch}{add \code{dims}; for length / age also
-#'     \code{distributions}}
-#'   \item{Rendering (any scenario)}{\code{engine}, \code{palette}
-#'     (fill-coloured types only), \code{angle} (categorical x only),
-#'     \code{ncol} (bars only), \code{n_per_screen} (base engine only),
-#'     \code{verbose}}
-#' }
-#' @return A ggplot object (`engine = "ggplot"`), or `NULL` invisibly
-#'   after drawing to the current device (`engine = "base"`).
-#' @seealso [build_strata()], [classify_strata()], [plot_biology_coverage()]
-#' @family coverage plots
-#' @export
-plot_coverage <- function(strata,
-                          ## -- what to draw --
-                          type = c("heatmap", "bubbles", "bars", "scatter"),
-                          what = "discard",
-                          ## -- role columns --
-                          y = NULL, fill = NULL, facet = NULL,
-                          ## -- classification (heatmap / bubbles / scatter colour) --
-                          threshold = NULL, min_trips = NULL, min_meas = 0,
-                          ## -- raw-catch auto-build --
-                          dims = NULL, distributions = NULL,
-                          weight_label = "landings",
-                          ## -- type = "scatter" only --
-                          scatter_y = "coverage", scatter_size = "numTrips",
-                          label_n = 8,
-                          ## -- type = "bars" only --
-                          show_fill_in_labels = FALSE,
-                          ## -- rendering --
-                          engine = c("ggplot", "base"),
-                          palette = c("default", "colorblind"),
-                          angle = 45, ncol = 2, n_per_screen = NULL,
-                          verbose = FALSE) {
-  type    <- match.arg(type)
-  engine  <- match.arg(engine)
-  palette <- match.arg(palette)
-  what    <- normalize_what(what)
-  if (!identical(type, "scatter") &&
-        (is.null(y) || !nzchar(y)))
-    stop("`y` is required for type = \"", type, "\"")
-  # scatter has numeric axes, not a category on y - infer a stratum
-  # resolution from fill/facet (or fall back to fleet x country) so the
-  # raw-catch auto-build still works without a `y`.
-  if (identical(type, "scatter") && is.null(dims))
-    dims <- unique(c("fleetValue", "Country",
-                     if (!is.null(fill)  && nzchar(fill))  fill,
-                     if (!is.null(facet) && nzchar(facet)) facet))
-  # "bars" never uses either bar: the ggplot version filters on
-  # cat_key != "none" only, which landings/discards alone decide, and
-  # colours by the fill variable, not by status - a threshold or a
-  # trips floor genuinely changes nothing it draws. Forced to NA (not
-  # just left at whatever default) so a verbose run reports the truth,
-  # and a caller cannot be misled into thinking a value they set was
-  # doing something.
-  if (identical(type, "bars")) {
-    threshold_used <- NA_real_; min_trips_used <- NA_real_
-  } else {
-    threshold_used <- if (is.null(threshold) || is.na(threshold)) 50 else threshold
-    min_trips_used <- if (is.null(min_trips) || is.na(min_trips)) 2 else min_trips
-  }
-  # classify_strata() itself still needs SOME numeric threshold/min_trips
-  # to run, even when building for "bars" - an internal placeholder,
-  # standing in for the fact that no rung of the resulting table is
-  # actually influenced by it (see above). Never surfaced to the caller
-  # or the verbose summary as if it meant something.
-  classify_threshold <- if (is.na(threshold_used)) 50 else threshold_used
-  classify_min_trips <- if (is.na(min_trips_used)) 2 else min_trips_used
+NULL
 
-  scatter_set <- !identical(scatter_y, "coverage") ||
-    !identical(scatter_size, "numTrips") || !identical(label_n, 8)
-  plot_arg_report("plot_coverage", list(
-    list(bad = !identical(type, "scatter") && scatter_set,
-         msg = "scatter_y / scatter_size / label_n only apply to type = \"scatter\"; ignored"),
-    list(bad = !identical(type, "bars") && isTRUE(show_fill_in_labels),
-         msg = "show_fill_in_labels only applies to type = \"bars\"; ignored"),
-    list(bad = identical(type, "bars") &&
-           (!is.null(threshold) || !is.null(min_trips)),
-         msg = "threshold / min_trips do not affect type = \"bars\" (it shows sampled vs unsampled weight); ignored"),
-    list(bad = identical(type, "scatter") && !is.null(y) && nzchar(y),
-         msg = "y is ignored for type = \"scatter\" (numeric axes); use scatter_y"),
+#' Default weight label for a coverage / distribution plot
+#'
+#' @param what `"discard"`, `"length"` or `"age"`.
+#' @param catchCategory `"Lan"`, `"Dis"`, `"BMS"` or `NULL`.
+#' @return `"landings"`, `"discards"` or `"BMS catch"`.
+#' @keywords internal
+#' @export
+default_weight_label <- function(what, catchCategory = NULL) {
+  if (identical(what, "discard")) return("landings")
+  switch(catchCategory %||% "Lan",
+         Dis = "discards", BMS = "BMS catch", "landings")
+}
+
+#' Shared engine behind the coverage plots
+#'
+#' Holds what [plot_coverage_heat()], [plot_coverage_bubble()] and
+#' [plot_coverage_bar()] have in common: canonicalise `what`, validate
+#' `catchCategory`, build and classify raw catch when needed, optionally
+#' print a summary, then hand off to the matching ggplot or base builder.
+#'
+#' @param view `"heat"`, `"bubble"` or `"bar"`.
+#' @inheritParams coverage-plots
+#' @return A ggplot object, or `NULL` invisibly (base engine).
+#' @keywords internal
+#' @export
+coverage_dispatch <- function(view, strata, y = NULL, x = NULL, fill = NULL,
+                              facet = NULL, what = "discard",
+                              catchCategory = NULL, threshold = 50,
+                              min_trips = 2, min_meas = 0, distributions = NULL,
+                              dims = NULL, weight_label = NULL,
+                              show_fill_in_labels = FALSE,
+                              engine = "ggplot", palette = "default",
+                              angle = 45, ncol = 2, n_per_screen = NULL,
+                              verbose = FALSE) {
+  what <- normalize_what(what)
+  fn   <- paste0("plot_coverage_", view)
+  if (is.null(y) || !nzchar(y)) stop(fn, "(): `y` is required", call. = FALSE)
+
+  user_cc <- !is.null(catchCategory)
+  if (identical(what, "discard")) {
+    if (user_cc)
+      stop(fn, "(): catchCategory does not apply to what = \"discard\" ",
+           "(discard coverage is the discard part by definition)",
+           call. = FALSE)
+    cc <- NULL
+  } else {
+    cc <- if (user_cc) match.arg(catchCategory, c("Lan", "Dis", "BMS")) else "Lan"
+  }
+
+  already <- !is.null(strata) && "cat_key" %in% names(strata)
+  if (isTRUE(verbose) && already && user_cc)
+    message("note: `strata` is already classified; catchCategory = \"", cc,
+            "\" is informational - the catch part was fixed upstream")
+
+  plot_arg_report(fn, list(
     list(bad = identical(palette, "colorblind") &&
-           type %in% c("heatmap", "bubbles"),
-         msg = "palette does not recolour type = \"heatmap\" / \"bubbles\" (cells are coloured by sampling status, a fixed scale)"),
-    list(bad = identical(type, "bars") && !identical(angle, 45),
-         msg = "angle rotates the categorical x labels; type = \"bars\" has a numeric x axis, ignored"),
+           view %in% c("heat", "bubble"),
+         msg = "palette does not recolour a status heatmap / bubble grid (the cells use a fixed semantic scale)"),
     list(bad = identical(engine, "ggplot") && !is.null(n_per_screen),
          msg = "n_per_screen is a base-engine option; the ggplot engine draws one figure"),
-    list(bad = identical(engine, "ggplot") && !identical(type, "bars") &&
+    list(bad = identical(engine, "base") && identical(view, "bar") &&
            !identical(ncol, 2),
-         msg = "ncol only affects type = \"bars\"")))
+         msg = "ncol only affects the ggplot bar chart")))
 
-  strata <- resolve_coverage_strata(strata, dims, y, fill, facet,
-                                    classify_threshold, what, min_meas,
-                                    classify_min_trips, distributions)
+  wl   <- weight_label %||% default_weight_label(what, cc)
+  xcol <- if (identical(view, "bar")) fill else x
 
-  if (isTRUE(verbose)) coverage_verbose_summary(
-    strata, type, engine, y, fill, facet, threshold_used, what,
-    weight_label, min_meas, min_trips_used, palette, angle, n_per_screen,
-    scatter_y, scatter_size, label_n)
+  strata <- resolve_coverage_strata(strata, dims, y, xcol, facet, threshold,
+                                    what, min_meas, min_trips, distributions, cc)
+
+  if (isTRUE(verbose))
+    coverage_verbose_summary(strata, view, engine, y, xcol, facet, threshold,
+                             what, wl, min_meas, min_trips, cc, palette, angle,
+                             n_per_screen)
 
   if (identical(engine, "base")) {
-    return(invisible(switch(type,
-      heatmap = plot_heatmap_base(strata, y, fill, facet, threshold_used, what,
-                                  weight_label, min_meas, min_trips_used,
-                                  palette = palette, angle = angle,
-                                  n_per_screen = n_per_screen),
-      bars    = plot_coverage_bars_base(strata, y, fill, facet, what,
-                                        weight_label, palette = palette,
-                                        n_per_screen = n_per_screen,
-                                        show_fill_in_labels = show_fill_in_labels),
-      bubbles = plot_bubbles_base(strata, y, fill, facet, threshold_used, what,
-                                  weight_label, min_meas, min_trips_used,
-                                  palette = palette, angle = angle,
-                                  n_per_screen = n_per_screen),
-      scatter = plot_coverage_scatter_base(strata, y = scatter_y,
-                                  size = scatter_size, facet_var = facet,
-                                  threshold = threshold_used, what = what,
-                                  weight_label = weight_label, min_meas = min_meas,
-                                  min_trips = min_trips_used, label_n = label_n,
-                                  palette = palette, angle = angle,
-                                  n_per_screen = n_per_screen))))
+    return(invisible(switch(view,
+      heat   = plot_heatmap_base(strata, y, x, facet, threshold, what, wl,
+                                 min_meas, min_trips, palette = palette,
+                                 angle = angle, n_per_screen = n_per_screen),
+      bubble = plot_bubbles_base(strata, y, x, facet, threshold, what, wl,
+                                 min_meas, min_trips, palette = palette,
+                                 angle = angle, n_per_screen = n_per_screen),
+      bar    = plot_coverage_bars_base(strata, y, fill, facet, what, wl,
+                                 palette = palette, n_per_screen = n_per_screen,
+                                 show_fill_in_labels = show_fill_in_labels))))
   }
-  p <- switch(type,
-    heatmap = plot_heatmap(strata, y, fill, facet, threshold_used, what,
-                           weight_label, min_meas, min_trips_used),
-    bubbles = plot_bubbles(strata, y, fill, facet, threshold_used, what,
-                           weight_label, min_meas, min_trips_used),
-    bars    = plot_coverage_bars(strata, y, fill, facet, ncol, what,
-                                 weight_label, palette = palette),
-    scatter = plot_coverage_scatter(strata, y = scatter_y, size = scatter_size,
-                           facet_var = facet, threshold = threshold_used,
-                           what = what, weight_label = weight_label,
-                           min_meas = min_meas, min_trips = min_trips_used,
-                           label_n = label_n, palette = palette))
-  # angle: the ggplot heatmap / bubble / scatter builders hard-set a 45
-  # degree x axis; a later theme() wins, so only touch it when the caller
-  # asked for something other than the default.
-  if (!is.null(p) && !identical(angle, 45) &&
-        type %in% c("heatmap", "bubbles", "scatter"))
+  p <- switch(view,
+    heat   = plot_heatmap(strata, y, x, facet, threshold, what, wl, min_meas,
+                          min_trips),
+    bubble = plot_bubbles(strata, y, x, facet, threshold, what, wl, min_meas,
+                          min_trips),
+    bar    = plot_coverage_bars(strata, y, fill, facet, ncol, what, wl,
+                                palette = palette))
+  if (!is.null(p) && !identical(angle, 45) && view %in% c("heat", "bubble"))
     p <- p + theme(axis.text.x = element_text(
       angle = angle, hjust = if (angle > 0) 1 else 0.5, vjust = 1))
   p
 }
+
+#' @rdname coverage-plots
+#' @export
+plot_coverage_heat <- function(strata, y, x = NULL, facet = NULL,
+                               what = "discard", catchCategory = NULL,
+                               threshold = 50, min_trips = 2, min_meas = 0,
+                               distributions = NULL, dims = NULL,
+                               weight_label = NULL,
+                               engine = c("ggplot", "base"),
+                               palette = c("default", "colorblind"), angle = 45,
+                               n_per_screen = NULL, verbose = FALSE) {
+  coverage_dispatch("heat", strata, y = y, x = x, facet = facet, what = what,
+                    catchCategory = catchCategory, threshold = threshold,
+                    min_trips = min_trips, min_meas = min_meas,
+                    distributions = distributions, dims = dims,
+                    weight_label = weight_label, engine = match.arg(engine),
+                    palette = match.arg(palette), angle = angle,
+                    n_per_screen = n_per_screen, verbose = verbose)
+}
+
+#' @rdname coverage-plots
+#' @export
+plot_coverage_bubble <- function(strata, y, x = NULL, facet = NULL,
+                                 what = "discard", catchCategory = NULL,
+                                 threshold = 50, min_trips = 2, min_meas = 0,
+                                 distributions = NULL, dims = NULL,
+                                 weight_label = NULL,
+                                 engine = c("ggplot", "base"),
+                                 palette = c("default", "colorblind"),
+                                 angle = 45, n_per_screen = NULL,
+                                 verbose = FALSE) {
+  coverage_dispatch("bubble", strata, y = y, x = x, facet = facet, what = what,
+                    catchCategory = catchCategory, threshold = threshold,
+                    min_trips = min_trips, min_meas = min_meas,
+                    distributions = distributions, dims = dims,
+                    weight_label = weight_label, engine = match.arg(engine),
+                    palette = match.arg(palette), angle = angle,
+                    n_per_screen = n_per_screen, verbose = verbose)
+}
+
+#' @rdname coverage-plots
+#' @export
+plot_coverage_bar <- function(strata, y, fill = NULL, facet = NULL,
+                              what = "discard", catchCategory = NULL,
+                              distributions = NULL, dims = NULL,
+                              weight_label = NULL, show_fill_in_labels = FALSE,
+                              engine = c("ggplot", "base"),
+                              palette = c("default", "colorblind"), ncol = 2,
+                              n_per_screen = NULL, verbose = FALSE,
+                              threshold = NULL, min_trips = NULL, angle = NULL) {
+  if (!is.null(threshold) || !is.null(min_trips))
+    stop("plot_coverage_bar(): threshold / min_trips do not apply here - a ",
+         "bar chart shows sampled vs unsampled weight, which neither affects. ",
+         "Use plot_coverage_heat() / plot_coverage_bubble() for a ",
+         "threshold-based view.", call. = FALSE)
+  if (!is.null(angle))
+    stop("plot_coverage_bar(): angle does not apply - the x axis is a numeric ",
+         "weight, not rotated category labels.", call. = FALSE)
+  coverage_dispatch("bar", strata, y = y, fill = fill, facet = facet,
+                    what = what, catchCategory = catchCategory,
+                    distributions = distributions, dims = dims,
+                    weight_label = weight_label,
+                    show_fill_in_labels = show_fill_in_labels,
+                    engine = match.arg(engine), palette = match.arg(palette),
+                    ncol = ncol, n_per_screen = n_per_screen, verbose = verbose)
+}
+
+
 
 #' Build and classify strata only if `strata` looks like raw catch data
 #'
@@ -2131,17 +1855,22 @@ plot_coverage <- function(strata,
 #' @param strata Raw catch data, or an already-classified strata table.
 #' @param dims Columns to build on; defaults to the union of `y`,
 #'   `fill`, `facet` when `NULL`.
-#' @param y,fill,facet,threshold,what,min_meas,min_trips As in
-#'   [plot_coverage()].
+#' @param y,fill,facet,threshold,what,min_meas,min_trips As in the
+#'   coverage plots.
 #' @param distributions A distributions table - required to auto-build a
 #'   `what = "length"`/`"age"` table from raw catch data; ignored when
 #'   `strata` is already classified or `what = "discard"`.
+#' @param catch_category For `what = "length"`/`"age"` built from raw
+#'   catch: which catch part the distribution is linked to - `"Lan"`
+#'   (default), `"Dis"` or `"BMS"`. Ignored for `what = "discard"` and
+#'   for an already-classified table.
 #' @return A classified strata table.
 #' @keywords internal
 #' @export
 resolve_coverage_strata <- function(strata, dims, y, fill, facet,
                                     threshold, what, min_meas, min_trips,
-                                    distributions = NULL) {
+                                    distributions = NULL,
+                                    catch_category = NULL) {
   if (!is.null(strata) && "cat_key" %in% names(strata)) return(strata)
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
   if (is.null(dims))
@@ -2158,8 +1887,9 @@ resolve_coverage_strata <- function(strata, dims, y, fill, facet,
          "biology stratum needs (biology_link(), stratum_measurements(), ",
          "add_sufficiency()).")
   dist_type <- if (identical(what, "age")) "Age" else "LengthTotal"
-  bl  <- biology_link(strata, distributions, dims, type = dist_type)
-  ms  <- stratum_measurements(strata, distributions, dims, type = dist_type)
+  cc <- catch_category %||% "Lan"
+  bl  <- biology_link(strata, distributions, dims, cc, type = dist_type)
+  ms  <- stratum_measurements(strata, distributions, dims, cc, type = dist_type)
   bl  <- add_sufficiency(bl, ms, threshold, min_meas)
   bio <- bl %>% mutate(landings = weight,
                        landings_with_discards = weight_measured,
@@ -2196,45 +1926,40 @@ plot_arg_report <- function(fn, checks) {
 
 #' Print a plain-language summary of a coverage plot before drawing it
 #'
-#' What `plot_coverage(..., verbose = TRUE)` prints: the type and
-#' engine, which columns are on which role, whether a threshold applies
-#' here and what it resolved to, and how many strata rows are about to
-#' be drawn. Meant to answer "what exactly am I looking at" at the
-#' console without having to read the call back to yourself - not a
-#' log, and not shown unless asked for.
+#' What `plot_coverage_heat(..., verbose = TRUE)` (and the bubble / bar
+#' siblings) prints: the view and engine, which columns are on which
+#' role, the threshold / min_trips in force (or, for bars, that they do
+#' not apply), the catch part for a length / age figure, and how many
+#' strata rows are about to be drawn.
 #'
-#' @param strata The (already classified) strata table about to be
-#'   plotted.
-#' @param type,engine,y,fill,facet,threshold,what,weight_label,min_meas,min_trips
-#'   As resolved inside [plot_coverage()] - `threshold`/`min_trips` are
-#'   already `NA` here when `type = "bars"`, not the raw arguments the
-#'   caller passed.
+#' @param strata The already-classified strata table about to be plotted.
+#' @param view `"heat"`, `"bubble"` or `"bar"`.
+#' @param engine,y,x,facet,threshold,what,weight_label,min_meas,min_trips
+#'   As resolved inside [coverage_dispatch()].
+#' @param catchCategory `"Lan"` / `"Dis"` / `"BMS"` or `NULL`.
+#' @param palette,angle,n_per_screen Rendering options, echoed back.
 #' @return `NULL`, invisibly - printed as a side effect.
 #' @keywords internal
 #' @export
-coverage_verbose_summary <- function(strata, type, engine, y, fill, facet,
+coverage_verbose_summary <- function(strata, view, engine, y, x, facet,
                                      threshold, what, weight_label,
-                                     min_meas, min_trips,
+                                     min_meas, min_trips, catchCategory = NULL,
                                      palette = "default", angle = 45,
-                                     n_per_screen = NULL,
-                                     scatter_y = "coverage",
-                                     scatter_size = "numTrips", label_n = 8) {
+                                     n_per_screen = NULL) {
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
   line <- function(...) cat(..., "\n", sep = "")
-  line("-- plot_coverage(): ", cov_title_what(what), " coverage, type = \"",
-       type, "\", engine = \"", engine, "\" --")
-  line("  y      : ", if (has(y)) y else if (identical(type, "scatter"))
-                        "(numeric - see the scatter y/size metrics)" else "(none)")
-  line("  fill   : ", if (has(fill))  fill  else "(none)")
+  line("-- plot_coverage_", view, "(): ", cov_title_what(what),
+       " coverage, engine = \"", engine, "\" --")
+  line("  y      : ", if (has(y)) y else "(none)")
+  line("  ", if (identical(view, "bar")) "fill   : " else "x      : ",
+       if (has(x)) x else "(none)")
   line("  facet  : ", if (has(facet)) facet else "(none)")
   line("  weight : ", weight_label)
-  if (identical(type, "scatter"))
-    line("  scatter: y = ", scatter_y, ", size = ", scatter_size,
-         ", label_n = ", label_n)
-  if (identical(type, "bars")) {
-    line("  threshold / min_trips: not used by type = \"bars\" - it shows ",
-         "sampled vs unsampled weight, which neither one affects. Any ",
-         "value passed in was ignored.")
+  if (!is.null(catchCategory))
+    line("  catchCategory : ", catchCategory)
+  if (identical(view, "bar")) {
+    line("  threshold / min_trips: not used by a bar chart - it shows ",
+         "sampled vs unsampled weight, which neither affects.")
   } else {
     line("  threshold  : ", threshold, "%")
     line("  min_trips  : ", min_trips)
@@ -2254,44 +1979,6 @@ coverage_verbose_summary <- function(strata, type, engine, y, fill, facet,
       line("    ", tb[i], "  ", names(tb)[i])
   }
   invisible(NULL)
-}
-
-#' Length- or age-sampling coverage plot (back-compat wrapper)
-#'
-#' Kept for existing call sites. [plot_coverage()] now takes `distributions`
-#' and a biology `what` directly, so
-#' `plot_coverage(catch, distributions = dist, what = "length", ...)` is
-#' the same call in one place. This wrapper just forwards, with
-#' `weight_label` defaulting to "catch".
-#'
-#' @inheritParams plot_coverage
-#' @param what "length" or "age".
-#' @return A ggplot object, or `NULL` (base engine draws and returns `NULL`).
-#' @seealso [plot_coverage()], [biology_link()]
-#' @family coverage plots
-#' @export
-plot_biology_coverage <- function(strata, distributions = NULL,
-                                  type = c("heatmap", "bubbles", "bars", "scatter"),
-                                  y = NULL, fill = NULL, facet = NULL,
-                                  threshold = NULL, min_trips = NULL, min_meas = 0,
-                                  dims = NULL, what = "length",
-                                  weight_label = "catch",
-                                  scatter_y = "coverage",
-                                  scatter_size = "numTrips", label_n = 8,
-                                  show_fill_in_labels = FALSE,
-                                  engine = c("ggplot", "base"),
-                                  palette = c("default", "colorblind"),
-                                  angle = 45, ncol = 2, n_per_screen = NULL,
-                                  verbose = FALSE) {
-  plot_coverage(strata, type = match.arg(type), what = what, y = y, fill = fill,
-                facet = facet, threshold = threshold, min_trips = min_trips,
-                min_meas = min_meas, dims = dims, distributions = distributions,
-                weight_label = weight_label, scatter_y = scatter_y,
-                scatter_size = scatter_size, label_n = label_n,
-                show_fill_in_labels = show_fill_in_labels,
-                engine = match.arg(engine), palette = match.arg(palette),
-                angle = angle, ncol = ncol, n_per_screen = n_per_screen,
-                verbose = verbose)
 }
 
 # ----------------------------------------------------------
@@ -2363,224 +2050,83 @@ plot_dr_raw <- function(s, x_var, colour_var = NULL, shape_var = NULL,
           legend.key.size = unit(1.1, "lines"))
 }
 
-#' Discard rate as a boxplot over a grouping
-#'
-#' Summarises the spread of the discard rate across the underlying strata as
-#' a boxplot, optionally overlaying the individual strata and a
-#' catch-weighted pooled rate. Runs on the full-resolution table so each box
-#' shows real spread. A lower-level builder behind [plot_discard_rate()].
-#'
-#' @param s_full Full-resolution stratum table.
-#' @param x_var Column on the x axis.
-#' @param fill_var Column mapped to box fill.
-#' @param facet_var Optional facet column.
-#' @param show_points Overlay the individual strata.
-#' @param show_pooled Add the catch-weighted pooled rate as a red diamond.
-#' @param ncol Facet columns.
-#' @return A ggplot object, or `NULL`.
-#' @seealso [plot_discard_rate()]
-#' @family discard-rate plots
-#' @export
-plot_dr_box <- function(s_full, x_var, fill_var = NULL, facet_var = NULL,
-                        show_points = TRUE, show_pooled = TRUE, ncol = 2,
-                        palette = c("default", "colorblind")) {
-  palette <- match.arg(palette)
-  d <- sampled_for_discards(s_full)
-  if (!nrow(d)) return(NULL)
-  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
-  dodge <- position_dodge(width = 0.78, preserve = "single")
-
-  p <- ggplot(d, aes(x = factor(.data[[x_var]]), y = discard_rate * 100))
-  if (has(fill_var)) {
-    p <- p + geom_boxplot(aes(fill = factor(.data[[fill_var]])),
-                          outlier.shape = NA, alpha = 0.5, colour = OUTLINE,
-                          position = dodge, width = 0.7)
-    if (show_points)
-      p <- p + geom_point(aes(fill = factor(.data[[fill_var]])), shape = 21,
-                          size = 1.9, alpha = 0.85, colour = OUTLINE,
-                          position = position_jitterdodge(
-                            jitter.width = 0.16, dodge.width = 0.78, seed = 1))
-  } else {
-    p <- p + geom_boxplot(outlier.shape = NA, alpha = 0.5, fill = "grey80",
-                          colour = OUTLINE, width = 0.6)
-    if (show_points)
-      p <- p + geom_point(size = 1.9, alpha = 0.75, colour = OUTLINE,
-                          position = position_jitter(width = 0.14, seed = 1))
-  }
-
-  if (show_pooled) {
-    keys <- c(x_var, fill_var, facet_var)
-    keys <- keys[!is.null(keys) & !is.na(keys) & nzchar(keys)]
-    pooled <- d %>% group_by(across(all_of(keys))) %>%
-      summarise(pooled = sum(discards, na.rm = TRUE) /
-                  (sum(landings_with_discards, na.rm = TRUE) +
-                     sum(discards, na.rm = TRUE)) * 100, .groups = "drop")
-    p <- p + geom_point(
-      data = pooled,
-      mapping = if (has(fill_var))
-        aes(x = factor(.data[[x_var]]), y = pooled, group = factor(.data[[fill_var]]))
-      else aes(x = factor(.data[[x_var]]), y = pooled),
-      shape = 23, size = 3.4, fill = "red2", colour = OUTLINE,
-      position = if (has(fill_var)) dodge else "identity",
-      inherit.aes = FALSE)
-  }
-
-  if (has(fill_var))
-    p <- p + scale_fill_var(fill_var, d[[fill_var]], name = fill_var,
-                            palette = palette)
-
-  # Y always from 0 to at least 100%, expanding only if some stratum's
-  # rate is genuinely higher - so a set of low rates is not magnified
-  # into looking spread out.
-  y_top <- max(100, max(d$discard_rate * 100, na.rm = TRUE))
-  p + scale_y_continuous(labels = function(z) paste0(z, "%"),
-                         limits = c(0, y_top),
-                         expand = expansion(mult = c(0, 0.03))) +
-    maybe_facet(facet_var, free_y = FALSE, ncol = ncol) +
-    labs(title = paste("Discard rate by", x_var,
-                       if (has(fill_var)) paste("and", fill_var) else ""),
-         subtitle = paste("Box + points = individual strata at full resolution;",
-                          "red diamond = catch-weighted pooled rate"),
-         y = "Discard rate", x = x_var, fill = fill_var) +
-    app_theme() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1),
-          legend.text = element_text(size = 11),
-          legend.key.size = unit(1.1, "lines"))
-}
-
 # ----------------------------------------------------------
 #  Discard-rate dispatcher
 # ----------------------------------------------------------
 
-#' Discard-rate plot (raw strata or boxplot)
+#' Discard rate per stratum
 #'
-#' Two views of the discard rate. "raw" draws one point per sampled stratum;
-#' "box" summarises the spread over a grouping. Both drop strata with no
-#' discard estimate (see [sampled_for_discards()]): a rate is a property of
-#' sampled strata only.
+#' One point per sampled stratum, its discard rate on the y axis, drawn
+#' from an already-built stratum table or straight from raw CEF catch
+#' data (auto-detected: raw catch has no `discard_rate` column, so it is
+#' run through [build_strata()] first). Strata with no discard estimate
+#' are dropped - a rate is a property of sampled strata only (see
+#' [sampled_for_discards()]).
 #'
-#' @param strata Stratum table with `discard_rate`, `discards`,
-#'   `landings_with_discards` and the grouping columns. For "box", pass the
-#'   full-resolution table so each box shows real spread.
-#' @param type "raw" or "box".
+#' @param strata A stratum table with `discard_rate` and the grouping
+#'   columns, or raw CEF catch data.
 #' @param x Column on the x axis.
-#' @param colour (raw) column mapped to point fill.
-#' @param shape (raw) column mapped to point shape.
+#' @param colour Column mapped to point fill.
+#' @param shape Column mapped to point shape.
 #' @param facet Optional facet column.
-#' @param jitter (raw) jitter the points horizontally.
-#' @param fill (box) column mapped to box fill.
-#' @param show_points (box) overlay the individual strata.
-#' @param show_pooled (box) add the catch-weighted pooled rate.
-#' @param ncol Facet columns.
-#' @param dims Columns to build the strata on, when `strata` is raw
-#'   catch data. Defaults to the union of `x`, `colour`/`fill` and
-#'   `facet` - the same convenience [plot_coverage()] offers, so a
-#'   discard-rate figure needs no `build_strata()` call of its own
-#'   either.
-#' @return A ggplot object, or `NULL`.
-#' @seealso [plot_dr_raw()], [plot_dr_box()]
+#' @param jitter Jitter the points horizontally.
+#' @param dims Columns to build the strata on when `strata` is raw catch.
+#'   Defaults to the union of `x`, `colour` and `facet`.
+#' @param engine `"ggplot"` (default) or `"base"`.
+#' @param palette `"default"` or `"colorblind"` (the point colours, via
+#'   [var_palette()] - the same assignment every other plot uses).
+#' @param angle Rotation of the categorical x labels.
+#' @param ncol Facet columns (ggplot).
+#' @param n_per_screen Base engine: split a faceted figure across this
+#'   many devices.
+#' @param verbose Print a short summary before drawing.
+#' @return A ggplot object, or `NULL` invisibly (base engine).
+#' @seealso [plot_dr_raw()], [sampled_for_discards()], [build_strata()]
 #' @family discard-rate plots
 #' @examples
 #' \dontrun{
-#' plot_discard_rate(catch_data, "raw", x = "Season", colour = "metier4")
-#' plot_discard_rate(catch_data, "box", x = "metier4", fill = "Country")
-#' }
-#' @param engine "ggplot" (default) or "base" - draws with base R
-#'   graphics instead of ggplot2. Same data, same per-level colours
-#'   (via [var_palette()], the same assignment the ggplot engine uses),
-#'   same faceting.
-#' @param verbose If `TRUE`, prints a short console summary before
-#'   drawing - see [plot_coverage()]'s `verbose` for the same idea
-#'   applied here.
-#' @section Arguments by scenario:
-#' \describe{
-#'   \item{Raw points}{\code{type = "raw"}, \code{x}, \code{colour},
-#'     \code{shape}, \code{facet}, \code{jitter}}
-#'   \item{Box summary}{\code{type = "box"}, \code{x}, \code{fill},
-#'     \code{facet}, \code{show_points}, \code{show_pooled}}
-#'   \item{From raw catch}{add \code{dims}}
-#'   \item{Rendering (any scenario)}{\code{engine}, \code{palette},
-#'     \code{angle}, \code{ncol} (ggplot only), \code{n_per_screen}
-#'     (base only), \code{verbose}}
+#' plot_discard_rate(catch_data, x = "Season", colour = "metier4")
 #' }
 #' @export
-plot_discard_rate <- function(strata,
-                              type = c("raw", "box"),
-                              x, facet = NULL,
-                              ## -- type = "raw" only --
-                              colour = NULL, shape = NULL, jitter = TRUE,
-                              ## -- type = "box" only --
-                              fill = NULL, show_points = TRUE,
-                              show_pooled = TRUE,
-                              ## -- raw-catch auto-build --
-                              dims = NULL,
-                              ## -- rendering --
+plot_discard_rate <- function(strata, x, colour = NULL, shape = NULL,
+                              facet = NULL, jitter = TRUE, dims = NULL,
                               engine = c("ggplot", "base"),
                               palette = c("default", "colorblind"),
                               angle = 45, ncol = 2, n_per_screen = NULL,
                               verbose = FALSE) {
-  type    <- match.arg(type)
   engine  <- match.arg(engine)
   palette <- match.arg(palette)
   has_ <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
   plot_arg_report("plot_discard_rate", list(
-    list(bad = identical(type, "raw") && has_(fill),
-         msg = "fill is a type = \"box\" option; for raw points use colour"),
-    list(bad = identical(type, "raw") && (!missing(show_points) || !missing(show_pooled)),
-         msg = "show_points / show_pooled only apply to type = \"box\""),
-    list(bad = identical(type, "box") && (has_(colour) || has_(shape)),
-         msg = "colour / shape are type = \"raw\" options; box fill is set with fill"),
-    list(bad = identical(type, "box") && !missing(jitter),
-         msg = "jitter only applies to type = \"raw\""),
     list(bad = identical(engine, "ggplot") && !is.null(n_per_screen),
          msg = "n_per_screen is a base-engine option"),
     list(bad = identical(engine, "base") && !identical(ncol, 2),
          msg = "ncol only affects the ggplot engine")))
-  # Raw catch data never carries discard_rate - build_strata() is what
-  # adds it. A caller passing an already-built table (has the column)
-  # is used exactly as before; nothing here changes for it.
+  # Raw catch never carries discard_rate - build_strata() adds it. A
+  # caller passing an already-built table (has the column) is used as is.
   if (!"discard_rate" %in% names(strata)) {
-    if (is.null(dims)) {
-      has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
-      group_var <- if (identical(type, "box")) fill else colour
-      dims <- unique(c(x, if (has(group_var)) group_var, if (has(facet)) facet))
-    }
+    if (is.null(dims))
+      dims <- unique(c(x, if (has_(colour)) colour, if (has_(facet)) facet))
     strata <- build_strata(strata, dims)
   }
   if (isTRUE(verbose)) {
-    cat("-- plot_discard_rate(): type = \"", type, "\", engine = \"", engine,
-        "\" --\n", sep = "")
+    cat("-- plot_discard_rate(): engine = \"", engine, "\" --\n", sep = "")
     cat("  x      : ", x, "\n", sep = "")
-    if (identical(type, "raw")) {
-      cat("  colour : ", if (!is.null(colour)) colour else "(none)", "\n", sep = "")
-      cat("  shape  : ", if (!is.null(shape))  shape  else "(none)", "\n", sep = "")
-    } else {
-      cat("  fill   : ", if (!is.null(fill)) fill else "(none)", "\n", sep = "")
-      cat("  show_points/show_pooled: ", show_points, " / ", show_pooled, "\n", sep = "")
-    }
-    cat("  facet  : ", if (!is.null(facet)) facet else "(none)", "\n", sep = "")
-    cat("  render : engine = ", engine, ", palette = ", palette,
-        ", angle = ", angle,
+    cat("  colour : ", if (has_(colour)) colour else "(none)", "\n", sep = "")
+    cat("  shape  : ", if (has_(shape))  shape  else "(none)", "\n", sep = "")
+    cat("  facet  : ", if (has_(facet))  facet  else "(none)", "\n", sep = "")
+    cat("  render : engine = ", engine, ", palette = ", palette, ", angle = ",
+        angle,
         if (!is.null(n_per_screen)) paste0(", n_per_screen = ", n_per_screen)
         else "", "\n", sep = "")
-    d <- sampled_for_discards(strata)
-    cat("  strata rows with a discard rate: ", nrow(d), "\n", sep = "")
+    cat("  strata rows with a discard rate: ",
+        nrow(sampled_for_discards(strata)), "\n", sep = "")
   }
-  if (identical(engine, "base")) {
-    return(invisible(if (identical(type, "box"))
-      plot_dr_box_base(strata, x, fill, facet, show_points, show_pooled,
-                       palette = palette, angle = angle,
-                       n_per_screen = n_per_screen)
-    else
-      plot_dr_raw_base(strata, x, colour, shape, facet, jitter,
-                       palette = palette, angle = angle,
-                       n_per_screen = n_per_screen)))
-  }
-  p <- if (type == "box")
-    plot_dr_box(strata, x, fill, facet, show_points, show_pooled, ncol,
-                palette = palette)
-  else
-    plot_dr_raw(strata, x, colour, shape, facet, jitter, palette = palette)
+  if (identical(engine, "base"))
+    return(invisible(plot_dr_raw_base(strata, x, colour, shape, facet, jitter,
+                                      palette = palette, angle = angle,
+                                      n_per_screen = n_per_screen)))
+  p <- plot_dr_raw(strata, x, colour, shape, facet, jitter, palette = palette)
   if (!is.null(p) && !identical(angle, 45))
     p <- p + theme(axis.text.x = element_text(
       angle = angle, hjust = if (angle > 0) 1 else 0.5, vjust = 1))
@@ -2697,117 +2243,6 @@ plot_dr_raw_base <- function(s, x_var, colour_var = NULL, shape_var = NULL,
   invisible(NULL)
 }
 
-#' Discard rate as a boxplot, drawn with base R graphics
-#'
-#' Same summary as [plot_dr_box()] - a boxplot of discard rate per
-#' `x_var` category, with the individual strata and a catch-weighted
-#' pooled rate optionally overlaid - drawn with `graphics::boxplot()`
-#' instead of ggplot2. Called through
-#' `plot_discard_rate(..., engine = "base")`, not directly.
-#'
-#' @inheritParams plot_dr_box
-#' @return `NULL`, invisibly - drawn on the current graphics device.
-#' @seealso [plot_dr_box()], [plot_discard_rate()]
-#' @keywords internal
-#' @export
-plot_dr_box_base <- function(s_full, x_var, fill_var = NULL, facet_var = NULL,
-                             show_points = TRUE, show_pooled = TRUE,
-                             palette = c("default", "colorblind"), angle = 45,
-                             n_per_screen = NULL) {
-  palette <- match.arg(palette)
-  d <- sampled_for_discards(s_full)
-  if (!nrow(d)) { message("Nothing to plot."); return(invisible(NULL)) }
-  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
-  d$.rate <- d$discard_rate * 100
-  pal <- if (has(fill_var)) var_palette(fill_var, d[[fill_var]], palette) else NULL
-  bmar   <- cat_axis_mar(unique(as.character(d[[x_var]])), 0.8, angle)
-  # A facet grid packs the panels tight; the x labels shrink there so a
-  # margin that actually holds them stays a sane fraction of each panel.
-  bmar_f <- cat_axis_mar(unique(as.character(d[[x_var]])), 0.55, angle)
-
-  draw_one <- function(dd, main, cex_x = 0.8) {
-    xs <- sort(unique(as.character(dd[[x_var]])))
-    bxcol <- if (has(fill_var)) pal[as.character(dd[[fill_var]])] else PAL_BASE[1]
-    bxdf <- data.frame(.rate = dd$.rate,
-                       .data_x = factor(as.character(dd[[x_var]]), levels = xs))
-    # An empty frame first, then the guide lines, then the boxes on top
-    # (boxplot(add = TRUE)) - the same "grid behind the marks" order the
-    # other base-R plots use, which boxplot() drawing its own frame does
-    # not otherwise allow.
-    # Y always spans 0 to at least 100% - a boxplot of rates that all
-    # sit near a few percent otherwise zooms in and reads as if the
-    # spread were large.
-    ymax <- max(100, suppressWarnings(max(dd$.rate, na.rm = TRUE)), na.rm = TRUE)
-    graphics::plot(NA, xlim = c(0.5, length(xs) + 0.5), ylim = c(0, ymax),
-                   axes = FALSE, xlab = "", ylab = "Discard rate (%)", main = main)
-    grid_base(v = seq_along(xs), h = graphics::axTicks(2))
-    graphics::boxplot(.rate ~ .data_x, data = bxdf, add = TRUE, axes = FALSE,
-                      col = if (has(fill_var)) "white" else PAL_BASE[1],
-                      border = OUTLINE, outline = FALSE)
-    graphics::box()
-    axis_x_cat(seq_along(xs), xs, angle = angle, cex = cex_x)
-    graphics::axis(2, at = graphics::axTicks(2), las = 1, cex.axis = 0.8)
-    if (isTRUE(show_points)) {
-      xi <- match(as.character(dd[[x_var]]), xs)
-      xi <- xi + stats::runif(length(xi), -0.15, 0.15)
-      graphics::points(xi, dd$.rate, pch = 21, bg = bxcol, col = OUTLINE,
-                       cex = 1, lwd = 0.6)
-    }
-    if (isTRUE(show_pooled) && "landings_with_discards" %in% names(dd)) {
-      pooled <- dd %>% group_by(across(all_of(x_var))) %>%
-        summarise(w = sum(landings_with_discards, na.rm = TRUE),
-                 r = sum(discards, na.rm = TRUE) /
-                   pmax(sum(landings_with_discards, na.rm = TRUE) +
-                          sum(discards, na.rm = TRUE), 1e-9) * 100,
-                 .groups = "drop")
-      pi <- match(as.character(pooled[[x_var]]), xs)
-      graphics::points(pi, pooled$r, pch = 18, col = "red3", cex = 1.6)
-    }
-  }
-
-  draw_legend <- function() {
-    if (!has(fill_var)) return(invisible(NULL))
-    lv <- sort(unique(as.character(d[[fill_var]])))
-    legend_overlay("bottomright", title = fill_var, legend = lv,
-                   pt.bg = pal[lv], pch = 21, pt.cex = 1.5, cex = 0.95,
-                   bty = "o", bg = grDevices::adjustcolor("white", 0.9),
-                   box.col = "grey65", y.intersp = 1.15, inset = c(0.02, 0.02))
-  }
-
-  facets <- if (has(facet_var)) sort(unique(as.character(d[[facet_var]]))) else NA
-  groups <- split_facets_to_screens(facets, n_per_screen)
-  had_device <- grDevices::dev.cur() > 1
-  for (grp in groups) {
-    op <- graphics::par(no.readonly = TRUE); on.exit(graphics::par(op), add = TRUE)
-    if (length(groups) > 1 && !had_device) grDevices::dev.new()
-    rmar <- 2
-    if (!identical(grp, "__nofacet__") && length(grp) > 1) {
-      gd <- facet_grid_dims(length(grp)); nr <- gd[1L]; nc <- gd[2L]
-      graphics::par(mfrow = c(nr, nc), mar = c(bmar_f, 4, 2, rmar),
-                    oma = c(2, 0, 3, 0))
-      for (fv in grp)
-        draw_one(d[as.character(d[[facet_var]]) == fv, , drop = FALSE], fv, cex_x = 0.55)
-      graphics::mtext("Discard rate by stratum", outer = TRUE, side = 3,
-                      cex = 1.05, font = 2, line = 1)
-      graphics::mtext(paste(facet_var, "=", paste(grp, collapse = ", ")),
-                      outer = TRUE, side = 3, cex = 0.8, line = -0.2, col = "grey30")
-      graphics::mtext(x_var, outer = TRUE, side = 1, cex = 0.8, line = 0.3)
-    } else if (!identical(grp, "__nofacet__") && length(grp) == 1) {
-      graphics::par(mar = c(bmar, 4, 3, rmar))
-      draw_one(d[as.character(d[[facet_var]]) == grp, , drop = FALSE],
-               paste0("Discard rate by stratum (", facet_var, " = ", grp, ")"))
-      graphics::mtext(x_var, side = 1, line = bmar - 1.4, cex = 0.85)
-    } else {
-      graphics::par(mar = c(bmar, 4, 3, rmar))
-      draw_one(d, "Discard rate by stratum")
-      graphics::mtext(x_var, side = 1, line = bmar - 1.4, cex = 0.85)
-    }
-    draw_legend()
-    graphics::par(op)
-  }
-  invisible(NULL)
-}
-
 # ----------------------------------------------------------
 #  Distribution builders
 # ----------------------------------------------------------
@@ -2816,7 +2251,7 @@ plot_dr_box_base <- function(s_full, x_var, fill_var = NULL, facet_var = NULL,
 #'
 #' Bars of numbers over the length or age classes, stacked or dodged on an
 #' optional fill, with up to two facet variables. A lower-level builder
-#' behind [plot_biology_distribution()].
+#' behind [plot_numbers_at_length_age()].
 #'
 #' @param d Numbers-at-class table (`length_numbers()` output): columns
 #'   `.class`, `number`, plus any grouping columns.
@@ -2827,7 +2262,7 @@ plot_dr_box_base <- function(s_full, x_var, fill_var = NULL, facet_var = NULL,
 #' @param scales Facet scales: "fixed", "free_x", "free_y" or "free".
 #' @param class_label X-axis label, e.g. "Length (cm)" or "Age (years)".
 #' @return A ggplot object, or `NULL`.
-#' @seealso [plot_biology_distribution()]
+#' @seealso [plot_numbers_at_length_age()]
 #' @family distribution plots
 #' @export
 plot_length_hist <- function(d, fill_var = NULL, facet1 = NULL, facet2 = NULL,
@@ -2866,7 +2301,7 @@ plot_length_hist <- function(d, fill_var = NULL, facet1 = NULL, facet2 = NULL,
 #' One area-normalised, weight-smoothed density curve per group, offset
 #' vertically so many groups stay readable. Each curve integrates to one, so
 #' groups of very different size are compared on shape alone. A lower-level
-#' builder behind [plot_biology_distribution()].
+#' builder behind [plot_numbers_at_length_age()].
 #'
 #' @param d Numbers-at-class table: columns `.class`, `number`, plus grouping
 #'   columns.
@@ -2879,7 +2314,7 @@ plot_length_hist <- function(d, fill_var = NULL, facet1 = NULL, facet2 = NULL,
 #' @param scales Facet scales.
 #' @param class_label X-axis label.
 #' @return A ggplot object, or `NULL`.
-#' @seealso [plot_biology_distribution()]
+#' @seealso [plot_numbers_at_length_age()]
 #' @family distribution plots
 #' @export
 plot_length_ridges <- function(d, group_var, facet1 = NULL, facet2 = NULL,
@@ -2972,7 +2407,7 @@ plot_length_ridges <- function(d, group_var, facet1 = NULL, facet2 = NULL,
 #' Mean weight at length or age as a line with points. A +/- 1 sd ribbon
 #' shows the spread hidden by grouping; setting `shape_var` instead draws
 #' each stratum separately and drops the ribbon. A lower-level builder behind
-#' [plot_biology_distribution()].
+#' [plot_numbers_at_length_age()].
 #'
 #' @param d Mean-weight table (`length_meanweight()` output): columns
 #'   `.class`, `mean_weight`, `sd_weight`, plus grouping columns.
@@ -2986,7 +2421,7 @@ plot_length_ridges <- function(d, group_var, facet1 = NULL, facet2 = NULL,
 #' @param scales Facet scales.
 #' @param class_label X-axis label.
 #' @return A ggplot object, or `NULL`.
-#' @seealso [plot_biology_distribution()]
+#' @seealso [plot_numbers_at_length_age()]
 #' @family distribution plots
 #' @export
 plot_length_meanweight <- function(d, colour_var = NULL, facet1 = NULL,
@@ -3070,7 +2505,7 @@ plot_length_meanweight <- function(d, colour_var = NULL, facet1 = NULL,
 #' @param distributionType "LengthTotal" (default) or "Age".
 #' @param quantity "numbers" (default) or "meanweight".
 #' @return A list: `class_label`, `value_label`, `value_scale`.
-#' @seealso [prep_distributions()], [plot_biology_distribution()]
+#' @seealso [prep_distributions()], [plot_numbers_at_length_age()]
 #' @keywords internal
 #' @export
 biology_axis_labels <- function(distributionType = "LengthTotal",
@@ -3082,224 +2517,251 @@ biology_axis_labels <- function(distributionType = "LengthTotal",
        value_scale = if (identical(quantity, "numbers")) 1e-3 else 1)
 }
 
-#' Numbers- or mean-weight-at-length/age distribution plot
+#' Link + summarise a biology distribution for the plot functions
 #'
-#' One entry point for the biology distribution views. `quantity =
-#' "numbers"` draws numbers at class as a histogram (`type = "histogram"`) or
-#' a smoothed density (`type = "density"`); `quantity = "meanweight"` draws
-#' mean weight at class as a line (`type = "line"`).
+#' The shared front half of [plot_numbers_at_length_age()] and
+#' [plot_meanweight_at_length_age()]: when `distributions` is given, run
+#' [link_dist_to_strata()] then [length_numbers()] / [length_meanweight()]
+#' (numbers are scaled to thousands, N3); otherwise `data` is already a
+#' summarised table and is used unchanged. Returns the axis labels that
+#' match.
 #'
-#' @param data For "numbers", a `length_numbers()` table (`.class`, `number`,
-#'   grouping columns); for "meanweight", a `length_meanweight()` table
-#'   (`.class`, `mean_weight`, `sd_weight`, ...).
-#' @param quantity "numbers" or "meanweight".
-#' @param type "histogram" or "density" for numbers; "line" for meanweight.
-#' @param fill (numbers) column mapped to bar fill / density group.
-#' @param colour (meanweight) column mapped to line colour.
-#' @param facet1,facet2 Up to two facet columns.
-#' @param shape (meanweight) column drawn as separate point shapes.
-#' @param stacked (histogram) stack the bars rather than dodge.
-#' @param smooth (density) bandwidth multiplier.
-#' @param show_points,show_spread (meanweight) draw the points / sd ribbon.
-#' @param ncol Facet columns.
-#' @param scales Facet scales: "fixed", "free_x", "free_y" or "free".
-#' @param class_label X-axis label, e.g. "Length (cm)" or "Age (years)".
-#' @return A ggplot object, or `NULL`.
-#' @seealso [plot_length_hist()], [plot_length_ridges()],
-#'   [plot_length_meanweight()]
-#' @family distribution plots
-#' @examples
-#' \dontrun{
-#' plot_biology_distribution(nums, "numbers", "histogram", fill = "Country")
-#' plot_biology_distribution(mw, "meanweight", "line", colour = "metier4")
-#' }
-#' @param engine "ggplot" (default) or "base" - draws with base R
-#'   graphics instead of ggplot2. Same data, same per-level colours (via
-#'   [var_palette()]), same faceting (up to two facet columns, combined
-#'   into one grid of panels rather than ggplot's nested rows/columns).
-#' @param verbose If `TRUE`, prints a short console summary before
-#'   drawing - see [plot_coverage()]'s `verbose` for the same idea
-#'   applied here.
-#' @section Arguments by scenario:
-#' \describe{
-#'   \item{Numbers at length / age, histogram}{\code{variableType = "Number"}
-#'     (or \code{quantity = "numbers"}), \code{type = "histogram"},
-#'     \code{fill}, \code{stacked}}
-#'   \item{Numbers, smoothed density}{as above with \code{type = "density"}
-#'     and \code{smooth}}
-#'   \item{Mean weight at length / age}{\code{variableType = "WeightLive"}
-#'     (or \code{quantity = "meanweight"}), \code{colour}, \code{shape},
-#'     \code{show_points}, \code{show_spread} - \code{type} is always a line}
-#'   \item{From raw catch}{pass \code{distributions} and
-#'     \code{distributionType = "LengthTotal"} / \code{"Age"}; also
-#'     \code{dims}, \code{catch_category}}
-#'   \item{Facets / labels}{\code{facet1}, \code{facet2}, \code{ncol},
-#'     \code{scales}, \code{class_label}, \code{value_label}}
-#'   \item{Rendering}{\code{engine}, \code{palette}, \code{angle},
-#'     \code{n_per_screen} (base only), \code{verbose}}
-#' }
+#' @param data A summarised numbers / mean-weight table, or raw CEF catch.
+#' @param distributions A CEF distributions table, or `NULL`.
+#' @param distributionType `"LengthTotal"` or `"Age"`.
+#' @param catchCategory `"Lan"`, `"Dis"` or `"BMS"`.
+#' @param quantity `"numbers"` or `"meanweight"`.
+#' @param grp Grouping columns for the summary.
+#' @param dims Stratum dimensions for the link; a default is used when `NULL`.
+#' @return `list(data, class_label, value_label)`.
+#' @keywords internal
 #' @export
-plot_biology_distribution <- function(data, distributions = NULL,
-                                      ## -- what to draw --
-                                      variableType = NULL,
-                                      distributionType = NULL,
-                                      quantity = c("numbers", "meanweight"),
-                                      type = c("histogram", "density", "line"),
-                                      ## -- role columns --
-                                      fill = NULL, colour = NULL,
-                                      facet1 = NULL, facet2 = NULL, shape = NULL,
-                                      ## -- raw catch + distributions link --
-                                      dims = NULL, catch_category = "Lan",
-                                      ## -- quantity = "numbers" --
-                                      stacked = TRUE, smooth = 1,
-                                      ## -- quantity = "meanweight" --
-                                      show_points = TRUE, show_spread = TRUE,
-                                      ## -- labels / facet layout --
-                                      class_label = NULL, value_label = NULL,
-                                      ncol = 2, scales = "fixed",
-                                      ## -- rendering --
-                                      engine = c("ggplot", "base"),
-                                      palette = c("default", "colorblind"),
-                                      angle = 45, n_per_screen = NULL,
-                                      verbose = FALSE) {
-  typed_type <- !missing(type)
-  typed_disttype <- !missing(distributionType)
-  type <- match.arg(type)
-  engine <- match.arg(engine)
-  palette <- match.arg(palette)
-  # variableType, when given, decides the quantity: Number -> numbers,
-  # WeightLive -> meanweight. Otherwise fall back to `quantity`.
-  if (!is.null(variableType) &&
-        !variableType %in% c("Number", "WeightLive")) {
-    warning("plot_biology_distribution(): variableType = \"", variableType,
-            "\" is not \"Number\" or \"WeightLive\"; using quantity instead",
-            call. = FALSE)
-    variableType <- NULL
-  }
-  quantity <- if (!is.null(variableType))
-    (if (identical(variableType, "WeightLive")) "meanweight" else "numbers")
-  else match.arg(quantity)
-  distributionType <- distributionType %||% "LengthTotal"
-
-  # Effective type: mean weight is always a line; numbers is a histogram
-  # or a density. A `type` that contradicts the quantity is honoured as
-  # far as it can be and the caller is told what was actually drawn.
-  eff_type <- type
-  if (identical(quantity, "meanweight")) {
-    if (typed_type && !identical(type, "line"))
-      warning("plot_biology_distribution(): type = \"", type,
-              "\" does not apply to a mean-weight plot; drawing a line",
-              call. = FALSE)
-    eff_type <- "line"
-  } else {
-    if (identical(type, "line")) {
-      warning("plot_biology_distribution(): type = \"line\" is a mean-weight ",
-              "view; for numbers use \"histogram\" or \"density\". Drawing a ",
-              "histogram.", call. = FALSE)
-      eff_type <- "histogram"
-    }
-  }
-  has_ <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
-  plot_arg_report("plot_biology_distribution", list(
-    list(bad = identical(quantity, "numbers") && (has_(colour) || has_(shape)),
-         msg = "for numbers use fill; colour / shape are mean-weight options"),
-    list(bad = identical(quantity, "meanweight") && has_(fill),
-         msg = "for mean weight use colour; fill is a numbers option"),
-    list(bad = identical(quantity, "meanweight") &&
-           (!missing(stacked) || !missing(smooth)),
-         msg = "stacked / smooth are numbers options; ignored for mean weight"),
-    list(bad = is.null(distributions) &&
-           (!is.null(variableType) || typed_disttype),
-         msg = "variableType / distributionType only matter with the raw-catch form (distributions supplied); data is used as an already-prepared table"),
-    list(bad = identical(engine, "ggplot") && !is.null(n_per_screen),
-         msg = "n_per_screen is a base-engine option"),
-    list(bad = identical(engine, "base") && !identical(scales, "fixed"),
-         msg = "scales is a ggplot facet option; the base engine uses one grid")))
-
-  # Direct-call form: raw catch data + a distributions table. Link and
-  # summarise here so a caller need not run link_dist_to_strata() /
-  # length_numbers() / length_meanweight() by hand. `data` that is
-  # already a prepared numbers / mean-weight table (no `distributions`)
-  # takes the original path unchanged.
+biology_dist_prep <- function(data, distributions, distributionType,
+                              catchCategory, quantity, grp, dims) {
   lab <- biology_axis_labels(distributionType, quantity)
   if (!is.null(distributions)) {
-    has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
-    grp <- unique(c(if (has(fill)) fill, if (has(colour)) colour,
-                    if (has(facet1)) facet1, if (has(facet2)) facet2,
-                    if (has(shape)) shape))
     if (is.null(dims))
       dims <- unique(c("catchCategory", "fleetValue", "Country", "Season", grp))
     dims <- intersect(dims, names(as.data.frame(data)))
-    linked <- link_dist_to_strata(data, distributions, dims, catch_category,
+    linked <- link_dist_to_strata(data, distributions, dims, catchCategory,
                                   type = distributionType)
     data <- if (identical(quantity, "numbers"))
       length_numbers(linked, grp) else length_meanweight(linked, grp)
-    # Numbers presented in thousands (N3); length already in cm, age as
-    # is - prep_distributions() did the unit normalisation, this is the
-    # presentation scale on top.
     if (!is.null(data) && nrow(data) && identical(quantity, "numbers"))
       data$number <- data$number * lab$value_scale
   }
-  class_label <- class_label %||% lab$class_label
-  value_label <- value_label %||% lab$value_label
+  list(data = data, class_label = lab$class_label, value_label = lab$value_label)
+}
 
+#' Numbers at length or age
+#'
+#' The catch numbers spread over the length (or age) classes, as a
+#' stacked / dodged histogram (`type = "histogram"`) or a weight-smoothed
+#' density (`type = "density"`). Numbers are always the `variableType`, so
+#' there is no `variableType` argument - `distributionType` picks length
+#' vs age.
+#'
+#' `data` is either a [length_numbers()] table already, or raw CEF catch
+#' together with `distributions` (then [link_dist_to_strata()] +
+#' [length_numbers()] run internally, with `catchCategory` choosing the
+#' landings, discards or BMS part). Numbers come out in thousands (N3),
+#' length in cm, age in years.
+#'
+#' @param data A [length_numbers()] table, or raw CEF catch data.
+#' @param distributions A CEF distributions table - needed only with raw
+#'   catch.
+#' @param distributionType `"LengthTotal"` (default) or `"Age"`.
+#' @param catchCategory `"Lan"` (default), `"Dis"` or `"BMS"` - which
+#'   catch part to link the distribution to (raw-catch form only).
+#' @param type `"histogram"` (default) or `"density"`.
+#' @param fill Column mapped to bar fill / density group.
+#' @param facet1,facet2 Up to two facet columns.
+#' @param stacked Histogram only: stack the bars on `fill` rather than dodge.
+#' @param smooth Density only: bandwidth multiplier.
+#' @param dims Stratum dimensions for the link (raw-catch form).
+#' @param class_label,value_label Axis labels; derived from the data when
+#'   `NULL`.
+#' @param ncol Facet columns (ggplot).
+#' @param scales Facet scales (ggplot): `"fixed"`, `"free_x"`, `"free_y"`
+#'   or `"free"`.
+#' @param engine `"ggplot"` (default) or `"base"`.
+#' @param palette `"default"` or `"colorblind"`.
+#' @param angle Rotation of the x labels.
+#' @param n_per_screen Base engine: split a faceted figure across devices.
+#' @param verbose Print a short summary before drawing.
+#' @return A ggplot object, or `NULL` invisibly (base engine).
+#' @seealso [plot_meanweight_at_length_age()], [length_numbers()]
+#' @family distribution plots
+#' @examples
+#' \dontrun{
+#' plot_numbers_at_length_age(catch, distributions, distributionType = "Age",
+#'                            catchCategory = "Dis", fill = "Country")
+#' }
+#' @export
+plot_numbers_at_length_age <- function(data, distributions = NULL,
+                                       distributionType = c("LengthTotal", "Age"),
+                                       catchCategory = "Lan",
+                                       type = c("histogram", "density"),
+                                       fill = NULL, facet1 = NULL, facet2 = NULL,
+                                       stacked = TRUE, smooth = 1, dims = NULL,
+                                       class_label = NULL, value_label = NULL,
+                                       ncol = 2, scales = "fixed",
+                                       engine = c("ggplot", "base"),
+                                       palette = c("default", "colorblind"),
+                                       angle = 45, n_per_screen = NULL,
+                                       verbose = FALSE) {
+  typed_dt <- !missing(distributionType); typed_cc <- !missing(catchCategory)
+  typed_stacked <- !missing(stacked)
+  distributionType <- match.arg(distributionType)
+  type    <- match.arg(type)
+  engine  <- match.arg(engine)
+  palette <- match.arg(palette)
+  catchCategory <- match.arg(catchCategory, c("Lan", "Dis", "BMS"))
+  has_ <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+  plot_arg_report("plot_numbers_at_length_age", list(
+    list(bad = identical(type, "histogram") && !identical(smooth, 1),
+         msg = "smooth only applies to type = \"density\""),
+    list(bad = identical(type, "density") && typed_stacked,
+         msg = "stacked only applies to type = \"histogram\""),
+    list(bad = is.null(distributions) && (typed_dt || typed_cc),
+         msg = "distributionType / catchCategory only matter when `distributions` is supplied (building from raw catch)"),
+    list(bad = identical(engine, "ggplot") && !is.null(n_per_screen),
+         msg = "n_per_screen is a base-engine option"),
+    list(bad = identical(engine, "base") && !identical(scales, "fixed"),
+         msg = "scales is a ggplot facet option")))
+  grp <- unique(c(if (has_(fill)) fill, if (has_(facet1)) facet1,
+                  if (has_(facet2)) facet2))
+  pr <- biology_dist_prep(data, distributions, distributionType, catchCategory,
+                          "numbers", grp, dims)
+  data <- pr$data
+  cl <- class_label %||% pr$class_label
+  vl <- value_label %||% pr$value_label
   if (isTRUE(verbose)) {
-    cat("-- plot_biology_distribution(): quantity = \"", quantity,
-        "\", type = \"", eff_type, "\", engine = \"", engine, "\" --\n", sep = "")
-    if (!is.null(variableType))
-      cat("  variableType = \"", variableType, "\" -> quantity = \"", quantity,
-          "\"\n", sep = "")
-    cat("  distributionType : ", distributionType, "\n", sep = "")
-    cat("  class_label : ", class_label, "\n", sep = "")
-    cat("  value_label : ", value_label, "\n", sep = "")
-    if (identical(quantity, "numbers"))
-      cat("  fill  : ", if (!is.null(fill)) fill else "(none)", "\n", sep = "")
-    else {
-      cat("  colour: ", if (!is.null(colour)) colour else "(none)", "\n", sep = "")
-      cat("  shape : ", if (!is.null(shape))  shape  else "(none)", "\n", sep = "")
-    }
-    cat("  facet1 / facet2: ", if (!is.null(facet1)) facet1 else "(none)", " / ",
-        if (!is.null(facet2)) facet2 else "(none)", "\n", sep = "")
-    cat("  render : engine = ", engine, ", palette = ", palette, ", angle = ",
-        angle, ", scales = ", scales, ", ncol = ", ncol,
-        if (!is.null(n_per_screen)) paste0(", n_per_screen = ", n_per_screen)
-        else "", "\n", sep = "")
+    cat("-- plot_numbers_at_length_age(): ", distributionType, ", type = \"",
+        type, "\", engine = \"", engine, "\" --\n", sep = "")
+    if (!is.null(distributions))
+      cat("  catchCategory : ", catchCategory, "\n", sep = "")
+    cat("  fill  : ", if (has_(fill)) fill else "(none)", "\n", sep = "")
+    cat("  facet1 / facet2: ", if (has_(facet1)) facet1 else "(none)", " / ",
+        if (has_(facet2)) facet2 else "(none)", "\n", sep = "")
+    cat("  labels : ", cl, " | ", vl, "\n", sep = "")
     cat("  rows: ", if (is.null(data)) 0L else nrow(data), "\n", sep = "")
   }
-  if (identical(engine, "base")) {
-    return(invisible(if (quantity == "numbers") {
-      if (eff_type == "density")
-        plot_length_ridges_base(data, fill, facet1, facet2, smooth = smooth,
-                                class_label = class_label, palette = palette,
-                                angle = angle, n_per_screen = n_per_screen)
-      else
-        plot_length_hist_base(data, fill, facet1, facet2, stacked = stacked,
-                              class_label = class_label, value_label = value_label,
-                              palette = palette, angle = angle,
+  if (identical(engine, "base"))
+    return(invisible(if (identical(type, "density"))
+      plot_length_ridges_base(data, fill, facet1, facet2, smooth = smooth,
+                              class_label = cl, palette = palette, angle = angle,
                               n_per_screen = n_per_screen)
-    } else {
-      plot_length_meanweight_base(data, colour, facet1, facet2, shape,
-                                  show_points = show_points,
-                                  show_spread = show_spread,
-                                  class_label = class_label, palette = palette,
-                                  angle = angle, n_per_screen = n_per_screen)
-    }))
-  }
-  p <- if (quantity == "numbers") {
-    if (eff_type == "density")
-      plot_length_ridges(data, fill, facet1, facet2, smooth = smooth,
-                         ncol = ncol, scales = scales, class_label = class_label,
-                         palette = palette)
     else
-      plot_length_hist(data, fill, facet1, facet2, stacked = stacked,
-                       ncol = ncol, scales = scales, class_label = class_label,
-                       value_label = value_label, palette = palette)
-  } else {
-    plot_length_meanweight(data, colour, facet1, facet2, shape,
-                           show_points = show_points, show_spread = show_spread,
-                           ncol = ncol, scales = scales, class_label = class_label,
-                           palette = palette)
+      plot_length_hist_base(data, fill, facet1, facet2, stacked = stacked,
+                            class_label = cl, value_label = vl,
+                            palette = palette, angle = angle,
+                            n_per_screen = n_per_screen)))
+  p <- if (identical(type, "density"))
+    plot_length_ridges(data, fill, facet1, facet2, smooth = smooth, ncol = ncol,
+                       scales = scales, class_label = cl, palette = palette)
+  else
+    plot_length_hist(data, fill, facet1, facet2, stacked = stacked, ncol = ncol,
+                     scales = scales, class_label = cl, value_label = vl,
+                     palette = palette)
+  if (!is.null(p) && !identical(angle, 45))
+    p <- p + theme(axis.text.x = element_text(
+      angle = angle, hjust = if (angle > 0) 1 else 0.5, vjust = 1))
+  p
+}
+
+#' Mean weight at length or age
+#'
+#' The number-weighted mean weight in each length (or age) class, as a
+#' line with points and an optional +/- 1 sd ribbon. Live weight is
+#' always the `variableType` and the geometry is always a line, so
+#' neither `variableType` nor `type` is an argument - `distributionType`
+#' picks length vs age.
+#'
+#' `data` is either a [length_meanweight()] table already, or raw CEF
+#' catch with `distributions` (then [link_dist_to_strata()] +
+#' [length_meanweight()] run internally, `catchCategory` choosing the
+#' part). Weight is in grams, length in cm, age in years.
+#'
+#' @param data A [length_meanweight()] table, or raw CEF catch data.
+#' @param distributions A CEF distributions table - needed only with raw
+#'   catch.
+#' @param distributionType `"LengthTotal"` (default) or `"Age"`.
+#' @param catchCategory `"Lan"` (default), `"Dis"` or `"BMS"`.
+#' @param colour Column mapped to line colour.
+#' @param facet1,facet2 Up to two facet columns.
+#' @param shape Column drawn as separate point shapes; opens the averaged
+#'   group back up and drops the ribbon.
+#' @param show_points Draw the points.
+#' @param show_spread Draw the +/- 1 sd ribbon (averaged strata only).
+#' @param dims Stratum dimensions for the link (raw-catch form).
+#' @param class_label Axis label; derived from the data when `NULL`.
+#' @param ncol Facet columns (ggplot).
+#' @param scales Facet scales (ggplot).
+#' @param engine `"ggplot"` (default) or `"base"`.
+#' @param palette `"default"` or `"colorblind"`.
+#' @param angle Rotation of the x labels.
+#' @param n_per_screen Base engine: split a faceted figure across devices.
+#' @param verbose Print a short summary before drawing.
+#' @return A ggplot object, or `NULL` invisibly (base engine).
+#' @seealso [plot_numbers_at_length_age()], [length_meanweight()]
+#' @family distribution plots
+#' @examples
+#' \dontrun{
+#' plot_meanweight_at_length_age(catch, distributions, distributionType = "Age",
+#'                               colour = "metier4")
+#' }
+#' @export
+plot_meanweight_at_length_age <- function(data, distributions = NULL,
+                                          distributionType = c("LengthTotal", "Age"),
+                                          catchCategory = "Lan",
+                                          colour = NULL, facet1 = NULL,
+                                          facet2 = NULL, shape = NULL,
+                                          show_points = TRUE, show_spread = TRUE,
+                                          dims = NULL, class_label = NULL,
+                                          ncol = 2, scales = "fixed",
+                                          engine = c("ggplot", "base"),
+                                          palette = c("default", "colorblind"),
+                                          angle = 45, n_per_screen = NULL,
+                                          verbose = FALSE) {
+  typed_dt <- !missing(distributionType); typed_cc <- !missing(catchCategory)
+  distributionType <- match.arg(distributionType)
+  engine  <- match.arg(engine)
+  palette <- match.arg(palette)
+  catchCategory <- match.arg(catchCategory, c("Lan", "Dis", "BMS"))
+  has_ <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+  plot_arg_report("plot_meanweight_at_length_age", list(
+    list(bad = is.null(distributions) && (typed_dt || typed_cc),
+         msg = "distributionType / catchCategory only matter when `distributions` is supplied (building from raw catch)"),
+    list(bad = identical(engine, "ggplot") && !is.null(n_per_screen),
+         msg = "n_per_screen is a base-engine option"),
+    list(bad = identical(engine, "base") && !identical(scales, "fixed"),
+         msg = "scales is a ggplot facet option")))
+  grp <- unique(c(if (has_(colour)) colour, if (has_(facet1)) facet1,
+                  if (has_(facet2)) facet2, if (has_(shape)) shape))
+  pr <- biology_dist_prep(data, distributions, distributionType, catchCategory,
+                          "meanweight", grp, dims)
+  data <- pr$data
+  cl <- class_label %||% pr$class_label
+  if (isTRUE(verbose)) {
+    cat("-- plot_meanweight_at_length_age(): ", distributionType,
+        ", engine = \"", engine, "\" --\n", sep = "")
+    if (!is.null(distributions))
+      cat("  catchCategory : ", catchCategory, "\n", sep = "")
+    cat("  colour: ", if (has_(colour)) colour else "(none)", "\n", sep = "")
+    cat("  shape : ", if (has_(shape))  shape  else "(none)", "\n", sep = "")
+    cat("  facet1 / facet2: ", if (has_(facet1)) facet1 else "(none)", " / ",
+        if (has_(facet2)) facet2 else "(none)", "\n", sep = "")
+    cat("  rows: ", if (is.null(data)) 0L else nrow(data), "\n", sep = "")
   }
+  if (identical(engine, "base"))
+    return(invisible(plot_length_meanweight_base(data, colour, facet1, facet2,
+      shape, show_points = show_points, show_spread = show_spread,
+      class_label = cl, palette = palette, angle = angle,
+      n_per_screen = n_per_screen)))
+  p <- plot_length_meanweight(data, colour, facet1, facet2, shape,
+    show_points = show_points, show_spread = show_spread, ncol = ncol,
+    scales = scales, class_label = cl, palette = palette)
   if (!is.null(p) && !identical(angle, 45))
     p <- p + theme(axis.text.x = element_text(
       angle = angle, hjust = if (angle > 0) 1 else 0.5, vjust = 1))
@@ -3335,11 +2797,11 @@ facet_key_base <- function(d, facet1 = NULL, facet2 = NULL) {
 #' or age classes, coloured by `fill_var` via [var_palette()] (the same
 #' per-level colours the ggplot engine uses), stacked or side-by-side -
 #' drawn with `graphics::barplot()` instead of ggplot2. Called through
-#' `plot_biology_distribution(..., engine = "base")`, not directly.
+#' the distribution plots' `engine = "base"`, not directly.
 #'
 #' @inheritParams plot_length_hist
 #' @return `NULL`, invisibly - drawn on the current graphics device.
-#' @seealso [plot_length_hist()], [plot_biology_distribution()]
+#' @seealso [plot_length_hist()], [plot_numbers_at_length_age()]
 #' @keywords internal
 #' @export
 plot_length_hist_base <- function(d, fill_var = NULL, facet1 = NULL,
@@ -3438,11 +2900,11 @@ plot_length_hist_base <- function(d, fill_var = NULL, facet1 = NULL,
 #' different size compare on shape alone - drawn as filled, vertically
 #' offset ribbons with `graphics::polygon()` instead of ggplot2's
 #' `geom_ribbon()`. Called through
-#' `plot_biology_distribution(..., engine = "base")`, not directly.
+#' the distribution plots' `engine = "base"`, not directly.
 #'
 #' @inheritParams plot_length_ridges
 #' @return `NULL`, invisibly - drawn on the current graphics device.
-#' @seealso [plot_length_ridges()], [plot_biology_distribution()]
+#' @seealso [plot_length_ridges()], [plot_numbers_at_length_age()]
 #' @keywords internal
 #' @export
 plot_length_ridges_base <- function(d, group_var = NULL, facet1 = NULL,
@@ -3549,11 +3011,11 @@ plot_length_ridges_base <- function(d, group_var = NULL, facet1 = NULL,
 #' line with points, coloured by `colour_var` via [var_palette()], with
 #' an optional +/- 1 sd ribbon - drawn with `graphics::plot()`/`lines()`
 #' instead of ggplot2. Called through
-#' `plot_biology_distribution(..., engine = "base")`, not directly.
+#' the distribution plots' `engine = "base"`, not directly.
 #'
 #' @inheritParams plot_length_meanweight
 #' @return `NULL`, invisibly - drawn on the current graphics device.
-#' @seealso [plot_length_meanweight()], [plot_biology_distribution()]
+#' @seealso [plot_length_meanweight()], [plot_numbers_at_length_age()]
 #' @keywords internal
 #' @export
 plot_length_meanweight_base <- function(d, colour_var = NULL, facet1 = NULL,
@@ -3809,107 +3271,4 @@ plot_comparison <- function(cmp, x_var, facet_var = NULL, ncol = 2) {
                           "data, translucent = added by raising."),
          x = x_var, y = "Discards (t)", fill = "Scenario") +
     app_theme() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
-}
-
-# ----------------------------------------------------------
-#  Mean weight, drawn as a spread rather than a point
-# ----------------------------------------------------------
-
-#' Mean weight at length or age, as boxes
-#'
-#' The companion to [plot_length_meanweight()], and a separate plot
-#' rather than an option on it, because the two answer different
-#' questions and should not silently swap places. The line plot says
-#' "what is the mean weight at this class"; this says "how much did the
-#' strata that were averaged into it disagree".
-#'
-#' A box is drawn wherever a class and group has more than one
-#' contributing stratum. Where it has exactly one there is no spread to
-#' show, so a point is drawn instead - which is the honest rendering and
-#' also what happens naturally once the facets are fine enough to leave
-#' one stratum per cell.
-#'
-#' `shape_var` does not replace the box, it decorates it: the box still
-#' shows the spread, and the dots on top are shaped by the variable so
-#' the season, or country, behind each value is readable.
-#'
-#' @param d A [length_meanweight_raw()] table.
-#' @param colour_var Column mapped to box fill.
-#' @param facet1,facet2 Up to two facet columns.
-#' @param shape_var Column mapped to point shape, drawn over the boxes.
-#' @param show_points Draw the underlying values over the boxes.
-#' @param ncol Facet columns.
-#' @param scales Facet scales, as `facet_wrap()` takes.
-#' @param class_label X axis label.
-#' @return A ggplot, or `NULL` if there is nothing to draw.
-#' @seealso [plot_length_meanweight()], [length_meanweight_raw()]
-#' @export
-plot_length_meanweight_box <- function(d, colour_var = NULL, facet1 = NULL,
-                                       facet2 = NULL, shape_var = NULL,
-                                       show_points = TRUE, ncol = 2,
-                                       scales = "fixed",
-                                       class_label = "Length (cm)") {
-  if (is.null(d) || !nrow(d)) return(NULL)
-  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
-
-  d <- d[is.finite(d$mean_weight), , drop = FALSE]
-  if (!nrow(d)) return(NULL)
-  if (!"n_group" %in% names(d)) d$n_group <- 2L
-
-  # A class axis has to be discrete for boxes to sit side by side, but
-  # keeping it numeric underneath would put every box at its own x with
-  # no dodging. Grouping on the class value gives one box per class.
-  d$.cls <- factor(d$.class, levels = sort(unique(d$.class)))
-
-  grp <- if (has(colour_var)) rlang::sym(colour_var) else NULL
-  p <- if (has(colour_var))
-    ggplot(d, aes(x = .cls, y = mean_weight, fill = factor(!!grp)))
-  else ggplot(d, aes(x = .cls, y = mean_weight))
-
-  many <- d[d$n_group > 1, , drop = FALSE]
-  one  <- d[d$n_group <= 1, , drop = FALSE]
-
-  if (nrow(many))
-    p <- p + geom_boxplot(data = many, outlier.shape = NA, alpha = 0.55,
-                          linewidth = 0.35, colour = OUTLINE,
-                          position = position_dodge(width = 0.8))
-  if (nrow(one))
-    p <- p + if (has(colour_var))
-      geom_point(data = one, shape = 21, size = 2.1, colour = OUTLINE,
-                 stroke = 0.4, position = position_dodge(width = 0.8))
-    else geom_point(data = one, shape = 21, size = 2.1, fill = PAL_BASE[1],
-                    colour = OUTLINE, stroke = 0.4)
-
-  if (show_points && nrow(many)) {
-    p <- p + if (has(shape_var))
-      geom_point(data = many, aes(shape = factor(.data[[shape_var]])),
-                 size = 1.8, alpha = 0.9,
-                 position = position_dodge(width = 0.8))
-    else geom_point(data = many, size = 1.3, alpha = 0.55,
-                    position = position_dodge(width = 0.8))
-    if (has(shape_var))
-      p <- p + scale_shape_manual(values = c(16, 17, 15, 18, 4, 3, 8, 7),
-                                  name = shape_var)
-  }
-
-  if (has(colour_var))
-    p <- p + scale_fill_var(colour_var, d[[colour_var]], name = colour_var)
-
-  n_box <- nrow(many); n_pt <- nrow(one)
-  sub <- if (n_box == 0)
-    "One stratum per class here, so every value is a point - nothing is being averaged."
-  else if (n_pt > 0)
-    sprintf("Box = the strata averaged into one mean (%d values); a point is a class with only one stratum.",
-            n_box)
-  else "Box = the strata averaged into one mean at that class."
-
-  p +
-    scale_y_continuous(labels = scales::comma) +
-    facet_two(facet1, facet2, ncol = ncol, scales = scales) +
-    labs(title = sprintf("Spread of mean weight at %s",
-                         tolower(sub(" .*", "", class_label))),
-         subtitle = sub, x = class_label, y = "Mean weight (g)",
-         fill = colour_var, shape = shape_var) +
-    app_theme() +
-    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, size = 7))
 }

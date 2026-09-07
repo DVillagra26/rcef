@@ -1,4 +1,4 @@
-## The two mean-weight plots, and mean weight in the allocation comparison.
+## The mean-weight line plot, and mean weight in the allocation comparison.
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
@@ -10,29 +10,14 @@ set.seed(1)
 d <- expand.grid(.class = c(20, 22, 24), Country = c("BE", "DE"),
                  Season = 1:4, stringsAsFactors = FALSE)
 d$mean_weight <- 100 + d$.class * 8 + rnorm(nrow(d), 0, 25)
-d$.w <- 1
-k <- paste(d$.class, d$Country)
-d$n_group <- as.integer(table(k)[k])
+d$sd_weight <- 12
 
-p <- plot_length_meanweight_box(d, colour_var = "Country", shape_var = "Season")
-ok(inherits(p, "ggplot"), "the boxplot builds")
-ok(!inherits(try(ggplot_build(p), silent = TRUE), "try-error"),
-   "and renders")
-ok(grepl("^Box =", p$labels$subtitle),
-   "it says the box is the strata that were averaged")
+p <- plot_meanweight_at_length_age(d, colour = "Country", facet1 = "Season")
+ok(inherits(p, "ggplot"), "the mean-weight line plot builds")
+ok(!inherits(try(ggplot_build(p), silent = TRUE), "try-error"), "and renders")
 
-## The case the user will hit as soon as they add a third facet: one
-## stratum per cell. A box around a single value is a lie about spread,
-## so a point is drawn and the subtitle says why.
-d1 <- d[d$Season == 1, ]; d1$n_group <- 1L
-p1 <- plot_length_meanweight_box(d1, colour_var = "Country")
-ok(inherits(p1, "ggplot"), "a single value per class still builds")
-ok(grepl("One stratum per class", p1$labels$subtitle),
-   "and says every value is a point, not a box")
-ok(!inherits(try(ggplot_build(p1), silent = TRUE), "try-error"), "and renders")
-
-ok(is.null(plot_length_meanweight_box(NULL)), "no data gives NULL, not an error")
-ok(is.null(plot_length_meanweight_box(d[0, ])), "no rows gives NULL")
+ok(is.null(plot_meanweight_at_length_age(NULL)), "no data gives NULL, not an error")
+ok(is.null(plot_meanweight_at_length_age(d[0, ])), "no rows gives NULL")
 
 ## --- mean weight in the comparison -----------------------------------
 cmp <- expand.grid(.cls = c(20, 22), allocation = c("a", "b"),
