@@ -11,11 +11,11 @@ coverage_verbose_summary(
   y,
   x,
   facet,
-  threshold,
+  min_cov,
   what,
   weight_label,
-  min_meas,
-  min_trips,
+  min_fish,
+  min_trip,
   catchCategory = NULL,
   palette = "default",
   angle = 45,
@@ -27,7 +27,7 @@ coverage_verbose_summary(
 
 \item{view}{`"heat"`, `"bubble"` or `"bar"`.}
 
-\item{engine, y, x, facet, threshold, what, weight_label, min_meas, min_trips}{As resolved inside [coverage_dispatch()].}
+\item{engine, y, x, facet, min_cov, what, weight_label, min_fish, min_trip}{As resolved inside [coverage_dispatch()].}
 
 \item{catchCategory}{`"Lan"` / `"Dis"` / `"BMS"` or `NULL`.}
 

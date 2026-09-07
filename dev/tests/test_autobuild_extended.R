@@ -62,7 +62,7 @@ if (length(fx) && length(fd)) {
 
   ## a pre-classified table (no distributions) still works
   p6 <- plot_coverage_heat(bio_len, y = "fleetValue", what = "length",
-                           threshold = 50, min_meas = 0, min_trips = 2,
+                           min_cov = 50, min_fish = 0, min_trip = 2,
                            weight_label = "catch")
   ok(inherits(p6, "gg"),
      "a pre-classified length table (no distributions) still works")

@@ -1382,13 +1382,12 @@ ices_area_centroid <- function(codes) {
 #' already-classified table is used as-is. Needs the suggested `maps`
 #' package.
 #'
-#' @param strata Classified stratum table, or raw CEF catch data.
+#' @param catch Raw CEF catch data (or a classified stratum table).
 #' @param area Column holding the ICES area code. Default `"areaValue"`.
 #' @param group Optional column - one boxed grid of pies per area, one
 #'   pie per level.
-#' @param what,catchCategory,threshold,min_trips,min_meas,dims,distributions
-#'   As in [coverage-plots] - only used when `strata` is raw and has to
-#'   be built.
+#' @param what,catchCategory,min_cov,min_trip,min_fish,dims,distributions
+#'   As in [coverage-plots].
 #' @param weight_label Word for the weight (title only). `NULL` derives
 #'   it from `what` and `catchCategory`.
 #' @param scale Multiplies every pie radius (and, when grouped, the box
@@ -1399,14 +1398,15 @@ ices_area_centroid <- function(codes) {
 #' @seealso [coverage-plots], [ices_area_centroid()]
 #' @family coverage plots
 #' @export
-plot_coverage_map <- function(strata, area = "areaValue", group = NULL,
-                              what = "discard", catchCategory = NULL,
-                              threshold = 50, min_trips = 2, min_meas = 0,
-                              distributions = NULL, dims = NULL,
-                              weight_label = NULL, scale = 1,
+plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
+                              group = NULL, what = "discard",
+                              catchCategory = NULL,
+                              min_cov = 50, min_trip = 2, min_fish = 0,
+                              dims = NULL, weight_label = NULL, scale = 1,
                               engine = c("base", "ggplot"), verbose = FALSE) {
   engine <- match.arg(engine)
   what   <- normalize_what(what)
+  strata <- catch
   area_var <- area; group_var <- group; bubble_scale <- scale
   weight_var <- "landings"; covered_var <- "landings_with_discards"
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
@@ -1422,11 +1422,10 @@ plot_coverage_map <- function(strata, area = "areaValue", group = NULL,
           else match.arg(catchCategory, c("Lan", "Dis", "BMS"))
   }
   weight_label <- weight_label %||% default_weight_label(what, cc)
-  thr <- threshold; mtr <- min_trips
   if (is.null(dims))
     dims <- unique(c(area_var, if (has(group_var)) group_var))
-  sc <- resolve_coverage_strata(strata, dims, NULL, NULL, NULL, thr, what,
-                                min_meas, mtr, distributions, cc)
+  sc <- resolve_coverage_strata(strata, dims, NULL, NULL, NULL, min_cov, what,
+                                min_fish, min_trip, distributions, cc)
   for (v in c(area_var, weight_var, covered_var))
     if (!v %in% names(sc)) stop("plot_coverage_map(): no column '", v, "'")
 
@@ -1614,18 +1613,18 @@ plot_coverage_map <- function(strata, area = "areaValue", group = NULL,
 #' ([plot_coverage_heat()]), a weighted bubble grid
 #' ([plot_coverage_bubble()]) and a sampled-vs-unsampled weight bar chart
 #' ([plot_coverage_bar()]) - plus a map ([plot_coverage_map()]). All four
-#' take either an already-classified stratum table (the output of
-#' [classify_strata()], or the biology equivalent) or raw CEF catch data,
-#' which they build and classify internally.
+#' take raw CEF catch data (plus `distributions` for length / age) and
+#' build + classify the strata internally.
 #'
 #' `what` selects what "sampled" means: `"discard"` (a discard estimate
 #' exists), `"length"` or `"age"` (a length / age distribution exists).
-#' For `"length"` / `"age"` from raw catch, pass `distributions` and, with
+#' For `"length"` / `"age"`, pass `distributions` and, with
 #' `catchCategory`, choose whether to look at the sampling of the landings
 #' (`"Lan"`, the default), the discards (`"Dis"`) or BMS (`"BMS"`).
 #'
-#' @param strata An already-classified stratum table, or raw CEF catch
-#'   data (auto-detected: a classified table carries `cat_key`).
+#' @param catch Raw CEF catch data.
+#' @param distributions A CEF distributions table - needed for
+#'   `what = "length"`/`"age"`, ignored otherwise.
 #' @param y Row category. Required.
 #' @param x Column category - the second axis of the heatmap / bubble
 #'   grid. `NULL` collapses to a single column.
@@ -1635,15 +1634,12 @@ plot_coverage_map <- function(strata, area = "areaValue", group = NULL,
 #'   mixed case are accepted (`"discards"`, `"Length"`, ...).
 #' @param catchCategory For `what = "length"`/`"age"`: `"Lan"` (default),
 #'   `"Dis"` or `"BMS"` - which catch part the distribution is linked to.
-#'   Not valid for `what = "discard"` (an error), and informational only
-#'   when `strata` is already classified (the part was fixed upstream).
-#' @param threshold Coverage threshold in percent (heat / bubble only).
-#' @param min_trips Trip-count floor (heat / bubble only).
-#' @param min_meas Measurement floor for `what = "length"`/`"age"`.
-#' @param distributions A CEF distributions table - needed only to build a
-#'   `what = "length"`/`"age"` figure from raw catch.
-#' @param dims Columns to build the strata on when `strata` is raw.
-#'   Defaults to the union of the role columns.
+#'   Not valid for `what = "discard"` (an error).
+#' @param min_cov Minimum coverage, percent (heat / bubble only).
+#' @param min_trip Minimum sampling trips (heat / bubble only).
+#' @param min_fish Minimum measurements for `what = "length"`/`"age"`.
+#' @param dims Columns to build the strata on. Defaults to the union of
+#'   the role columns.
 #' @param weight_label Word for the weight (axis / legend). `NULL` derives
 #'   it from `what` and `catchCategory`.
 #' @param show_fill_in_labels Bars only: append the fill level to each row
@@ -1665,11 +1661,10 @@ plot_coverage_map <- function(strata, area = "areaValue", group = NULL,
 #' @family coverage plots
 #' @examples
 #' \dontrun{
-#' sc <- classify_strata(build_strata(catch, c("metier4", "Season")), 50)
-#' plot_coverage_heat(sc, y = "metier4", x = "Season")
-#' plot_coverage_bar(sc, y = "metier4", fill = "Season")
-#' plot_coverage_heat(catch, y = "fleetValue", what = "length",
-#'                    catchCategory = "Dis", distributions = dist)
+#' plot_coverage_heat(catch, y = "metier4", x = "Season")
+#' plot_coverage_bar(catch, y = "metier4", fill = "Season")
+#' plot_coverage_heat(catch, dist, y = "fleetValue", what = "length",
+#'                    catchCategory = "Dis", min_cov = 50, min_fish = 100)
 #' }
 NULL
 
@@ -1698,15 +1693,16 @@ default_weight_label <- function(what, catchCategory = NULL) {
 #' @return A ggplot object, or `NULL` invisibly (base engine).
 #' @keywords internal
 #' @export
-coverage_dispatch <- function(view, strata, y = NULL, x = NULL, fill = NULL,
+coverage_dispatch <- function(view, catch, y = NULL, x = NULL, fill = NULL,
                               facet = NULL, what = "discard",
-                              catchCategory = NULL, threshold = 50,
-                              min_trips = 2, min_meas = 0, distributions = NULL,
+                              catchCategory = NULL, min_cov = 50,
+                              min_trip = 2, min_fish = 0, distributions = NULL,
                               dims = NULL, weight_label = NULL,
                               show_fill_in_labels = FALSE,
                               engine = "ggplot", palette = "default",
                               angle = 45, ncol = 2, n_per_screen = NULL,
                               verbose = FALSE) {
+  strata <- catch
   what <- normalize_what(what)
   fn   <- paste0("plot_coverage_", view)
   if (is.null(y) || !nzchar(y)) stop(fn, "(): `y` is required", call. = FALSE)
@@ -1740,31 +1736,31 @@ coverage_dispatch <- function(view, strata, y = NULL, x = NULL, fill = NULL,
   wl   <- weight_label %||% default_weight_label(what, cc)
   xcol <- if (identical(view, "bar")) fill else x
 
-  strata <- resolve_coverage_strata(strata, dims, y, xcol, facet, threshold,
-                                    what, min_meas, min_trips, distributions, cc)
+  strata <- resolve_coverage_strata(strata, dims, y, xcol, facet, min_cov,
+                                    what, min_fish, min_trip, distributions, cc)
 
   if (isTRUE(verbose))
-    coverage_verbose_summary(strata, view, engine, y, xcol, facet, threshold,
-                             what, wl, min_meas, min_trips, cc, palette, angle,
+    coverage_verbose_summary(strata, view, engine, y, xcol, facet, min_cov,
+                             what, wl, min_fish, min_trip, cc, palette, angle,
                              n_per_screen)
 
   if (identical(engine, "base")) {
     return(invisible(switch(view,
-      heat   = plot_heatmap_base(strata, y, x, facet, threshold, what, wl,
-                                 min_meas, min_trips, palette = palette,
+      heat   = plot_heatmap_base(strata, y, x, facet, min_cov, what, wl,
+                                 min_fish, min_trip, palette = palette,
                                  angle = angle, n_per_screen = n_per_screen),
-      bubble = plot_bubbles_base(strata, y, x, facet, threshold, what, wl,
-                                 min_meas, min_trips, palette = palette,
+      bubble = plot_bubbles_base(strata, y, x, facet, min_cov, what, wl,
+                                 min_fish, min_trip, palette = palette,
                                  angle = angle, n_per_screen = n_per_screen),
       bar    = plot_coverage_bars_base(strata, y, fill, facet, what, wl,
                                  palette = palette, n_per_screen = n_per_screen,
                                  show_fill_in_labels = show_fill_in_labels))))
   }
   p <- switch(view,
-    heat   = plot_heatmap(strata, y, x, facet, threshold, what, wl, min_meas,
-                          min_trips),
-    bubble = plot_bubbles(strata, y, x, facet, threshold, what, wl, min_meas,
-                          min_trips),
+    heat   = plot_heatmap(strata, y, x, facet, min_cov, what, wl, min_fish,
+                          min_trip),
+    bubble = plot_bubbles(strata, y, x, facet, min_cov, what, wl, min_fish,
+                          min_trip),
     bar    = plot_coverage_bars(strata, y, fill, facet, ncol, what, wl,
                                 palette = palette))
   if (!is.null(p) && !identical(angle, 45) && view %in% c("heat", "bubble"))
@@ -1775,17 +1771,17 @@ coverage_dispatch <- function(view, strata, y = NULL, x = NULL, fill = NULL,
 
 #' @rdname coverage-plots
 #' @export
-plot_coverage_heat <- function(strata, y, x = NULL, facet = NULL,
-                               what = "discard", catchCategory = NULL,
-                               threshold = 50, min_trips = 2, min_meas = 0,
-                               distributions = NULL, dims = NULL,
-                               weight_label = NULL,
+plot_coverage_heat <- function(catch, distributions = NULL, y, x = NULL,
+                               facet = NULL, what = "discard",
+                               catchCategory = NULL,
+                               min_cov = 50, min_trip = 2, min_fish = 0,
+                               dims = NULL, weight_label = NULL,
                                engine = c("ggplot", "base"),
                                palette = c("default", "colorblind"), angle = 45,
                                n_per_screen = NULL, verbose = FALSE) {
-  coverage_dispatch("heat", strata, y = y, x = x, facet = facet, what = what,
-                    catchCategory = catchCategory, threshold = threshold,
-                    min_trips = min_trips, min_meas = min_meas,
+  coverage_dispatch("heat", catch, y = y, x = x, facet = facet, what = what,
+                    catchCategory = catchCategory, min_cov = min_cov,
+                    min_trip = min_trip, min_fish = min_fish,
                     distributions = distributions, dims = dims,
                     weight_label = weight_label, engine = match.arg(engine),
                     palette = match.arg(palette), angle = angle,
@@ -1794,18 +1790,18 @@ plot_coverage_heat <- function(strata, y, x = NULL, facet = NULL,
 
 #' @rdname coverage-plots
 #' @export
-plot_coverage_bubble <- function(strata, y, x = NULL, facet = NULL,
-                                 what = "discard", catchCategory = NULL,
-                                 threshold = 50, min_trips = 2, min_meas = 0,
-                                 distributions = NULL, dims = NULL,
-                                 weight_label = NULL,
+plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
+                                 facet = NULL, what = "discard",
+                                 catchCategory = NULL,
+                                 min_cov = 50, min_trip = 2, min_fish = 0,
+                                 dims = NULL, weight_label = NULL,
                                  engine = c("ggplot", "base"),
                                  palette = c("default", "colorblind"),
                                  angle = 45, n_per_screen = NULL,
                                  verbose = FALSE) {
-  coverage_dispatch("bubble", strata, y = y, x = x, facet = facet, what = what,
-                    catchCategory = catchCategory, threshold = threshold,
-                    min_trips = min_trips, min_meas = min_meas,
+  coverage_dispatch("bubble", catch, y = y, x = x, facet = facet, what = what,
+                    catchCategory = catchCategory, min_cov = min_cov,
+                    min_trip = min_trip, min_fish = min_fish,
                     distributions = distributions, dims = dims,
                     weight_label = weight_label, engine = match.arg(engine),
                     palette = match.arg(palette), angle = angle,
@@ -1814,23 +1810,24 @@ plot_coverage_bubble <- function(strata, y, x = NULL, facet = NULL,
 
 #' @rdname coverage-plots
 #' @export
-plot_coverage_bar <- function(strata, y, fill = NULL, facet = NULL,
-                              what = "discard", catchCategory = NULL,
-                              distributions = NULL, dims = NULL,
-                              weight_label = NULL, show_fill_in_labels = FALSE,
+plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
+                              facet = NULL, what = "discard",
+                              catchCategory = NULL,
+                              dims = NULL, weight_label = NULL,
+                              show_fill_in_labels = FALSE,
                               engine = c("ggplot", "base"),
                               palette = c("default", "colorblind"), ncol = 2,
                               n_per_screen = NULL, verbose = FALSE,
-                              threshold = NULL, min_trips = NULL, angle = NULL) {
-  if (!is.null(threshold) || !is.null(min_trips))
-    stop("plot_coverage_bar(): threshold / min_trips do not apply here - a ",
-         "bar chart shows sampled vs unsampled weight, which neither affects. ",
+                              min_cov = NULL, min_trip = NULL, angle = NULL) {
+  if (!is.null(min_cov) || !is.null(min_trip))
+    stop("plot_coverage_bar(): min_cov / min_trip do not apply here - a bar ",
+         "chart shows sampled vs unsampled weight, which neither affects. ",
          "Use plot_coverage_heat() / plot_coverage_bubble() for a ",
-         "threshold-based view.", call. = FALSE)
+         "coverage-threshold view.", call. = FALSE)
   if (!is.null(angle))
     stop("plot_coverage_bar(): angle does not apply - the x axis is a numeric ",
          "weight, not rotated category labels.", call. = FALSE)
-  coverage_dispatch("bar", strata, y = y, fill = fill, facet = facet,
+  coverage_dispatch("bar", catch, y = y, fill = fill, facet = facet,
                     what = what, catchCategory = catchCategory,
                     distributions = distributions, dims = dims,
                     weight_label = weight_label,
@@ -1855,8 +1852,8 @@ plot_coverage_bar <- function(strata, y, fill = NULL, facet = NULL,
 #' @param strata Raw catch data, or an already-classified strata table.
 #' @param dims Columns to build on; defaults to the union of `y`,
 #'   `fill`, `facet` when `NULL`.
-#' @param y,fill,facet,threshold,what,min_meas,min_trips As in the
-#'   coverage plots.
+#' @param y,fill,facet,min_cov,what,min_fish,min_trip As in the coverage
+#'   plots.
 #' @param distributions A distributions table - required to auto-build a
 #'   `what = "length"`/`"age"` table from raw catch data; ignored when
 #'   `strata` is already classified or `what = "discard"`.
@@ -1868,7 +1865,7 @@ plot_coverage_bar <- function(strata, y, fill = NULL, facet = NULL,
 #' @keywords internal
 #' @export
 resolve_coverage_strata <- function(strata, dims, y, fill, facet,
-                                    threshold, what, min_meas, min_trips,
+                                    min_cov, what, min_fish, min_trip,
                                     distributions = NULL,
                                     catch_category = NULL) {
   if (!is.null(strata) && "cat_key" %in% names(strata)) return(strata)
@@ -1876,8 +1873,8 @@ resolve_coverage_strata <- function(strata, dims, y, fill, facet,
   if (is.null(dims))
     dims <- unique(c(y, if (has(fill)) fill, if (has(facet)) facet))
   if (identical(what, "discard"))
-    return(classify_strata(build_strata(strata, dims), threshold, what,
-                           min_meas, min_trips))
+    return(classify_strata(build_strata(strata, dims), min_cov, what,
+                           min_fish, min_trip))
   # length / age: the full biology pipeline, which needs the
   # distributions table (build_strata() alone cannot do it).
   if (is.null(distributions))
@@ -1890,11 +1887,11 @@ resolve_coverage_strata <- function(strata, dims, y, fill, facet,
   cc <- catch_category %||% "Lan"
   bl  <- biology_link(strata, distributions, dims, cc, type = dist_type)
   ms  <- stratum_measurements(strata, distributions, dims, cc, type = dist_type)
-  bl  <- add_sufficiency(bl, ms, threshold, min_meas)
+  bl  <- add_sufficiency(bl, ms, min_cov, min_fish)
   bio <- bl %>% mutate(landings = weight,
                        landings_with_discards = weight_measured,
                        discards = 0, discard_rate = NA_real_)
-  classify_strata(bio, threshold, what, min_meas, min_trips)
+  classify_strata(bio, min_cov, what, min_fish, min_trip)
 }
 
 #' Warn about arguments that do not fit the requested plot
@@ -1934,7 +1931,7 @@ plot_arg_report <- function(fn, checks) {
 #'
 #' @param strata The already-classified strata table about to be plotted.
 #' @param view `"heat"`, `"bubble"` or `"bar"`.
-#' @param engine,y,x,facet,threshold,what,weight_label,min_meas,min_trips
+#' @param engine,y,x,facet,min_cov,what,weight_label,min_fish,min_trip
 #'   As resolved inside [coverage_dispatch()].
 #' @param catchCategory `"Lan"` / `"Dis"` / `"BMS"` or `NULL`.
 #' @param palette,angle,n_per_screen Rendering options, echoed back.
@@ -1942,8 +1939,8 @@ plot_arg_report <- function(fn, checks) {
 #' @keywords internal
 #' @export
 coverage_verbose_summary <- function(strata, view, engine, y, x, facet,
-                                     threshold, what, weight_label,
-                                     min_meas, min_trips, catchCategory = NULL,
+                                     min_cov, what, weight_label,
+                                     min_fish, min_trip, catchCategory = NULL,
                                      palette = "default", angle = 45,
                                      n_per_screen = NULL) {
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
@@ -1958,14 +1955,14 @@ coverage_verbose_summary <- function(strata, view, engine, y, x, facet,
   if (!is.null(catchCategory))
     line("  catchCategory : ", catchCategory)
   if (identical(view, "bar")) {
-    line("  threshold / min_trips: not used by a bar chart - it shows ",
+    line("  min_cov / min_trip: not used by a bar chart - it shows ",
          "sampled vs unsampled weight, which neither affects.")
   } else {
-    line("  threshold  : ", threshold, "%")
-    line("  min_trips  : ", min_trips)
+    line("  min_cov    : ", min_cov, "%")
+    line("  min_trip   : ", min_trip)
   }
-  if (!is.na(min_meas) && min_meas > 0)
-    line("  min_meas   : ", min_meas)
+  if (!is.na(min_fish) && min_fish > 0)
+    line("  min_fish   : ", min_fish)
   line("  render : engine = ", engine, ", palette = ", palette,
        ", angle = ", angle,
        if (!is.null(n_per_screen)) paste0(", n_per_screen = ", n_per_screen)

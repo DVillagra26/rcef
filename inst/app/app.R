@@ -2540,36 +2540,36 @@ server <- function(input, output, session) {
   # One place that maps a coverage "view" (heatmap / bubbles / bars) onto
   # its split function, for the live plot (emit = FALSE) and the emitted
   # script line (emit = TRUE). `second` is the x column for heat / bubble
-  # and the fill column for bars; threshold / min_trips / min_meas apply
-  # to heat / bubble only. `strata` is a classified table (or, for emit,
-  # the name of one) - no catchCategory here, that was chosen upstream.
-  coverage_call <- function(strata, view, y, second, facet,
+  # and the fill column for bars; min_cov / min_trip / min_fish apply to
+  # heat / bubble only. `data` is a catch (or classified) table, or its
+  # name for emit - no catchCategory here, that was chosen upstream.
+  coverage_call <- function(data, view, y, second, facet,
                             what = "discard", weight_label = NULL,
-                            threshold = 50, min_trips = 2, min_meas = 0,
+                            min_cov = 50, min_trip = 2, min_fish = 0,
                             emit = FALSE) {
     fn  <- switch(view, bars = "plot_coverage_bar",
                   bubbles = "plot_coverage_bubble", "plot_coverage_heat")
     is_bar <- identical(view, "bars")
     role   <- if (is_bar) "fill" else "x"
     if (isTRUE(emit)) {
-      a <- list(strata, y = taf_q(y))
+      a <- list(data, y = taf_q(y))
       a[[role]] <- taf_q(second)
       a$facet <- taf_q(facet)
       if (!identical(what, "discard")) {
         a$what <- taf_q(what); a$weight_label <- taf_q(weight_label)
       }
       if (!is_bar) {
-        a$threshold <- threshold; a$min_trips <- min_trips
-        if (min_meas) a$min_meas <- min_meas
+        a$min_cov <- min_cov; a$min_trip <- min_trip
+        if (min_fish) a$min_fish <- min_fish
       }
       return(taf_call(fn, a))
     }
-    a <- list(strata, y = y, facet = facet)
+    a <- list(data, y = y, facet = facet)
     a[[role]] <- second
     if (!identical(what, "discard")) { a$what <- what
       a$weight_label <- weight_label }
-    if (!is_bar) { a$threshold <- threshold; a$min_trips <- min_trips
-      a$min_meas <- min_meas }
+    if (!is_bar) { a$min_cov <- min_cov; a$min_trip <- min_trip
+      a$min_fish <- min_fish }
     do.call(fn, a)
   }
 
@@ -3649,7 +3649,7 @@ server <- function(input, output, session) {
       wl <- cc_word("cov"); th <- thr_cov()
       coverage_call(sc, input[[paste0(p, "_cov_type")]] %||% "heatmap",
         y = y, second = f, facet = fc, what = what_word, weight_label = wl,
-        threshold = th, min_trips = thr_trips(), min_meas = thr_meas()) },
+        min_cov = th, min_trip = thr_trips(), min_fish = thr_meas()) },
       live = cov_live)
 
     # how many rows the plot will actually draw, so the panel grows with them
@@ -3707,8 +3707,7 @@ server <- function(input, output, session) {
         input[[paste0(p, "_cov_type")]] %||% "heatmap",
         y = rc("cov", "y"), second = rc("cov", "fill"),
         facet = rc("cov", "facet"), what = what_word,
-        weight_label = cc_word("cov"), threshold = thr_cov(),
-        min_trips = thr_trips(), min_meas = thr_meas(), emit = TRUE))
+        weight_label = cc_word("cov"), min_cov = thr_cov(), min_trip = thr_trips(), min_fish = thr_meas(), emit = TRUE))
 
     # ---- view 2: numbers at length ------------------------------
     num_data <- reactive({
@@ -6443,12 +6442,12 @@ server <- function(input, output, session) {
       sprintf('plot_discard_rate(strata, x = %s, colour = %s, shape = %s, facet = %s)',
               r(role("dr","x")), r(role("dr","fill")),
               r(role("dr","shape")), r(role("dr","facet"))),
-      sprintf('plot_coverage_heat(classify_strata(strata, %s), y = %s, x = %s, facet = %s, threshold = %s)',
-              input$threshold %||% 50, r(col_of("cov", input$cov_y)),
+      sprintf('plot_coverage_heat(catch_data, y = %s, x = %s, facet = %s, min_cov = %s)',
+              r(col_of("cov", input$cov_y)),
               r(col_of("cov", input$cov_fill)), r(col_of("cov", input$cov_facet)),
               input$threshold %||% 50),
-      sprintf('plot_coverage_bar(classify_strata(strata, %s), y = %s, fill = %s, facet = %s)',
-              input$threshold %||% 50, r(col_of("cov", input$cov_y)),
+      sprintf('plot_coverage_bar(catch_data, y = %s, fill = %s, facet = %s)',
+              r(col_of("cov", input$cov_y)),
               r(col_of("cov", input$cov_fill)), r(col_of("cov", input$cov_facet)))) })
 
   # =========================================================
@@ -6497,8 +6496,8 @@ server <- function(input, output, session) {
     y <- col_of("cov", input$cov_y); f <- col_of("cov", input$cov_fill)
     fc <- col_of("cov", input$cov_facet)
     coverage_call(cov_sc(), cov_type_eff(), y = y, second = f, facet = fc,
-                  threshold = input$threshold %||% 50,
-                  min_trips = input$cov_trips %||% 2) },
+                  min_cov = input$threshold %||% 50,
+                  min_trip = input$cov_trips %||% 2) },
     live = cov_live)
 
   output$cov_plot_ui <- renderUI({
@@ -6535,8 +6534,8 @@ server <- function(input, output, session) {
     call = function() coverage_call("strata_cov", cov_type_eff(),
       y = col_of("cov", input$cov_y), second = col_of("cov", input$cov_fill),
       facet = col_of("cov", input$cov_facet),
-      threshold = input$threshold %||% 50,
-      min_trips = input$cov_trips %||% 2, emit = TRUE))
+      min_cov = input$threshold %||% 50,
+      min_trip = input$cov_trips %||% 2, emit = TRUE))
 
   # discard-rate plot (one view: raw per-stratum points)
   dr_sig <- reactive(list(input$dr_x, input$dr_fill,

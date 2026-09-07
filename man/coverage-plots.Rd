@@ -8,16 +8,16 @@
 \title{Coverage: which strata are sampled well enough}
 \usage{
 plot_coverage_heat(
-  strata,
+  catch,
+  distributions = NULL,
   y,
   x = NULL,
   facet = NULL,
   what = "discard",
   catchCategory = NULL,
-  threshold = 50,
-  min_trips = 2,
-  min_meas = 0,
-  distributions = NULL,
+  min_cov = 50,
+  min_trip = 2,
+  min_fish = 0,
   dims = NULL,
   weight_label = NULL,
   engine = c("ggplot", "base"),
@@ -28,16 +28,16 @@ plot_coverage_heat(
 )
 
 plot_coverage_bubble(
-  strata,
+  catch,
+  distributions = NULL,
   y,
   x = NULL,
   facet = NULL,
   what = "discard",
   catchCategory = NULL,
-  threshold = 50,
-  min_trips = 2,
-  min_meas = 0,
-  distributions = NULL,
+  min_cov = 50,
+  min_trip = 2,
+  min_fish = 0,
   dims = NULL,
   weight_label = NULL,
   engine = c("ggplot", "base"),
@@ -48,13 +48,13 @@ plot_coverage_bubble(
 )
 
 plot_coverage_bar(
-  strata,
+  catch,
+  distributions = NULL,
   y,
   fill = NULL,
   facet = NULL,
   what = "discard",
   catchCategory = NULL,
-  distributions = NULL,
   dims = NULL,
   weight_label = NULL,
   show_fill_in_labels = FALSE,
@@ -63,14 +63,16 @@ plot_coverage_bar(
   ncol = 2,
   n_per_screen = NULL,
   verbose = FALSE,
-  threshold = NULL,
-  min_trips = NULL,
+  min_cov = NULL,
+  min_trip = NULL,
   angle = NULL
 )
 }
 \arguments{
-\item{strata}{An already-classified stratum table, or raw CEF catch
-data (auto-detected: a classified table carries `cat_key`).}
+\item{catch}{Raw CEF catch data.}
+
+\item{distributions}{A CEF distributions table - needed for
+`what = "length"`/`"age"`, ignored otherwise.}
 
 \item{y}{Row category. Required.}
 
@@ -84,20 +86,16 @@ mixed case are accepted (`"discards"`, `"Length"`, ...).}
 
 \item{catchCategory}{For `what = "length"`/`"age"`: `"Lan"` (default),
 `"Dis"` or `"BMS"` - which catch part the distribution is linked to.
-Not valid for `what = "discard"` (an error), and informational only
-when `strata` is already classified (the part was fixed upstream).}
+Not valid for `what = "discard"` (an error).}
 
-\item{threshold}{Coverage threshold in percent (heat / bubble only).}
+\item{min_cov}{Minimum coverage, percent (heat / bubble only).}
 
-\item{min_trips}{Trip-count floor (heat / bubble only).}
+\item{min_trip}{Minimum sampling trips (heat / bubble only).}
 
-\item{min_meas}{Measurement floor for `what = "length"`/`"age"`.}
+\item{min_fish}{Minimum measurements for `what = "length"`/`"age"`.}
 
-\item{distributions}{A CEF distributions table - needed only to build a
-`what = "length"`/`"age"` figure from raw catch.}
-
-\item{dims}{Columns to build the strata on when `strata` is raw.
-Defaults to the union of the role columns.}
+\item{dims}{Columns to build the strata on. Defaults to the union of
+the role columns.}
 
 \item{weight_label}{Word for the weight (axis / legend). `NULL` derives
 it from `what` and `catchCategory`.}
@@ -131,24 +129,22 @@ Three views of how well a set of strata is sampled - a heatmap
 ([plot_coverage_heat()]), a weighted bubble grid
 ([plot_coverage_bubble()]) and a sampled-vs-unsampled weight bar chart
 ([plot_coverage_bar()]) - plus a map ([plot_coverage_map()]). All four
-take either an already-classified stratum table (the output of
-[classify_strata()], or the biology equivalent) or raw CEF catch data,
-which they build and classify internally.
+take raw CEF catch data (plus `distributions` for length / age) and
+build + classify the strata internally.
 }
 \details{
 `what` selects what "sampled" means: `"discard"` (a discard estimate
 exists), `"length"` or `"age"` (a length / age distribution exists).
-For `"length"` / `"age"` from raw catch, pass `distributions` and, with
+For `"length"` / `"age"`, pass `distributions` and, with
 `catchCategory`, choose whether to look at the sampling of the landings
 (`"Lan"`, the default), the discards (`"Dis"`) or BMS (`"BMS"`).
 }
 \examples{
 \dontrun{
-sc <- classify_strata(build_strata(catch, c("metier4", "Season")), 50)
-plot_coverage_heat(sc, y = "metier4", x = "Season")
-plot_coverage_bar(sc, y = "metier4", fill = "Season")
-plot_coverage_heat(catch, y = "fleetValue", what = "length",
-                   catchCategory = "Dis", distributions = dist)
+plot_coverage_heat(catch, y = "metier4", x = "Season")
+plot_coverage_bar(catch, y = "metier4", fill = "Season")
+plot_coverage_heat(catch, dist, y = "fleetValue", what = "length",
+                   catchCategory = "Dis", min_cov = 50, min_fish = 100)
 }
 }
 \seealso{

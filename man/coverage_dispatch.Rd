@@ -6,16 +6,16 @@
 \usage{
 coverage_dispatch(
   view,
-  strata,
+  catch,
   y = NULL,
   x = NULL,
   fill = NULL,
   facet = NULL,
   what = "discard",
   catchCategory = NULL,
-  threshold = 50,
-  min_trips = 2,
-  min_meas = 0,
+  min_cov = 50,
+  min_trip = 2,
+  min_fish = 0,
   distributions = NULL,
   dims = NULL,
   weight_label = NULL,
@@ -31,8 +31,7 @@ coverage_dispatch(
 \arguments{
 \item{view}{`"heat"`, `"bubble"` or `"bar"`.}
 
-\item{strata}{An already-classified stratum table, or raw CEF catch
-data (auto-detected: a classified table carries `cat_key`).}
+\item{catch}{Raw CEF catch data.}
 
 \item{y}{Row category. Required.}
 
@@ -48,20 +47,19 @@ mixed case are accepted (`"discards"`, `"Length"`, ...).}
 
 \item{catchCategory}{For `what = "length"`/`"age"`: `"Lan"` (default),
 `"Dis"` or `"BMS"` - which catch part the distribution is linked to.
-Not valid for `what = "discard"` (an error), and informational only
-when `strata` is already classified (the part was fixed upstream).}
+Not valid for `what = "discard"` (an error).}
 
-\item{threshold}{Coverage threshold in percent (heat / bubble only).}
+\item{min_cov}{Minimum coverage, percent (heat / bubble only).}
 
-\item{min_trips}{Trip-count floor (heat / bubble only).}
+\item{min_trip}{Minimum sampling trips (heat / bubble only).}
 
-\item{min_meas}{Measurement floor for `what = "length"`/`"age"`.}
+\item{min_fish}{Minimum measurements for `what = "length"`/`"age"`.}
 
-\item{distributions}{A CEF distributions table - needed only to build a
-`what = "length"`/`"age"` figure from raw catch.}
+\item{distributions}{A CEF distributions table - needed for
+`what = "length"`/`"age"`, ignored otherwise.}
 
-\item{dims}{Columns to build the strata on when `strata` is raw.
-Defaults to the union of the role columns.}
+\item{dims}{Columns to build the strata on. Defaults to the union of
+the role columns.}
 
 \item{weight_label}{Word for the weight (axis / legend). `NULL` derives
 it from `what` and `catchCategory`.}

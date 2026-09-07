@@ -1,4 +1,4 @@
-## plot_coverage_bar(): threshold / min_trips do not apply, and the base
+## plot_coverage_bar(): min_cov / min_trip do not apply, and the base
 ## engine colours the bars by the fill variable.
 ##
 ## 1. A bar chart shows sampled vs unsampled weight; a threshold or a
@@ -29,27 +29,27 @@ strata_raw <- data.frame(
 ## recognises it (via cat_key) as already built.
 strata <- classify_strata(strata_raw, 50, min_trips = 2)
 
-## ---- 1. threshold / min_trips are an error for the bar chart --------
+## ---- 1. min_cov / min_trip are an error for the bar chart --------
 e1 <- tryCatch({
-  plot_coverage_bar(strata, y = "metier4", fill = "Country", threshold = 42)
+  plot_coverage_bar(strata, y = "metier4", fill = "Country", min_cov = 42)
   NA
 }, error = function(e) conditionMessage(e))
-ok(is.character(e1) && grepl("threshold / min_trips do not apply", e1),
-   "plot_coverage_bar() with `threshold` set is an error")
+ok(is.character(e1) && grepl("min_cov / min_trip do not apply", e1),
+   "plot_coverage_bar() with min_cov set is an error")
 ok(grepl("plot_coverage_heat", e1),
-   "and the message points at the threshold-based views")
+   "and the message points at a coverage-threshold view")
 
 e2 <- tryCatch({
-  plot_coverage_bar(strata, y = "metier4", min_trips = 3); NA
+  plot_coverage_bar(strata, y = "metier4", min_trip = 3); NA
 }, error = function(e) conditionMessage(e))
-ok(is.character(e2) && grepl("threshold / min_trips do not apply", e2),
-   "min_trips is an error too")
+ok(is.character(e2) && grepl("min_cov / min_trip do not apply", e2),
+   "min_trip is an error too")
 
 grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
 p_ok <- tryCatch(plot_coverage_bar(strata, y = "metier4", fill = "Country"),
                  error = function(e) e)
 ok(inherits(p_ok, "ggplot"),
-   "plot_coverage_bar() with no threshold / min_trips builds normally")
+   "plot_coverage_bar() with no min_cov / min_trip builds normally")
 
 ## ---- 2. verbose names the view and the fill column -----------------
 out <- capture.output(
@@ -57,16 +57,16 @@ out <- capture.output(
 ok(any(grepl("plot_coverage_bar", out)), "verbose names the function")
 ok(any(grepl("fill   : Country", out)), "verbose reports the fill column")
 ok(any(grepl("not used by a bar chart", out)),
-   "verbose still says threshold / min_trips do not apply here")
+   "verbose still says min_cov / min_trip do not apply here")
 ok(any(grepl("strata rows being drawn", out)),
    "verbose reports how many rows are drawn")
 
 out2 <- capture.output(
   plot_coverage_heat(strata, y = "metier4", verbose = TRUE))
-ok(any(grepl("threshold  : 50", out2, fixed = TRUE)),
-   "a verbose heatmap run reports the resolved threshold (default 50)")
-ok(any(grepl("min_trips  : 2", out2, fixed = TRUE)),
-   "and the resolved min_trips (default 2)")
+ok(any(grepl("min_cov    : 50", out2, fixed = TRUE)),
+   "a verbose heatmap run reports the resolved min_cov (default 50)")
+ok(any(grepl("min_trip   : 2", out2, fixed = TRUE)),
+   "and the resolved min_trip (default 2)")
 
 ## ---- 3. base bars colour by the fill variable ---------------------
 reset_palettes()

@@ -5,15 +5,15 @@
 \title{Coverage map: one pie per ICES area (optionally per group level)}
 \usage{
 plot_coverage_map(
-  strata,
+  catch,
+  distributions = NULL,
   area = "areaValue",
   group = NULL,
   what = "discard",
   catchCategory = NULL,
-  threshold = 50,
-  min_trips = 2,
-  min_meas = 0,
-  distributions = NULL,
+  min_cov = 50,
+  min_trip = 2,
+  min_fish = 0,
   dims = NULL,
   weight_label = NULL,
   scale = 1,
@@ -22,15 +22,14 @@ plot_coverage_map(
 )
 }
 \arguments{
-\item{strata}{Classified stratum table, or raw CEF catch data.}
+\item{catch}{Raw CEF catch data (or a classified stratum table).}
 
 \item{area}{Column holding the ICES area code. Default `"areaValue"`.}
 
 \item{group}{Optional column - one boxed grid of pies per area, one
 pie per level.}
 
-\item{what, catchCategory, threshold, min_trips, min_meas, dims, distributions}{As in [coverage-plots] - only used when `strata` is raw and has to
-be built.}
+\item{what, catchCategory, min_cov, min_trip, min_fish, dims, distributions}{As in [coverage-plots].}
 
 \item{weight_label}{Word for the weight (title only). `NULL` derives
 it from `what` and `catchCategory`.}

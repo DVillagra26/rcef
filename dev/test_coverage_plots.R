@@ -109,11 +109,11 @@ invisible(dev.off())
 
 ## ---- 1c. bubbles: weighted status grid ---------------------------
 p1c <- plot_coverage_bubble(catch_data, y = "fleetValue", x = "Country",
-                            threshold = 50, min_trips = 2)
+                            min_cov = 50, min_trip = 2)
 print(p1c)
 png("11e_discard_bubbles_base.png", width = 1300, height = 800, res = 110)
 plot_coverage_bubble(catch_data, y = "fleetValue", x = "Country",
-                     threshold = 50, min_trips = 2, engine = "base")
+                     min_cov = 50, min_trip = 2, engine = "base")
 invisible(dev.off())
 
 ## ---- 1d-1f. coverage map - one sampled/not-sampled pie per ICES
@@ -169,27 +169,27 @@ invisible(dev.off())
 p2b <- plot_coverage_heat(catch_data, y = "fleetValue", x = "Country",
                           facet = "Season", what = "length",
                           catchCategory = "Dis", distributions = distributions,
-                          threshold = 50, min_meas = 100, min_trips = 2,
+                          min_cov = 50, min_fish = 100, min_trip = 2,
                           weight_label = "discards")
 print(p2b)
 png("12b_length_heatmap_base.png", width = 1400, height = 900, res = 110)
 plot_coverage_heat(catch_data, y = "fleetValue", x = "Country", facet = "Season",
                    what = "length", catchCategory = "Dis",
-                   distributions = distributions, threshold = 50,
-                   min_meas = 100, min_trips = 2, weight_label = "discards",
+                   distributions = distributions, min_cov = 50,
+                   min_fish = 100, min_trip = 2, weight_label = "discards",
                    engine = "base")
 invisible(dev.off())
 
 ## ---- 2c. length coverage, bubbles (landings) -------------------
 p2c <- plot_coverage_bubble(catch_data, y = "fleetValue", x = "Country",
                             what = "length", distributions = distributions,
-                            threshold = 50, min_meas = 100, min_trips = 2,
+                            min_cov = 50, min_fish = 100, min_trip = 2,
                             weight_label = "catch")
 print(p2c)
 png("12c_length_bubbles_base.png", width = 1300, height = 800, res = 110)
 plot_coverage_bubble(catch_data, y = "fleetValue", x = "Country",
                      what = "length", distributions = distributions,
-                     threshold = 50, min_meas = 100, min_trips = 2,
+                     min_cov = 50, min_fish = 100, min_trip = 2,
                      weight_label = "catch", engine = "base")
 invisible(dev.off())
 
@@ -207,25 +207,25 @@ if (have_age) {
 
   p2e <- plot_coverage_heat(age_catch, y = "fleetValue", x = "Country",
                             facet = "Season", what = "age",
-                            distributions = age_dist, threshold = 50,
-                            min_meas = 50, min_trips = 2, weight_label = "catch")
+                            distributions = age_dist, min_cov = 50,
+                            min_fish = 50, min_trip = 2, weight_label = "catch")
   print(p2e)
   png("12e_age_heatmap_base.png", width = 1400, height = 900, res = 110)
   plot_coverage_heat(age_catch, y = "fleetValue", x = "Country", facet = "Season",
-                     what = "age", distributions = age_dist, threshold = 50,
-                     min_meas = 50, min_trips = 2, weight_label = "catch",
+                     what = "age", distributions = age_dist, min_cov = 50,
+                     min_fish = 50, min_trip = 2, weight_label = "catch",
                      engine = "base")
   invisible(dev.off())
 
   p2f <- plot_coverage_bubble(age_catch, y = "fleetValue", x = "Country",
                               what = "age", distributions = age_dist,
-                              threshold = 50, min_meas = 50, min_trips = 2,
+                              min_cov = 50, min_fish = 50, min_trip = 2,
                               weight_label = "catch")
   print(p2f)
   png("12f_age_bubbles_base.png", width = 1300, height = 800, res = 110)
   plot_coverage_bubble(age_catch, y = "fleetValue", x = "Country", what = "age",
-                       distributions = age_dist, threshold = 50, min_meas = 50,
-                       min_trips = 2, weight_label = "catch", engine = "base")
+                       distributions = age_dist, min_cov = 50, min_fish = 50,
+                       min_trip = 2, weight_label = "catch", engine = "base")
   invisible(dev.off())
 
   if (requireNamespace("maps", quietly = TRUE)) {
@@ -344,10 +344,10 @@ try_show <- function(expr) tryCatch(
 grDevices::pdf(tempfile())
 
 say("a. bar chart given a threshold -> ERROR (points at heat / bubble)")
-try_show(plot_coverage_bar(catch_data, y = "fleetValue", threshold = 80))
+try_show(plot_coverage_bar(catch_data, y = "fleetValue", min_cov = 80))
 
 say("b. bar chart given min_trips -> ERROR")
-try_show(plot_coverage_bar(catch_data, y = "fleetValue", min_trips = 5))
+try_show(plot_coverage_bar(catch_data, y = "fleetValue", min_trip = 5))
 
 say("c. catchCategory on a discard coverage plot -> ERROR")
 try_show(plot_coverage_heat(catch_data, y = "fleetValue", catchCategory = "Lan"))

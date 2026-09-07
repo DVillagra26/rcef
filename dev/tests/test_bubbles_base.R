@@ -28,7 +28,7 @@ r <- tryCatch({
   grDevices::pdf(NULL)
   on.exit(grDevices::dev.off(), add = TRUE)
   plot_coverage_bubble(sc, y = "metier4", x = "Country",
-               threshold = 50, min_trips = 2, engine = "base")
+               min_cov = 50, min_trip = 2, engine = "base")
   TRUE
 }, error = function(e) conditionMessage(e))
 ok(isTRUE(r), paste("plot_coverage_bubble(engine='base') runs:", r))

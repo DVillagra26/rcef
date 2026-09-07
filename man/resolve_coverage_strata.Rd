@@ -10,10 +10,10 @@ resolve_coverage_strata(
   y,
   fill,
   facet,
-  threshold,
+  min_cov,
   what,
-  min_meas,
-  min_trips,
+  min_fish,
+  min_trip,
   distributions = NULL,
   catch_category = NULL
 )
@@ -24,8 +24,8 @@ resolve_coverage_strata(
 \item{dims}{Columns to build on; defaults to the union of `y`,
 `fill`, `facet` when `NULL`.}
 
-\item{y, fill, facet, threshold, what, min_meas, min_trips}{As in the
-coverage plots.}
+\item{y, fill, facet, min_cov, what, min_fish, min_trip}{As in the coverage
+plots.}
 
 \item{distributions}{A distributions table - required to auto-build a
 `what = "length"`/`"age"` table from raw catch data; ignored when
