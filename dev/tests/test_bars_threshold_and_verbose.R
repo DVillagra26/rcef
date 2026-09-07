@@ -25,7 +25,7 @@ strata_raw <- data.frame(
   discard_rate = c(0.09, 0.09, 0.09, 0.09, 0.09, NA),
   n_measurements = 0, numTrips = c(3, 3, 1, 3, 1, 0),
   stringsAsFactors = FALSE)
-## Already stratum-level - classified directly so resolve_coverage_strata()
+## Already stratum-level - classified directly so build_coverage_strata()
 ## recognises it (via cat_key) as already built.
 strata <- classify_strata(strata_raw, 50, min_trips = 2)
 
