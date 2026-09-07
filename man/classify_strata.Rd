@@ -4,12 +4,15 @@
 \alias{classify_strata}
 \title{Classify strata against a coverage (and measurement) threshold}
 \usage{
-classify_strata(s, threshold, what = "discard", min_meas = 0)
+classify_strata(s, threshold, what = "discard", min_meas = 0, min_trips = 2)
 }
 \arguments{
-\item{s}{A stratum table from [build_strata()] (discards) or the biology
-link (length/age), carrying at least `coverage`; length/age
-classification also reads `n_measurements`.}
+\item{s}{A stratum table from [build_strata()] (discards) or
+[biology_link()] (length/age), carrying at least `coverage`;
+length/age classification also reads `n_measurements`. Both carry
+`numTrips` when the loaded CEF file reported it; a stratum with no
+trip count is treated as failing the trips test, not passing it -
+unknown is not the same as adequate.}
 
 \item{threshold}{Coverage threshold in percent.}
 
@@ -17,6 +20,8 @@ classification also reads `n_measurements`.}
 
 \item{min_meas}{Minimum number of measurements for length/age; ignored for
 discards.}
+
+\item{min_trips}{Minimum number of trips. Defaults to 2.}
 }
 \value{
 `s` with `cat_key`, `Status` and `Raising_Decision` added.
@@ -24,10 +29,10 @@ discards.}
 \description{
 Adds the sampling verdict to a stratum table: `cat_key` (a stable key),
 `Status` (a factor with every level from [cat_lookup()], so legends stay
-complete) and `Raising_Decision` (what to do about it). Discards use the
-one-axis coverage scheme; lengths and ages use the two-axis
-coverage-by-measurements scheme, where a thinly measured stratum keeps its
-real coverage but is flagged rather than demoted.
+complete) and `Raising_Decision` (what to do about it). Discards are
+classified on coverage and trips; lengths and ages on coverage, trips
+AND measurements - three sampling-effort questions at once, none of
+which substitutes for the others.
 }
 \seealso{
 [build_strata()], [cat_lookup()]

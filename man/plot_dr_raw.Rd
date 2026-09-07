@@ -10,7 +10,8 @@ plot_dr_raw(
   colour_var = NULL,
   shape_var = NULL,
   facet_var = NULL,
-  jitter = TRUE
+  jitter = TRUE,
+  palette = c("default", "colorblind")
 )
 }
 \arguments{

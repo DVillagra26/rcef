@@ -11,7 +11,8 @@ plot_dr_box(
   facet_var = NULL,
   show_points = TRUE,
   show_pooled = TRUE,
-  ncol = 2
+  ncol = 2,
+  palette = c("default", "colorblind")
 )
 }
 \arguments{

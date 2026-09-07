@@ -4,7 +4,7 @@
 \alias{scenario_manual}
 \title{Describe a manual-method scenario}
 \usage{
-scenario_manual(name, dims, rules, sets, fleet_level, area_level)
+scenario_manual(name, dims, rules, sets)
 }
 \arguments{
 \item{name}{Scenario name.}
@@ -14,8 +14,6 @@ scenario_manual(name, dims, rules, sets, fleet_level, area_level)
 \item{rules}{The rule list.}
 
 \item{sets}{Named value sets referenced by the rules.}
-
-\item{fleet_level, area_level}{The chosen fleet and area resolutions.}
 }
 \value{
 A scenario list.

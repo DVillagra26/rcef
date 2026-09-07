@@ -7,7 +7,7 @@
 taf_model_explore_length_age(ctx, kept = list())
 }
 \arguments{
-\item{ctx}{Session context. Uses `dims_len`, `len_threshold`,
+\item{ctx}{Session context. Uses `dims_len`, `dims_age`, `len_threshold`,
 `len_min_meas`, `age_threshold`, `age_min_meas`.}
 
 \item{kept}{Kept-plot records; those marked for this section are drawn

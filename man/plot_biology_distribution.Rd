@@ -6,6 +6,9 @@
 \usage{
 plot_biology_distribution(
   data,
+  distributions = NULL,
+  variableType = NULL,
+  distributionType = NULL,
   quantity = c("numbers", "meanweight"),
   type = c("histogram", "density", "line"),
   fill = NULL,
@@ -13,13 +16,21 @@ plot_biology_distribution(
   facet1 = NULL,
   facet2 = NULL,
   shape = NULL,
+  dims = NULL,
+  catch_category = "Lan",
   stacked = TRUE,
   smooth = 1,
   show_points = TRUE,
   show_spread = TRUE,
+  class_label = NULL,
+  value_label = NULL,
   ncol = 2,
   scales = "fixed",
-  class_label = "Length (cm)"
+  engine = c("ggplot", "base"),
+  palette = c("default", "colorblind"),
+  angle = 45,
+  n_per_screen = NULL,
+  verbose = FALSE
 )
 }
 \arguments{
@@ -45,11 +56,20 @@ grouping columns); for "meanweight", a `length_meanweight()` table
 
 \item{show_points, show_spread}{(meanweight) draw the points / sd ribbon.}
 
+\item{class_label}{X-axis label, e.g. "Length (cm)" or "Age (years)".}
+
 \item{ncol}{Facet columns.}
 
 \item{scales}{Facet scales: "fixed", "free_x", "free_y" or "free".}
 
-\item{class_label}{X-axis label, e.g. "Length (cm)" or "Age (years)".}
+\item{engine}{"ggplot" (default) or "base" - draws with base R
+graphics instead of ggplot2. Same data, same per-level colours (via
+[var_palette()]), same faceting (up to two facet columns, combined
+into one grid of panels rather than ggplot's nested rows/columns).}
+
+\item{verbose}{If `TRUE`, prints a short console summary before
+drawing - see [plot_coverage()]'s `verbose` for the same idea
+applied here.}
 }
 \value{
 A ggplot object, or `NULL`.
@@ -60,6 +80,27 @@ One entry point for the biology distribution views. `quantity =
 a smoothed density (`type = "density"`); `quantity = "meanweight"` draws
 mean weight at class as a line (`type = "line"`).
 }
+\section{Arguments by scenario}{
+
+\describe{
+  \item{Numbers at length / age, histogram}{\code{variableType = "Number"}
+    (or \code{quantity = "numbers"}), \code{type = "histogram"},
+    \code{fill}, \code{stacked}}
+  \item{Numbers, smoothed density}{as above with \code{type = "density"}
+    and \code{smooth}}
+  \item{Mean weight at length / age}{\code{variableType = "WeightLive"}
+    (or \code{quantity = "meanweight"}), \code{colour}, \code{shape},
+    \code{show_points}, \code{show_spread} - \code{type} is always a line}
+  \item{From raw catch}{pass \code{distributions} and
+    \code{distributionType = "LengthTotal"} / \code{"Age"}; also
+    \code{dims}, \code{catch_category}}
+  \item{Facets / labels}{\code{facet1}, \code{facet2}, \code{ncol},
+    \code{scales}, \code{class_label}, \code{value_label}}
+  \item{Rendering}{\code{engine}, \code{palette}, \code{angle},
+    \code{n_per_screen} (base only), \code{verbose}}
+}
+}
+
 \examples{
 \dontrun{
 plot_biology_distribution(nums, "numbers", "histogram", fill = "Country")

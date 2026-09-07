@@ -13,7 +13,8 @@ exclusion_report(
   dr_min = NA,
   dr_max = NA,
   scope = NULL,
-  drop_unusable = TRUE
+  drop_unusable = TRUE,
+  trips_min = NA
 )
 }
 \arguments{

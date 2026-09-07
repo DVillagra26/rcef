@@ -6,23 +6,40 @@
 \usage{
 plot_coverage(
   strata,
-  type = c("heatmap", "bubbles", "bars"),
-  y,
+  type = c("heatmap", "bubbles", "bars", "scatter"),
+  what = "discard",
+  y = NULL,
   fill = NULL,
   facet = NULL,
-  threshold = 50,
-  what = "discard",
+  threshold = NULL,
+  min_trips = NULL,
+  min_meas = 0,
+  dims = NULL,
+  distributions = NULL,
   weight_label = "landings",
+  scatter_y = "coverage",
+  scatter_size = "numTrips",
+  label_n = 8,
+  show_fill_in_labels = FALSE,
+  engine = c("ggplot", "base"),
+  palette = c("default", "colorblind"),
+  angle = 45,
   ncol = 2,
-  min_meas = 0
+  n_per_screen = NULL,
+  verbose = FALSE
 )
 }
 \arguments{
-\item{strata}{Classified stratum table: the output of `classify_strata()`,
-carrying at least `landings`, `landings_with_discards`, `discards`,
-`coverage`, `cat_key` and `Status`.}
+\item{strata}{Raw catch data, or an already-classified strata table
+(see Details).}
 
 \item{type}{"heatmap", "bubbles" or "bars".}
+
+\item{what}{"discard" (default), "length" or "age". For "length" /
+"age", either pass an already-classified biology table as `strata`,
+or pass raw catch data together with `distributions` and the whole
+biology pipeline (`biology_link()`, `stratum_measurements()`,
+`add_sufficiency()`, `classify_strata()`) runs internally.}
 
 \item{y}{Column on the y axis (rows).}
 
@@ -31,19 +48,55 @@ for bars. `NULL` collapses it away.}
 
 \item{facet}{Optional facet column.}
 
-\item{threshold}{Coverage threshold in percent; drives the status colours.}
-
-\item{what}{"discard" (default), "length" or "age". Changes titles and,
-for biology, the status scheme; never the computation.}
-
-\item{weight_label}{Word for the weight shown, e.g. "landings" or "catch".}
-
-\item{ncol}{Facet columns (bars only).}
+\item{threshold}{Coverage threshold (%), used to classify raw data
+into a sampling status. Ignored for `type = "bars"` (see Details).
+Defaults to 50 when `NULL` and the type needs it.}
 
 \item{min_meas}{Measurement threshold for length/age status.}
+
+\item{dims}{Columns to build the strata on, when `strata` is raw
+data. Defaults to the union of `y`, `fill` and `facet` - enough for
+the figure itself, though a caller building strata for reuse
+elsewhere may want to pass a wider set explicitly.}
+
+\item{distributions}{A distributions table, needed only to auto-build
+a `what = "length"`/`"age"` figure from raw catch data. `"age"`
+reads the `Age` rows, otherwise `LengthTotal`.}
+
+\item{weight_label}{Axis/legend label for the weight measure.}
+
+\item{engine}{"ggplot" (default, unchanged) or "base" - draws with
+base R graphics instead of ggplot2. Same data, same colour-by-status
+scheme, same faceting, all three types ("heatmap", "bubbles",
+"bars"); a lighter-weight rendering for a script that would rather
+not depend on ggplot2, at the cost of some of the ggplot version's
+finer annotation (exact separator lines, precise percentage
+callouts, ggrepel's automatic label-overlap avoidance on the
+bubble plot - labels there are placed just above each bubble
+instead).}
+
+\item{ncol}{Facet columns, for the "bars" type.}
+
+\item{verbose}{If `TRUE`, prints a short summary to the console
+before drawing: the plot type and engine, which columns feed y /
+fill / facet, whether a threshold applies and what it resolved to,
+and how many strata rows are being drawn. Meant for exploring at
+the console, not for a script that already knows what it asked for
+- default `FALSE`.}
+
+\item{y, fill, facet}{Column names for the plot's roles. `y` is
+required; `fill`/`facet` may be `NULL`.}
+
+\item{min_meas, min_trips}{Sufficiency floors used to classify raw
+data. `min_trips` is ignored for `type = "bars"` (see Details);
+defaults to 2 when `NULL` and the type needs it. `min_meas`
+defaults to 0 (no measurement floor) regardless of type.}
 }
 \value{
 A ggplot object, or `NULL`.
+
+A ggplot object (`engine = "ggplot"`), or `NULL` invisibly
+  after drawing to the current device (`engine = "base"`).
 }
 \description{
 One view of how well a set of strata is sampled, from a classified
@@ -51,6 +104,28 @@ stratum table. The same engine serves discard coverage and, through
 `what`, length/age coverage, so a biology-coverage panel reads exactly
 like a discard one.
 }
+\section{Arguments by scenario}{
+
+\describe{
+  \item{Discard heatmap / bubbles}{\code{type}, \code{y}, \code{fill},
+    \code{facet}, \code{threshold}, \code{min_trips}}
+  \item{Coverage bars}{\code{type = "bars"}, \code{y}, \code{fill},
+    \code{show_fill_in_labels}; \code{threshold} / \code{min_trips} are
+    ignored (a warning if you set them)}
+  \item{Data-availability scatter}{\code{type = "scatter"},
+    \code{scatter_y}, \code{scatter_size}, \code{label_n}, \code{facet},
+    \code{threshold}, \code{min_trips}; \code{y} is ignored}
+  \item{Length / age coverage}{add \code{what = "length"} or
+    \code{"age"}, and \code{min_meas}}
+  \item{From raw catch}{add \code{dims}; for length / age also
+    \code{distributions}}
+  \item{Rendering (any scenario)}{\code{engine}, \code{palette}
+    (fill-coloured types only), \code{angle} (categorical x only),
+    \code{ncol} (bars only), \code{n_per_screen} (base engine only),
+    \code{verbose}}
+}
+}
+
 \examples{
 \dontrun{
 sc <- classify_strata(build_strata(catch, c("metier4", "Season")), 50)
@@ -62,10 +137,23 @@ plot_coverage(sc, "bars", y = "metier4")
 [plot_biology_coverage()], [plot_discard_rate()], [plot_heatmap()],
   [plot_bubbles()], [plot_coverage_bars()]
 
+[build_strata()], [classify_strata()], [plot_biology_coverage()]
+
 Other coverage plots: 
 \code{\link{plot_biology_coverage}()},
 \code{\link{plot_bubbles}()},
 \code{\link{plot_coverage_bars}()},
+\code{\link{plot_coverage_map}()},
+\code{\link{plot_coverage_scatter}()},
+\code{\link{plot_heatmap}()},
+\code{\link{status_legend_plot}()}
+
+Other coverage plots: 
+\code{\link{plot_biology_coverage}()},
+\code{\link{plot_bubbles}()},
+\code{\link{plot_coverage_bars}()},
+\code{\link{plot_coverage_map}()},
+\code{\link{plot_coverage_scatter}()},
 \code{\link{plot_heatmap}()},
 \code{\link{status_legend_plot}()}
 }

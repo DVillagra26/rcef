@@ -8,14 +8,20 @@ plot_discard_rate(
   strata,
   type = c("raw", "box"),
   x,
+  facet = NULL,
   colour = NULL,
   shape = NULL,
-  facet = NULL,
   jitter = TRUE,
   fill = NULL,
   show_points = TRUE,
   show_pooled = TRUE,
-  ncol = 2
+  dims = NULL,
+  engine = c("ggplot", "base"),
+  palette = c("default", "colorblind"),
+  angle = 45,
+  ncol = 2,
+  n_per_screen = NULL,
+  verbose = FALSE
 )
 }
 \arguments{
@@ -27,11 +33,11 @@ full-resolution table so each box shows real spread.}
 
 \item{x}{Column on the x axis.}
 
+\item{facet}{Optional facet column.}
+
 \item{colour}{(raw) column mapped to point fill.}
 
 \item{shape}{(raw) column mapped to point shape.}
-
-\item{facet}{Optional facet column.}
 
 \item{jitter}{(raw) jitter the points horizontally.}
 
@@ -41,7 +47,22 @@ full-resolution table so each box shows real spread.}
 
 \item{show_pooled}{(box) add the catch-weighted pooled rate.}
 
+\item{dims}{Columns to build the strata on, when `strata` is raw
+catch data. Defaults to the union of `x`, `colour`/`fill` and
+`facet` - the same convenience [plot_coverage()] offers, so a
+discard-rate figure needs no `build_strata()` call of its own
+either.}
+
+\item{engine}{"ggplot" (default) or "base" - draws with base R
+graphics instead of ggplot2. Same data, same per-level colours
+(via [var_palette()], the same assignment the ggplot engine uses),
+same faceting.}
+
 \item{ncol}{Facet columns.}
+
+\item{verbose}{If `TRUE`, prints a short console summary before
+drawing - see [plot_coverage()]'s `verbose` for the same idea
+applied here.}
 }
 \value{
 A ggplot object, or `NULL`.
@@ -52,10 +73,24 @@ Two views of the discard rate. "raw" draws one point per sampled stratum;
 discard estimate (see [sampled_for_discards()]): a rate is a property of
 sampled strata only.
 }
+\section{Arguments by scenario}{
+
+\describe{
+  \item{Raw points}{\code{type = "raw"}, \code{x}, \code{colour},
+    \code{shape}, \code{facet}, \code{jitter}}
+  \item{Box summary}{\code{type = "box"}, \code{x}, \code{fill},
+    \code{facet}, \code{show_points}, \code{show_pooled}}
+  \item{From raw catch}{add \code{dims}}
+  \item{Rendering (any scenario)}{\code{engine}, \code{palette},
+    \code{angle}, \code{ncol} (ggplot only), \code{n_per_screen}
+    (base only), \code{verbose}}
+}
+}
+
 \examples{
 \dontrun{
-plot_discard_rate(strata, "raw", x = "Season", colour = "metier4")
-plot_discard_rate(strata, "box", x = "metier4", fill = "Country")
+plot_discard_rate(catch_data, "raw", x = "Season", colour = "metier4")
+plot_discard_rate(catch_data, "box", x = "metier4", fill = "Country")
 }
 }
 \seealso{

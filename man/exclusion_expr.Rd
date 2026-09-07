@@ -10,7 +10,8 @@ exclusion_expr(
   dr_min = NA,
   dr_max = NA,
   named = character(0),
-  dims = NULL
+  dims = NULL,
+  trips_min = NA
 )
 }
 \arguments{

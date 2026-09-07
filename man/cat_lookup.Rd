@@ -4,7 +4,7 @@
 \alias{cat_lookup}
 \title{Sampling-status categories, decisions and colours}
 \usage{
-cat_lookup(threshold, what = "discard", min_meas = 0)
+cat_lookup(threshold, what = "discard", min_meas = 0, min_trips = 2)
 }
 \arguments{
 \item{threshold}{Coverage threshold in percent that separates "enough"
@@ -14,19 +14,34 @@ from "too little".}
 
 \item{min_meas}{Minimum number of measurements for a length/age stratum to
 count as well measured. Ignored for discards.}
+
+\item{min_trips}{Minimum number of trips for a stratum to count as
+adequately covered in EFFORT terms, separately from coverage in
+WEIGHT terms. Defaults to 2, matching ICES practice.}
 }
 \value{
 A data frame with columns `cat_key`, `status`, `decision` and
   `colour`, one row per category.
 }
 \description{
-The single source of truth for how a stratum's sampling is described. For
-discards it is a one-axis scheme on coverage; for lengths and ages it is a
-two-axis scheme on coverage AND the number of fish measured, so a fully
-covered but thinly measured stratum is flagged rather than trusted.
-Colours are shades of one palette (green = use own data, yellow / orange =
-borrow, red = nothing sampled) so hue gives the verdict and shade the
-severity.
+The single source of truth for how a stratum's sampling is described.
+Coverage alone says how much of the landings weight carries a discard
+estimate; it says nothing about how many TRIPS that estimate rests
+on, and a stratum 100% covered by one unusually large trip is a
+thinner basis than the same coverage spread across a dozen. Every
+scheme here is therefore at least two-axis: coverage and trips for
+discards, coverage, trips and measurements for lengths and ages -
+three sampling-effort questions asked at once, not folded into one
+number.
+}
+\details{
+Colours are shades of one palette (green = use own data, yellow /
+orange = borrow, red = nothing usable) so hue gives the verdict and
+shade the severity. `min_trips` and the trips comparisons themselves
+are unknown-averse: a stratum with no trip count reported is treated
+as failing the trips test rather than passing it by default, the same
+way a stratum outside every category collapses to the worst one
+rather than the best.
 }
 \seealso{
 [classify_strata()], [status_palette()]

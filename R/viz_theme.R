@@ -86,18 +86,6 @@ OUTLINE_LW <- 0.25
 #' @noRd
 .LEVEL_COLOURS <- new.env(parent = emptyenv())
 
-#' Stable colours for the levels of a variable
-#'
-#' Returns a named colour vector for `values`, reusing the colours already
-#' assigned to levels of `var` and extending the palette for any new level.
-#' Because the assignment is remembered, a level keeps its colour across every
-#' plot in the session.
-#'
-#' @param var Name of the variable being coloured.
-#' @param values The levels to colour.
-#' @return A character vector of colours, named by level.
-#' @seealso [scale_fill_var()], [scale_colour_var()], [reset_palettes()]
-#' @export
 #' Colourblind-safe categorical palette (Okabe-Ito)
 #'
 #' The standard 8-colour palette recommended for red-green and
@@ -110,6 +98,20 @@ OUTLINE_LW <- 0.25
 PAL_CB <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2",
            "#D55E00", "#CC79A7", "#000000")
 
+#' Stable colours for the levels of a variable
+#'
+#' Returns a named colour vector for `values`, reusing the colours already
+#' assigned to levels of `var` and extending the palette for any new level.
+#' Because the assignment is remembered, a level keeps its colour across every
+#' plot in the session.
+#'
+#' @param var Name of the variable being coloured.
+#' @param values The levels to colour.
+#' @param palette `"default"` ([PAL_BASE]) or `"colorblind"` ([PAL_CB]).
+#' @return A character vector of colours, named by level.
+#' @seealso [scale_fill_var()], [scale_colour_var()], [reset_palettes()]
+#' @keywords internal
+#' @export
 var_palette <- function(var, values, palette = c("default", "colorblind")) {
   palette <- match.arg(palette)
   pal_src <- if (identical(palette, "colorblind")) PAL_CB else PAL_BASE

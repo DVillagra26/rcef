@@ -11,7 +11,8 @@ flag_donor_exclusion(
   cov_min = NA,
   meas_min = NA,
   excluded = character(0),
-  dims = NULL
+  dims = NULL,
+  trips_min = NA
 )
 }
 \arguments{

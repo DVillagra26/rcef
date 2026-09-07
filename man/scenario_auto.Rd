@@ -9,8 +9,6 @@ scenario_auto(
   dims,
   hierarchy,
   thresholds,
-  fleet_level,
-  area_level,
   self_threshold = NA,
   mode = "nested",
   dr_min = NA,
@@ -25,8 +23,6 @@ scenario_auto(
 \item{hierarchy}{Key columns, finest first.}
 
 \item{thresholds}{One threshold, or one per level.}
-
-\item{fleet_level, area_level}{The chosen fleet and area resolutions.}
 
 \item{self_threshold}{Own-stratum threshold, or `NA`.}
 

@@ -11,7 +11,8 @@ plot_coverage_bars(
   facet_var = NULL,
   ncol = 2,
   what = "discard",
-  weight_label = "landings"
+  weight_label = "landings",
+  palette = c("default", "colorblind")
 )
 }
 \arguments{
@@ -46,6 +47,8 @@ Other coverage plots:
 \code{\link{plot_biology_coverage}()},
 \code{\link{plot_bubbles}()},
 \code{\link{plot_coverage}()},
+\code{\link{plot_coverage_map}()},
+\code{\link{plot_coverage_scatter}()},
 \code{\link{plot_heatmap}()},
 \code{\link{status_legend_plot}()}
 }

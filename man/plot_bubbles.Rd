@@ -12,7 +12,8 @@ plot_bubbles(
   threshold = 50,
   what = "discard",
   weight_label = "landings",
-  min_meas = 0
+  min_meas = 0,
+  min_trips = 2
 )
 }
 \arguments{
@@ -55,6 +56,8 @@ Other coverage plots:
 \code{\link{plot_biology_coverage}()},
 \code{\link{plot_coverage}()},
 \code{\link{plot_coverage_bars}()},
+\code{\link{plot_coverage_map}()},
+\code{\link{plot_coverage_scatter}()},
 \code{\link{plot_heatmap}()},
 \code{\link{status_legend_plot}()}
 }

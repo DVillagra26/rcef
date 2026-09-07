@@ -14,7 +14,8 @@ plot_length_meanweight(
   show_spread = TRUE,
   ncol = 2,
   scales = "fixed",
-  class_label = "Length (cm)"
+  class_label = "Length (cm)",
+  palette = c("default", "colorblind")
 )
 }
 \arguments{

@@ -9,7 +9,8 @@ status_legend_plot(
   what = "discard",
   min_meas = 0,
   key = c("point", "tile"),
-  size = NULL
+  size = NULL,
+  min_trips = 2
 )
 }
 \arguments{
@@ -30,6 +31,10 @@ by [plot_bubbles()]: a list with `breaks`, `labels`, `limits`, `range`
 and `name`. Built with the SAME limits and range as the plot it came
 from, so a key circle is drawn at exactly the diameter that value has in
 the plot and can be read off it.}
+
+\item{min_trips}{Minimum number of trips for a stratum to count as
+adequately covered in EFFORT terms, separately from coverage in
+WEIGHT terms. Defaults to 2, matching ICES practice.}
 }
 \value{
 A ggplot object; only its legend is meant to be used.
@@ -56,6 +61,8 @@ Other coverage plots:
 \code{\link{plot_bubbles}()},
 \code{\link{plot_coverage}()},
 \code{\link{plot_coverage_bars}()},
+\code{\link{plot_coverage_map}()},
+\code{\link{plot_coverage_scatter}()},
 \code{\link{plot_heatmap}()}
 }
 \concept{coverage plots}

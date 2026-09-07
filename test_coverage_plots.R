@@ -107,6 +107,14 @@ plot_coverage(catch_data, type = "bars", y = "fleetValue", fill = "Country",
              engine = "base", palette = "colorblind", verbose = TRUE)
 invisible(dev.off())
 
+## ---- 1b2. faceted base bars - one panel per Season, each panel keeps
+## its own fill legend (bottom-right). `what = "discards"` (plural) is
+## accepted as an alias for "discard".
+png("11b_discard_bars_facet_base.png", width = 1600, height = 1000, res = 120)
+plot_coverage(catch_data, type = "bars", y = "fleetValue", fill = "Country",
+             facet = "Season", what = "discards", engine = "base")
+invisible(dev.off())
+
 ## ---- 1c. threshold and min_trips genuinely do nothing for "bars" ----
 ## (setting them on a bars plot now warns - see section 5f; suppressed
 ## here since the point of 1c is only that the DATA is identical)
@@ -522,6 +530,16 @@ try_show(plot_discard_rate(catch_data, type = "box", x = "fleetValue",
 
 say("l. coverage map given palette = colorblind -> warns")
 try_show(plot_coverage_map(catch_data, palette = "colorblind"))
+
+say("o. what = plural / mixed case is accepted; a bogus what errors clearly")
+try_show(plot_coverage(catch_data, type = "bars", y = "fleetValue",
+  fill = "Country", what = "discards"))          # -> "discard", no warning
+try_show(plot_coverage(catch_data, type = "bars", y = "fleetValue",
+  fill = "Country", what = "Length", distributions = distributions))  # -> "length"
+cat("  what = 'nonsense' ->",
+    tryCatch({ plot_coverage(catch_data, type = "bars", y = "fleetValue",
+                             what = "nonsense"); "(no error!)" },
+             error = function(e) conditionMessage(e)), "\n")
 
 say("m. GOOD CALLS - these must print NO warning")
 try_show(plot_coverage(catch_data, type = "bars", y = "fleetValue",

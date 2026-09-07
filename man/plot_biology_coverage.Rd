@@ -2,25 +2,40 @@
 % Please edit documentation in R/viz_plots.R
 \name{plot_biology_coverage}
 \alias{plot_biology_coverage}
-\title{Length- or age-sampling coverage plot}
+\title{Length- or age-sampling coverage plot (back-compat wrapper)}
 \usage{
 plot_biology_coverage(
   strata,
-  type = c("heatmap", "bubbles", "bars"),
-  y,
+  distributions = NULL,
+  type = c("heatmap", "bubbles", "bars", "scatter"),
+  y = NULL,
   fill = NULL,
   facet = NULL,
-  threshold = 50,
+  threshold = NULL,
+  min_trips = NULL,
+  min_meas = 0,
+  dims = NULL,
   what = "length",
   weight_label = "catch",
+  scatter_y = "coverage",
+  scatter_size = "numTrips",
+  label_n = 8,
+  show_fill_in_labels = FALSE,
+  engine = c("ggplot", "base"),
+  palette = c("default", "colorblind"),
+  angle = 45,
   ncol = 2,
-  min_meas = 0
+  n_per_screen = NULL,
+  verbose = FALSE
 )
 }
 \arguments{
-\item{strata}{Classified stratum table: the output of `classify_strata()`,
-carrying at least `landings`, `landings_with_discards`, `discards`,
-`coverage`, `cat_key` and `Status`.}
+\item{strata}{Raw catch data, or an already-classified strata table
+(see Details).}
+
+\item{distributions}{A distributions table, needed only to auto-build
+a `what = "length"`/`"age"` figure from raw catch data. `"age"`
+reads the `Age` rows, otherwise `LengthTotal`.}
 
 \item{type}{"heatmap", "bubbles" or "bars".}
 
@@ -31,33 +46,59 @@ for bars. `NULL` collapses it away.}
 
 \item{facet}{Optional facet column.}
 
-\item{threshold}{Coverage threshold in percent; drives the status colours.}
+\item{threshold}{Coverage threshold (%), used to classify raw data
+into a sampling status. Ignored for `type = "bars"` (see Details).
+Defaults to 50 when `NULL` and the type needs it.}
+
+\item{min_meas}{Measurement threshold for length/age status.}
+
+\item{dims}{Columns to build the strata on, when `strata` is raw
+data. Defaults to the union of `y`, `fill` and `facet` - enough for
+the figure itself, though a caller building strata for reuse
+elsewhere may want to pass a wider set explicitly.}
 
 \item{what}{"length" or "age".}
 
-\item{weight_label}{Defaults to "catch".}
+\item{weight_label}{Axis/legend label for the weight measure.}
 
-\item{ncol}{Facet columns (bars only).}
+\item{engine}{"ggplot" (default, unchanged) or "base" - draws with
+base R graphics instead of ggplot2. Same data, same colour-by-status
+scheme, same faceting, all three types ("heatmap", "bubbles",
+"bars"); a lighter-weight rendering for a script that would rather
+not depend on ggplot2, at the cost of some of the ggplot version's
+finer annotation (exact separator lines, precise percentage
+callouts, ggrepel's automatic label-overlap avoidance on the
+bubble plot - labels there are placed just above each bubble
+instead).}
 
-\item{min_meas}{Measurement threshold for length/age status.}
+\item{ncol}{Facet columns, for the "bars" type.}
+
+\item{verbose}{If `TRUE`, prints a short summary to the console
+before drawing: the plot type and engine, which columns feed y /
+fill / facet, whether a threshold applies and what it resolved to,
+and how many strata rows are being drawn. Meant for exploring at
+the console, not for a script that already knows what it asked for
+- default `FALSE`.}
 }
 \value{
-A ggplot object, or `NULL`.
+A ggplot object, or `NULL` (base engine draws and returns `NULL`).
 }
 \description{
-Thin wrapper over [plot_coverage()] for biology sampling: it shares the
-identical heatmap/bubbles/bars engine, so a length- or age-coverage panel
-looks like a discard-coverage one, with only the wording and the status
-scheme changed. Here "covered" means a length/age distribution exists for
-the stratum, and the status also reflects the number of fish measured.
+Kept for existing call sites. [plot_coverage()] now takes `distributions`
+and a biology `what` directly, so
+`plot_coverage(catch, distributions = dist, what = "length", ...)` is
+the same call in one place. This wrapper just forwards, with
+`weight_label` defaulting to "catch".
 }
 \seealso{
-[plot_coverage()]
+[plot_coverage()], [biology_link()]
 
 Other coverage plots: 
 \code{\link{plot_bubbles}()},
 \code{\link{plot_coverage}()},
 \code{\link{plot_coverage_bars}()},
+\code{\link{plot_coverage_map}()},
+\code{\link{plot_coverage_scatter}()},
 \code{\link{plot_heatmap}()},
 \code{\link{status_legend_plot}()}
 }

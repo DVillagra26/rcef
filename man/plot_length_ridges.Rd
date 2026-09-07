@@ -13,7 +13,8 @@ plot_length_ridges(
   smooth = 1,
   ncol = 2,
   scales = "fixed",
-  class_label = "Length (cm)"
+  class_label = "Length (cm)",
+  palette = c("default", "colorblind")
 )
 }
 \arguments{

@@ -7,8 +7,8 @@
 exclusion_choices(
   strata,
   dims,
-  order_by = c("weight", "coverage", "rate", "measurements"),
-  show = c("coverage", "rate", "measurements", "weight")
+  order_by = c("weight", "coverage", "rate", "measurements", "trips"),
+  show = c("coverage", "rate", "measurements", "weight", "trips")
 )
 }
 \arguments{

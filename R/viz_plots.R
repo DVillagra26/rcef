@@ -194,6 +194,31 @@ cov_title_what <- function(what)
 samp_word <- function(what)
   switch(what, length = "length", age = "age", "discard")
 
+#' Canonicalise a `what` argument
+#'
+#' The coverage plots take `what = "discard"` / `"length"` / `"age"`.
+#' Callers reasonably type the plural or a near-synonym; this maps those
+#' to the canonical singular and gives a clear error for anything else,
+#' rather than letting an unrecognised value fall through to the biology
+#' pipeline and fail obscurely.
+#'
+#' @param what A string: discard(s), length(s)/len, or age(s).
+#' @return `"discard"`, `"length"` or `"age"`.
+#' @keywords internal
+#' @export
+normalize_what <- function(what) {
+  w <- tolower(trimws(as.character(what)))
+  out <- switch(w,
+    discard = , discards = "discard",
+    length = , lengths = , len = "length",
+    age = , ages = "age",
+    NA_character_)
+  if (is.na(out))
+    stop("`what` must be \"discard\", \"length\" or \"age\" (got \"", what,
+         "\")", call. = FALSE)
+  out
+}
+
 # ----------------------------------------------------------
 #  Coverage builders
 # ----------------------------------------------------------
@@ -1034,16 +1059,19 @@ plot_coverage_bars_base <- function(sc, y_var, fill_var = NULL,
     if (!compact)
       graphics::mtext(subtitle, side = 3, line = 3.9, cex = 0.8, adj = 0,
                       col = "grey30")
-    if (has(fill_var) && !compact) {
+    if (has(fill_var)) {
       lv <- sort(unique(dd$.fill))
       # Legend inside the panel, bottom-right corner, on a semi-opaque
       # box - the right margin is reserved for the "Sampled / Not sampled
-      # (NN%)" callouts, not the fill key.
+      # (NN%)" callouts, not the fill key. Drawn on EVERY panel, faceted
+      # or not, so a facet grid does not lose the key; smaller when the
+      # panel is a fraction of the device.
       graphics::legend("bottomright", legend = lv, fill = pal[lv],
-                       cex = 0.8, bty = "o",
+                       cex = if (compact) 0.6 else 0.8, bty = "o",
                        bg = grDevices::adjustcolor("white", 0.85),
                        box.col = "grey65", xpd = NA, inset = c(0.02, 0.02),
-                       ncol = min(2, ceiling(length(lv) / 10)))
+                       ncol = min(2, ceiling(length(lv) /
+                                             (if (compact) 6 else 10))))
     }
   }
 
@@ -1632,6 +1660,7 @@ plot_coverage_map <- function(sc,
                               verbose = FALSE) {
   engine  <- match.arg(engine)
   palette <- match.arg(palette)
+  what    <- normalize_what(what)
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
   if (!requireNamespace("maps", quietly = TRUE))
     stop("plot_coverage_map() needs the 'maps' package: install.packages(\"maps\")")
@@ -1980,6 +2009,7 @@ plot_coverage <- function(strata,
   type    <- match.arg(type)
   engine  <- match.arg(engine)
   palette <- match.arg(palette)
+  what    <- normalize_what(what)
   if (!identical(type, "scatter") &&
         (is.null(y) || !nzchar(y)))
     stop("`y` is required for type = \"", type, "\"")

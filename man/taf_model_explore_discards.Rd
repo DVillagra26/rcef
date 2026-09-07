@@ -8,7 +8,7 @@ taf_model_explore_discards(ctx, kept = list())
 }
 \arguments{
 \item{ctx}{Session context. Uses `dims_disc`, `threshold`, `dr_min`,
-`dr_max`, `fleet_level`, `area_level`.}
+`dr_max`.}
 
 \item{kept}{Kept-plot records; those marked for this section are drawn
 at the end of the script.}

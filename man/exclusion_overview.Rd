@@ -12,7 +12,9 @@ exclusion_overview(
   meas_min = NA,
   dr_min = NA,
   dr_max = NA,
-  wt_min = NA
+  wt_min = NA,
+  trips_min = NA,
+  m = NULL
 )
 }
 \arguments{
@@ -32,6 +34,10 @@ excluded.}
 
 \item{wt_min}{Minimum weight. Chiefly useful to drop the zero-weight
 strata, which carry no data to lend.}
+
+\item{m}{A pre-computed `stratum_metrics(strata, dims)`, for a caller
+that already has one and would otherwise pay for it twice. `NULL`
+(the default) computes it here, as before.}
 }
 \value{
 A data frame with one row per excluded stratum: `key`, the

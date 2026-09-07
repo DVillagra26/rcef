@@ -12,7 +12,9 @@ plot_length_hist(
   stacked = TRUE,
   ncol = 2,
   scales = "fixed",
-  class_label = "Length (cm)"
+  class_label = "Length (cm)",
+  value_label = "Numbers",
+  palette = c("default", "colorblind")
 )
 }
 \arguments{

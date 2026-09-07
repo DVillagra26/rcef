@@ -4,15 +4,20 @@
 \alias{alloc_cascade_table}
 \title{Table of what each rung of the allocation cascade actually resolved}
 \usage{
-alloc_cascade_table(assigned, steps, keys = NULL)
+alloc_cascade_table(assigned, steps, keys = NULL, dims = NULL)
 }
 \arguments{
 \item{assigned}{A stratum table tagged by [assign_alloc_cascade()].}
 
 \item{steps}{The cascade steps, from [alloc_steps()].}
 
-\item{keys}{The full key set, so the grouping column can name what
-each rung keeps. Defaults to `attr(steps, "keys")`.}
+\item{keys}{The cascade's own key list, in cascade order. Defaults to
+`attr(steps, "keys")`, which [alloc_steps()] sets automatically.}
+
+\item{dims}{The full set of columns the strata table is built on -
+usually broader than `keys`, since the uploaded stratum carries
+columns nobody chose as a cascade key. Defaults to `keys` when not
+supplied.}
 }
 \value{
 A data frame, one row per rung, or `NULL` if `assigned` is

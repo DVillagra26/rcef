@@ -4,7 +4,13 @@
 \alias{scale_colour_var}
 \title{Colour scale using the stable per-level colours}
 \usage{
-scale_colour_var(var, values, name = var, ...)
+scale_colour_var(
+  var,
+  values,
+  name = var,
+  palette = c("default", "colorblind"),
+  ...
+)
 }
 \arguments{
 \item{var}{Name of the variable being coloured.}
@@ -12,6 +18,8 @@ scale_colour_var(var, values, name = var, ...)
 \item{values}{The levels present.}
 
 \item{name}{Legend title; defaults to `var`.}
+
+\item{palette}{"default" or "colorblind" - passed to [var_palette()].}
 
 \item{...}{Passed to [ggplot2::scale_fill_manual()].}
 }
