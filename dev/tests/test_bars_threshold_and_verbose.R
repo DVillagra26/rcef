@@ -77,8 +77,8 @@ r <- tryCatch({
 }, error = function(e) conditionMessage(e))
 ok(isTRUE(r), paste("the base engine's bar chart runs:", r))
 
-body_txt <- paste(deparse(body(plot_coverage_bars_base)), collapse = "\n")
+body_txt <- paste(deparse(body(plot_coverage_bar)), collapse = "\n")
 ok(grepl("var_palette(", body_txt, fixed = TRUE),
-   "plot_coverage_bars_base() uses var_palette()")
+   "the base bar-chart branch colours by var_palette()")
 
 cat("\nDONE ", FAIL, "failure(s)", "\n")

@@ -36,13 +36,7 @@ d_mw <- data.frame(
   fleetValue = rep(c("A", "B"), each = 9),
   stringsAsFactors = FALSE)
 
-## ---- 1. all three functions accept the three general parameters ------
-for (fn in c("plot_length_hist_base", "plot_length_ridges_base",
-            "plot_length_meanweight_base")) {
-  f <- get(fn)
-  ok(all(c("palette", "angle", "n_per_screen") %in% names(formals(f))),
-     paste(fn, "accepts palette, angle and n_per_screen"))
-}
+## ---- 1. both distribution functions accept the three general params --
 for (fn in c("plot_numbers_at_length_age", "plot_meanweight_at_length_age"))
   ok(all(c("palette", "angle", "n_per_screen") %in%
           names(formals(get(fn)))),
@@ -66,7 +60,7 @@ ok(after > before, "n_per_screen opens more than one device when none was alread
 for (dv in grDevices::dev.list()) grDevices::dev.off(dv)
 
 ## ---- 4. the density ribbon's outline is black, not colour-matched ----
-body_ridge <- paste(deparse(body(plot_length_ridges_base)), collapse = "\n")
+body_ridge <- paste(deparse(body(plot_numbers_at_length_age)), collapse = "\n")
 ok(grepl("border = OUTLINE", body_ridge, fixed = TRUE),
    "the density ribbon's border is OUTLINE (black)")
 ok(!grepl("border = pal[g]", body_ridge, fixed = TRUE),
@@ -78,10 +72,11 @@ ok(grepl("max(1.3, 1 + overlap + 0.3)", body_ridge, fixed = TRUE),
 
 r2 <- tryCatch({
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
-  plot_length_ridges_base(d_num, "fleetValue", overlap = 2)
+  plot_numbers_at_length_age(d_num, type = "density", fill = "fleetValue",
+                             engine = "base")
   TRUE
 }, error = function(e) conditionMessage(e))
-ok(isTRUE(r2), paste("a large overlap (which would have clipped before) still runs:", r2))
+ok(isTRUE(r2), paste("the base density branch runs:", r2))
 
 ## ---- 6. mean-weight line plot still works with the new parameters ----
 r3 <- tryCatch({

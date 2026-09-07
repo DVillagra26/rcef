@@ -31,9 +31,9 @@ strata_raw <- data.frame(
   stringsAsFactors = FALSE)
 strata <- classify_strata(strata_raw, 50, min_trips = 2)
 
-draws_ok <- function(...) tryCatch({
+draws_ok <- function(y, fill = NULL, facet = NULL) tryCatch({
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
-  plot_coverage_bars_base(strata, ...)
+  plot_coverage_bar(strata, y = y, fill = fill, facet = facet, engine = "base")
   TRUE
 }, error = function(e) conditionMessage(e))
 
@@ -42,15 +42,16 @@ r1 <- draws_ok("metier4", "Country")
 ok(isTRUE(r1), paste("runs with a fill variable:", r1))
 r2 <- draws_ok("metier4")
 ok(isTRUE(r2), paste("runs with no fill variable at all:", r2))
-r3 <- draws_ok("metier4", "Country", facet_var = "Country")
+r3 <- draws_ok("metier4", "Country", facet = "Country")
 ok(isTRUE(r3), paste("runs faceted:", r3))
 ## also the ggplot engine builds
-gg <- tryCatch(inherits(plot_coverage_bars(strata, "metier4", "Country"), "ggplot"),
+gg <- tryCatch(inherits(plot_coverage_bar(strata, y = "metier4", fill = "Country"),
+                        "ggplot"),
                error = function(e) conditionMessage(e))
 ok(isTRUE(gg), paste("ggplot engine builds:", gg))
 
 strip <- function(s) gsub("[[:space:]]", "", s)
-body_ns <- strip(paste(deparse(body(plot_coverage_bars_base)), collapse = ""))
+body_ns <- strip(paste(deparse(body(plot_coverage_bar)), collapse = ""))
 has <- function(s) grepl(strip(s), body_ns, fixed = TRUE)
 
 ## ---- 2. block label read from the data, mapped to Sampled/Not sampled -

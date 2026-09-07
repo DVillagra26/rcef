@@ -152,10 +152,7 @@ plot_coverage_heat(catch, dist, y = "fleetValue", what = "length",
   [plot_numbers_at_length_age()]
 
 Other coverage plots: 
-\code{\link{plot_bubbles}()},
-\code{\link{plot_coverage_bars}()},
 \code{\link{plot_coverage_map}()},
-\code{\link{plot_heatmap}()},
 \code{\link{status_legend_plot}()}
 }
 \concept{coverage plots}

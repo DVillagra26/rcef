@@ -78,12 +78,11 @@ r5 <- tryCatch({
 }, error = function(e) conditionMessage(e))
 ok(isTRUE(r5), paste("no grouping column given still runs:", r5))
 
-## ---- 5. every new function draws a box() -------------------------------
-for (fn in c("plot_length_hist_base", "plot_length_ridges_base",
-            "plot_length_meanweight_base")) {
+## ---- 5. every base branch draws a box() ------------------------------
+for (fn in c("plot_numbers_at_length_age", "plot_meanweight_at_length_age")) {
   bt <- paste(deparse(body(get(fn))), collapse = "\n")
   ok(grepl("box()", bt, fixed = TRUE),
-     paste(fn, "draws a box() around the plotting area"))
+     paste(fn, "base branch draws a box() around the plotting area"))
 }
 
 ## ---- 6. verbose reports correctly for each quantity/type ---------------

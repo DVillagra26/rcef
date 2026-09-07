@@ -27,7 +27,7 @@ count as well measured. Ignored for discards.}
 describes, so a heatmap gets square swatches and a bubble plot circles.}
 
 \item{size}{Optional spec for a second, independent SIZE key, as attached
-by [plot_bubbles()]: a list with `breaks`, `labels`, `limits`, `range`
+by [plot_coverage_bubble()]: a list with `breaks`, `labels`, `limits`, `range`
 and `name`. Built with the SAME limits and range as the plot it came
 from, so a key circle is drawn at exactly the diameter that value has in
 the plot and can be read off it.}
@@ -58,9 +58,6 @@ panel can construct it on demand without carrying a second plot around.
 
 Other coverage plots: 
 \code{\link{coverage-plots}},
-\code{\link{plot_bubbles}()},
-\code{\link{plot_coverage_bars}()},
-\code{\link{plot_coverage_map}()},
-\code{\link{plot_heatmap}()}
+\code{\link{plot_coverage_map}()}
 }
 \concept{coverage plots}

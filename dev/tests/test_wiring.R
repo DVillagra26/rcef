@@ -226,7 +226,6 @@ cat("\n=== 6. the package exports everything app.R relies on ===\n")
 suppressMessages(library(rcef))
 need <- c("build_strata","classify_strata","recommend_raising","raising_steps",
           "decision_tree","raising_groups",
-          "plot_heatmap","plot_bubbles","plot_coverage_bars","plot_dr_raw",
           "plot_coverage_heat","plot_coverage_bubble","plot_coverage_bar",
           "plot_coverage_map","plot_discard_rate",
           "plot_numbers_at_length_age","plot_meanweight_at_length_age",

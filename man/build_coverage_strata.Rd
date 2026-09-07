@@ -2,10 +2,10 @@
 % Please edit documentation in R/viz_helpers.R
 \name{build_coverage_strata}
 \alias{build_coverage_strata}
-\title{Build and classify strata only if `strata` looks like raw catch data}
+\title{Build and classify the strata a coverage plot draws}
 \usage{
 build_coverage_strata(
-  strata,
+  catch,
   dims,
   y,
   fill,
@@ -19,7 +19,7 @@ build_coverage_strata(
 )
 }
 \arguments{
-\item{strata}{Raw catch data, or an already-classified strata table.}
+\item{catch}{Raw CEF catch data (or an already-classified table).}
 
 \item{dims}{Columns to build on; defaults to the union of `y`,
 `fill`, `facet` when `NULL`.}
@@ -27,26 +27,27 @@ build_coverage_strata(
 \item{y, fill, facet, min_cov, what, min_fish, min_trip}{As in the coverage
 plots.}
 
-\item{distributions}{A distributions table - required to auto-build a
-`what = "length"`/`"age"` table from raw catch data; ignored when
-`strata` is already classified or `what = "discard"`.}
+\item{distributions}{A distributions table - required for
+`what = "length"`/`"age"`.}
 
-\item{catch_category}{For `what = "length"`/`"age"` built from raw
-catch: which catch part the distribution is linked to - `"Lan"`
-(default), `"Dis"` or `"BMS"`. Ignored for `what = "discard"` and
-for an already-classified table.}
+\item{catch_category}{For `what = "length"`/`"age"`: which catch part
+the distribution is linked to - `"Lan"` (default), `"Dis"` or
+`"BMS"`.}
 }
 \value{
 A classified strata table.
 }
 \description{
-The detection is simple and deliberate: a classified strata table
-always carries `cat_key` ([classify_strata()] adds it unconditionally),
-raw catch data never does. If `strata` already has it, it is returned
-completely unchanged - this function does not re-classify, re-filter,
-or otherwise second-guess a table a caller already built, which
-matters for every existing call site in the app that passes a strata
-table already carrying exclusions, a custom donor window, or a
-resolution wider than this one figure's own axes.
+The coverage plots take raw CEF catch (plus `distributions` for
+length / age) and this turns it into the classified stratum table they
+render: [build_strata()] + [classify_strata()] for discards, or the
+full biology pipeline ([biology_link()], [stratum_measurements()],
+[add_sufficiency()], [classify_strata()]) for length / age.
+}
+\details{
+A table that already carries `cat_key` (already through
+[classify_strata()]) is passed straight through - a narrow convenience
+for a caller that must pre-aggregate; the documented input is raw
+catch.
 }
 \keyword{internal}

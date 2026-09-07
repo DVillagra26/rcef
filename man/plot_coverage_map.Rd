@@ -64,9 +64,6 @@ package.
 
 Other coverage plots: 
 \code{\link{coverage-plots}},
-\code{\link{plot_bubbles}()},
-\code{\link{plot_coverage_bars}()},
-\code{\link{plot_heatmap}()},
 \code{\link{status_legend_plot}()}
 }
 \concept{coverage plots}

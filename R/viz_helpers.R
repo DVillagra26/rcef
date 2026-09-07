@@ -196,7 +196,7 @@ normalize_what <- function(what) {
 #'   `"point"` for the bubble plot. The legend should look like the thing it
 #'   describes, so a heatmap gets square swatches and a bubble plot circles.
 #' @param size Optional spec for a second, independent SIZE key, as attached
-#'   by [plot_bubbles()]: a list with `breaks`, `labels`, `limits`, `range`
+#'   by [plot_coverage_bubble()]: a list with `breaks`, `labels`, `limits`, `range`
 #'   and `name`. Built with the SAME limits and range as the plot it came
 #'   from, so a key circle is drawn at exactly the diameter that value has in
 #'   the plot and can be read off it.
@@ -510,36 +510,37 @@ default_weight_label <- function(what, catchCategory = NULL) {
          Dis = "discards", BMS = "BMS catch", "landings")
 }
 
-#' Build and classify strata only if `strata` looks like raw catch data
+#' Build and classify the strata a coverage plot draws
 #'
-#' The detection is simple and deliberate: a classified strata table
-#' always carries `cat_key` ([classify_strata()] adds it unconditionally),
-#' raw catch data never does. If `strata` already has it, it is returned
-#' completely unchanged - this function does not re-classify, re-filter,
-#' or otherwise second-guess a table a caller already built, which
-#' matters for every existing call site in the app that passes a strata
-#' table already carrying exclusions, a custom donor window, or a
-#' resolution wider than this one figure's own axes.
+#' The coverage plots take raw CEF catch (plus `distributions` for
+#' length / age) and this turns it into the classified stratum table they
+#' render: [build_strata()] + [classify_strata()] for discards, or the
+#' full biology pipeline ([biology_link()], [stratum_measurements()],
+#' [add_sufficiency()], [classify_strata()]) for length / age.
 #'
-#' @param strata Raw catch data, or an already-classified strata table.
+#' A table that already carries `cat_key` (already through
+#' [classify_strata()]) is passed straight through - a narrow convenience
+#' for a caller that must pre-aggregate; the documented input is raw
+#' catch.
+#'
+#' @param catch Raw CEF catch data (or an already-classified table).
 #' @param dims Columns to build on; defaults to the union of `y`,
 #'   `fill`, `facet` when `NULL`.
 #' @param y,fill,facet,min_cov,what,min_fish,min_trip As in the coverage
 #'   plots.
-#' @param distributions A distributions table - required to auto-build a
-#'   `what = "length"`/`"age"` table from raw catch data; ignored when
-#'   `strata` is already classified or `what = "discard"`.
-#' @param catch_category For `what = "length"`/`"age"` built from raw
-#'   catch: which catch part the distribution is linked to - `"Lan"`
-#'   (default), `"Dis"` or `"BMS"`. Ignored for `what = "discard"` and
-#'   for an already-classified table.
+#' @param distributions A distributions table - required for
+#'   `what = "length"`/`"age"`.
+#' @param catch_category For `what = "length"`/`"age"`: which catch part
+#'   the distribution is linked to - `"Lan"` (default), `"Dis"` or
+#'   `"BMS"`.
 #' @return A classified strata table.
 #' @keywords internal
 #' @export
-build_coverage_strata <- function(strata, dims, y, fill, facet,
-                                    min_cov, what, min_fish, min_trip,
-                                    distributions = NULL,
-                                    catch_category = NULL) {
+build_coverage_strata <- function(catch, dims, y, fill, facet,
+                                  min_cov, what, min_fish, min_trip,
+                                  distributions = NULL,
+                                  catch_category = NULL) {
+  strata <- catch
   if (!is.null(strata) && "cat_key" %in% names(strata)) return(strata)
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
   if (is.null(dims))
@@ -604,7 +605,8 @@ plot_arg_report <- function(fn, checks) {
 #' @param strata The already-classified strata table about to be plotted.
 #' @param view `"heat"`, `"bubble"` or `"bar"`.
 #' @param engine,y,x,facet,min_cov,what,weight_label,min_fish,min_trip
-#'   As resolved inside [coverage_dispatch()].
+#'   As resolved inside the coverage plot functions ([plot_coverage_heat()]
+#'   and siblings).
 #' @param catchCategory `"Lan"` / `"Dis"` / `"BMS"` or `NULL`.
 #' @param palette,angle,n_per_screen Rendering options, echoed back.
 #' @return `NULL`, invisibly - printed as a side effect.

@@ -24,14 +24,14 @@ d <- data.frame(
 
 r <- tryCatch({
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
-  plot_length_meanweight_base(d, colour_var = "fleetValue")
+  plot_meanweight_at_length_age(d, colour = "fleetValue", engine = "base")
   TRUE
 }, error = function(e) conditionMessage(e))
 ok(isTRUE(r), paste("runs without error on a ribbon with a gap in the middle:", r))
 
 ## checked at the source: the fix draws per-run polygons, not one
 ## polygon whose vertex list still includes NA coordinates
-body_txt <- paste(deparse(body(plot_length_meanweight_base)), collapse = "\n")
+body_txt <- paste(deparse(body(plot_meanweight_at_length_age)), collapse = "\n")
 ok(grepl("run <- cumsum", body_txt, fixed = TRUE),
    "the fix splits into contiguous runs before building each ribbon polygon")
 ok(grepl("nrow(seg)", body_txt, fixed = TRUE) && grepl("< 2", body_txt, fixed = TRUE),
@@ -41,7 +41,7 @@ ok(grepl("nrow(seg)", body_txt, fixed = TRUE) && grepl("< 2", body_txt, fixed = 
 d2 <- d; d2$sd_weight <- NA_real_
 r2 <- tryCatch({
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
-  plot_length_meanweight_base(d2, colour_var = "fleetValue")
+  plot_meanweight_at_length_age(d2, colour = "fleetValue", engine = "base")
   TRUE
 }, error = function(e) conditionMessage(e))
 ok(isTRUE(r2), paste("an entirely-NA sd_weight column still runs (line only, no ribbon):", r2))

@@ -31,12 +31,13 @@ strata <- data.frame(
 ## source (checked against the function body directly) ------------------
 r1 <- tryCatch({
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
-  plot_dr_raw_base(strata, "fleetValue", colour_var = "Country", facet_var = "Season")
+  plot_discard_rate(strata, x = "fleetValue", colour = "Country",
+                    facet = "Season", engine = "base")
   TRUE
 }, error = function(e) conditionMessage(e))
 ok(isTRUE(r1), paste("faceted raw plot runs without error:", r1))
 
-body_raw <- paste(deparse(body(plot_dr_raw_base)), collapse = "\n")
+body_raw <- paste(deparse(body(plot_discard_rate)), collapse = "\n")
 ok(grepl("draw_legend <- function", body_raw, fixed = TRUE) &&
      grepl("draw_legend()", body_raw, fixed = TRUE),
    "the legend is drawn from inside the per-screen loop (every group), not conditionally skipped when faceted")
@@ -51,8 +52,8 @@ ok(!grepl("line = 4.2", body_raw, fixed = TRUE),
 
 ## ---- 4. n_per_screen / palette / angle actually accepted and used -----
 ok(all(c("palette", "angle", "n_per_screen") %in%
-         names(formals(plot_dr_raw_base))),
-   "plot_dr_raw_base() accepts palette, angle and n_per_screen")
+         names(formals(plot_discard_rate))),
+   "plot_discard_rate() accepts palette, angle and n_per_screen")
 
 r3 <- tryCatch({
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)

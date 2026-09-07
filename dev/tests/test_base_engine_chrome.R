@@ -22,30 +22,30 @@ strata_raw <- data.frame(
   stringsAsFactors = FALSE)
 strata <- classify_strata(strata_raw, 50, min_trips = 2)
 
-for (fn in c("plot_heatmap_base", "plot_coverage_bars_base", "plot_bubbles_base")) {
+for (fn in c("plot_coverage_heat", "plot_coverage_bar", "plot_coverage_bubble")) {
   body_txt <- paste(deparse(body(get(fn))), collapse = "\n")
   ok(grepl("box()", body_txt, fixed = TRUE),
-     paste(fn, "draws a box() around the plotting area"))
+     paste(fn, "base branch draws a box() around the plotting area"))
 }
 
-for (fn in c("plot_heatmap_base", "plot_bubbles_base")) {
+for (fn in c("plot_coverage_heat", "plot_coverage_bubble")) {
   body_txt <- paste(deparse(body(get(fn))), collapse = "\n")
   ok(!grepl("tick = FALSE", gsub(" ", "", body_txt, fixed = TRUE), fixed = TRUE) &&
        !grepl("tick=FALSE", gsub(" ", "", body_txt, fixed = TRUE), fixed = TRUE),
-     paste(fn, "no longer disables its own tick marks"))
+     paste(fn, "base branch no longer disables its own tick marks"))
 }
 
-bars_body <- paste(deparse(body(plot_coverage_bars_base)), collapse = "\n")
+bars_body <- paste(deparse(body(plot_coverage_bar)), collapse = "\n")
 ok(grepl('border=OUTLINE', gsub(" ", "", bars_body), fixed = TRUE),
-   "plot_coverage_bars_base() outlines bars in OUTLINE (black), not white")
+   "the base bar branch outlines bars in OUTLINE (black), not white")
 ok(!grepl('border="white"', bars_body, fixed = TRUE),
    "the old invisible white border is gone")
 
 ## ---- runs cleanly, all three types --------------------------------
 for (call in list(
-  quote(plot_coverage_bars_base(strata, "metier4", "Country")),
-  quote(plot_heatmap_base(strata, "metier4", "Country")),
-  quote(plot_bubbles_base(strata, "metier4", "Country"))
+  quote(plot_coverage_bar(strata, y = "metier4", fill = "Country", engine = "base")),
+  quote(plot_coverage_heat(strata, y = "metier4", x = "Country", engine = "base")),
+  quote(plot_coverage_bubble(strata, y = "metier4", x = "Country", engine = "base"))
 )) {
   r <- tryCatch({
     grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)

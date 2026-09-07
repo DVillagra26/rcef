@@ -70,16 +70,15 @@ A ggplot object, or `NULL` invisibly (base engine).
 }
 \description{
 The number-weighted mean weight in each length (or age) class, as a
-line with points and an optional +/- 1 sd ribbon. Live weight is
-always the `variableType` and the geometry is always a line, so
-neither `variableType` nor `type` is an argument - `distributionType`
-picks length vs age.
+line with points and an optional +/- 1 sd ribbon. Live weight and a
+line are the only options, so there is no `variableType` or `type`
+argument. One function, two engines.
 }
 \details{
-`data` is either a [length_meanweight()] table already, or raw CEF
-catch with `distributions` (then [link_dist_to_strata()] +
-[length_meanweight()] run internally, `catchCategory` choosing the
-part). Weight is in grams, length in cm, age in years.
+`data` is a [length_meanweight()] table, or raw CEF catch with
+`distributions` (then the link + summary run internally,
+`catchCategory` choosing the part). Weight in grams, length in cm,
+age in years.
 }
 \examples{
 \dontrun{
@@ -91,9 +90,6 @@ plot_meanweight_at_length_age(catch, distributions, distributionType = "Age",
 [plot_numbers_at_length_age()], [length_meanweight()]
 
 Other distribution plots: 
-\code{\link{plot_length_hist}()},
-\code{\link{plot_length_meanweight}()},
-\code{\link{plot_length_ridges}()},
 \code{\link{plot_numbers_at_length_age}()}
 }
 \concept{distribution plots}

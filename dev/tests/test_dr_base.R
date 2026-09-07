@@ -24,14 +24,15 @@ strata <- data.frame(
 ## ---- 1. every point renders, not just one -----------------------------
 r <- tryCatch({
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
-  plot_dr_raw_base(strata, "fleetValue", colour_var = "Country")
+  plot_discard_rate(strata, x = "fleetValue", colour = "Country",
+                    engine = "base")
   TRUE
 }, error = function(e) conditionMessage(e))
-ok(isTRUE(r), paste("plot_dr_raw_base() runs without error:", r))
+ok(isTRUE(r), paste("plot_discard_rate(engine='base') runs without error:", r))
 
 ## checked at the source: colour/shape must be columns of d, not a
 ## rownames()-keyed lookup into a separately computed vector
-body_txt <- paste(deparse(body(plot_dr_raw_base)), collapse = "\n")
+body_txt <- paste(deparse(body(plot_discard_rate)), collapse = "\n")
 ok(grepl("d$.ptcol", body_txt, fixed = TRUE) &&
      grepl("d$.ptpch", body_txt, fixed = TRUE),
    "colour and shape are attached as columns of d, not looked up by rownames()")
@@ -57,8 +58,8 @@ ok(any(grepl("plot_discard_rate", out_raw)),
    "verbose names the function")
 
 ## ---- 4. box() around the plotting area ---------------------------
-bt <- paste(deparse(body(plot_dr_raw_base)), collapse = "\n")
+bt <- paste(deparse(body(plot_discard_rate)), collapse = "\n")
 ok(grepl("box()", bt, fixed = TRUE),
-   "plot_dr_raw_base() draws a box() around the plotting area")
+   "the base discard-rate branch draws a box() around the plotting area")
 
 cat("\nDONE ", FAIL, "failure(s)", "\n")

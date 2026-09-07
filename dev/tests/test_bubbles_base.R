@@ -1,4 +1,4 @@
-## plot_bubbles_base() - the base-R port of plot_bubbles(), the last of
+## the base-R bubble branch of plot_bubbles(), the last of
 ## the three coverage plot types to get one. Same status colours, same
 ## data, circles sized cell-relative (not in fixed physical inches) so
 ## a multi-panel facet grid does not bury every category under
@@ -36,7 +36,7 @@ ok(isTRUE(r), paste("plot_coverage_bubble(engine='base') runs:", r))
 ## ---- 2. runs with a facet, and with no fill/facet at all -------------
 r3 <- tryCatch({
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
-  plot_bubbles_base(sc, "metier4", "Country", threshold = 50, min_trips = 2)
+  plot_coverage_bubble(sc, y = "metier4", x = "Country", min_cov = 50, min_trip = 2, engine = "base")
   TRUE
 }, error = function(e) conditionMessage(e))
 ok(isTRUE(r3), paste("runs with x_var given:", r3))
@@ -44,7 +44,7 @@ ok(isTRUE(r3), paste("runs with x_var given:", r3))
 sc2 <- classify_strata(strata, 50, min_trips = 2)
 r4 <- tryCatch({
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
-  plot_bubbles_base(sc2, "metier4", threshold = 50, min_trips = 2)
+  plot_coverage_bubble(sc2, y = "metier4", min_cov = 50, min_trip = 2, engine = "base")
   TRUE
 }, error = function(e) conditionMessage(e))
 ok(isTRUE(r4), paste("runs with no x_var (collapses to a single column):", r4))
@@ -57,7 +57,7 @@ ok(isTRUE(r4), paste("runs with no x_var (collapses to a single column):", r4))
 ## same device. Checked against the function's own body (not by reading
 ## R/ source files, which an installed package does not ship - they are
 ## compiled into a lazy-load database).
-body_txt <- paste(deparse(body(plot_bubbles_base)), collapse = "\n")
+body_txt <- paste(deparse(body(plot_coverage_bubble)), collapse = "\n")
 ok(grepl("cell_rad", body_txt, fixed = TRUE),
    "bubble radius is derived from the grid cell, not a fixed inch span")
 ok(!grepl("1/sqrt(length(facets))", gsub(" ", "", body_txt), fixed = TRUE),

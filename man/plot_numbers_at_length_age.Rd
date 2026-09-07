@@ -35,8 +35,7 @@ catch.}
 
 \item{distributionType}{`"LengthTotal"` (default) or `"Age"`.}
 
-\item{catchCategory}{`"Lan"` (default), `"Dis"` or `"BMS"` - which
-catch part to link the distribution to (raw-catch form only).}
+\item{catchCategory}{`"Lan"` (default), `"Dis"` or `"BMS"`.}
 
 \item{type}{`"histogram"` (default) or `"density"`.}
 
@@ -50,13 +49,13 @@ catch part to link the distribution to (raw-catch form only).}
 
 \item{dims}{Stratum dimensions for the link (raw-catch form).}
 
-\item{class_label, value_label}{Axis labels; derived from the data when
-`NULL`.}
+\item{class_label, value_label}{Axis labels; derived from the data
+when `NULL`.}
 
 \item{ncol}{Facet columns (ggplot).}
 
-\item{scales}{Facet scales (ggplot): `"fixed"`, `"free_x"`, `"free_y"`
-or `"free"`.}
+\item{scales}{Facet scales (ggplot): `"fixed"`, `"free_x"`,
+`"free_y"` or `"free"`.}
 
 \item{engine}{`"ggplot"` (default) or `"base"`.}
 
@@ -73,17 +72,15 @@ A ggplot object, or `NULL` invisibly (base engine).
 }
 \description{
 The catch numbers spread over the length (or age) classes, as a
-stacked / dodged histogram (`type = "histogram"`) or a weight-smoothed
-density (`type = "density"`). Numbers are always the `variableType`, so
-there is no `variableType` argument - `distributionType` picks length
-vs age.
+stacked / dodged histogram (`type = "histogram"`) or a
+weight-smoothed density (`type = "density"`). One function, two
+engines (`engine = "ggplot"` / `"base"`).
 }
 \details{
-`data` is either a [length_numbers()] table already, or raw CEF catch
-together with `distributions` (then [link_dist_to_strata()] +
-[length_numbers()] run internally, with `catchCategory` choosing the
-landings, discards or BMS part). Numbers come out in thousands (N3),
-length in cm, age in years.
+`data` is a [length_numbers()] table, or raw CEF catch with
+`distributions` (then the link + summary run internally, with
+`catchCategory` choosing the landings / discards / BMS part).
+Numbers come out in thousands (N3), length in cm, age in years.
 }
 \examples{
 \dontrun{
@@ -95,9 +92,6 @@ plot_numbers_at_length_age(catch, distributions, distributionType = "Age",
 [plot_meanweight_at_length_age()], [length_numbers()]
 
 Other distribution plots: 
-\code{\link{plot_length_hist}()},
-\code{\link{plot_length_meanweight}()},
-\code{\link{plot_length_ridges}()},
 \code{\link{plot_meanweight_at_length_age}()}
 }
 \concept{distribution plots}

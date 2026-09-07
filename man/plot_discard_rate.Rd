@@ -5,7 +5,7 @@
 \title{Discard rate per stratum}
 \usage{
 plot_discard_rate(
-  strata,
+  catch,
   x,
   colour = NULL,
   shape = NULL,
@@ -21,8 +21,7 @@ plot_discard_rate(
 )
 }
 \arguments{
-\item{strata}{A stratum table with `discard_rate` and the grouping
-columns, or raw CEF catch data.}
+\item{catch}{Raw CEF catch data, or a stratum table with `discard_rate`.}
 
 \item{x}{Column on the x axis.}
 
@@ -34,13 +33,13 @@ columns, or raw CEF catch data.}
 
 \item{jitter}{Jitter the points horizontally.}
 
-\item{dims}{Columns to build the strata on when `strata` is raw catch.
+\item{dims}{Columns to build the strata on when `catch` is raw.
 Defaults to the union of `x`, `colour` and `facet`.}
 
 \item{engine}{`"ggplot"` (default) or `"base"`.}
 
-\item{palette}{`"default"` or `"colorblind"` (the point colours, via
-[var_palette()] - the same assignment every other plot uses).}
+\item{palette}{`"default"` or `"colorblind"` (point colours, via
+[var_palette()]).}
 
 \item{angle}{Rotation of the categorical x labels.}
 
@@ -52,25 +51,27 @@ many devices.}
 \item{verbose}{Print a short summary before drawing.}
 }
 \value{
-A ggplot object, or `NULL` invisibly (base engine).
+A ggplot object (`engine = "ggplot"`), or `NULL` invisibly
+  after drawing to the current device (`engine = "base"`).
 }
 \description{
-One point per sampled stratum, its discard rate on the y axis, drawn
-from an already-built stratum table or straight from raw CEF catch
-data (auto-detected: raw catch has no `discard_rate` column, so it is
-run through [build_strata()] first). Strata with no discard estimate
-are dropped - a rate is a property of sampled strata only (see
+One point per sampled stratum, its discard rate on the y axis. Takes
+raw CEF catch (it builds the strata with [build_strata()]) or an
+already-built stratum table. Strata with no discard estimate are
+dropped - a rate is a property of sampled strata only (see
 [sampled_for_discards()]).
+}
+\details{
+One function, two engines: `engine = "ggplot"` (default) draws it with
+ggplot2; `engine = "base"` draws the same figure with base graphics.
 }
 \examples{
 \dontrun{
 plot_discard_rate(catch_data, x = "Season", colour = "metier4")
+plot_discard_rate(catch_data, x = "metier4", engine = "base")
 }
 }
 \seealso{
-[plot_dr_raw()], [sampled_for_discards()], [build_strata()]
-
-Other discard-rate plots: 
-\code{\link{plot_dr_raw}()}
+[sampled_for_discards()], [build_strata()]
 }
 \concept{discard-rate plots}

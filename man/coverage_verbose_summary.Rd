@@ -27,7 +27,8 @@ coverage_verbose_summary(
 
 \item{view}{`"heat"`, `"bubble"` or `"bar"`.}
 
-\item{engine, y, x, facet, min_cov, what, weight_label, min_fish, min_trip}{As resolved inside [coverage_dispatch()].}
+\item{engine, y, x, facet, min_cov, what, weight_label, min_fish, min_trip}{As resolved inside the coverage plot functions ([plot_coverage_heat()]
+and siblings).}
 
 \item{catchCategory}{`"Lan"` / `"Dis"` / `"BMS"` or `NULL`.}
 

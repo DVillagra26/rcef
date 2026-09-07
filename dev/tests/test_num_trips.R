@@ -195,7 +195,7 @@ if (nzchar(app)) {
 ## Not just wired to classify_strata() - the whole chain from a trips
 ## floor down to the rendered pixels has to actually respond: the
 ## heatmap has to recolour and the legend has to match it. Checked at
-## the plotting-function level (plot_heatmap() + status_legend_plot()),
+## the plotting-function level (plot_coverage_heat() + status_legend_plot()),
 ## which exercises the identical code path app.R's server calls, without
 ## depending on package attachment ORDER inside a live Shiny session -
 ## app.R relies on shiny being attached before rcef (see
@@ -210,8 +210,8 @@ strata <- data.frame(
   discard_rate = c(0.08, 0.07, 0.06), n_measurements = c(0, 0, 0),
   numTrips = c(1, 1, 1), cat_key = "safe", stringsAsFactors = FALSE)
 
-p_lo <- plot_heatmap(strata, "metier4", threshold = 50, min_trips = 1)
-p_hi <- plot_heatmap(strata, "metier4", threshold = 50, min_trips = 5)
+p_lo <- plot_coverage_heat(strata, y = "metier4", min_cov = 50, min_trip = 1)
+p_hi <- plot_coverage_heat(strata, y = "metier4", min_cov = 50, min_trip = 5)
 ok(!is.null(p_lo) && !is.null(p_hi), "the heatmap renders at both trips floors")
 b_lo <- ggplot2::ggplot_build(p_lo)$data[[1]]$fill
 b_hi <- ggplot2::ggplot_build(p_hi)$data[[1]]$fill
