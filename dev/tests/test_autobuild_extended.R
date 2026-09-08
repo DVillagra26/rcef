@@ -18,15 +18,11 @@ ok <- function(cond, what) {
 }
 suppressPackageStartupMessages(library(dplyr))
 
-fx <- list.files(system.file("extdata", package = "rcef"),
-                 "bll_2025_1catches_CEF.*\\.csv$", recursive = TRUE,
-                 full.names = TRUE)
-fd <- list.files(system.file("extdata", package = "rcef"),
-                 "bll_2025_1distributions_CEF.*\\.csv$", recursive = TRUE,
-                 full.names = TRUE)
-if (length(fx) && length(fd)) {
-  cd <- rcef:::derive_fields(utils::read.csv(fx[1], stringsAsFactors = FALSE))
-  dd <- utils::read.csv(fd[1], stringsAsFactors = FALSE)
+local({
+  data("anchoveta_catch", package = "rcef", envir = environment())
+  data("anchoveta_dist",  package = "rcef", envir = environment())
+  cd <- anchoveta_catch
+  dd <- anchoveta_dist
 
   ## ---- 1. plot_discard_rate() auto-builds from raw catch data --------
   p1 <- plot_discard_rate(cd, x = "fleetValue", colour = "Country")
@@ -84,6 +80,6 @@ if (length(fx) && length(fd)) {
     TRUE
   }, error = function(e) conditionMessage(e))
   ok(isTRUE(r2), paste("engine='base' also auto-builds for length coverage:", r2))
-}
+})
 
 cat("\nDONE ", FAIL, "failure(s)", "\n")

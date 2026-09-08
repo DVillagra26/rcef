@@ -37,7 +37,7 @@ R/                     THE PACKAGE
   rcef_status.R          replaces the old external_loader.R
 inst/app/              THE APPLICATION — shipped, never R CMD check'ed
   app.R, app_ui_helpers.R, app_mod_intercatch_ui.R, app_state.R
-inst/extdata/          CSV fixtures (was data/)
+data/                  anchoveta_catch, anchoveta_dist — the example data set
 dev/                   tests, tooling, deploy (.Rbuildignore'd)
 ```
 

@@ -8,11 +8,9 @@ ok <- function(cond, what) {
 }
 
 ## ---- key_vocab_grouped(): structure and curation -----------------------
-fx <- list.files(system.file("extdata", package = "rcef"),
-                 "bll_2025_1catches_CEF.*\\.csv$", recursive = TRUE,
-                 full.names = TRUE)
+fx <- "anchoveta"
 if (length(fx)) {
-  cd <- rcef:::derive_fields(utils::read.csv(fx[1], stringsAsFactors = FALSE))
+  cd <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
   kv <- key_vocab_grouped(cd)
   ok(identical(names(kv), c("Fleet", "Country", "Area", "Season")),
      "four families, in this order")

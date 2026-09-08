@@ -68,17 +68,13 @@ if (!requireNamespace("shiny", quietly = TRUE)) {
   ok(grepl("5. Include a Catch All by All", mg, fixed = TRUE),
      "the catch-all is step 5 now, not 4")
 
-  fx <- list.files(system.file("extdata", package = "rcef"),
-                   "bll_2025_1catches_CEF.*\\.csv$", recursive = TRUE,
-                   full.names = TRUE)
-  fd <- list.files(system.file("extdata", package = "rcef"),
-                   "bll_2025_1distributions_CEF.*\\.csv$", recursive = TRUE,
-                   full.names = TRUE)
+  fx <- "anchoveta"
+  fd <- "anchoveta"
   if (!length(fx)) {
     cat("no CEF fixture - skipping the live server checks\n")
   } else {
-    cef_raw <- utils::read.csv(fx[1], stringsAsFactors = FALSE)
-    dist_raw <- if (length(fd)) utils::read.csv(fd[1], stringsAsFactors = FALSE)
+    cef_raw <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
+    dist_raw <- if (length(fd)) {data("anchoveta_dist", package = "rcef", envir = environment()); anchoveta_dist}
                 else NULL
 
     shiny::testServer(app, {

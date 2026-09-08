@@ -84,11 +84,14 @@ ones; keeping them whole would have dragged shiny into `Imports`.
 `dev/tests/` (the 11 suites + `run_tests.R`), `dev/testdata/`,
 `dev/check_syntax.R`, `dev/load_all_sourced.R`.
 
-## inst/extdata/
+## data/
 
-The former `data/` folder. Renamed because in an R package `data/` means
-lazy-loaded `.rda`, not CSV fixtures. Reach it with
-`system.file("extdata", ..., package = "rcef")`.
+`anchoveta_catch` and `anchoveta_dist` - a fully synthetic
+Southeast-Pacific anchoveta CEF pair, lazy-loaded with the package
+(`data(anchoveta_catch)`). The only example data now shipped: the real
+bll / pok CEF files and the IC exchange / overview fixtures that used to
+live in `inst/extdata/` have been removed - tests, the walkthrough and
+the vignettes all run off `anchoveta_*`.
 
 ---
 

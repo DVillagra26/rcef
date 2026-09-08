@@ -59,12 +59,11 @@ ok("Stratum" %in% lab(nos),
    "with no own-stratum bar, Stratum stays as its own rung")
 
 ## ---- 3. it resolves against real data --------------------------------
-fx <- list.files(system.file("extdata", package = "rcef"),
-                 "catches_CEF.*\\.csv$", recursive = TRUE, full.names = TRUE)
+fx <- "anchoveta"
 if (!length(fx)) {
   cat("no CEF fixture - skipping the data checks\n")
 } else {
-  cd <- rcef:::derive_fields(utils::read.csv(fx[1], stringsAsFactors = FALSE))
+  cd <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
 
   ok(all(keys %in% names(cd)), "every key names a real column")
   ok("Stratum" %in% names(cd), "derive_fields() creates Stratum")
@@ -145,10 +144,9 @@ if (requireNamespace("dplyr", quietly = TRUE)) {
      "and is not dplyr's function")
   ## the shape the app runs in: dplyr attached, rcef attached
   f <- get("grouping_vars", envir = asNamespace("rcef"))
-  fx2 <- list.files(system.file("extdata", package = "rcef"),
-                    "catches_CEF.*\\.csv$", recursive = TRUE, full.names = TRUE)
+  fx2 <- "anchoveta"
   if (length(fx2)) {
-    cd2 <- rcef:::derive_fields(utils::read.csv(fx2[1], stringsAsFactors = FALSE))
+    cd2 <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
     ok(length(f(cd2)) > 5,
        "and returns a real vocabulary with dplyr on the search path")
   }

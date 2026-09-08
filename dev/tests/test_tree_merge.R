@@ -15,13 +15,11 @@ ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
   else { FAIL <<- FAIL + 1L; cat("FAIL  ", what, "\n") }
 }
-
-ex <- system.file("extdata", package = "rcef")
-fx <- list.files(ex, "catches_CEF.*\\.csv$", recursive = TRUE, full.names = TRUE)
+fx <- "anchoveta"
 if (!length(fx)) {
   cat("no CEF fixture available - skipping\n")
 } else {
-  cd <- rcef:::derive_fields(utils::read.csv(fx[1], stringsAsFactors = FALSE))
+  cd <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
   dm <- c("metier4", "Country", "ICESDivision", "Season")
   st <- classify_strata(build_strata(cd, dm), 50)
   rec <- recommend_raising(st, dm, rep(50, 4), 50, "nested",

@@ -40,11 +40,9 @@ if (nzchar(app)) {
 ## and that build_strata()/mg_dims() compose correctly in isolation -
 ## the same two pieces man_strata() is built from, exercised the way
 ## every other function-level test in this suite is.
-fx <- list.files(system.file("extdata", package = "rcef"),
-                 "bll_2025_1catches_CEF.*\\.csv$", recursive = TRUE,
-                 full.names = TRUE)
+fx <- "anchoveta"
 if (length(fx)) {
-  cd <- rcef:::derive_fields(utils::read.csv(fx[1], stringsAsFactors = FALSE))
+  cd <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
   dims <- c("Country", "fleetValue", "areaValue", "Season", "metier4")
   st <- build_strata(cd, dims)
   ok(setequal(intersect(dims, names(st)), dims),

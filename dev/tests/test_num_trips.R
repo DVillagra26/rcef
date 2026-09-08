@@ -113,11 +113,9 @@ ok(u2$cat_key == "warn_lowtrip",
    "a table with no numTrips column at all gets the same treatment")
 
 ## ---- 4. aggregation direction: max within a build, sum across a pool -
-fx <- list.files(system.file("extdata", package = "rcef"),
-                 "bll_2025_1catches_CEF.*\\.csv$", recursive = TRUE,
-                 full.names = TRUE)
+fx <- "anchoveta"
 if (length(fx)) {
-  cd <- rcef:::derive_fields(utils::read.csv(fx[1], stringsAsFactors = FALSE))
+  cd <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
   ok("numTrips" %in% names(build_strata(cd, c("metier4", "Country"))),
      "numTrips reaches build_strata()'s output")
 

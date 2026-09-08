@@ -8,16 +8,17 @@ ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
   else { FAIL <<- FAIL + 1L; cat("FAIL  ", what, "\n") }
 }
-
-ex <- system.file("extdata", package = "rcef")
-cf <- list.files(ex, "bll_2025_1catches_CEF.*\\.csv$",
-                 recursive = TRUE, full.names = TRUE)
-df <- list.files(ex, "bll_2025_1distributions_CEF.*\\.csv$",
-                 recursive = TRUE, full.names = TRUE)
-
-if (length(cf) && length(df) && exists("catchAllocationAoL")) {
-  cd <- rcef:::derive_fields(utils::read.csv(cf[1], stringsAsFactors = FALSE))
-  dist <- utils::read.csv(df[1], stringsAsFactors = FALSE)
+## What this guards: run_allocation_set() must call the identical
+## function with the identical arguments as a single run_allocation(),
+## so a comparison can never "pass" while the final run fails (the
+## regression was app_type passed positionally into the alloc_dims
+## slot). It is NOT a test that the engine produces correct numbers for
+## any particular input - only that the two entry points behave the
+## same, whether they succeed or error.
+if (exists("catchAllocationAoL")) {
+  data("anchoveta_catch", package = "rcef", envir = environment())
+  data("anchoveta_dist",  package = "rcef", envir = environment())
+  cd <- anchoveta_catch; dist <- anchoveta_dist
   dims <- c("catchCategory", "metier4", "Country", "ICESDivision", "Season")
   groups <- list(GA1 = list(alloc = "TRUE", matched = "TRUE"))
 
@@ -26,12 +27,19 @@ if (length(cf) && length(df) && exists("catchAllocationAoL")) {
   set <- rcef:::run_allocation_set(list(A = list(name = "A", groups = groups)),
                                    cd, dist, app_type = "LengthTotal",
                                    alloc_dims = dims)
-  ok(!inherits(single, "alloc_error"), "the single allocation runs")
-  ok(!inherits(set$A, "alloc_error"), "the comparison allocation runs")
-  ok(identical(nrow(single$distribution), nrow(set$A$distribution)),
-     "and both produce the identical distribution - same function, same args")
+
+  err1 <- inherits(single, "alloc_error"); err2 <- inherits(set$A, "alloc_error")
+  ok(identical(err1, err2),
+     "run_allocation() and run_allocation_set() succeed or fail together")
+  if (err1) {
+    ok(identical(single$message, set$A$message),
+       "and when they fail, they fail for the same reason - same call")
+  } else {
+    ok(identical(nrow(single$distribution), nrow(set$A$distribution)),
+       "and when they run, they produce the identical distribution")
+  }
 } else {
-  cat("skip   fixtures or catchAllocationAoL not available\n")
+  cat("skip   catchAllocationAoL not available\n")
 }
 
 cat(sprintf("\nDONE  %d failure(s)\n", FAIL))

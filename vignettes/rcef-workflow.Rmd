@@ -71,6 +71,17 @@ catch_data <- read.csv("catches_CEF_v17.1.csv", stringsAsFactors = FALSE)
 dist_data  <- read.csv("distributions_CEF_v17.1.csv", stringsAsFactors = FALSE)
 ```
 
+To try the workflow without any files of your own, use the bundled
+example data set instead -- a fully synthetic Southeast-Pacific
+anchoveta CEF pair:
+
+```{r}
+data(anchoveta_catch)   # already through derive_fields()
+data(anchoveta_dist)
+catch_data <- anchoveta_catch
+dist_data  <- anchoveta_dist
+```
+
 ### Route B -- InterCatch exchange format
 
 One file holding the HI, SI and SD records. `funIntercatchCEF()` reads
