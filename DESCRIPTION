@@ -19,7 +19,6 @@ URL: https://github.com/DVillagra26/rcef
 BugReports: https://github.com/DVillagra26/rcef/issues
 Encoding: UTF-8
 LazyData: true
-LazyDataCompression: xz
 Roxygen: list(markdown = FALSE)
 RoxygenNote: 7.3.3
 Depends:
