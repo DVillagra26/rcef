@@ -9,7 +9,8 @@ A data frame of distribution records, two rows per
   class / stratum (one `Number`, one `WeightLive`). Key columns:
 \describe{
   \item{distributionType}{`"LengthTotal"` or `"Age"`.}
-  \item{distributionClass}{Length in mm, or age in whole years.}
+  \item{distributionClass}{Length in mm (40--200), or age in whole
+    years (0--7).}
   \item{distributionUnit}{`"mm"` or `"y"`.}
   \item{catchCategory}{`"Lan"` or `"Dis"` - which catch part the
     distribution describes.}
@@ -26,7 +27,7 @@ anchoveta_dist
 \description{
 The length- and age-distribution companion to [anchoveta_catch]: a
 made-up CEF distributions table carrying, for both `LengthTotal` (mm,
-classes 40--200) and `Age` (years, 0--4), a `Number` row (numbers at
+classes 40--200) and `Age` (years, 0--7), a `Number` row (numbers at
 class, `valueType = "Total"`) AND a `WeightLive` row (mean weight at
 class in grams, `valueType = "Mean"`) - so
 [plot_numbers_at_length_age()] and [plot_meanweight_at_length_age()]

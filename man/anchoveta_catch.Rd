@@ -15,10 +15,11 @@ A data frame of catch records, one row per
   \item{seasonValue, Season}{Quarter, `"1"`--`"4"`.}
   \item{areaValue, ICESDivision, ...}{FAO Area 87 (Pacific, Southeast)
     division code and its parsed parts.}
-  \item{metier6, metier4, ...}{Gear / metier (`"PS"`, `"MPT"`,
-    `"LHP"`) and its parsed parts.}
-  \item{fleetValue}{Fleet segment.}
-  \item{total}{Weight (kg) for the row's `variableType`.}
+  \item{fleetValue, metier4, ...}{The metier6 string
+    (`derive_fields()` parses `metier4` - `"PS"` / `"MPT"` / `"LHP"` -
+    and the gear / target / mesh parts out of it).}
+  \item{total}{Weight (kg) for the row's `variableType`; `0` for a
+    reported-nothing stratum.}
   \item{numTrips, domainBiology}{Sampling-trip count and the key that
     links a catch stratum to its length / age distribution.}
 }
@@ -49,6 +50,12 @@ length and age coverage plots look genuinely different: Peru has the
 best discard programme, Chile the best length sampling, Russia the
 best age reading, and Russia / Vanuatu run almost no discard observers
 (their cells read "no discard sampled").
+
+Not every fleet works every metier: several (country, metier)
+combinations have no rows at all - so a coverage grid grouped by
+`metier4` x `Country` has genuine holes - and a few strata carry a
+zero-weight `Lan` row (the fleet was there but landed nothing), which
+classifies as "no landings / no discards".
 }
 \seealso{
 [anchoveta_dist], [coverage-plots], [plot_discard_rate()]

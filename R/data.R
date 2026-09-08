@@ -31,6 +31,12 @@
 #' best age reading, and Russia / Vanuatu run almost no discard observers
 #' (their cells read "no discard sampled").
 #'
+#' Not every fleet works every metier: several (country, metier)
+#' combinations have no rows at all - so a coverage grid grouped by
+#' `metier4` x `Country` has genuine holes - and a few strata carry a
+#' zero-weight `Lan` row (the fleet was there but landed nothing), which
+#' classifies as "no landings / no discards".
+#'
 #' @format A data frame of catch records, one row per
 #'   stock / catch category / year / quarter / area / fleet cell. Key
 #'   columns:
@@ -41,10 +47,11 @@
 #'   \item{seasonValue, Season}{Quarter, `"1"`--`"4"`.}
 #'   \item{areaValue, ICESDivision, ...}{FAO Area 87 (Pacific, Southeast)
 #'     division code and its parsed parts.}
-#'   \item{metier6, metier4, ...}{Gear / metier (`"PS"`, `"MPT"`,
-#'     `"LHP"`) and its parsed parts.}
-#'   \item{fleetValue}{Fleet segment.}
-#'   \item{total}{Weight (kg) for the row's `variableType`.}
+#'   \item{fleetValue, metier4, ...}{The metier6 string
+#'     (`derive_fields()` parses `metier4` - `"PS"` / `"MPT"` / `"LHP"` -
+#'     and the gear / target / mesh parts out of it).}
+#'   \item{total}{Weight (kg) for the row's `variableType`; `0` for a
+#'     reported-nothing stratum.}
 #'   \item{numTrips, domainBiology}{Sampling-trip count and the key that
 #'     links a catch stratum to its length / age distribution.}
 #' }
@@ -59,7 +66,7 @@
 #'
 #' The length- and age-distribution companion to [anchoveta_catch]: a
 #' made-up CEF distributions table carrying, for both `LengthTotal` (mm,
-#' classes 40--200) and `Age` (years, 0--4), a `Number` row (numbers at
+#' classes 40--200) and `Age` (years, 0--7), a `Number` row (numbers at
 #' class, `valueType = "Total"`) AND a `WeightLive` row (mean weight at
 #' class in grams, `valueType = "Mean"`) - so
 #' [plot_numbers_at_length_age()] and [plot_meanweight_at_length_age()]
@@ -82,7 +89,8 @@
 #'   class / stratum (one `Number`, one `WeightLive`). Key columns:
 #' \describe{
 #'   \item{distributionType}{`"LengthTotal"` or `"Age"`.}
-#'   \item{distributionClass}{Length in mm, or age in whole years.}
+#'   \item{distributionClass}{Length in mm (40--200), or age in whole
+#'     years (0--7).}
 #'   \item{distributionUnit}{`"mm"` or `"y"`.}
 #'   \item{catchCategory}{`"Lan"` or `"Dis"` - which catch part the
 #'     distribution describes.}

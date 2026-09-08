@@ -180,7 +180,12 @@ plot_coverage_bar(anchoveta_catch, y = "metier4", fill = "Country",
 # Age coverage
 
 Identical call, `what = "age"`. `anchoveta_dist` carries `Age` rows
-(ages 0-4) alongside the length rows.
+(ages 0-7) alongside the length rows.
+
+Where a `metier4` x `Country` cell is blank, that fleet never worked
+that metier - a genuine hole, not an unsampled stratum. A stratum that
+operated but landed nothing shows in the near-white "no landings /
+no discards" colour.
 
 ```{r age-heat, fig.height = 5, fig.alt = "Age-sampling coverage by metier and fleet region"}
 plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",

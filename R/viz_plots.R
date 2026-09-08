@@ -432,7 +432,11 @@ plot_coverage_heat <- function(catch, distributions = NULL, y, x = NULL,
 
   ## ============ base engine ==========================================
   if (identical(engine, "base")) {
-    d <- sc %>% filter(cat_key != "none")
+    # keep cat_key == "none" (a stratum that landed nothing) so its cell
+    # is drawn in the "no landings / no discards" colour rather than
+    # left as a blank hole - collapse_cells() re-classifies below and a
+    # cell that mixes a real stratum with an empty one stays real
+    d <- sc
     if (!nrow(d)) { message("Nothing to plot."); return(invisible(NULL)) }
     if (is.null(x_var) || !nzchar(x_var)) { d$.x <- "All"; x_var <- ".x" }
     d <- collapse_cells(d, c(y_var, x_var, facet_var), threshold, what,
@@ -527,7 +531,9 @@ plot_coverage_heat <- function(catch, distributions = NULL, y, x = NULL,
   }
 
   ## ============ ggplot engine ========================================
-  d <- sc %>% filter(cat_key != "none")
+  # keep cat_key == "none" (a stratum that landed nothing) so its cell
+  # shows in the "no landings / no discards" colour, not as a blank hole
+  d <- sc
   if (!nrow(d)) return(NULL)
   if (is.null(x_var) || !nzchar(x_var)) { d$.x <- "All"; x_var <- ".x" }
   d <- collapse_cells(d, c(y_var, x_var, facet_var), threshold, what, min_meas,
@@ -627,7 +633,11 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
 
   ## ============ base engine ==========================================
   if (identical(engine, "base")) {
-    d <- sc %>% filter(cat_key != "none")
+    # keep cat_key == "none" (a stratum that landed nothing) so its cell
+    # is drawn in the "no landings / no discards" colour rather than
+    # left as a blank hole - collapse_cells() re-classifies below and a
+    # cell that mixes a real stratum with an empty one stays real
+    d <- sc
     if (!nrow(d)) { message("Nothing to plot."); return(invisible(NULL)) }
     if (is.null(x_var) || !nzchar(x_var)) { d$.x <- "All"; x_var <- ".x" }
     d <- collapse_cells(d, c(y_var, x_var, facet_var), threshold, what,
@@ -780,7 +790,9 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
   }
 
   ## ============ ggplot engine ========================================
-  d <- sc %>% filter(cat_key != "none")
+  # keep cat_key == "none" (a stratum that landed nothing) so its cell
+  # shows in the "no landings / no discards" colour, not as a blank hole
+  d <- sc
   if (!nrow(d)) return(NULL)
   if (is.null(x_var) || !nzchar(x_var)) { d$.x <- "All"; x_var <- ".x" }
   # one bubble per cell, or several sit on the same point with their
