@@ -432,20 +432,13 @@ len_numbers_ui <- function(p, type = "LengthTotal") {
   tagList(
     control_deck(paste0(p, "_n"), label = "Numbers at class controls",
       options = tagList(
-        len_cc_filter(ns),
-        pick_bar(ns("type"), list(hist = "Histogram", ridge = "Density"), "hist")),
+        len_cc_filter(ns)),
       settings = tagList(
         role_chips(ns("r"), c(fill = "Stack / colour", facet = "Facet",
                               shape = "Facet 2"),
                    c("Country", "metier4", ""), stacked = TRUE),
         free_scale_ticks(ns),
-        conditionalPanel(sprintf("input.%s != 'ridge'", ns("type")),
-          checkboxInput(ns("stack"), "Stack the bars", TRUE)),
-        conditionalPanel(sprintf("input.%s == 'ridge'", ns("type")),
-          sliderInput(ns("smooth"), "Smoothing", 0.2, 3, 1, 0.1),
-          span(class = "note",
-               "Turn it down for a well-sampled stratum to keep the detail, ",
-               "up for a sparse or noisy one so the shape stays readable."))),
+        checkboxInput(ns("stack"), "Stack the bars", TRUE)),
       ),
     deck_page(
       picker = NULL,
@@ -468,8 +461,7 @@ len_meanw_ui <- function(p, type = "LengthTotal") {
                    c("metier4", "Country", ""), stacked = TRUE),
         free_scale_ticks(ns),
         selectInput(ns("pt"), "Shape",
-                    c("-- none (average the rest) --" = ""), ""),
-        checkboxInput(ns("points"), "Show points", TRUE)),
+                    c("-- none (average the rest) --" = ""), "")),
       ),
     deck_page(
       picker = NULL,
@@ -3480,6 +3472,15 @@ server <- function(input, output, session) {
       biology_link(d, dist_tbl(), dims_of(), cc_of(view), type) }
 
     rc <- function(view, role) len_dim_col(p, input[[paste0(p, "_", view, "_r_", role)]])
+    # the two facet roles as one `facet` vector (NULLs drop out); and the
+    # same for the emitted script line
+    rc_facet   <- function(view) c(rc(view, "facet"), rc(view, "shape"))
+    taf_facet  <- function(view) {
+      v <- rc_facet(view)
+      if (!length(v)) NULL
+      else if (length(v) == 1) taf_q(v)
+      else sprintf('c(%s)', paste(sprintf('"%s"', v), collapse = ", "))
+    }
 
     # Same vocabulary as the discard figures. Without this the length and
     # age pickers were left with the placeholder role_chips() ships -
@@ -3716,22 +3717,17 @@ server <- function(input, output, session) {
       d <- num_data()
       validate(need(!is.null(d) && nrow(d), "No numbers-at-length rows."))
       plot_numbers_at_length_age(d,
-        type = if (identical(input[[paste0(p, "_n_type")]], "ridge"))
-                 "density" else "histogram",
-        fill = rc("n","fill"), facet1 = rc("n","facet"), facet2 = rc("n","shape"),
+        fill = rc("n","fill"), facet = rc_facet("n"),
         stacked = isTRUE(input[[paste0(p, "_n_stack")]]),
-        smooth = input[[paste0(p, "_n_smooth")]] %||% 1,
         scales = facet_scales(isTRUE(input[[paste0(p, "_n_freex")]]),
-                              isTRUE(input[[paste0(p, "_n_freey")]])),
-        class_label = class_axis_label(type)) },
+                              isTRUE(input[[paste0(p, "_n_freey")]]))) },
       live = n_live)
     output[[paste0(p, "_n_plot_ui")]] <- renderUI({
       n_gate$now(); n_live()
       d <- tryCatch(isolate(num_data()), error = function(e) NULL)
       plotOutput(paste0(p, "_n_plot"),
         height = paste0(length_plot_height(d, rc("n","facet"), rc("n","shape"),
-                          n_y = if (identical(input[[paste0(p, "_n_type")]], "ridge"))
-                                  n_levels_of(d, rc("n","fill")) else 10),
+                          n_y = 10),
                         "px")) })
     output[[paste0(p, "_n_plot")]] <- renderPlot({
       pl <- num_obj(); validate(need(!is.null(pl), "Nothing to plot."))
@@ -3742,9 +3738,7 @@ server <- function(input, output, session) {
 
     keep_plot(paste0(p, "_n_plot"), num_obj, gate = n_gate,
       section = "model_explore_length_age",
-      title = function() sprintf("Numbers at %s - %s", what_word,
-        if (identical(input[[paste0(p, "_n_type")]], "ridge")) "density"
-        else "histogram"),
+      title = function() sprintf("Numbers at %s", what_word),
       note = function() sprintf("%s, grouped by %s", cc_word("n"),
         paste(na.omit(c(rc("n","fill"), rc("n","facet"), rc("n","shape"))),
               collapse = ", ")),
@@ -3757,13 +3751,8 @@ server <- function(input, output, session) {
                                           rc("n","shape"))))))),
       call = function() taf_call("plot_numbers_at_length_age", list(
         "d_num",
-        type = if (identical(input[[paste0(p, "_n_type")]], "ridge"))
-                 '"density"' else '"histogram"',
-        fill = taf_q(rc("n","fill")), facet1 = taf_q(rc("n","facet")),
-        facet2 = taf_q(rc("n","shape")),
-        stacked = if (isTRUE(input[[paste0(p, "_n_stack")]])) "TRUE" else "FALSE",
-        smooth = input[[paste0(p, "_n_smooth")]] %||% 1,
-        class_label = taf_q(class_axis_label(type)))))
+        fill = taf_q(rc("n","fill")), facet = taf_facet("n"),
+        stacked = if (isTRUE(input[[paste0(p, "_n_stack")]])) "TRUE" else "FALSE")))
 
     # ---- view 3: mean weight at length --------------------------
     mw_data <- reactive({
@@ -3777,13 +3766,10 @@ server <- function(input, output, session) {
       d <- mw_data()
       validate(need(!is.null(d) && nrow(d), "No mean-weight rows."))
       plot_meanweight_at_length_age(d,
-        colour = rc("w","fill"), facet1 = rc("w","facet"),
-        facet2 = rc("w","shape"),
+        colour = rc("w","fill"), facet = rc_facet("w"),
         shape = len_dim_col(p, input[[paste0(p, "_w_pt")]]),
-        show_points = isTRUE(input[[paste0(p, "_w_points")]]),
         scales = facet_scales(isTRUE(input[[paste0(p, "_w_freex")]]),
-                              isTRUE(input[[paste0(p, "_w_freey")]])),
-        class_label = class_axis_label(type)) })
+                              isTRUE(input[[paste0(p, "_w_freey")]]))) })
     output[[paste0(p, "_w_plot_ui")]] <- renderUI({
       w_gate$now()
       d <- tryCatch(isolate(mw_data()), error = function(e) NULL)
@@ -3812,11 +3798,8 @@ server <- function(input, output, session) {
                           len_dim_col(p, input[[paste0(p, "_w_pt")]]))))))),
       call = function() taf_call("plot_meanweight_at_length_age", list(
         "d_mw",
-        colour = taf_q(rc("w","fill")), facet1 = taf_q(rc("w","facet")),
-        facet2 = taf_q(rc("w","shape")),
-        shape = taf_q(len_dim_col(p, input[[paste0(p, "_w_pt")]])),
-        show_points = if (isTRUE(input[[paste0(p, "_w_points")]])) "TRUE" else "FALSE",
-        class_label = taf_q(class_axis_label(type)))))
+        colour = taf_q(rc("w","fill")), facet = taf_facet("w"),
+        shape = taf_q(len_dim_col(p, input[[paste0(p, "_w_pt")]])))))
   }
 
   length_server("len", "LengthTotal")

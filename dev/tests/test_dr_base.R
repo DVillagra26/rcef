@@ -48,16 +48,7 @@ r3 <- tryCatch({
 }, error = function(e) conditionMessage(e))
 ok(isTRUE(r3), paste("plot_discard_rate(engine='base') runs:", r3))
 
-## ---- 3. verbose reports the roles ----------------------------------
-out_raw <- capture.output(
-  plot_discard_rate(strata, x = "fleetValue", colour = "Country",
-                    verbose = TRUE))
-ok(any(grepl("colour : Country", out_raw, fixed = TRUE)),
-   "verbose reports the colour column")
-ok(any(grepl("plot_discard_rate", out_raw)),
-   "verbose names the function")
-
-## ---- 4. box() around the plotting area ---------------------------
+## ---- 3. box() around the plotting area ---------------------------
 bt <- paste(deparse(body(plot_discard_rate)), collapse = "\n")
 ok(grepl("box()", bt, fixed = TRUE),
    "the base discard-rate branch draws a box() around the plotting area")

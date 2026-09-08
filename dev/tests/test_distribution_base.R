@@ -75,16 +75,13 @@ for (fn in c("plot_numbers_at_length_age", "plot_meanweight_at_length_age")) {
      paste(fn, "base branch draws a box() around the plotting area"))
 }
 
-## ---- 6. verbose reports correctly for each quantity -------------------
-out_h <- capture.output(
-  plot_numbers_at_length_age(d_num, fill = "fleetValue", verbose = TRUE))
-ok(any(grepl("fill  : fleetValue", out_h, fixed = TRUE)),
-   "verbose reports the fill column for numbers/histogram")
-
-out_mw <- capture.output(
-  plot_meanweight_at_length_age(d_mw, colour = "fleetValue",
-                            verbose = TRUE))
-ok(any(grepl("colour: fleetValue", out_mw, fixed = TRUE)),
-   "verbose reports the colour column for meanweight/line")
+## ---- 6. mean weight always draws its points; the sd band only when
+##        strata are averaged (no shape) ---------------------------------
+bt_mw <- paste(deparse(body(plot_meanweight_at_length_age)), collapse = "\n")
+ok(grepl("band <- !has(shape_var)", bt_mw, fixed = TRUE),
+   "the +/- 1 sd band is gated on there being no shape column, nothing else")
+ok(!grepl("show_points", bt_mw, fixed = TRUE) &&
+   !grepl("show_spread", bt_mw, fixed = TRUE),
+   "the show_points / show_spread toggles are gone")
 
 cat("\nDONE ", FAIL, "failure(s)", "\n")

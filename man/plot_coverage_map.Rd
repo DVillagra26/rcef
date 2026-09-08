@@ -15,7 +15,6 @@ plot_coverage_map(
   min_trip = 2,
   min_fish = 0,
   scale = 1,
-  verbose = FALSE,
   engine = c("base", "ggplot")
 )
 }
@@ -32,8 +31,6 @@ from `what` and `catchCategory`.}
 
 \item{scale}{Multiplies every pie radius (and, when grouped, the box
 grid cell size).}
-
-\item{verbose}{Print a one-line summary before drawing.}
 
 \item{engine}{`"base"` (default) or `"ggplot"`.}
 }

@@ -656,64 +656,6 @@ plot_arg_report <- function(fn, checks) {
   invisible(msgs)
 }
 
-#' Print a plain-language summary of a coverage plot before drawing it
-#'
-#' What `plot_coverage_heat(..., verbose = TRUE)` (and the bubble / bar
-#' siblings) prints: the view and engine, which columns are on which
-#' role, the threshold / min_trips in force (or, for bars, that they do
-#' not apply), the catch part for a length / age figure, and how many
-#' strata rows are about to be drawn.
-#'
-#' @param strata The already-classified strata table about to be plotted.
-#' @param view `"heat"`, `"bubble"` or `"bar"`.
-#' @param engine,y,x,facet,min_cov,what,weight_label,min_fish,min_trip
-#'   As resolved inside the coverage plot functions ([plot_coverage_heat()]
-#'   and siblings).
-#' @param catchCategory `"Lan"` / `"Dis"` / `"BMS"` or `NULL`.
-#' @param palette,angle,n_per_screen Rendering options, echoed back.
-#' @return `NULL`, invisibly - printed as a side effect.
-#' @keywords internal
-#' @export
-coverage_verbose_summary <- function(strata, view, engine, y, x, facet,
-                                     min_cov, what, weight_label,
-                                     min_fish, min_trip, catchCategory = NULL,
-                                     palette = "default", angle = 45,
-                                     n_per_screen = NULL) {
-  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
-  line <- function(...) cat(..., "\n", sep = "")
-  line("-- plot_coverage_", view, "(): ", cov_title_what(what),
-       " coverage, engine = \"", engine, "\" --")
-  line("  y      : ", if (has(y)) y else "(none)")
-  line("  ", if (identical(view, "bar")) "fill   : " else "x      : ",
-       if (has(x)) x else "(none)")
-  line("  facet  : ", if (has(facet)) facet else "(none)")
-  line("  weight : ", weight_label)
-  if (!is.null(catchCategory))
-    line("  catchCategory : ", catchCategory)
-  if (identical(view, "bar")) {
-    line("  min_cov / min_trip: not used by a bar chart - it shows ",
-         "sampled vs unsampled weight, which neither affects.")
-  } else {
-    line("  min_cov    : ", min_cov, "%")
-    line("  min_trip   : ", min_trip)
-  }
-  if (!is.na(min_fish) && min_fish > 0)
-    line("  min_fish   : ", min_fish)
-  line("  render : engine = ", engine, ", palette = ", palette,
-       ", angle = ", angle,
-       if (!is.null(n_per_screen)) paste0(", n_per_screen = ", n_per_screen)
-       else "")
-  n <- if (is.null(strata)) 0L else nrow(strata)
-  line("  strata rows being drawn: ", n)
-  if (n > 0 && "Status" %in% names(strata)) {
-    tb <- sort(table(strata$Status), decreasing = TRUE)
-    line("  status breakdown:")
-    for (i in seq_along(tb))
-      line("    ", tb[i], "  ", names(tb)[i])
-  }
-  invisible(NULL)
-}
-
 #' Axis labels and presentation scale for a biology distribution plot
 #'
 #' [prep_distributions()] already normalises the length class to cm and

@@ -12,10 +12,8 @@ plot_numbers_at_length_age(
   fill = NULL,
   facet = NULL,
   stacked = TRUE,
-  ncol = 2,
   scales = "fixed",
   n_per_screen = NULL,
-  verbose = FALSE,
   palette = c("default", "colorblind"),
   engine = c("ggplot", "base")
 )
@@ -38,14 +36,10 @@ given, the resolved word goes in the plot title.}
 
 \item{stacked}{Stack the bars on `fill` rather than dodge.}
 
-\item{ncol}{Facet columns (ggplot).}
-
 \item{scales}{Facet scales (ggplot): `"fixed"`, `"free_x"`,
 `"free_y"` or `"free"`.}
 
 \item{n_per_screen}{Base engine: split a faceted figure across devices.}
-
-\item{verbose}{Print a short summary before drawing.}
 
 \item{palette}{`"default"` or `"colorblind"`.}
 

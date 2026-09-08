@@ -12,12 +12,8 @@ plot_meanweight_at_length_age(
   colour = NULL,
   facet = NULL,
   shape = NULL,
-  show_points = TRUE,
-  show_spread = TRUE,
-  ncol = 2,
   scales = "fixed",
   n_per_screen = NULL,
-  verbose = FALSE,
   palette = c("default", "colorblind"),
   engine = c("ggplot", "base")
 )
@@ -39,19 +35,11 @@ given, the resolved word goes in the plot title.}
 \item{facet}{Up to two facet columns (`"col"` or `c("row", "col")`).}
 
 \item{shape}{Column drawn as separate point shapes; opens the averaged
-group back up and drops the ribbon.}
-
-\item{show_points}{Draw the points.}
-
-\item{show_spread}{Draw the +/- 1 sd ribbon (averaged strata only).}
-
-\item{ncol}{Facet columns (ggplot).}
+group back up and drops the band.}
 
 \item{scales}{Facet scales (ggplot).}
 
 \item{n_per_screen}{Base engine: split a faceted figure across devices.}
-
-\item{verbose}{Print a short summary before drawing.}
 
 \item{palette}{`"default"` or `"colorblind"`.}
 
@@ -62,7 +50,8 @@ A ggplot object, or `NULL` invisibly (base engine).
 }
 \description{
 The number-weighted mean weight in each length (or age) class, as a
-line with points and an optional +/- 1 sd ribbon. Live weight and a
+line with points. When the strata are averaged (no `shape`) and a
+spread is available, a +/- 1 sd band is drawn too. Live weight and a
 line are the only options, so there is no `variableType` or `type`
 argument. One function, two engines.
 }

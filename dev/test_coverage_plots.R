@@ -7,7 +7,7 @@
 ## length distributions and age distributions - each with a few options
 ## to compare against each other, ggplot2 side by side with the base-R
 ## engine, and the general-purpose arguments (auto-build from raw data,
-## verbose, palette, n_per_screen).
+## palette, n_per_screen).
 ##
 ## Data: the bundled `anchoveta_catch` / `anchoveta_dist` example set - a
 ## fully synthetic Southeast-Pacific anchoveta CEF pair, lazy-loaded with
@@ -56,8 +56,7 @@ cat(sprintf("anchoveta: %d catch rows, %d LengthTotal + %d Age distribution rows
 ## drawn in BOTH engines. The status legend always lists every category.
 
 ## ---- 1a. bars: sampled vs not-sampled weight + cumulative staircase -
-p1a <- plot_coverage_bar(catch_data, y = "metier4", fill = "Country",
-                         verbose = TRUE)
+p1a <- plot_coverage_bar(catch_data, y = "metier4", fill = "Country")
 print(p1a)
 png("11a_discard_bars_base.png", width = 1300, height = 800, res = 110)
 plot_coverage_bar(catch_data, y = "metier4", fill = "Country",
@@ -66,7 +65,7 @@ invisible(dev.off())
 
 ## ---- 1b. heatmap: status per metier x country x season ------------
 p1b <- plot_coverage_heat(catch_data, y = "metier4", x = "Country",
-                          facet = "Season", verbose = TRUE)
+                          facet = "Season")
 print(p1b)
 png("11d_discard_heatmap_base.png", width = 1400, height = 900, res = 110)
 plot_coverage_heat(catch_data, y = "metier4", x = "Country",
@@ -85,7 +84,7 @@ invisible(dev.off())
 ## ---- 1d-1f. coverage map - one sampled/not-sampled pie per FAO
 ## area, radius = landings; `group` puts a labelled box of pies per area.
 if (requireNamespace("maps", quietly = TRUE)) {
-  p1d <- plot_coverage_map(catch_data, engine = "ggplot", verbose = TRUE)
+  p1d <- plot_coverage_map(catch_data, engine = "ggplot")
   print(p1d)
   png("11i_coverage_map_base.png", width = 1000, height = 950, res = 110)
   plot_coverage_map(catch_data, engine = "base")
@@ -121,8 +120,7 @@ invisible(dev.off())
 ## ---- 2a. length coverage of the LANDINGS, bars -------------------
 p2a <- plot_coverage_bar(catch_data, y = "metier4", fill = "Country",
                          what = "length", catchCategory = "Lan",
-                         distributions = distributions,
-                         verbose = TRUE)
+                         distributions = distributions)
 print(p2a)
 png("12a_length_bars_base.png", width = 1300, height = 800, res = 110)
 plot_coverage_bar(catch_data, y = "metier4", fill = "Country",
@@ -158,7 +156,7 @@ invisible(dev.off())
 
 ## ---- 2d-2h. AGE coverage, all four views + the map --------------
 p2d <- plot_coverage_bar(age_catch, y = "metier4", fill = "Country",
-                         what = "age", distributions = age_dist, verbose = TRUE)
+                         what = "age", distributions = age_dist)
 print(p2d)
 png("12d_age_bars_base.png", width = 1300, height = 800, res = 110)
 plot_coverage_bar(age_catch, y = "metier4", fill = "Country", what = "age",
@@ -207,7 +205,7 @@ if (requireNamespace("maps", quietly = TRUE)) {
 ## now - the boxplot was dropped.
 
 p3a <- plot_discard_rate(catch_data, x = "metier4", colour = "Country",
-                         facet = "Season", jitter = TRUE, verbose = TRUE)
+                         facet = "Season", jitter = TRUE)
 print(p3a)
 png("13a_discard_rate_raw_base.png", width = 1400, height = 900, res = 110)
 plot_discard_rate(catch_data, x = "metier4", colour = "Country",
@@ -233,7 +231,7 @@ print(p4a)
 png("14a_length_hist_base.png", width = 1300, height = 800, res = 110)
 plot_numbers_at_length_age(catch_data, distributions,
   distributionType = "LengthTotal", fill = "Country",
-  engine = "base", palette = "colorblind", verbose = TRUE)
+  engine = "base", palette = "colorblind")
 invisible(dev.off())
 
 ## ---- 4b. numbers at length, dodged instead of stacked ---------
@@ -247,11 +245,10 @@ invisible(dev.off())
 
 ## ---- 4c. mean weight at length, one line per country (discards) --
 p4c <- plot_meanweight_at_length_age(catch_data, distributions,
-         catchCategory = "Dis", colour = "Country", show_points = TRUE)
+         catchCategory = "Dis", colour = "Country")
 print(p4c)
 png("14c_length_meanweight_base.png", width = 1200, height = 800, res = 110)
-plot_meanweight_at_length_age(catch_data, distributions, colour = "Country",
-  show_points = TRUE, engine = "base")
+plot_meanweight_at_length_age(catch_data, distributions, colour = "Country", engine = "base")
 invisible(dev.off())
 
 ## ---- 4d-4f. AGE distribution --------------------------------
@@ -262,7 +259,7 @@ print(p4d)
 png("14d_age_hist_base.png", width = 1300, height = 800, res = 110)
 plot_numbers_at_length_age(age_catch, age_dist, distributionType = "Age",
   fill = "Country", engine = "base",
-  palette = "colorblind", verbose = TRUE)
+  palette = "colorblind")
 invisible(dev.off())
 
 p4e <- plot_numbers_at_length_age(age_catch, age_dist,
@@ -274,12 +271,11 @@ plot_numbers_at_length_age(age_catch, age_dist, distributionType = "Age",
 invisible(dev.off())
 
 p4f <- plot_meanweight_at_length_age(age_catch, age_dist,
-         distributionType = "Age", colour = "Country", show_points = TRUE,
-         show_spread = TRUE)
+         distributionType = "Age", colour = "Country")
 print(p4f)
 png("14f_age_meanweight_base.png", width = 1200, height = 800, res = 110)
 plot_meanweight_at_length_age(age_catch, age_dist, distributionType = "Age",
-  colour = "Country", show_points = TRUE, engine = "base")
+  colour = "Country", engine = "base")
 invisible(dev.off())
 
 ## ---- 4g-4j. catchCategory sweep - default "All" ("catch"), then the
@@ -303,8 +299,8 @@ cat("4g-4j: catchCategory default is \"All\" (title says \"catch\")\n")
 ## =====================================================================
 ##  5. ARGUMENT REACTIONS - wrong / partial calls
 ## =====================================================================
-## The split functions error or warn (always, not only under verbose)
-## when an argument does not fit. Each call is wrapped so the walkthrough
+## The split functions error or warn when an argument does not fit.
+## Each call is wrapped so the walkthrough
 ## runs to the end; watch the "  error:" / "  warning:" lines.
 
 say <- function(l) cat("\n---- 5", l, "----\n")

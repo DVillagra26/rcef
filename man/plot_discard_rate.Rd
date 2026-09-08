@@ -11,9 +11,7 @@ plot_discard_rate(
   shape = NULL,
   facet = NULL,
   jitter = TRUE,
-  ncol = 2,
   n_per_screen = NULL,
-  verbose = FALSE,
   palette = c("default", "colorblind"),
   engine = c("ggplot", "base")
 )
@@ -35,12 +33,8 @@ and each point is one such stratum - not an average over finer ones.}
 \item{jitter}{Jitter the points horizontally (cosmetic only - one
 point is still one stratum).}
 
-\item{ncol}{Facet columns (ggplot).}
-
 \item{n_per_screen}{Base engine: split a faceted figure across this
 many devices.}
-
-\item{verbose}{Print a short summary before drawing.}
 
 \item{palette}{`"default"` or `"colorblind"` (point colours, via
 [var_palette()]).}

@@ -4,8 +4,7 @@
 ## 1. A bar chart shows sampled vs unsampled weight; a threshold or a
 ##    trip floor changes nothing it draws. The function does not accept
 ##    min_cov / min_trip at all, so passing either is R's normal
-##    unused-argument error; verbose still spells out why they do not
-##    apply and points at plot_coverage_heat() / plot_coverage_bubble().
+##    unused-argument error.
 ## 2. plot_coverage_bars_base() colours by var_palette() - the SAME
 ##    per-level assignment the ggplot engine uses - not a fixed
 ##    sampled/unsampled pair.
@@ -50,24 +49,7 @@ p_ok <- tryCatch(plot_coverage_bar(strata, y = "metier4", fill = "Country"),
 ok(inherits(p_ok, "ggplot"),
    "plot_coverage_bar() with no min_cov / min_trip builds normally")
 
-## ---- 2. verbose names the view and the fill column -----------------
-out <- capture.output(
-  plot_coverage_bar(strata, y = "metier4", fill = "Country", verbose = TRUE))
-ok(any(grepl("plot_coverage_bar", out)), "verbose names the function")
-ok(any(grepl("fill   : Country", out)), "verbose reports the fill column")
-ok(any(grepl("not used by a bar chart", out)),
-   "verbose still says min_cov / min_trip do not apply here")
-ok(any(grepl("strata rows being drawn", out)),
-   "verbose reports how many rows are drawn")
-
-out2 <- capture.output(
-  plot_coverage_heat(strata, y = "metier4", verbose = TRUE))
-ok(any(grepl("min_cov    : 50", out2, fixed = TRUE)),
-   "a verbose heatmap run reports the resolved min_cov (default 50)")
-ok(any(grepl("min_trip   : 2", out2, fixed = TRUE)),
-   "and the resolved min_trip (default 2)")
-
-## ---- 3. base bars colour by the fill variable ---------------------
+## ---- 2. base bars colour by the fill variable ---------------------
 reset_palettes()
 invisible(var_palette("Country", c("BE", "FR")))
 r <- tryCatch({

@@ -19,7 +19,6 @@ plot_coverage_heat(
   min_trip = 2,
   min_fish = 0,
   n_per_screen = NULL,
-  verbose = FALSE,
   palette = c("default", "colorblind"),
   engine = c("ggplot", "base")
 )
@@ -36,7 +35,6 @@ plot_coverage_bubble(
   min_trip = 2,
   min_fish = 0,
   n_per_screen = NULL,
-  verbose = FALSE,
   palette = c("default", "colorblind"),
   engine = c("ggplot", "base")
 )
@@ -49,9 +47,7 @@ plot_coverage_bar(
   facet = NULL,
   what = "discard",
   catchCategory = NULL,
-  ncol = 2,
   n_per_screen = NULL,
-  verbose = FALSE,
   palette = c("default", "colorblind"),
   engine = c("ggplot", "base")
 )
@@ -87,8 +83,6 @@ weight word in the plot title. Not valid for `what = "discard"`
 \item{n_per_screen}{Base engine: split a faceted figure across this
 many devices.}
 
-\item{verbose}{Print a short summary before drawing.}
-
 \item{palette}{`"default"` or `"colorblind"` - recolours the bar fill.
 The heatmap / bubble status colours are a fixed semantic scale;
 asking for `"colorblind"` there warns.}
@@ -96,8 +90,6 @@ asking for `"colorblind"` there warns.}
 \item{engine}{`"ggplot"` (default) or `"base"`.}
 
 \item{fill}{Bar fill category (bars only). `NULL` uses `y`.}
-
-\item{ncol}{Facet columns (bars, ggplot).}
 }
 \value{
 A ggplot object (`engine = "ggplot"`) or `NULL` invisibly
@@ -121,9 +113,8 @@ For `"length"` / `"age"`, pass `distributions` and, with
 The arguments run in the order you usually think about them: what data
 (`catch`, `distributions`, `what`, `catchCategory`), then which columns
 are the strata (`y`, `x` / `fill`, `facet`), then the pass / fail
-thresholds (`min_cov`, `min_trip`, `min_fish`), then rendering knobs
-(`ncol`, `n_per_screen`, `verbose`), and finally `palette` and
-`engine` last.
+thresholds (`min_cov`, `min_trip`, `min_fish`), then `n_per_screen`,
+and finally `palette` and `engine` last.
 }
 \examples{
 \dontrun{

@@ -236,16 +236,6 @@ plot_coverage_bubble(anchoveta_catch, y = "metier4", x = "Country",
 
 # Reading the status scale
 
-`verbose = TRUE` prints the resolved arguments and a breakdown of how
-many strata fell into each status before the figure is drawn:
-
-```{r verbose}
-invisible(plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
-                             what = "length", distributions = anchoveta_dist,
-                             min_cov = 50, min_fish = 25, min_trip = 2,
-                             verbose = TRUE))
-```
-
 The heatmap and bubble colours are a fixed semantic scale (green = safe,
 amber = warning, grey = nothing to sample), so asking for
 `palette = "colorblind"` there does nothing and warns. `palette` *does*
@@ -361,10 +351,10 @@ plot_numbers_at_length_age(anchoveta_catch, anchoveta_dist,
 
 # Mean weight at length and age
 
-`plot_meanweight_at_length_age()` draws mean weight at class as a line,
-with a +/- 1 sd ribbon when the strata are averaged. `colour` groups
-the lines; `catchCategory` works exactly as above and defaults to
-`"All"` ("catch").
+`plot_meanweight_at_length_age()` draws mean weight at class as a line
+with points, plus a +/- 1 sd band when the strata are averaged (no
+`shape`). `colour` groups the lines; `catchCategory` works exactly as
+above and defaults to `"All"` ("catch").
 
 ## Mean weight at length
 
@@ -384,12 +374,12 @@ plot_meanweight_at_length_age(anchoveta_catch, anchoveta_dist,
 ```
 
 `shape` opens the averaged group back up (one series per level) and
-drops the ribbon; `facet` splits into panels; the base engine draws the
+drops the band; `facet` splits into panels; the base engine draws the
 same figure:
 
 ```{r mw-len-shape, fig.height = 4.4, fig.alt = "Mean weight at length, separate series per quarter"}
 plot_meanweight_at_length_age(anchoveta_catch, anchoveta_dist,
-                              shape = "Season", show_spread = FALSE)
+                              shape = "Season")
 ```
 
 ```{r mw-len-facet-base, fig.height = 5.5, fig.alt = "Mean weight at length faceted by quarter, base engine"}
@@ -480,9 +470,7 @@ The arguments are ordered the way you build a call: **what data**, then
 | threshold | `min_cov`        | minimum coverage, percent (heat / bubble) |
 | threshold | `min_trip`       | minimum sampling trips (heat / bubble) |
 | threshold | `min_fish`       | minimum measured fish (`"length"` / `"age"`) |
-| render    | `ncol`           | facet columns (bars, ggplot) |
 | render    | `n_per_screen`   | base engine: split a faceted figure across devices |
-| render    | `verbose`        | print the resolved arguments and status breakdown |
 | last      | `palette`        | `"default"` or `"colorblind"` (bar fill only) |
 | last      | `engine`         | `"ggplot"` (default) or `"base"` |
 
@@ -511,6 +499,5 @@ There is deliberately **no** `dims`, `weight_label`, `angle` or
 | `fill` / `colour` | grouping column (`fill` for numbers, `colour` for mean weight) |
 | `facet`           | one or two facet columns (`c("row", "col")` becomes a grid) |
 | `stacked`         | numbers histogram: stack (default) or dodge on `fill` |
-| `shape`           | mean weight: separate series per level, drops the ribbon |
-| `show_points`, `show_spread` | mean weight: draw the points / the +/- 1 sd ribbon |
+| `shape`           | mean weight: separate series per level, drops the sd band |
 | `scales`          | ggplot facet scales: `"fixed"` (default), `"free_x"`, `"free_y"`, `"free"` |
