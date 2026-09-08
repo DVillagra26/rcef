@@ -5,14 +5,17 @@
 \alias{anchoveta_dist}
 \title{Synthetic Peruvian-anchoveta CEF distributions table}
 \format{
-A data frame of distribution records. Key columns:
+A data frame of distribution records, two rows per
+  class / stratum (one `Number`, one `WeightLive`). Key columns:
 \describe{
   \item{distributionType}{`"LengthTotal"` or `"Age"`.}
   \item{distributionClass}{Length in mm, or age in whole years.}
   \item{distributionUnit}{`"mm"` or `"y"`.}
   \item{catchCategory}{`"Lan"` or `"Dis"` - which catch part the
     distribution describes.}
-  \item{value}{Numbers at the class (`valueType = "Total"`).}
+  \item{variableType, valueType, value}{`"Number"` / `"Total"` gives
+    numbers at the class; `"WeightLive"` / `"Mean"` gives mean weight
+    at the class in grams.}
   \item{numMeasurements, numTrips}{Sampling effort behind the row.}
   \item{domainBiology}{Join key back to [anchoveta_catch].}
 }
@@ -22,13 +25,16 @@ anchoveta_dist
 }
 \description{
 The length- and age-distribution companion to [anchoveta_catch]: a
-made-up CEF distributions table carrying both `LengthTotal` rows (mm,
-classes 40--200) and `Age` rows (years, ages 0--4). Every row links
-back to a catch stratum through `domainBiology` + `catchCategory`, so
-both biology `what` values (`"length"`, `"age"`) and both distribution
-plots work straight off it. Only a fraction of the covered strata
-carry a length distribution and fewer still an age one, so the
-`what = "length"` / `"age"` coverage views have gaps to show.
+made-up CEF distributions table carrying, for both `LengthTotal` (mm,
+classes 40--200) and `Age` (years, 0--4), a `Number` row (numbers at
+class, `valueType = "Total"`) AND a `WeightLive` row (mean weight at
+class in grams, `valueType = "Mean"`) - so
+[plot_numbers_at_length_age()] and [plot_meanweight_at_length_age()]
+both have real data. Every row links back to a catch stratum through
+`domainBiology` + `catchCategory`. The distribution shape varies:
+the modal size and age shift by country and quarter, spreads and skew
+are drawn per stratum, and one quarter carries a recruitment pulse
+(a second mode of small, young fish).
 }
 \details{
 Pass it as the `distributions` argument:

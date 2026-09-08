@@ -69,7 +69,7 @@ p1b <- plot_coverage_heat(catch_data, y = "metier4", x = "Country",
                           facet = "Season", verbose = TRUE)
 print(p1b)
 png("11d_discard_heatmap_base.png", width = 1400, height = 900, res = 110)
-plot_coverage_heat(catch_data, y = "metier4", x = "Country",
+plot_coverage_heat(catch_data, y = "fleetValue", x = "Country",
                    facet = "Season", engine = "base")
 invisible(dev.off())
 
@@ -135,25 +135,25 @@ invisible(dev.off())
 p2b <- plot_coverage_heat(catch_data, y = "metier4", x = "Country",
                           facet = "Season", what = "length",
                           catchCategory = "Dis", distributions = distributions,
-                          min_cov = 50, min_fish = 50, min_trip = 2)
+                          min_cov = 50, min_fish = 25, min_trip = 2)
 print(p2b)
 png("12b_length_heatmap_base.png", width = 1400, height = 900, res = 110)
 plot_coverage_heat(catch_data, y = "metier4", x = "Country", facet = "Season",
                    what = "length", catchCategory = "Dis",
                    distributions = distributions, min_cov = 50,
-                   min_fish = 50, min_trip = 2,
+                   min_fish = 25, min_trip = 2,
                    engine = "base")
 invisible(dev.off())
 
 ## ---- 2c. length coverage, bubbles (landings) -------------------
 p2c <- plot_coverage_bubble(catch_data, y = "metier4", x = "Country",
                             what = "length", distributions = distributions,
-                            min_cov = 50, min_fish = 50, min_trip = 2)
+                            min_cov = 50, min_fish = 25, min_trip = 2)
 print(p2c)
 png("12c_length_bubbles_base.png", width = 1300, height = 800, res = 110)
 plot_coverage_bubble(catch_data, y = "metier4", x = "Country",
                      what = "length", distributions = distributions,
-                     min_cov = 50, min_fish = 50, min_trip = 2, engine = "base")
+                     min_cov = 50, min_fish = 25, min_trip = 2, engine = "base")
 invisible(dev.off())
 
 ## ---- 2d-2h. AGE coverage, all four views + the map --------------
@@ -169,22 +169,22 @@ invisible(dev.off())
 p2e <- plot_coverage_heat(age_catch, y = "metier4", x = "Country",
                           facet = "Season", what = "age",
                           distributions = age_dist, min_cov = 50,
-                          min_fish = 20, min_trip = 2)
+                          min_fish = 15, min_trip = 2)
 print(p2e)
 png("12e_age_heatmap_base.png", width = 1400, height = 900, res = 110)
 plot_coverage_heat(age_catch, y = "metier4", x = "Country", facet = "Season",
                    what = "age", distributions = age_dist, min_cov = 50,
-                   min_fish = 20, min_trip = 2,
+                   min_fish = 15, min_trip = 2,
                    engine = "base")
 invisible(dev.off())
 
 p2f <- plot_coverage_bubble(age_catch, y = "metier4", x = "Country",
                             what = "age", distributions = age_dist,
-                            min_cov = 50, min_fish = 20, min_trip = 2)
+                            min_cov = 50, min_fish = 15, min_trip = 2)
 print(p2f)
 png("12f_age_bubbles_base.png", width = 1300, height = 800, res = 110)
 plot_coverage_bubble(age_catch, y = "metier4", x = "Country", what = "age",
-                     distributions = age_dist, min_cov = 50, min_fish = 20,
+                     distributions = age_dist, min_cov = 50, min_fish = 15,
                      min_trip = 2, engine = "base")
 invisible(dev.off())
 

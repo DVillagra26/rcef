@@ -43,10 +43,12 @@ for the `what = "length"` / `what = "age"` coverage views and for
 
 Nothing here comes from another data set: the fleets, areas, metiers,
 weights and sampling coverage are all drawn from invented
-distributions, deliberately uneven across countries and metiers so the
-coverage plots have a real pattern to show. Peru and Chile land the
-most and are the best sampled; the distant-water fleets (China, Korea,
-Russia, Vanuatu) are large and thinly covered.
+distributions. The three kinds of coverage are driven by SEPARATE
+per-country / per-metier / per-quarter patterns, so the discard,
+length and age coverage plots look genuinely different: Peru has the
+best discard programme, Chile the best length sampling, Russia the
+best age reading, and Russia / Vanuatu run almost no discard observers
+(their cells read "no discard sampled").
 }
 \seealso{
 [anchoveta_dist], [coverage-plots], [plot_discard_rate()]

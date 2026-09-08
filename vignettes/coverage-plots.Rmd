@@ -64,7 +64,7 @@ distant-water fleets least.
 | `plot_coverage_heat()`   | a status colour per `y` x `x` cell        | spotting blind spots across two categories at a glance |
 | `plot_coverage_bubble()` | the same grid, bubble area = weight       | when the *size* of the gap matters, not just its presence |
 | `plot_coverage_bar()`    | sampled vs un-sampled weight, per `y`     | "how much of the catch is behind the estimate?" |
-| `plot_coverage_map()`    | one sampled/not pie per ICES area         | where, geographically, the gaps are |
+| `plot_coverage_map()`    | one sampled/not pie per area              | where, geographically, the gaps are |
 
 `y` is the only required grouping argument. `heat` / `bubble` put a
 second category on `x`; `bar` puts it on `fill`.
@@ -156,14 +156,14 @@ number of measured fish for a stratum to count as covered.
 ```{r len-lan, fig.height = 5, fig.alt = "Length-sampling coverage of the landings, by metier and fleet region"}
 plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
                    what = "length", distributions = anchoveta_dist,
-                   min_cov = 50, min_fish = 50, min_trip = 2)
+                   min_cov = 50, min_fish = 25, min_trip = 2)
 ```
 
 ```{r len-dis, fig.height = 5, fig.alt = "Length-sampling coverage of the discards"}
 plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
                    what = "length", catchCategory = "Dis",
                    distributions = anchoveta_dist,
-                   min_cov = 50, min_fish = 50, min_trip = 2)
+                   min_cov = 50, min_fish = 25, min_trip = 2)
 ```
 
 The weight word in the title ("landings", "discards", ...) is derived
@@ -202,7 +202,7 @@ many strata fell into each status before the figure is drawn:
 ```{r verbose}
 invisible(plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
                              what = "length", distributions = anchoveta_dist,
-                             min_cov = 50, min_fish = 50, min_trip = 2,
+                             min_cov = 50, min_fish = 25, min_trip = 2,
                              verbose = TRUE))
 ```
 
@@ -244,10 +244,10 @@ data.frame(engine = c("ggplot", "base"),
 ```{r timing-len, echo = TRUE}
 gg_l   <- bench(plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
                                    what = "length", distributions = anchoveta_dist,
-                                   min_fish = 50))
+                                   min_fish = 25))
 base_l <- bench(plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
                                    what = "length", distributions = anchoveta_dist,
-                                   min_fish = 50, engine = "base"))
+                                   min_fish = 25, engine = "base"))
 data.frame(engine = c("ggplot", "base"),
            seconds = round(c(gg_l, base_l), 3),
            row.names = NULL)
