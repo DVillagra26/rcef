@@ -19,7 +19,8 @@ plot_discard_rate(
 )
 }
 \arguments{
-\item{catch}{Raw CEF catch data, or a stratum table with `discard_rate`.}
+\item{catch}{Raw CEF catch data, or a stratum table with `discard_rate`.
+When raw, the strata are built on `x` + `colour` + `shape` + `facet`.}
 
 \item{x}{Column on the x axis.}
 

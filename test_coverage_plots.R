@@ -70,7 +70,7 @@ p1b <- plot_coverage_heat(catch_data, y = "metier4", x = "Country",
 print(p1b)
 png("11d_discard_heatmap_base.png", width = 1400, height = 900, res = 110)
 plot_coverage_heat(catch_data, y = "fleetValue", x = "Country",
-                   facet = "Season", engine = "base")
+                   facet = "Season", engine = "base", min_cov = 50, min_trip = 9)
 invisible(dev.off())
 
 ## ---- 1c. bubbles: weighted status grid ---------------------------
@@ -282,6 +282,23 @@ png("14f_age_meanweight_base.png", width = 1200, height = 800, res = 110)
 plot_meanweight_at_length_age(age_catch, age_dist, distributionType = "Age",
   colour = "Country", show_points = TRUE, engine = "base")
 invisible(dev.off())
+
+## ---- 4g-4j. catchCategory sweep - default "All" ("catch"), then the
+## landings and the discards, for numbers AND mean weight, length AND age.
+## The catch part appears in the plot title.
+for (dt in c("LengthTotal", "Age")) {
+  for (cc in c("All", "Lan", "Dis")) {
+    print(plot_numbers_at_length_age(catch_data, distributions,
+            distributionType = dt, catchCategory = cc, fill = "Country"))
+    print(plot_meanweight_at_length_age(catch_data, distributions,
+            distributionType = dt, catchCategory = cc, colour = "Country"))
+  }
+}
+## and the default really is "All" - no catchCategory passed
+stopifnot(grepl("\\(catch\\)",
+  plot_numbers_at_length_age(catch_data, distributions,
+    distributionType = "Age", fill = "Country")$labels$title))
+cat("4g-4j: catchCategory default is \"All\" (title says \"catch\")\n")
 
 
 ## =====================================================================

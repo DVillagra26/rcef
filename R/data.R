@@ -71,10 +71,17 @@
 #' class in grams, `valueType = "Mean"`) - so
 #' [plot_numbers_at_length_age()] and [plot_meanweight_at_length_age()]
 #' both have real data. Every row links back to a catch stratum through
-#' `domainBiology` + `catchCategory`. The distribution shape varies:
-#' the modal size and age shift by country and quarter, spreads and skew
-#' are drawn per stratum, and one quarter carries a recruitment pulse
-#' (a second mode of small, young fish).
+#' `domainBiology` + `catchCategory`. The distribution shape varies: the
+#' modal size and age shift by country and quarter, spreads and skew are
+#' drawn per stratum, and one quarter carries a recruitment pulse (a
+#' second mode of small, young fish).
+#'
+#' The **discards run smaller, younger and thinner** than the landings,
+#' as you would expect: within a stratum the discard length mode sits
+#' ~3 cm below the landings mode, the age mode ~1 year younger, and the
+#' mean weight at a given length or age class is ~0.75x the landings
+#' value (a lower length-weight condition factor). Discard numbers are a
+#' small fraction of the landings.
 #'
 #' Pass it as the `distributions` argument:
 #' \preformatted{

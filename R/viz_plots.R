@@ -123,13 +123,14 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
            "what = \"discard\"", call. = FALSE)
     cc <- NULL
   } else {
-    cc <- if (is.null(catchCategory)) "Lan"
-          else match.arg(catchCategory, c("Lan", "Dis", "BMS"))
+    cc <- if (is.null(catchCategory)) "All"
+          else match.arg(catchCategory, c("Lan", "Dis", "BMS", "All"))
   }
   weight_label <- default_weight_label(what, cc)
   dims <- unique(c(area_var, if (has(group_var)) group_var))
   sc <- build_coverage_strata(strata, dims, NULL, NULL, NULL, min_cov, what,
-                                min_fish, min_trip, distributions, cc)
+                                min_fish, min_trip, distributions,
+                                    catch_category_parts(cc))
   for (v in c(area_var, weight_var, covered_var))
     if (!v %in% names(sc)) stop("plot_coverage_map(): no column '", v, "'")
 
@@ -219,8 +220,10 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
   allx <- c(agg$cx, if (boxed) c(boxes$x0, boxes$x1) else agg$lon)
   ally <- c(agg$cy, if (boxed) c(boxes$y0, boxes$y1 + 0.5) else agg$lat)
   xlim <- pad(allx, 2.5); ylim <- pad(ally, 1.8)
-  ttl  <- sprintf("%s coverage by %s%s", cov_title_what(what), area_var,
-                  if (has(group_var)) paste0(" and ", group_var) else "")
+  ttl  <- sprintf("%s coverage by %s%s%s", cov_title_what(what), area_var,
+                  if (has(group_var)) paste0(" and ", group_var) else "",
+                  if (identical(what, "discard")) ""
+                  else paste0(" (", weight_label, ")"))
 
   if (isTRUE(verbose))
     cat(sprintf("-- plot_coverage_map(): %s | area = %s%s | %d pies over %d areas | %s | engine = %s\n",
@@ -338,9 +341,11 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #'   `what = "length"`/`"age"`, ignored otherwise.
 #' @param what `"discard"` (default), `"length"` or `"age"`. Plural and
 #'   mixed case are accepted (`"discards"`, `"Length"`, ...).
-#' @param catchCategory For `what = "length"`/`"age"`: `"Lan"` (default),
-#'   `"Dis"` or `"BMS"` - which catch part the distribution is linked to.
-#'   Not valid for `what = "discard"` (an error).
+#' @param catchCategory For `what = "length"`/`"age"`: `"All"` (default -
+#'   landings and discards together, titled "catch"), `"Lan"`, `"Dis"` or
+#'   `"BMS"`. Sets which catch part the distribution is linked to and the
+#'   weight word in the plot title. Not valid for `what = "discard"`
+#'   (an error).
 #' @param y Row category. Required.
 #' @param x Column category - the second axis of the heatmap / bubble
 #'   grid. `NULL` collapses to a single column.
@@ -397,7 +402,7 @@ plot_coverage_heat <- function(catch, distributions = NULL, y, x = NULL,
            call. = FALSE)
     cc <- NULL
   } else {
-    cc <- if (user_cc) match.arg(catchCategory, c("Lan", "Dis", "BMS")) else "Lan"
+    cc <- if (user_cc) match.arg(catchCategory, c("Lan", "Dis", "BMS", "All")) else "All"
   }
 
   already <- !is.null(strata) && "cat_key" %in% names(strata)
@@ -419,7 +424,8 @@ plot_coverage_heat <- function(catch, distributions = NULL, y, x = NULL,
   xcol <- x
 
   strata <- build_coverage_strata(strata, NULL, y, xcol, facet, min_cov,
-                                    what, min_fish, min_trip, distributions, cc)
+                                    what, min_fish, min_trip, distributions,
+                                    catch_category_parts(cc))
 
   if (isTRUE(verbose))
     coverage_verbose_summary(strata, view, engine, y, xcol, facet, min_cov,
@@ -497,7 +503,9 @@ plot_coverage_heat <- function(catch, distributions = NULL, y, x = NULL,
     # x labels, from the widest one anywhere in the figure.
     bmar <- cat_axis_mar(unique(as.character(d[[x_var]])), 0.8, angle)
     groups <- split_facets_to_screens(facets, n_per_screen)
-    main_txt <- sprintf("%s sampling coverage vs threshold", cov_title_what(what))
+    main_txt <- sprintf("%s sampling coverage vs threshold%s", cov_title_what(what),
+                        if (identical(what, "discard")) ""
+                        else paste0(" (", weight_label, ")"))
     # Captured once, before the loop: dev.cur() changes the moment the
     # first dev.new() runs, so re-checking it every iteration would only
     # ever open a second screen and then stop.
@@ -556,8 +564,10 @@ plot_coverage_heat <- function(catch, distributions = NULL, y, x = NULL,
                       labels = status_abbr(threshold, what, min_meas, min_trips),
                       drop = FALSE, name = "Sampling status") +
     maybe_facet(facet_var) +
-    labs(title = sprintf("%s sampling coverage vs threshold",
-                         cov_title_what(what)),
+    labs(title = sprintf("%s sampling coverage vs threshold%s",
+                         cov_title_what(what),
+                         if (identical(what, "discard")) ""
+                         else paste0(" (", weight_label, ")")),
          subtitle = if (any(d$n_strata > 1, na.rm = TRUE))
            sprintf("Each cell aggregates every stratum at this grouping (up to %d per cell)",
                    max(d$n_strata, na.rm = TRUE)) else NULL,
@@ -598,7 +608,7 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
            call. = FALSE)
     cc <- NULL
   } else {
-    cc <- if (user_cc) match.arg(catchCategory, c("Lan", "Dis", "BMS")) else "Lan"
+    cc <- if (user_cc) match.arg(catchCategory, c("Lan", "Dis", "BMS", "All")) else "All"
   }
 
   already <- !is.null(strata) && "cat_key" %in% names(strata)
@@ -620,7 +630,8 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
   xcol <- x
 
   strata <- build_coverage_strata(strata, NULL, y, xcol, facet, min_cov,
-                                    what, min_fish, min_trip, distributions, cc)
+                                    what, min_fish, min_trip, distributions,
+                                    catch_category_parts(cc))
 
   if (isTRUE(verbose))
     coverage_verbose_summary(strata, view, engine, y, xcol, facet, min_cov,
@@ -934,7 +945,7 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
            call. = FALSE)
     cc <- NULL
   } else {
-    cc <- if (user_cc) match.arg(catchCategory, c("Lan", "Dis", "BMS")) else "Lan"
+    cc <- if (user_cc) match.arg(catchCategory, c("Lan", "Dis", "BMS", "All")) else "All"
   }
 
   already <- !is.null(strata) && "cat_key" %in% names(strata)
@@ -956,7 +967,8 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
   xcol <- fill
 
   strata <- build_coverage_strata(strata, NULL, y, xcol, facet, min_cov,
-                                    what, min_fish, min_trip, distributions, cc)
+                                    what, min_fish, min_trip, distributions,
+                                    catch_category_parts(cc))
 
   if (isTRUE(verbose))
     coverage_verbose_summary(strata, view, engine, y, xcol, facet, min_cov,
@@ -1288,6 +1300,7 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 #' ggplot2; `engine = "base"` draws the same figure with base graphics.
 #'
 #' @param catch Raw CEF catch data, or a stratum table with `discard_rate`.
+#'   When raw, the strata are built on `x` + `colour` + `shape` + `facet`.
 #' @param x Column on the x axis.
 #' @param colour Column mapped to point fill.
 #' @param shape Column mapped to point shape.
@@ -1329,7 +1342,8 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
   # caller passing an already-built table (has the column) is used as is.
   if (!"discard_rate" %in% names(catch)) {
     if (is.null(dims))
-      dims <- unique(c(x, if (has(colour)) colour, if (has(facet)) facet))
+      dims <- unique(c(x, if (has(colour)) colour, if (has(shape)) shape,
+                       if (has(facet)) facet))
     catch <- build_strata(catch, dims)
   }
   d <- sampled_for_discards(catch)
@@ -1486,14 +1500,17 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
 #'
 #' `data` is a [length_numbers()] table, or raw CEF catch with
 #' `distributions` (then the link + summary run internally, with
-#' `catchCategory` choosing the landings / discards / BMS part).
+#' `catchCategory` choosing the landings / discards / BMS part, or
+#' `"All"` for the landings and discards together).
 #' Numbers come out in thousands (N3), length in cm, age in years.
 #'
 #' @param data A [length_numbers()] table, or raw CEF catch data.
 #' @param distributions A CEF distributions table - needed only with raw
 #'   catch.
 #' @param distributionType `"LengthTotal"` (default) or `"Age"`.
-#' @param catchCategory `"Lan"` (default), `"Dis"` or `"BMS"`.
+#' @param catchCategory `"All"` (default - landings + discards, titled
+#'   "catch"), `"Lan"`, `"Dis"` or `"BMS"`. When `distributions` is
+#'   given, the resolved word goes in the plot title.
 #' @param type `"histogram"` (default) or `"density"`.
 #' @param fill Column mapped to bar fill / density group.
 #' @param facet1,facet2 Up to two facet columns.
@@ -1519,7 +1536,7 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
 #' @export
 plot_numbers_at_length_age <- function(data, distributions = NULL,
                                        distributionType = c("LengthTotal", "Age"),
-                                       catchCategory = "Lan",
+                                       catchCategory = "All",
                                        type = c("histogram", "density"),
                                        fill = NULL, facet1 = NULL, facet2 = NULL,
                                        stacked = TRUE, smooth = 1,
@@ -1535,7 +1552,7 @@ plot_numbers_at_length_age <- function(data, distributions = NULL,
   type    <- match.arg(type)
   engine  <- match.arg(engine)
   palette <- match.arg(palette)
-  catchCategory <- match.arg(catchCategory, c("Lan", "Dis", "BMS"))
+  catchCategory <- match.arg(catchCategory, c("Lan", "Dis", "BMS", "All"))
   has_ <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
   plot_arg_report("plot_numbers_at_length_age", list(
     list(bad = identical(type, "histogram") && !identical(smooth, 1),
@@ -1550,11 +1567,15 @@ plot_numbers_at_length_age <- function(data, distributions = NULL,
          msg = "scales is a ggplot facet option")))
   grp <- unique(c(if (has_(fill)) fill, if (has_(facet1)) facet1,
                   if (has_(facet2)) facet2))
-  pr <- biology_dist_prep(data, distributions, distributionType, catchCategory,
+  pr <- biology_dist_prep(data, distributions, distributionType,
+                          catch_category_parts(catchCategory),
                           "numbers", grp, dims)
   data <- pr$data
   cl <- class_label %||% pr$class_label
   vl <- value_label %||% pr$value_label
+  cc_word   <- switch(catchCategory, Lan = "landings", Dis = "discards",
+                      BMS = "BMS catch", All = "catch")
+  cc_suffix <- if (!is.null(distributions)) paste0(" (", cc_word, ")") else ""
   if (isTRUE(verbose)) {
     cat("-- plot_numbers_at_length_age(): ", distributionType, ", type = \"",
         type, "\", engine = \"", engine, "\" --\n", sep = "")
@@ -1637,7 +1658,8 @@ plot_numbers_at_length_age <- function(data, distributions = NULL,
         }
 
         facets <- if (!all(is.na(d$.fk))) sort(unique(d$.fk)) else NA
-        main_txt <- sprintf("Frequency, as a smoothed density (x%.2f smoothing)", smooth)
+        main_txt <- paste0(sprintf(
+        "Frequency, as a smoothed density (x%.2f smoothing)", smooth), cc_suffix)
         # Left margin sized to the widest group label, the same way the
         # heatmap and bubble plots do it - a fixed 6 clipped the long
         # fleet-level names on the y axis.
@@ -1719,7 +1741,8 @@ plot_numbers_at_length_age <- function(data, distributions = NULL,
         }
 
         facets <- if (!all(is.na(d$.fk))) sort(unique(d$.fk)) else NA
-        main_txt <- sprintf("Numbers at %s", tolower(sub(" .*", "", class_label)))
+        main_txt <- paste0(sprintf("Numbers at %s",
+                                   tolower(sub(" .*", "", class_label))), cc_suffix)
         groups <- split_facets_to_screens(facets, n_per_screen)
         had_device <- grDevices::dev.cur() > 1
         for (grp in groups) {
@@ -1818,7 +1841,7 @@ plot_numbers_at_length_age <- function(data, distributions = NULL,
         scale_fill_var(group_var, d$.g, name = group_var, palette = palette) +
         scale_colour_var(group_var, d$.g, name = group_var, palette = palette) +
         facet_two(facet1, facet2, ncol = ncol, scales = scales) +
-        labs(title = "Frequency, as a smoothed density",
+        labs(title = paste0("Frequency, as a smoothed density", cc_suffix),
              subtitle = sprintf(paste("Each curve integrates to one, so strata of",
                                       "very different size are compared on shape",
                                       "alone (smoothing x%.2f)"), smooth),
@@ -1846,7 +1869,8 @@ plot_numbers_at_length_age <- function(data, distributions = NULL,
       p +
         scale_y_continuous(labels = scales::comma) +
         facet_two(facet1, facet2, ncol = ncol, scales = scales) +
-        labs(title = sprintf("Numbers at %s", tolower(sub(" .*", "", class_label))),
+        labs(title = paste0(sprintf("Numbers at %s",
+                                    tolower(sub(" .*", "", class_label))), cc_suffix),
              subtitle = if (has(fill_var)) paste0("Stacked by ", fill_var) else NULL,
              x = class_label, y = value_label, fill = fill_var) +
         app_theme()
@@ -1864,14 +1888,17 @@ plot_numbers_at_length_age <- function(data, distributions = NULL,
 #'
 #' `data` is a [length_meanweight()] table, or raw CEF catch with
 #' `distributions` (then the link + summary run internally,
-#' `catchCategory` choosing the part). Weight in grams, length in cm,
+#' `catchCategory` choosing the part - `"All"` combines landings and
+#' discards). Weight in grams, length in cm,
 #' age in years.
 #'
 #' @param data A [length_meanweight()] table, or raw CEF catch data.
 #' @param distributions A CEF distributions table - needed only with raw
 #'   catch.
 #' @param distributionType `"LengthTotal"` (default) or `"Age"`.
-#' @param catchCategory `"Lan"` (default), `"Dis"` or `"BMS"`.
+#' @param catchCategory `"All"` (default - landings + discards, titled
+#'   "catch"), `"Lan"`, `"Dis"` or `"BMS"`. When `distributions` is
+#'   given, the resolved word goes in the plot title.
 #' @param colour Column mapped to line colour.
 #' @param facet1,facet2 Up to two facet columns.
 #' @param shape Column drawn as separate point shapes; opens the averaged
@@ -1896,7 +1923,7 @@ plot_numbers_at_length_age <- function(data, distributions = NULL,
 #' @export
 plot_meanweight_at_length_age <- function(data, distributions = NULL,
                                           distributionType = c("LengthTotal", "Age"),
-                                          catchCategory = "Lan",
+                                          catchCategory = "All",
                                           colour = NULL, facet1 = NULL,
                                           facet2 = NULL, shape = NULL,
                                           show_points = TRUE, show_spread = TRUE,
@@ -1910,7 +1937,7 @@ plot_meanweight_at_length_age <- function(data, distributions = NULL,
   distributionType <- match.arg(distributionType)
   engine  <- match.arg(engine)
   palette <- match.arg(palette)
-  catchCategory <- match.arg(catchCategory, c("Lan", "Dis", "BMS"))
+  catchCategory <- match.arg(catchCategory, c("Lan", "Dis", "BMS", "All"))
   has_ <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
   plot_arg_report("plot_meanweight_at_length_age", list(
     list(bad = is.null(distributions) && (typed_dt || typed_cc),
@@ -1921,10 +1948,14 @@ plot_meanweight_at_length_age <- function(data, distributions = NULL,
          msg = "scales is a ggplot facet option")))
   grp <- unique(c(if (has_(colour)) colour, if (has_(facet1)) facet1,
                   if (has_(facet2)) facet2, if (has_(shape)) shape))
-  pr <- biology_dist_prep(data, distributions, distributionType, catchCategory,
+  pr <- biology_dist_prep(data, distributions, distributionType,
+                          catch_category_parts(catchCategory),
                           "meanweight", grp, dims)
   data <- pr$data
   cl <- class_label %||% pr$class_label
+  cc_word   <- switch(catchCategory, Lan = "landings", Dis = "discards",
+                      BMS = "BMS catch", All = "catch")
+  cc_suffix <- if (!is.null(distributions)) paste0(" (", cc_word, ")") else ""
   if (isTRUE(verbose)) {
     cat("-- plot_meanweight_at_length_age(): ", distributionType,
         ", engine = \"", engine, "\" --\n", sep = "")
@@ -2008,7 +2039,8 @@ plot_meanweight_at_length_age <- function(data, distributions = NULL,
       }
 
       facets <- if (!all(is.na(d$.fk))) sort(unique(d$.fk)) else NA
-      main_txt <- sprintf("Mean weight at %s", tolower(sub(" .*", "", class_label)))
+      main_txt <- paste0(sprintf("Mean weight at %s",
+                                 tolower(sub(" .*", "", class_label))), cc_suffix)
       groups <- split_facets_to_screens(facets, n_per_screen)
       had_device <- grDevices::dev.cur() > 1
       for (grp in groups) {
@@ -2087,8 +2119,8 @@ plot_meanweight_at_length_age <- function(data, distributions = NULL,
       p +
         scale_y_continuous(labels = scales::comma) +
         facet_two(facet1, facet2, ncol = ncol, scales = scales) +
-        labs(title = sprintf("Mean weight at %s",
-                             tolower(sub(" .*", "", class_label))), subtitle = sub,
+        labs(title = paste0(sprintf("Mean weight at %s",
+                             tolower(sub(" .*", "", class_label))), cc_suffix), subtitle = sub,
              x = class_label, y = "Mean weight (g)",
              colour = colour_var, fill = colour_var, shape = shape_var) +
         app_theme()

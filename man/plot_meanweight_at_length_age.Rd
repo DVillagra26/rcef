@@ -8,7 +8,7 @@ plot_meanweight_at_length_age(
   data,
   distributions = NULL,
   distributionType = c("LengthTotal", "Age"),
-  catchCategory = "Lan",
+  catchCategory = "All",
   colour = NULL,
   facet1 = NULL,
   facet2 = NULL,
@@ -32,7 +32,9 @@ catch.}
 
 \item{distributionType}{`"LengthTotal"` (default) or `"Age"`.}
 
-\item{catchCategory}{`"Lan"` (default), `"Dis"` or `"BMS"`.}
+\item{catchCategory}{`"All"` (default - landings + discards, titled
+"catch"), `"Lan"`, `"Dis"` or `"BMS"`. When `distributions` is
+given, the resolved word goes in the plot title.}
 
 \item{colour}{Column mapped to line colour.}
 
@@ -71,7 +73,8 @@ argument. One function, two engines.
 \details{
 `data` is a [length_meanweight()] table, or raw CEF catch with
 `distributions` (then the link + summary run internally,
-`catchCategory` choosing the part). Weight in grams, length in cm,
+`catchCategory` choosing the part - `"All"` combines landings and
+discards). Weight in grams, length in cm,
 age in years.
 }
 \examples{

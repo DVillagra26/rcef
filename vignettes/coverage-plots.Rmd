@@ -1,12 +1,12 @@
 ---
-title: "Coverage plots: reading how well strata are sampled"
+title: "rcef's exploratory plots: coverage, discard rate, length and age"
 output:
   rmarkdown::pdf_document:
     toc: true
     toc_depth: 3
     number_sections: true
 vignette: >
-  %\VignetteIndexEntry{Coverage plots: reading how well strata are sampled}
+  %\VignetteIndexEntry{rcef's exploratory plots: coverage, discard rate, length and age}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -20,6 +20,24 @@ knitr::opts_chunk$set(
 library(rcef)
 have_maps <- requireNamespace("maps", quietly = TRUE)
 ```
+
+# The plots
+
+`rcef` has three families of exploratory plot, all taking **raw CEF
+catch** (and a **distributions** table where length / age is involved)
+and doing the strata building internally:
+
+* **coverage** - `plot_coverage_heat()` / `_bubble()` / `_bar()` /
+  `_map()`: which strata are sampled well enough.
+* **discard rate** - `plot_discard_rate()`: the raw per-stratum discard
+  rate.
+* **length / age distribution** - `plot_numbers_at_length_age()` and
+  `plot_meanweight_at_length_age()`: numbers and mean weight at length
+  or age.
+
+Every one is a single function that draws with either engine
+(`engine = "ggplot"`, the default, or `"base"`), and every one ends its
+signature with `palette` then `engine`.
 
 # What the coverage plots answer
 
@@ -148,14 +166,23 @@ labelled box of pies per area, one pie per level.)
 
 # Length coverage
 
-Pass `distributions` and `what = "length"`. `catchCategory` chooses
-which catch part the distribution is judged against: `"Lan"` (landings,
-the default), `"Dis"` (discards) or `"BMS"`. `min_fish` is the minimum
-number of measured fish for a stratum to count as covered.
+Pass `distributions` and `what = "length"`. `catchCategory` picks which
+catch part the distribution is judged against and appears in the plot
+title: it defaults to **`"All"`** (landings and discards together,
+titled "catch") and also takes `"Lan"`, `"Dis"` or `"BMS"`. `min_fish`
+is the minimum number of measured fish for a stratum to count as
+covered.
 
-```{r len-lan, fig.height = 5, fig.alt = "Length-sampling coverage of the landings, by metier and fleet region"}
+```{r len-catch, fig.height = 5, fig.alt = "Length-sampling coverage of the whole catch, by metier and fleet region"}
 plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
                    what = "length", distributions = anchoveta_dist,
+                   min_cov = 50, min_fish = 25, min_trip = 2)   # catchCategory = "All"
+```
+
+```{r len-lan, fig.height = 5, fig.alt = "Length-sampling coverage of the landings"}
+plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
+                   what = "length", catchCategory = "Lan",
+                   distributions = anchoveta_dist,
                    min_cov = 50, min_fish = 25, min_trip = 2)
 ```
 
@@ -166,9 +193,9 @@ plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
                    min_cov = 50, min_fish = 25, min_trip = 2)
 ```
 
-The weight word in the title ("landings", "discards", ...) is derived
-from `what` and `catchCategory` - there is no `weight_label` argument to
-set.
+The title carries the catch part - "Length sampling coverage vs
+threshold (catch)" / "(landings)" / "(discards)". It is derived from
+`what` and `catchCategory`; there is no `weight_label` argument to set.
 
 The bar and bubble views take exactly the same arguments:
 
@@ -179,24 +206,32 @@ plot_coverage_bar(anchoveta_catch, y = "metier4", fill = "Country",
 
 # Age coverage
 
-Identical call, `what = "age"`. `anchoveta_dist` carries `Age` rows
-(ages 0-7) alongside the length rows.
+Identical call, `what = "age"` (`anchoveta_dist` carries `Age` rows,
+ages 0-7). `catchCategory` again defaults to `"All"` and titles the
+figure "(catch)".
 
 Where a `metier4` x `Country` cell is blank, that fleet never worked
 that metier - a genuine hole, not an unsampled stratum. A stratum that
 operated but landed nothing shows in the near-white "no landings /
 no discards" colour.
 
-```{r age-heat, fig.height = 5, fig.alt = "Age-sampling coverage by metier and fleet region"}
+```{r age-heat, fig.height = 5, fig.alt = "Age-sampling coverage of the catch, by metier and fleet region"}
 plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
                    what = "age", distributions = anchoveta_dist,
-                   min_cov = 50, min_fish = 20, min_trip = 2)
+                   min_cov = 50, min_fish = 15, min_trip = 2)
+```
+
+```{r age-dis, fig.height = 5, fig.alt = "Age-sampling coverage of the discards"}
+plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
+                   what = "age", catchCategory = "Dis",
+                   distributions = anchoveta_dist,
+                   min_cov = 50, min_fish = 15, min_trip = 2)
 ```
 
 ```{r age-bubble, fig.height = 5, fig.alt = "Age-sampling coverage as a weighted bubble grid"}
 plot_coverage_bubble(anchoveta_catch, y = "metier4", x = "Country",
                      what = "age", distributions = anchoveta_dist,
-                     min_cov = 50, min_fish = 20, min_trip = 2)
+                     min_cov = 50, min_fish = 15, min_trip = 2)
 ```
 
 # Reading the status scale
@@ -220,6 +255,165 @@ The status legend always lists **every** category with its colour, even
 the ones no cell in the current figure lands in - so the same figure
 drawn on two different subsets has the same key, and an absent category
 reads as "nothing here", not "not a category".
+
+# Discard rate
+
+`plot_discard_rate()` draws one point per stratum: its discard rate,
+`discards / (landings + discards)`. It builds the strata from raw catch
+on `x` + `colour` + `shape` + `facet`, then plots them raw - no
+aggregation, no classification. `x` is required; everything else is
+optional.
+
+```{r dr-basic, fig.alt = "Discard rate per stratum, by metier"}
+plot_discard_rate(anchoveta_catch, x = "metier4")
+```
+
+Map a column to `colour` (point fill) and another to `shape`:
+
+```{r dr-colour-shape, fig.height = 4.6, fig.alt = "Discard rate by metier, coloured by country and shaped by quarter"}
+plot_discard_rate(anchoveta_catch, x = "metier4",
+                  colour = "Country", shape = "Season")
+```
+
+`facet` splits the panel; `jitter = FALSE` stops the horizontal spread
+(useful when there are few strata per `x`):
+
+```{r dr-facet, fig.height = 5.5, fig.alt = "Discard rate by metier, coloured by country, one panel per quarter"}
+plot_discard_rate(anchoveta_catch, x = "Country", colour = "metier4",
+                  facet = "Season", jitter = FALSE)
+```
+
+The base engine draws the same figure without ggplot2 on the call path:
+
+```{r dr-base, fig.alt = "Discard rate per stratum, base-graphics engine"}
+plot_discard_rate(anchoveta_catch, x = "metier4", colour = "Country",
+                  engine = "base")
+```
+
+# Numbers at length and age
+
+`plot_numbers_at_length_age()` takes raw catch + `distributions`, links
+them and sums the numbers at each class. `distributionType` picks
+`"LengthTotal"` (default) or `"Age"`; `type` picks `"histogram"`
+(default) or a smoothed `"density"`. `catchCategory` picks the catch
+part and titles the plot: it defaults to **`"All"`** - landings and
+discards together, titled "catch" - and also takes `"Lan"`, `"Dis"` or
+`"BMS"`.
+
+## Numbers at length
+
+```{r num-len-catch, fig.height = 4, fig.alt = "Numbers at length, landings and discards combined, by country"}
+plot_numbers_at_length_age(anchoveta_catch, anchoveta_dist,
+                           fill = "Country")                    # catchCategory = "All"
+```
+
+```{r num-len-lan, fig.height = 4, fig.alt = "Numbers at length of the landings, by country"}
+plot_numbers_at_length_age(anchoveta_catch, anchoveta_dist,
+                           catchCategory = "Lan", fill = "Country")
+```
+
+```{r num-len-dis, fig.height = 4, fig.alt = "Numbers at length of the discards, by country"}
+plot_numbers_at_length_age(anchoveta_catch, anchoveta_dist,
+                           catchCategory = "Dis", fill = "Country")
+```
+
+`stacked = FALSE` dodges the bars instead of stacking; `type = "density"`
+with `smooth` gives a smoothed curve; two facet columns (`facet1`,
+`facet2`) and `scales = "free_y"` let each panel set its own range:
+
+```{r num-len-density, fig.height = 4.4, fig.alt = "Numbers at length as a smoothed density per country"}
+plot_numbers_at_length_age(anchoveta_catch, anchoveta_dist,
+                           type = "density", fill = "Country", smooth = 1.4)
+```
+
+```{r num-len-facets, fig.height = 6.5, fig.alt = "Numbers at length faceted by quarter and metier"}
+plot_numbers_at_length_age(anchoveta_catch, anchoveta_dist,
+                           fill = "Country", facet1 = "Season",
+                           facet2 = "metier4", scales = "free_y")
+```
+
+## Numbers at age
+
+```{r num-age-catch, fig.height = 4, fig.alt = "Numbers at age, landings and discards combined, by country"}
+plot_numbers_at_length_age(anchoveta_catch, anchoveta_dist,
+                           distributionType = "Age", fill = "Country")
+```
+
+```{r num-age-lan, fig.height = 4, fig.alt = "Numbers at age of the landings, by country"}
+plot_numbers_at_length_age(anchoveta_catch, anchoveta_dist,
+                           distributionType = "Age", catchCategory = "Lan",
+                           fill = "Country")
+```
+
+```{r num-age-dis, fig.height = 4, fig.alt = "Numbers at age of the discards, by country"}
+plot_numbers_at_length_age(anchoveta_catch, anchoveta_dist,
+                           distributionType = "Age", catchCategory = "Dis",
+                           fill = "Country")
+```
+
+```{r num-age-base, fig.height = 4.4, fig.alt = "Numbers at age histogram, base engine, one panel per quarter"}
+plot_numbers_at_length_age(anchoveta_catch, anchoveta_dist,
+                           distributionType = "Age", fill = "Country",
+                           facet1 = "Season", engine = "base", n_per_screen = 2)
+```
+
+# Mean weight at length and age
+
+`plot_meanweight_at_length_age()` draws mean weight at class as a line,
+with a +/- 1 sd ribbon when the strata are averaged. `colour` groups
+the lines; `catchCategory` works exactly as above and defaults to
+`"All"` ("catch").
+
+## Mean weight at length
+
+```{r mw-len-catch, fig.height = 4, fig.alt = "Mean weight at length, landings and discards combined"}
+plot_meanweight_at_length_age(anchoveta_catch, anchoveta_dist,
+                              colour = "Country")                # catchCategory = "All"
+```
+
+```{r mw-len-lan, fig.height = 4, fig.alt = "Mean weight at length of the landings"}
+plot_meanweight_at_length_age(anchoveta_catch, anchoveta_dist,
+                              catchCategory = "Lan", colour = "Country")
+```
+
+```{r mw-len-dis, fig.height = 4, fig.alt = "Mean weight at length of the discards"}
+plot_meanweight_at_length_age(anchoveta_catch, anchoveta_dist,
+                              catchCategory = "Dis", colour = "Country")
+```
+
+`shape` opens the averaged group back up (one series per level) and
+drops the ribbon; `facet1` splits into panels; the base engine draws the
+same figure:
+
+```{r mw-len-shape, fig.height = 4.4, fig.alt = "Mean weight at length, separate series per quarter"}
+plot_meanweight_at_length_age(anchoveta_catch, anchoveta_dist,
+                              shape = "Season", show_spread = FALSE)
+```
+
+```{r mw-len-facet-base, fig.height = 5.5, fig.alt = "Mean weight at length faceted by quarter, base engine"}
+plot_meanweight_at_length_age(anchoveta_catch, anchoveta_dist,
+                              colour = "Country", facet1 = "Season",
+                              engine = "base")
+```
+
+## Mean weight at age
+
+```{r mw-age-catch, fig.height = 4, fig.alt = "Mean weight at age, landings and discards combined"}
+plot_meanweight_at_length_age(anchoveta_catch, anchoveta_dist,
+                              distributionType = "Age", colour = "Country")
+```
+
+```{r mw-age-lan, fig.height = 4, fig.alt = "Mean weight at age of the landings"}
+plot_meanweight_at_length_age(anchoveta_catch, anchoveta_dist,
+                              distributionType = "Age", catchCategory = "Lan",
+                              colour = "Country")
+```
+
+```{r mw-age-dis, fig.height = 4, fig.alt = "Mean weight at age of the discards"}
+plot_meanweight_at_length_age(anchoveta_catch, anchoveta_dist,
+                              distributionType = "Age", catchCategory = "Dis",
+                              colour = "Country")
+```
 
 # Base R vs ggplot2 on a heavier table
 
@@ -277,7 +471,7 @@ The arguments are ordered the way you build a call: **what data**, then
 | data      | `catch`          | raw CEF catch (already `derive_fields()`-ed) |
 | data      | `distributions`  | CEF distributions table; required for `what = "length"` / `"age"` |
 | data      | `what`           | `"discard"` (default), `"length"`, `"age"` |
-| data      | `catchCategory`  | `"Lan"` / `"Dis"` / `"BMS"` for `"length"` / `"age"`; invalid for `"discard"` |
+| data      | `catchCategory`  | `"All"` (default - landings + discards, titled "catch") / `"Lan"` / `"Dis"` / `"BMS"` for `"length"` / `"age"`; invalid for `"discard"` |
 | columns   | `y`              | row category (required) |
 | columns   | `x` / `fill`     | second category - `x` for heat/bubble, `fill` for bar |
 | columns   | `facet`          | optional facet column |
@@ -294,3 +488,29 @@ There is deliberately **no** `dims`, `weight_label`, `angle` or
 `show_fill_in_labels` argument: the strata come from
 `y` / `x` / `fill` / `facet`, the weight word from `what` /
 `catchCategory`, and the x-label rotation is fixed.
+
+`plot_discard_rate()` adds:
+
+| Argument | Meaning |
+|----------|---------|
+| `x`      | x-axis category (required); strata built on `x` + `colour` + `shape` + `facet` |
+| `colour` | column mapped to point fill |
+| `shape`  | column mapped to point shape |
+| `facet`  | optional facet column |
+| `jitter` | jitter the points horizontally (default `TRUE`) |
+
+`plot_numbers_at_length_age()` / `plot_meanweight_at_length_age()` add:
+
+| Argument | Meaning |
+|----------|---------|
+| `distributions`   | CEF distributions table (linked to `data` internally) |
+| `distributionType`| `"LengthTotal"` (default) or `"Age"` |
+| `catchCategory`   | `"Lan"` (default) / `"Dis"` / `"BMS"` / `"All"`; feeds the title |
+| `type`            | numbers only: `"histogram"` (default) or `"density"` |
+| `fill` / `colour` | grouping column (`fill` for numbers, `colour` for mean weight) |
+| `facet1`, `facet2`| up to two facet columns |
+| `stacked`         | numbers histogram: stack (default) or dodge on `fill` |
+| `smooth`          | numbers density: bandwidth multiplier |
+| `shape`           | mean weight: separate series per level, drops the ribbon |
+| `show_points`, `show_spread` | mean weight: draw the points / the +/- 1 sd ribbon |
+| `scales`          | ggplot facet scales: `"fixed"` (default), `"free_x"`, `"free_y"`, `"free"` |

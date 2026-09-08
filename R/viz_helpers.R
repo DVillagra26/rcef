@@ -548,7 +548,22 @@ ices_area_centroid <- function(codes) {
 default_weight_label <- function(what, catchCategory = NULL) {
   if (identical(what, "discard")) return("landings")
   switch(catchCategory %||% "Lan",
-         Dis = "discards", BMS = "BMS catch", "landings")
+         Dis = "discards", BMS = "BMS catch", All = "catch", "landings")
+}
+
+#' Expand a `catchCategory` argument to the catch parts it selects
+#'
+#' `"All"` means the landings and the discards together; every other
+#' value is itself. Used so a plot can title itself "catch" while
+#' filtering the distribution / catch rows to both parts.
+#'
+#' @param cc `"Lan"`, `"Dis"`, `"BMS"`, `"All"` or `NULL`.
+#' @return A character vector of `catchCategory` values to keep.
+#' @keywords internal
+#' @export
+catch_category_parts <- function(cc) {
+  if (is.null(cc)) return("Lan")
+  if (identical(cc, "All")) c("Lan", "Dis") else cc
 }
 
 #' Build and classify the strata a coverage plot draws

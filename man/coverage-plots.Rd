@@ -74,9 +74,11 @@ grid. `NULL` collapses to a single column.}
 \item{what}{`"discard"` (default), `"length"` or `"age"`. Plural and
 mixed case are accepted (`"discards"`, `"Length"`, ...).}
 
-\item{catchCategory}{For `what = "length"`/`"age"`: `"Lan"` (default),
-`"Dis"` or `"BMS"` - which catch part the distribution is linked to.
-Not valid for `what = "discard"` (an error).}
+\item{catchCategory}{For `what = "length"`/`"age"`: `"All"` (default -
+landings and discards together, titled "catch"), `"Lan"`, `"Dis"` or
+`"BMS"`. Sets which catch part the distribution is linked to and the
+weight word in the plot title. Not valid for `what = "discard"`
+(an error).}
 
 \item{min_cov}{Minimum coverage, percent (heat / bubble only).}
 

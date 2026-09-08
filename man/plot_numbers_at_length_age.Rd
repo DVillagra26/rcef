@@ -8,7 +8,7 @@ plot_numbers_at_length_age(
   data,
   distributions = NULL,
   distributionType = c("LengthTotal", "Age"),
-  catchCategory = "Lan",
+  catchCategory = "All",
   type = c("histogram", "density"),
   fill = NULL,
   facet1 = NULL,
@@ -33,7 +33,9 @@ catch.}
 
 \item{distributionType}{`"LengthTotal"` (default) or `"Age"`.}
 
-\item{catchCategory}{`"Lan"` (default), `"Dis"` or `"BMS"`.}
+\item{catchCategory}{`"All"` (default - landings + discards, titled
+"catch"), `"Lan"`, `"Dis"` or `"BMS"`. When `distributions` is
+given, the resolved word goes in the plot title.}
 
 \item{type}{`"histogram"` (default) or `"density"`.}
 
@@ -73,7 +75,8 @@ engines (`engine = "ggplot"` / `"base"`).
 \details{
 `data` is a [length_numbers()] table, or raw CEF catch with
 `distributions` (then the link + summary run internally, with
-`catchCategory` choosing the landings / discards / BMS part).
+`catchCategory` choosing the landings / discards / BMS part, or
+`"All"` for the landings and discards together).
 Numbers come out in thousands (N3), length in cm, age in years.
 }
 \examples{
