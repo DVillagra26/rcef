@@ -52,8 +52,6 @@ plot_coverage_bar(
   ncol = 2,
   n_per_screen = NULL,
   verbose = FALSE,
-  min_cov = NULL,
-  min_trip = NULL,
   palette = c("default", "colorblind"),
   engine = c("ggplot", "base")
 )

@@ -218,8 +218,8 @@ invisible(dev.off())
 ## =====================================================================
 ##  4. LENGTH & AGE DISTRIBUTION - plot_numbers / plot_meanweight
 ## =====================================================================
-## plot_numbers_at_length_age(): histogram / density, variableType is
-## always Number. plot_meanweight_at_length_age(): a line, always.
+## plot_numbers_at_length_age(): a histogram, variableType is always
+## Number. plot_meanweight_at_length_age(): a line, always.
 ## Both take a prepared table OR raw catch + `distributions` (then the
 ## link + summary run inside, `catchCategory` choosing the part).
 ## Numbers in thousands (N3), length in cm, age in years.
@@ -227,22 +227,22 @@ invisible(dev.off())
 
 ## ---- 4a. numbers at length, stacked histogram by country -------
 p4a <- plot_numbers_at_length_age(catch_data, distributions,
-         distributionType = "LengthTotal", type = "histogram",
+         distributionType = "LengthTotal",
          fill = "Country", stacked = TRUE)
 print(p4a)
 png("14a_length_hist_base.png", width = 1300, height = 800, res = 110)
 plot_numbers_at_length_age(catch_data, distributions,
-  distributionType = "LengthTotal", type = "histogram", fill = "Country",
+  distributionType = "LengthTotal", fill = "Country",
   engine = "base", palette = "colorblind", verbose = TRUE)
 invisible(dev.off())
 
-## ---- 4b. numbers at length, smoothed density -------------------
+## ---- 4b. numbers at length, dodged instead of stacked ---------
 p4b <- plot_numbers_at_length_age(catch_data, distributions,
-         type = "density", fill = "Country", smooth = 0.5)
+         fill = "Country", stacked = FALSE)
 print(p4b)
-png("14b_length_density_base.png", width = 1200, height = 900, res = 110)
-plot_numbers_at_length_age(catch_data, distributions, type = "density",
-  fill = "Country", smooth = 0.5, engine = "base")
+png("14b_length_hist_dodge_base.png", width = 1200, height = 900, res = 110)
+plot_numbers_at_length_age(catch_data, distributions,
+  fill = "Country", stacked = FALSE, engine = "base")
 invisible(dev.off())
 
 ## ---- 4c. mean weight at length, one line per country (discards) --
@@ -256,22 +256,21 @@ invisible(dev.off())
 
 ## ---- 4d-4f. AGE distribution --------------------------------
 p4d <- plot_numbers_at_length_age(age_catch, age_dist,
-         distributionType = "Age", type = "histogram", fill = "Country",
+         distributionType = "Age", fill = "Country",
          stacked = TRUE)
 print(p4d)
 png("14d_age_hist_base.png", width = 1300, height = 800, res = 110)
 plot_numbers_at_length_age(age_catch, age_dist, distributionType = "Age",
-  type = "histogram", fill = "Country", engine = "base",
+  fill = "Country", engine = "base",
   palette = "colorblind", verbose = TRUE)
 invisible(dev.off())
 
 p4e <- plot_numbers_at_length_age(age_catch, age_dist,
-         distributionType = "Age", type = "density", fill = "Country",
-         smooth = 0.6)
+         distributionType = "Age", fill = "Country", stacked = FALSE)
 print(p4e)
-png("14e_age_density_base.png", width = 1200, height = 900, res = 110)
+png("14e_age_hist_dodge_base.png", width = 1200, height = 900, res = 110)
 plot_numbers_at_length_age(age_catch, age_dist, distributionType = "Age",
-  type = "density", fill = "Country", smooth = 0.6, engine = "base")
+  fill = "Country", stacked = FALSE, engine = "base")
 invisible(dev.off())
 
 p4f <- plot_meanweight_at_length_age(age_catch, age_dist,
@@ -317,10 +316,10 @@ try_show <- function(expr) tryCatch(
 
 grDevices::pdf(tempfile())
 
-say("a. bar chart given a threshold -> ERROR (points at heat / bubble)")
+say("a. bar chart given min_cov -> ERROR (arg not accepted)")
 try_show(plot_coverage_bar(catch_data, y = "metier4", min_cov = 80))
 
-say("b. bar chart given min_trip -> ERROR")
+say("b. bar chart given min_trip -> ERROR (arg not accepted)")
 try_show(plot_coverage_bar(catch_data, y = "metier4", min_trip = 5))
 
 say("c. catchCategory on a discard coverage plot -> ERROR")
@@ -339,9 +338,9 @@ say("g. ggplot heat given a colorblind palette -> warns (status is fixed)")
 try_show(plot_coverage_heat(catch_data, y = "metier4", engine = "ggplot",
   palette = "colorblind"))
 
-say("h. numbers plot given `smooth` on a histogram -> warns")
+say("h. numbers plot given `n_per_screen` on the ggplot engine -> warns")
 try_show(plot_numbers_at_length_age(catch_data, distributions,
-  type = "histogram", smooth = 0.5))
+  engine = "ggplot", n_per_screen = 1))
 
 say("i. distributionType with no distributions table -> warns")
 n5 <- length_numbers(link_dist_to_strata(catch_data, distributions,

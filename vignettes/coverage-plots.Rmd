@@ -259,9 +259,12 @@ reads as "nothing here", not "not a category".
 # Discard rate
 
 `plot_discard_rate()` draws one point per stratum: its discard rate,
-`discards / (landings + discards)`. It builds the strata from raw catch
-on `x` + `colour` + `shape` + `facet`, then plots them raw - no
-aggregation, no classification. `x` is required; everything else is
+`discards / (landings + discards)`. A stratum here is one
+`x` + `colour` + `shape` + `facet` cell - each point is that cell's own
+discards over its own landings plus discards, straight from
+`build_strata()`. It is **not** an average of anything finer: change
+`x` (or `colour` / `shape` / `facet`) and the strata, and the points,
+are rebuilt at that resolution. `x` is required; everything else is
 optional.
 
 ```{r dr-basic, fig.alt = "Discard rate per stratum, by metier"}
@@ -293,12 +296,11 @@ plot_discard_rate(anchoveta_catch, x = "metier4", colour = "Country",
 # Numbers at length and age
 
 `plot_numbers_at_length_age()` takes raw catch + `distributions`, links
-them and sums the numbers at each class. `distributionType` picks
-`"LengthTotal"` (default) or `"Age"`; `type` picks `"histogram"`
-(default) or a smoothed `"density"`. `catchCategory` picks the catch
-part and titles the plot: it defaults to **`"All"`** - landings and
-discards together, titled "catch" - and also takes `"Lan"`, `"Dis"` or
-`"BMS"`.
+them and sums the numbers at each class, drawn as a histogram.
+`distributionType` picks `"LengthTotal"` (default) or `"Age"`.
+`catchCategory` picks the catch part and titles the plot: it defaults
+to **`"All"`** - landings and discards together, titled "catch" - and
+also takes `"Lan"`, `"Dis"` or `"BMS"`.
 
 ## Numbers at length
 
@@ -317,19 +319,19 @@ plot_numbers_at_length_age(anchoveta_catch, anchoveta_dist,
                            catchCategory = "Dis", fill = "Country")
 ```
 
-`stacked = FALSE` dodges the bars instead of stacking; `type = "density"`
-with `smooth` gives a smoothed curve; two facet columns (`facet1`,
-`facet2`) and `scales = "free_y"` let each panel set its own range:
+`stacked = FALSE` dodges the bars instead of stacking; `facet` takes one
+or two columns (`c("row", "col")` becomes a grid) and, with
+`scales = "free_y"`, lets each panel set its own range:
 
-```{r num-len-density, fig.height = 4.4, fig.alt = "Numbers at length as a smoothed density per country"}
+```{r num-len-dodge, fig.height = 4.4, fig.alt = "Numbers at length, dodged bars per country"}
 plot_numbers_at_length_age(anchoveta_catch, anchoveta_dist,
-                           type = "density", fill = "Country", smooth = 1.4)
+                           fill = "Country", stacked = FALSE)
 ```
 
 ```{r num-len-facets, fig.height = 6.5, fig.alt = "Numbers at length faceted by quarter and metier"}
 plot_numbers_at_length_age(anchoveta_catch, anchoveta_dist,
-                           fill = "Country", facet1 = "Season",
-                           facet2 = "metier4", scales = "free_y")
+                           fill = "Country", facet = c("Season", "metier4"),
+                           scales = "free_y")
 ```
 
 ## Numbers at age
@@ -354,7 +356,7 @@ plot_numbers_at_length_age(anchoveta_catch, anchoveta_dist,
 ```{r num-age-base, fig.height = 4.4, fig.alt = "Numbers at age histogram, base engine, one panel per quarter"}
 plot_numbers_at_length_age(anchoveta_catch, anchoveta_dist,
                            distributionType = "Age", fill = "Country",
-                           facet1 = "Season", engine = "base", n_per_screen = 2)
+                           facet = "Season", engine = "base", n_per_screen = 2)
 ```
 
 # Mean weight at length and age
@@ -382,7 +384,7 @@ plot_meanweight_at_length_age(anchoveta_catch, anchoveta_dist,
 ```
 
 `shape` opens the averaged group back up (one series per level) and
-drops the ribbon; `facet1` splits into panels; the base engine draws the
+drops the ribbon; `facet` splits into panels; the base engine draws the
 same figure:
 
 ```{r mw-len-shape, fig.height = 4.4, fig.alt = "Mean weight at length, separate series per quarter"}
@@ -392,7 +394,7 @@ plot_meanweight_at_length_age(anchoveta_catch, anchoveta_dist,
 
 ```{r mw-len-facet-base, fig.height = 5.5, fig.alt = "Mean weight at length faceted by quarter, base engine"}
 plot_meanweight_at_length_age(anchoveta_catch, anchoveta_dist,
-                              colour = "Country", facet1 = "Season",
+                              colour = "Country", facet = "Season",
                               engine = "base")
 ```
 
@@ -505,12 +507,10 @@ There is deliberately **no** `dims`, `weight_label`, `angle` or
 |----------|---------|
 | `distributions`   | CEF distributions table (linked to `data` internally) |
 | `distributionType`| `"LengthTotal"` (default) or `"Age"` |
-| `catchCategory`   | `"Lan"` (default) / `"Dis"` / `"BMS"` / `"All"`; feeds the title |
-| `type`            | numbers only: `"histogram"` (default) or `"density"` |
+| `catchCategory`   | `"All"` (default) / `"Lan"` / `"Dis"` / `"BMS"`; feeds the title |
 | `fill` / `colour` | grouping column (`fill` for numbers, `colour` for mean weight) |
-| `facet1`, `facet2`| up to two facet columns |
+| `facet`           | one or two facet columns (`c("row", "col")` becomes a grid) |
 | `stacked`         | numbers histogram: stack (default) or dodge on `fill` |
-| `smooth`          | numbers density: bandwidth multiplier |
 | `shape`           | mean weight: separate series per level, drops the ribbon |
 | `show_points`, `show_spread` | mean weight: draw the points / the +/- 1 sd ribbon |
 | `scales`          | ggplot facet scales: `"fixed"` (default), `"free_x"`, `"free_y"`, `"free"` |

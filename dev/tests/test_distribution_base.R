@@ -1,7 +1,6 @@
 ## plot_numbers_at_length_age() / plot_meanweight_at_length_age(),
-## engine = "base" - histogram, density and the mean-weight line:
-## histogram, density (ridges), and meanweight line. Completes the
-## base-R port of every plotting function in the package.
+## engine = "base" - the histogram and the mean-weight line. Completes
+## the base-R port of every plotting function in the package.
 
 FAIL <- 0L
 ok <- function(cond, what) {
@@ -23,22 +22,13 @@ d_mw <- data.frame(
   fleetValue = rep(c("A", "B"), each = 9),
   stringsAsFactors = FALSE)
 
-## ---- 1. all three types run without error -----------------------------
+## ---- 1. histogram and mean-weight line run without error -------------
 r1 <- tryCatch({
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
-  plot_numbers_at_length_age(d_num, type = "histogram", fill = "fleetValue",
-                            engine = "base")
+  plot_numbers_at_length_age(d_num, fill = "fleetValue", engine = "base")
   TRUE
 }, error = function(e) conditionMessage(e))
 ok(isTRUE(r1), paste("histogram runs:", r1))
-
-r2 <- tryCatch({
-  grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
-  plot_numbers_at_length_age(d_num, type = "density", fill = "fleetValue",
-                            smooth = 1, engine = "base")
-  TRUE
-}, error = function(e) conditionMessage(e))
-ok(isTRUE(r2), paste("density runs:", r2))
 
 r3 <- tryCatch({
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
@@ -63,8 +53,8 @@ d_num2 <- d_num
 d_num2$Season <- rep(c("1", "2", "3"), length.out = nrow(d_num2))
 r4 <- tryCatch({
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
-  plot_numbers_at_length_age(d_num2, type = "histogram", fill = "fleetValue",
-                            facet1 = "Season", engine = "base")
+  plot_numbers_at_length_age(d_num2, fill = "fleetValue",
+                            facet = "Season", engine = "base")
   TRUE
 }, error = function(e) conditionMessage(e))
 ok(isTRUE(r4), paste("faceted histogram runs:", r4))
@@ -72,7 +62,7 @@ ok(isTRUE(r4), paste("faceted histogram runs:", r4))
 ## ---- 4. no fill/colour still works (single series) --------------------
 r5 <- tryCatch({
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
-  plot_numbers_at_length_age(d_num, type = "histogram", engine = "base")
+  plot_numbers_at_length_age(d_num, engine = "base")
   plot_meanweight_at_length_age(d_mw, engine = "base")
   TRUE
 }, error = function(e) conditionMessage(e))
@@ -85,10 +75,9 @@ for (fn in c("plot_numbers_at_length_age", "plot_meanweight_at_length_age")) {
      paste(fn, "base branch draws a box() around the plotting area"))
 }
 
-## ---- 6. verbose reports correctly for each quantity/type ---------------
+## ---- 6. verbose reports correctly for each quantity -------------------
 out_h <- capture.output(
-  plot_numbers_at_length_age(d_num, type = "histogram", fill = "fleetValue",
-                            verbose = TRUE))
+  plot_numbers_at_length_age(d_num, fill = "fleetValue", verbose = TRUE))
 ok(any(grepl("fill  : fleetValue", out_h, fixed = TRUE)),
    "verbose reports the fill column for numbers/histogram")
 

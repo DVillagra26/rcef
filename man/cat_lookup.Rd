@@ -20,8 +20,8 @@ adequately covered in EFFORT terms, separately from coverage in
 WEIGHT terms. Defaults to 2, matching ICES practice.}
 }
 \value{
-A data frame with columns `cat_key`, `status`, `decision` and
-  `colour`, one row per category.
+A data frame with columns `cat_key`, `status`, `decision`,
+  `abbr` and `colour`, one row per category, ordered best to worst.
 }
 \description{
 The single source of truth for how a stratum's sampling is described.
@@ -35,13 +35,20 @@ three sampling-effort questions asked at once, not folded into one
 number.
 }
 \details{
-Colours are shades of one palette (green = use own data, yellow /
-orange = borrow, red = nothing usable) so hue gives the verdict and
-shade the severity. `min_trips` and the trips comparisons themselves
-are unknown-averse: a stratum with no trip count reported is treated
-as failing the trips test rather than passing it by default, the same
-way a stratum outside every category collapses to the worst one
-rather than the best.
+Colours run one direction only: dark green (nothing to fix) -> green
+-> yellow -> orange -> dark orange as more sampling targets are
+missed, with a single reserved red for the one qualitatively
+different case - a stratum that carries NO discard estimate (or, for
+length/age, NO linked distribution) at all, so there is nothing to
+judge against a threshold. A near-white marks a stratum with no catch
+to classify. Every colour is reachable: for discards the warning
+shade counts how many of {coverage, trips} were missed (yellow = 1,
+orange = 2); for length/age it counts {coverage, trips, measurements}
+(yellow = 1, orange = 2, dark orange = 3).
+
+`min_trips` and the trips comparison are unknown-averse: a stratum
+with no trip count reported is treated as failing the trips test
+rather than passing it by default.
 }
 \seealso{
 [classify_strata()], [status_palette()]

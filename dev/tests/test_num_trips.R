@@ -17,14 +17,31 @@ ok <- function(cond, what) {
 }
 
 ## ---- 1. discard classification: every specified combination ----------
+## Two tests only - coverage vs threshold and trips vs min_trips - so the
+## warning shade is a straight count of how many were missed: yellow
+## (warn1) for one, orange (warn2) for both. Red is NOT reachable from a
+## threshold miss; it is reserved for "no discard estimate at all".
 d <- data.frame(
   landings = 100, discards = 10,
   coverage = c(100, 70, 30, 70, 30),
   numTrips = c(3, 2, 3, 1, 1), stringsAsFactors = FALSE)
 d <- classify_strata(d, threshold = 50)
-expect_d <- c("full", "safe", "warn_lowcov", "warn_lowtrip", "warn_red")
+expect_d <- c("full", "safe", "warn1", "warn1", "warn2")
 ok(identical(d$cat_key, expect_d),
    "every discard combination lands in the specified category")
+
+## red only when the stratum carries NO discard estimate (has_disc_data)
+nd <- classify_strata(data.frame(landings = 100, discards = 0,
+                                 coverage = 0, numTrips = 0,
+                                 has_disc_data = FALSE), 50)
+ok(nd$cat_key == "no_dist",
+   "a stratum with no discard estimate at all is red (no_dist), not a warn")
+## the same numbers WITH an estimate are just a double threshold miss
+wd <- classify_strata(data.frame(landings = 100, discards = 0,
+                                 coverage = 0, numTrips = 0,
+                                 has_disc_data = TRUE), 50)
+ok(wd$cat_key == "warn2",
+   "with an estimate present, missing both thresholds is warn2 (orange), not red")
 
 ## boundary: exactly 2 trips is NOT "more than 2" (full needs > min_trips)
 b <- classify_strata(data.frame(landings = 100, discards = 0,
@@ -32,46 +49,45 @@ b <- classify_strata(data.frame(landings = 100, discards = 0,
 ok(b$cat_key == "safe",
    "100% coverage with exactly 2 trips is safe, not full (needs > 2)")
 
-## ---- 2. length/age classification: all 8 corners ----------------------
+## ---- 2. length/age classification: the missed-target count -----------
+## Three tests - coverage, trips, measurements - so warn1/warn2/warn3
+## count exactly how many were missed (yellow / orange / dark orange).
 l <- data.frame(
   coverage       = c(100, 70, 30, 70, 70, 70, 30, 30),
   numTrips       = c(3,   3,  3,  3,  1,  1,  3,  1),
   n_measurements = c(150, 150, 150, 50, 150, 50, 50, 150),
   stringsAsFactors = FALSE)
 l <- classify_strata(l, threshold = 50, what = "length", min_meas = 100)
-expect_l <- c("full_ok", "safe_ok", "yellowgreen", "yellow", "orangeyellow",
-             "orange_lowtrip", "orange_lowcov", "orange_lowcovtrip")
+expect_l <- c("full", "safe", "warn1", "warn1", "warn1", "warn2", "warn2", "warn2")
 ok(identical(l$cat_key, expect_l),
-   "every length/age corner lands in the specified category")
+   "the length/age warning shade counts how many targets were missed")
 
-## the all-fail corner
+## all three missed -> dark orange (warn3), NOT red
 r <- classify_strata(data.frame(coverage = 30, numTrips = 1,
                                 n_measurements = 50), 50, "length", 100)
-ok(r$cat_key == "red", "coverage, trips and measurements all failing is red")
+ok(r$cat_key == "warn3", "coverage, trips and measurements all missed is warn3")
 
-## a stratum with nothing landed or discarded is NOT the same as one
-## with everything failing - it has nothing to sample, which is not a
-## sampling FAILURE. Before this fix, weight=0 forced coverage to NA,
-## every comparison in the cascade failed, and it fell through to the
-## same "red" as a genuinely unsampled stratum - an empty cell and a
-## failed cell were visually indistinguishable in a heatmap.
+## red only when NO distribution is linked at all
+nl <- classify_strata(data.frame(weight = 100, landings_with_discards = 0,
+                                 coverage = 0, numTrips = 0,
+                                 n_measurements = 0), 50, "length", 100)
+ok(nl$cat_key == "no_dist",
+   "a length stratum with no linked distribution is red (no_dist)")
+
+## a stratum with nothing landed has nothing to sample - "none", not a
+## sampling failure and not red.
 z <- data.frame(weight = c(0, NA, 100), weight_measured = c(0, 0, 80),
                 coverage = c(NA, NA, 80), numTrips = c(NA, NA, 3),
                 n_measurements = c(0, 0, 150), stringsAsFactors = FALSE)
 z <- classify_strata(z, threshold = 50, what = "length", min_meas = 100)
-ok(z$cat_key[1] == "none", "zero weight is 'none', not 'red'")
+ok(z$cat_key[1] == "none", "zero weight is 'none'")
 ok(z$cat_key[2] == "none", "NA weight is 'none' too")
 ok(z$cat_key[3] != "none", "real weight is unaffected by the none check")
-ok(all(c("safe_ok", "full_ok", "yellowgreen", "yellow", "orangeyellow",
-        "orange_lowtrip", "orange_lowcov", "orange_lowcovtrip",
-        "red") != "none"),
+ok(all(c("full", "safe", "warn1", "warn2", "warn3", "no_dist") != "none"),
    "none is a distinct category from every sampling-status one")
 
-## a caller with no weight column at all (works from coverage directly,
-## as several existing callers and this suite's own earlier fixtures do)
-## keeps the ORIGINAL behaviour - falls through to the coverage/trips/
-## measurement comparisons - rather than being silently forced to "none"
-## for a column it never had
+## a caller with no weight column at all (works from coverage directly)
+## keeps the fall-through behaviour rather than being forced to "none"
 no_wt <- data.frame(coverage = 80, numTrips = 3, n_measurements = 150)
 no_wt <- classify_strata(no_wt, 50, "length", 100)
 ok(no_wt$cat_key != "none",
@@ -81,35 +97,38 @@ ok(no_wt$cat_key != "none",
 age_none <- classify_strata(data.frame(weight = 0, weight_measured = 0,
                                        coverage = NA, numTrips = NA,
                                        n_measurements = 0), 50, "age", 100)
-ok(age_none$cat_key == "none", "the same fix applies to age, not just length")
+ok(age_none$cat_key == "none", "the same applies to age, not just length")
 
-## and its colour matches the discard side's white/gray exactly, so a
-## reader does not learn two different "nothing here" colours
+## the "no catch" colour is the same near-white on both sides
 lk_none <- cat_lookup(50, "length", min_meas = 100)
 lk_disc <- cat_lookup(50, "discard")
 ok(identical(lk_none$colour[lk_none$cat_key == "none"],
             lk_disc$colour[lk_disc$cat_key == "none"]),
-   "the none colour matches the discard side's 'no landings/no discards'")
+   "the none colour matches on the length and discard sides")
 
-## nine categories, three distinguishable oranges, as asked. Matched on
-## "orange_" (with the underscore) specifically - "orangeyellow" is a
-## real, separate fourth category and correctly has its own colour, but
-## it is not one of the three oranges the request asked for.
+## and the reserved red is the same on both sides
+ok(identical(lk_none$colour[lk_none$cat_key == "no_dist"],
+            lk_disc$colour[lk_disc$cat_key == "no_dist"]),
+   "the no_dist (red) colour matches on the length and discard sides")
+
+## the length/age scheme: full, safe, warn1..3, no_dist, none = 7 rows,
+## with a distinct colour each and one direction of increasing severity
 lk <- cat_lookup(50, "length", min_meas = 100)
-ok(nrow(lk) == 10, "nine sampling-status categories, plus none for zero catch")
-oranges <- lk$colour[grepl("^orange_", lk$cat_key)]
-ok(length(oranges) == 3 && length(unique(oranges)) == 3,
-   "three genuinely distinct oranges")
+ok(nrow(lk) == 7L && !anyDuplicated(lk$colour),
+   "seven length/age categories, every colour distinct")
+ok(identical(lk$cat_key,
+             c("full", "safe", "warn1", "warn2", "warn3", "no_dist", "none")),
+   "ordered best to worst")
 
 ## ---- 3. unknown trips are treated as failing, not passing -------------
 u <- classify_strata(data.frame(landings = 100, discards = 10,
                                 coverage = 70, numTrips = NA), 50)
-ok(u$cat_key == "warn_lowtrip",
+ok(u$cat_key == "warn1",
    "no reported trip count fails the trips test (unknown is not adequate)")
 ## and the same stratum with no numTrips COLUMN at all behaves identically
 u2 <- classify_strata(data.frame(landings = 100, discards = 10,
                                  coverage = 70), 50)
-ok(u2$cat_key == "warn_lowtrip",
+ok(u2$cat_key == "warn1",
    "a table with no numTrips column at all gets the same treatment")
 
 ## ---- 4. aggregation direction: max within a build, sum across a pool -

@@ -16,11 +16,11 @@ The character vector of emitted messages, invisibly.
 }
 \description{
 The plotting dispatchers accept a wide, shared set of arguments, only
-some of which apply to any one `type` / `engine` / `quantity`. This
-turns a list of "this argument was set but does nothing here" checks
-into `warning()`s, so a caller who sets, say, `fill =` on a
-discard-rate "raw" plot or `type = "histogram"` on a mean-weight plot
-hears about it instead of quietly getting something else.
+some of which apply to any one `engine` / `quantity`. This turns a
+list of "this argument was set but does nothing here" checks into
+`warning()`s, so a caller who sets, say, `n_per_screen =` on the
+ggplot engine hears about it instead of quietly getting something
+else.
 }
 \details{
 Each check is a `list(bad = <logical>, msg = <character>)`; only the

@@ -20,9 +20,11 @@ plot_discard_rate(
 }
 \arguments{
 \item{catch}{Raw CEF catch data, or a stratum table with `discard_rate`.
-When raw, the strata are built on `x` + `colour` + `shape` + `facet`.}
+When raw, the strata are built on `x` + `colour` + `shape` + `facet`,
+and each point is one such stratum - not an average over finer ones.}
 
-\item{x}{Column on the x axis.}
+\item{x}{Column on the x axis. One point per level (times `colour` /
+`shape` / `facet`).}
 
 \item{colour}{Column mapped to point fill.}
 
@@ -30,7 +32,8 @@ When raw, the strata are built on `x` + `colour` + `shape` + `facet`.}
 
 \item{facet}{Optional facet column.}
 
-\item{jitter}{Jitter the points horizontally.}
+\item{jitter}{Jitter the points horizontally (cosmetic only - one
+point is still one stratum).}
 
 \item{ncol}{Facet columns (ggplot).}
 
@@ -49,13 +52,20 @@ A ggplot object (`engine = "ggplot"`), or `NULL` invisibly
   after drawing to the current device (`engine = "base"`).
 }
 \description{
-One point per sampled stratum, its discard rate on the y axis. Takes
-raw CEF catch (it builds the strata with [build_strata()]) or an
+One point per stratum, its discard rate on the y axis - raw, with no
+aggregation or averaging. A stratum here is one `x` + `colour` +
+`shape` + `facet` cell: each point is that cell's own discards over
+its own landings plus discards (`discards / (landings + discards)`,
+from [build_strata()]), not the mean of any finer strata. Change `x`
+(or `colour` / `shape` / `facet`) and the strata - and the points -
+are rebuilt at that resolution.
+}
+\details{
+Takes raw CEF catch (it builds the strata with [build_strata()]) or an
 already-built stratum table. Strata with no discard estimate are
 dropped - a rate is a property of sampled strata only (see
 [sampled_for_discards()]).
-}
-\details{
+
 One function, two engines: `engine = "ggplot"` (default) draws it with
 ggplot2; `engine = "base"` draws the same figure with base graphics.
 }

@@ -9,14 +9,9 @@ plot_numbers_at_length_age(
   distributions = NULL,
   distributionType = c("LengthTotal", "Age"),
   catchCategory = "All",
-  type = c("histogram", "density"),
   fill = NULL,
-  facet1 = NULL,
-  facet2 = NULL,
+  facet = NULL,
   stacked = TRUE,
-  smooth = 1,
-  class_label = NULL,
-  value_label = NULL,
   ncol = 2,
   scales = "fixed",
   n_per_screen = NULL,
@@ -37,18 +32,11 @@ catch.}
 "catch"), `"Lan"`, `"Dis"` or `"BMS"`. When `distributions` is
 given, the resolved word goes in the plot title.}
 
-\item{type}{`"histogram"` (default) or `"density"`.}
+\item{fill}{Column mapped to bar fill.}
 
-\item{fill}{Column mapped to bar fill / density group.}
+\item{facet}{Up to two facet columns (`"col"` or `c("row", "col")`).}
 
-\item{facet1, facet2}{Up to two facet columns.}
-
-\item{stacked}{Histogram only: stack the bars on `fill` rather than dodge.}
-
-\item{smooth}{Density only: bandwidth multiplier.}
-
-\item{class_label, value_label}{Axis labels; derived from the data
-when `NULL`.}
+\item{stacked}{Stack the bars on `fill` rather than dodge.}
 
 \item{ncol}{Facet columns (ggplot).}
 
@@ -68,9 +56,8 @@ A ggplot object, or `NULL` invisibly (base engine).
 }
 \description{
 The catch numbers spread over the length (or age) classes, as a
-stacked / dodged histogram (`type = "histogram"`) or a
-weight-smoothed density (`type = "density"`). One function, two
-engines (`engine = "ggplot"` / `"base"`).
+stacked (or dodged) histogram. One function, two engines
+(`engine = "ggplot"` / `"base"`).
 }
 \details{
 `data` is a [length_numbers()] table, or raw CEF catch with

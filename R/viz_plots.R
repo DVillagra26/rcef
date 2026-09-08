@@ -668,9 +668,7 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
       mea_bit <- ifelse(!is.na(d$n_measurements) & d$n_measurements < min_meas,
                         paste0("n=", format(round(d$n_measurements),
                                             big.mark = ",", trim = TRUE)), "")
-      lab_me <- d$cat_key %in% c("yellowgreen", "yellow", "orangeyellow",
-                                 "orange_lowtrip", "orange_lowcov",
-                                 "orange_lowcovtrip")
+      lab_me <- d$cat_key %in% c("warn1", "warn2", "warn3")
       d$lab <- ifelse(lab_me,
                       paste0(cov_bit, ifelse(nzchar(cov_bit) & nzchar(mea_bit),
                                              " ", ""), mea_bit,
@@ -680,7 +678,7 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
     } else {
       d$lab <- dplyr::case_when(
         d$cat_key == "disc_only" ~ "100% Disc",
-        d$cat_key %in% c("warn_lowcov", "warn_lowtrip") ~
+        d$cat_key %in% c("warn1", "warn2") ~
           paste0(round(d$coverage, 1), "%",
                  ifelse(nzchar(trp_bit), paste0("\n", trp_bit), "")),
         TRUE ~ "")
@@ -826,17 +824,12 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
       ifelse(!is.na(d$numTrips) & d$numTrips < min_trips,
              paste0(round(d$numTrips), " trip",
                     ifelse(round(d$numTrips) == 1, "", "s")), "") else ""
-    # Label only the cells a reader has to ACT on. Two exclusions:
-    #   - the SAFE categories, which need no explanation;
-    #   - "coverage, trips and measurements all fail" (cat_key "red"),
-    #     whose numbers are usually 0% and n=0 and so say nothing the red
-    #     colour has not already said. On a stock where most cells are
-    #     unsampled that one category supplies most of the labels, and
-    #     the crowd of "0%" buries the handful of borderline cells that
-    #     actually matter.
-    lab_me <- d$cat_key %in% c("yellowgreen", "yellow", "orangeyellow",
-                               "orange_lowtrip", "orange_lowcov",
-                               "orange_lowcovtrip")
+    # Label only the cells a reader has to ACT on: the warning shades
+    # (one, two or three targets short), with their coverage / trip /
+    # measurement shortfalls spelled out. The SAFE cells need no
+    # explanation; the "no distribution linked" cells (red) have no
+    # numbers to show.
+    lab_me <- d$cat_key %in% c("warn1", "warn2", "warn3")
     d$lab <- ifelse(lab_me,
                     paste0(cov_bit,
                            ifelse(nzchar(cov_bit) & nzchar(mea_bit), "\n", ""),
@@ -853,7 +846,7 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
                     ifelse(round(d$numTrips) == 1, "", "s")), "") else ""
     d$lab <- with(d, case_when(
       cat_key == "disc_only" ~ "100%\nDisc",
-      cat_key %in% c("warn_lowcov", "warn_lowtrip") ~
+      cat_key %in% c("warn1", "warn2") ~
         paste0(round(coverage, 1), "%",
                ifelse(nzchar(trp_bit), paste0("\n", trp_bit), "")),
       TRUE ~ ""))
@@ -922,17 +915,11 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
                               facet = NULL, what = "discard",
                               catchCategory = NULL,
                               ncol = 2, n_per_screen = NULL, verbose = FALSE,
-                              min_cov = NULL, min_trip = NULL,
                               palette = c("default", "colorblind"),
                               engine = c("ggplot", "base")) {
   view <- "bar"; fn <- "plot_coverage_bar"
   engine <- match.arg(engine); palette <- match.arg(palette)
   strata <- catch
-  if (!is.null(min_cov) || !is.null(min_trip))
-    stop("plot_coverage_bar(): min_cov / min_trip do not apply here - a bar ",
-         "chart shows sampled vs unsampled weight, which neither affects. ",
-         "Use plot_coverage_heat() / plot_coverage_bubble() for a ",
-         "coverage-threshold view.", call. = FALSE)
   x <- NULL; min_cov <- 50; min_trip <- 2; min_fish <- 0; angle <- 45
   what <- normalize_what(what)
   if (is.null(y) || !nzchar(y)) stop(fn, "(): `y` is required", call. = FALSE)
@@ -1290,8 +1277,15 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 
 #' Discard rate per stratum
 #'
-#' One point per sampled stratum, its discard rate on the y axis. Takes
-#' raw CEF catch (it builds the strata with [build_strata()]) or an
+#' One point per stratum, its discard rate on the y axis - raw, with no
+#' aggregation or averaging. A stratum here is one `x` + `colour` +
+#' `shape` + `facet` cell: each point is that cell's own discards over
+#' its own landings plus discards (`discards / (landings + discards)`,
+#' from [build_strata()]), not the mean of any finer strata. Change `x`
+#' (or `colour` / `shape` / `facet`) and the strata - and the points -
+#' are rebuilt at that resolution.
+#'
+#' Takes raw CEF catch (it builds the strata with [build_strata()]) or an
 #' already-built stratum table. Strata with no discard estimate are
 #' dropped - a rate is a property of sampled strata only (see
 #' [sampled_for_discards()]).
@@ -1300,12 +1294,15 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 #' ggplot2; `engine = "base"` draws the same figure with base graphics.
 #'
 #' @param catch Raw CEF catch data, or a stratum table with `discard_rate`.
-#'   When raw, the strata are built on `x` + `colour` + `shape` + `facet`.
-#' @param x Column on the x axis.
+#'   When raw, the strata are built on `x` + `colour` + `shape` + `facet`,
+#'   and each point is one such stratum - not an average over finer ones.
+#' @param x Column on the x axis. One point per level (times `colour` /
+#'   `shape` / `facet`).
 #' @param colour Column mapped to point fill.
 #' @param shape Column mapped to point shape.
 #' @param facet Optional facet column.
-#' @param jitter Jitter the points horizontally.
+#' @param jitter Jitter the points horizontally (cosmetic only - one
+#'   point is still one stratum).
 #' @param ncol Facet columns (ggplot).
 #' @param n_per_screen Base engine: split a faceted figure across this
 #'   many devices.
@@ -1397,7 +1394,7 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
     }
 
     facets <- if (has(facet_var)) sort(unique(as.character(d[[facet_var]]))) else NA
-    main_txt <- "Discard rate by stratum (raw, no aggregation)"
+    main_txt <- "Discard rate - one point per stratum (raw, no averaging)"
     bmar <- cat_axis_mar(xs, 0.7, angle)
     draw_legend <- function() {
       if (!has(colour_var)) return(invisible(NULL))
@@ -1470,8 +1467,8 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
   p <- p +
     scale_y_continuous(labels = function(z) paste0(z, "%")) +
     maybe_facet(facet_var, free_y = FALSE, ncol = ncol) +
-    labs(title = "Discard rate by stratum (raw, no aggregation)",
-         subtitle = "One point per stratum that has discard data",
+    labs(title = "Discard rate - one point per stratum (raw, no averaging)",
+         subtitle = "One point per x / colour / shape / facet stratum with discard data",
          y = "Discard rate", x = x_var,
          fill = if (has(colour_var)) colour_var else NULL,
          shape = if (has(shape_var)) shape_var else NULL) +
@@ -1494,9 +1491,8 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
 #' Numbers at length or age
 #'
 #' The catch numbers spread over the length (or age) classes, as a
-#' stacked / dodged histogram (`type = "histogram"`) or a
-#' weight-smoothed density (`type = "density"`). One function, two
-#' engines (`engine = "ggplot"` / `"base"`).
+#' stacked (or dodged) histogram. One function, two engines
+#' (`engine = "ggplot"` / `"base"`).
 #'
 #' `data` is a [length_numbers()] table, or raw CEF catch with
 #' `distributions` (then the link + summary run internally, with
@@ -1511,13 +1507,9 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
 #' @param catchCategory `"All"` (default - landings + discards, titled
 #'   "catch"), `"Lan"`, `"Dis"` or `"BMS"`. When `distributions` is
 #'   given, the resolved word goes in the plot title.
-#' @param type `"histogram"` (default) or `"density"`.
-#' @param fill Column mapped to bar fill / density group.
-#' @param facet1,facet2 Up to two facet columns.
-#' @param stacked Histogram only: stack the bars on `fill` rather than dodge.
-#' @param smooth Density only: bandwidth multiplier.
-#' @param class_label,value_label Axis labels; derived from the data
-#'   when `NULL`.
+#' @param fill Column mapped to bar fill.
+#' @param facet Up to two facet columns (`"col"` or `c("row", "col")`).
+#' @param stacked Stack the bars on `fill` rather than dodge.
 #' @param ncol Facet columns (ggplot).
 #' @param scales Facet scales (ggplot): `"fixed"`, `"free_x"`,
 #'   `"free_y"` or `"free"`.
@@ -1537,28 +1529,25 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
 plot_numbers_at_length_age <- function(data, distributions = NULL,
                                        distributionType = c("LengthTotal", "Age"),
                                        catchCategory = "All",
-                                       type = c("histogram", "density"),
-                                       fill = NULL, facet1 = NULL, facet2 = NULL,
-                                       stacked = TRUE, smooth = 1,
-                                       class_label = NULL, value_label = NULL,
+                                       fill = NULL, facet = NULL,
+                                       stacked = TRUE,
                                        ncol = 2, scales = "fixed",
                                        n_per_screen = NULL, verbose = FALSE,
                                        palette = c("default", "colorblind"),
                                        engine = c("ggplot", "base")) {
   typed_dt <- !missing(distributionType); typed_cc <- !missing(catchCategory)
-  typed_stacked <- !missing(stacked)
   angle <- 45; dims <- NULL
   distributionType <- match.arg(distributionType)
-  type    <- match.arg(type)
   engine  <- match.arg(engine)
   palette <- match.arg(palette)
   catchCategory <- match.arg(catchCategory, c("Lan", "Dis", "BMS", "All"))
+  if (length(facet) > 2)
+    stop("plot_numbers_at_length_age(): `facet` takes at most two columns",
+         call. = FALSE)
+  facet1 <- if (length(facet) >= 1) facet[1] else NULL
+  facet2 <- if (length(facet) >= 2) facet[2] else NULL
   has_ <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
   plot_arg_report("plot_numbers_at_length_age", list(
-    list(bad = identical(type, "histogram") && !identical(smooth, 1),
-         msg = "smooth only applies to type = \"density\""),
-    list(bad = identical(type, "density") && typed_stacked,
-         msg = "stacked only applies to type = \"histogram\""),
     list(bad = is.null(distributions) && (typed_dt || typed_cc),
          msg = "distributionType / catchCategory only matter when `distributions` is supplied (building from raw catch)"),
     list(bad = identical(engine, "ggplot") && !is.null(n_per_screen),
@@ -1571,120 +1560,27 @@ plot_numbers_at_length_age <- function(data, distributions = NULL,
                           catch_category_parts(catchCategory),
                           "numbers", grp, dims)
   data <- pr$data
-  cl <- class_label %||% pr$class_label
-  vl <- value_label %||% pr$value_label
+  cl <- pr$class_label
+  vl <- pr$value_label
   cc_word   <- switch(catchCategory, Lan = "landings", Dis = "discards",
                       BMS = "BMS catch", All = "catch")
   cc_suffix <- if (!is.null(distributions)) paste0(" (", cc_word, ")") else ""
   if (isTRUE(verbose)) {
-    cat("-- plot_numbers_at_length_age(): ", distributionType, ", type = \"",
-        type, "\", engine = \"", engine, "\" --\n", sep = "")
+    cat("-- plot_numbers_at_length_age(): ", distributionType,
+        ", engine = \"", engine, "\" --\n", sep = "")
     if (!is.null(distributions))
       cat("  catchCategory : ", catchCategory, "\n", sep = "")
     cat("  fill  : ", if (has_(fill)) fill else "(none)", "\n", sep = "")
-    cat("  facet1 / facet2: ", if (has_(facet1)) facet1 else "(none)", " / ",
+    cat("  facet : ", if (has_(facet1)) facet1 else "(none)", " / ",
         if (has_(facet2)) facet2 else "(none)", "\n", sep = "")
     cat("  labels : ", cl, " | ", vl, "\n", sep = "")
     cat("  rows: ", if (is.null(data)) 0L else nrow(data), "\n", sep = "")
   }
   d <- data; fill_var <- fill; group_var <- fill
-  class_label <- cl; value_label <- vl; overlap <- 0.75
+  class_label <- cl; value_label <- vl
 
   ## ============ base engine ==========================================
   if (identical(engine, "base")) {
-    if (identical(type, "density")) {
-        if (is.null(d) || !nrow(d)) { message("Nothing to plot."); return(invisible(NULL)) }
-        has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
-        if (!has(group_var)) { d$.g <- "All"; group_var <- ".g" }
-        d$.g <- as.character(d[[group_var]])
-        d$.fk <- facet_key_base(d, facet1, facet2)
-
-        # Same weighted-density logic as this function's ggplot density
-        # branch - the bandwidth comes from the weighted spread rather
-        # than stats::density()'s own unweighted default.
-        dens_one <- function(g) {
-          x <- g$.class; w <- g$number
-          keep <- is.finite(x) & is.finite(w) & w > 0
-          x <- x[keep]; w <- w[keep]
-          if (length(x) < 2 || sum(w) <= 0 || length(unique(x)) < 2) return(NULL)
-          p <- w / sum(w)
-          mu <- sum(p * x); sdw <- sqrt(sum(p * (x - mu)^2))
-          if (!is.finite(sdw) || sdw <= 0) sdw <- diff(range(x)) / 6
-          n_eff <- 1 / sum(p^2)
-          bw <- 1.06 * sdw * n_eff^(-1 / 5) * smooth
-          if (!is.finite(bw) || bw <= 0) return(NULL)
-          dn <- tryCatch(stats::density(x, weights = p, bw = bw, n = 256,
-                                        from = min(x) - 2 * bw, to = max(x) + 2 * bw),
-                         error = function(e) NULL)
-          if (is.null(dn)) return(NULL)
-          data.frame(.class = dn$x, .dens = dn$y)
-        }
-        pal <- var_palette(group_var, d$.g, palette)
-
-        draw_one <- function(dd, main) {
-          lev <- sort(unique(dd$.g))
-          curves <- lapply(lev, function(g) dens_one(dd[dd$.g == g, , drop = FALSE]))
-          names(curves) <- lev
-          curves <- Filter(Negate(is.null), curves)
-          if (!length(curves)) { message("Nothing to plot for ", main); return(invisible(NULL)) }
-          maxd <- max(vapply(curves, function(x) max(x$.dens), numeric(1)))
-          scale_h <- (1 + overlap) / maxd
-          xr <- range(unlist(lapply(curves, function(x) x$.class)))
-          # ylim's upper bound was exactly length(lev) + 1.3, which clipped
-          # the TALLEST curve's peak whenever that curve belonged to the row
-          # closest to the top (its own peak plus 1+overlap could exceed that
-          # fixed margin) - widened to fit the actual tallest peak instead of
-          # a constant that assumed every curve's own height stayed small.
-          graphics::plot(NA, xlim = xr, ylim = c(0.5, length(lev) + max(1.3, 1 + overlap + 0.3)),
-                         axes = FALSE, xlab = class_label, ylab = "", main = main)
-          grid_base(v = graphics::axTicks(1), h = seq_along(lev))
-          for (i in seq_along(lev)) {
-            g <- lev[i]; cv <- curves[[g]]
-            if (is.null(cv)) next
-            row <- i
-            # Black outline (OUTLINE), not coloured to match the fill - the
-            # same "make the shape's edge read clearly" fix the heatmap tiles
-            # got, here applied to the density ribbon.
-            graphics::polygon(c(cv$.class, rev(cv$.class)),
-                              c(row + cv$.dens * scale_h, rep(row, nrow(cv))),
-                              col = grDevices::adjustcolor(pal[g], alpha.f = 0.72),
-                              border = OUTLINE, lwd = 0.6)
-            graphics::segments(min(cv$.class), row, max(cv$.class), row,
-                               col = "grey65", lwd = 0.6)
-          }
-          graphics::box()
-          graphics::axis(1, cex.axis = 0.8)
-          axis_y_cat(seq_along(lev), lev, cex = 0.8)
-        }
-
-        facets <- if (!all(is.na(d$.fk))) sort(unique(d$.fk)) else NA
-        main_txt <- paste0(sprintf(
-        "Frequency, as a smoothed density (x%.2f smoothing)", smooth), cc_suffix)
-        # Left margin sized to the widest group label, the same way the
-        # heatmap and bubble plots do it - a fixed 6 clipped the long
-        # fleet-level names on the y axis.
-        lmar <- max(6, max(nchar(unique(d$.g))) * 0.45)
-        groups <- split_facets_to_screens(facets, n_per_screen)
-        had_device <- grDevices::dev.cur() > 1
-        for (grp in groups) {
-          op <- graphics::par(no.readonly = TRUE); on.exit(graphics::par(op), add = TRUE)
-          if (length(groups) > 1 && !had_device) grDevices::dev.new()
-          if (!identical(grp, "__nofacet__") && length(grp) > 1) {
-            gd <- facet_grid_dims(length(grp)); nr <- gd[1L]; nc <- gd[2L]
-            graphics::par(mfrow = c(nr, nc), mar = c(4, lmar, 2, 1), oma = c(0, 0, 3, 0))
-            for (fv in grp) draw_one(d[d$.fk == fv, , drop = FALSE], fv)
-            graphics::mtext(main_txt, outer = TRUE, side = 3, cex = 1.05, font = 2, line = 1)
-          } else if (!identical(grp, "__nofacet__") && length(grp) == 1) {
-            graphics::par(mar = c(4, lmar, 3, 2))
-            draw_one(d[d$.fk == grp, , drop = FALSE], paste0(main_txt, " (", grp, ")"))
-          } else {
-            graphics::par(mar = c(4, lmar, 3, 2))
-            draw_one(d, main_txt)
-          }
-          graphics::par(op)
-        }
-        invisible(NULL)
-    } else {
         if (is.null(d) || !nrow(d)) { message("Nothing to plot."); return(invisible(NULL)) }
         has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
         d$.fk <- facet_key_base(d, facet1, facet2)
@@ -1766,90 +1662,11 @@ plot_numbers_at_length_age <- function(data, distributions = NULL,
           graphics::par(op)
         }
         invisible(NULL)
-    }
     return(invisible(NULL))
   }
 
   ## ============ ggplot engine ========================================
-  p <- if (identical(type, "density")) {
-      if (is.null(d) || !nrow(d)) return(NULL)
-      has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
-      if (!has(group_var)) { d$.g <- "All"; group_var <- ".g" }
-      d$.g <- as.character(d[[group_var]])
-
-      facets <- c(if (has(facet1)) facet1, if (has(facet2)) facet2)
-      key <- c(".g", facets)
-
-      # A kernel density rather than a bare normalised histogram: the counts
-      # at each class are used as weights, so a class where 500 fish were
-      # measured pulls the curve harder than one with 5. `smooth` multiplies
-      # the bandwidth - turn it down for a well-sampled stratum to keep the
-      # detail, up for a sparse or noisy one so the shape is still readable
-      # instead of a comb of spikes.
-      dens_one <- function(g) {
-        x <- g$.class; w <- g$number
-        ok <- is.finite(x) & is.finite(w) & w > 0
-        x <- x[ok]; w <- w[ok]
-        if (length(x) < 2 || sum(w) <= 0) return(NULL)
-        if (length(unique(x)) < 2) return(NULL)
-        p <- w / sum(w)
-        # stats::density picks its bandwidth from the unweighted points, which
-        # ignores exactly the information that matters here, so it is computed
-        # from the WEIGHTED spread instead (Silverman's rule on the weighted
-        # sd). `smooth` then scales it.
-        mu <- sum(p * x)
-        sdw <- sqrt(sum(p * (x - mu)^2))
-        if (!is.finite(sdw) || sdw <= 0) sdw <- diff(range(x)) / 6
-        n_eff <- 1 / sum(p^2)                    # Kish effective sample size
-        bw <- 1.06 * sdw * n_eff^(-1 / 5) * smooth
-        if (!is.finite(bw) || bw <= 0) return(NULL)
-        dn <- tryCatch(stats::density(x, weights = p, bw = bw, n = 256,
-                                      from = min(x) - 2 * bw,
-                                      to = max(x) + 2 * bw),
-                       error = function(e) NULL)
-        if (is.null(dn)) return(NULL)
-        data.frame(.class = dn$x, .dens = dn$y)
-      }
-
-      parts <- d %>% group_by(across(all_of(key))) %>% group_split()
-      built <- lapply(parts, function(g) {
-        dd <- dens_one(g)
-        if (is.null(dd)) return(NULL)
-        for (k in key) dd[[k]] <- g[[k]][1]
-        dd })
-      built <- built[!vapply(built, is.null, logical(1))]
-      if (!length(built)) return(NULL)
-      d <- bind_rows(built)
-      if (!nrow(d) || max(d$.dens, na.rm = TRUE) <= 0) return(NULL)
-
-      # vertical offset: one row per group, curves scaled to overlap a little
-      lev <- sort(unique(d$.g))
-      d$.row <- match(d$.g, lev)
-      scale_h <- (1 + overlap) / max(d$.dens, na.rm = TRUE)
-      d$.y <- d$.row + d$.dens * scale_h
-
-      ggplot(d, aes(x = .class, group = .g)) +
-        geom_ribbon(aes(ymin = .row, ymax = .y, fill = .g), alpha = 0.72,
-                    colour = NA) +
-        geom_line(aes(y = .y, colour = .g), linewidth = 0.5) +
-        geom_segment(aes(x = min(.class, na.rm = TRUE),
-                         xend = max(.class, na.rm = TRUE),
-                         y = .row, yend = .row), colour = "grey65",
-                     linewidth = 0.25) +
-        scale_y_continuous(breaks = seq_along(lev), labels = lev,
-                           expand = expansion(mult = c(0.02, 0.12))) +
-        scale_fill_var(group_var, d$.g, name = group_var, palette = palette) +
-        scale_colour_var(group_var, d$.g, name = group_var, palette = palette) +
-        facet_two(facet1, facet2, ncol = ncol, scales = scales) +
-        labs(title = paste0("Frequency, as a smoothed density", cc_suffix),
-             subtitle = sprintf(paste("Each curve integrates to one, so strata of",
-                                      "very different size are compared on shape",
-                                      "alone (smoothing x%.2f)"), smooth),
-             x = class_label, y = NULL) +
-        app_theme() +
-        theme(legend.position = "none",
-              panel.grid.major.y = element_blank())
-  } else {
+  p <- {
       if (is.null(d) || !nrow(d)) return(NULL)
       has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
       bw <- { u <- sort(unique(d$.class)); if (length(u) > 1) min(diff(u)) else 1 }
@@ -1900,12 +1717,11 @@ plot_numbers_at_length_age <- function(data, distributions = NULL,
 #'   "catch"), `"Lan"`, `"Dis"` or `"BMS"`. When `distributions` is
 #'   given, the resolved word goes in the plot title.
 #' @param colour Column mapped to line colour.
-#' @param facet1,facet2 Up to two facet columns.
+#' @param facet Up to two facet columns (`"col"` or `c("row", "col")`).
 #' @param shape Column drawn as separate point shapes; opens the averaged
 #'   group back up and drops the ribbon.
 #' @param show_points Draw the points.
 #' @param show_spread Draw the +/- 1 sd ribbon (averaged strata only).
-#' @param class_label Axis label; derived from the data when `NULL`.
 #' @param ncol Facet columns (ggplot).
 #' @param scales Facet scales (ggplot).
 #' @param n_per_screen Base engine: split a faceted figure across devices.
@@ -1924,10 +1740,8 @@ plot_numbers_at_length_age <- function(data, distributions = NULL,
 plot_meanweight_at_length_age <- function(data, distributions = NULL,
                                           distributionType = c("LengthTotal", "Age"),
                                           catchCategory = "All",
-                                          colour = NULL, facet1 = NULL,
-                                          facet2 = NULL, shape = NULL,
+                                          colour = NULL, facet = NULL, shape = NULL,
                                           show_points = TRUE, show_spread = TRUE,
-                                          class_label = NULL,
                                           ncol = 2, scales = "fixed",
                                           n_per_screen = NULL, verbose = FALSE,
                                           palette = c("default", "colorblind"),
@@ -1938,6 +1752,11 @@ plot_meanweight_at_length_age <- function(data, distributions = NULL,
   engine  <- match.arg(engine)
   palette <- match.arg(palette)
   catchCategory <- match.arg(catchCategory, c("Lan", "Dis", "BMS", "All"))
+  if (length(facet) > 2)
+    stop("plot_meanweight_at_length_age(): `facet` takes at most two columns",
+         call. = FALSE)
+  facet1 <- if (length(facet) >= 1) facet[1] else NULL
+  facet2 <- if (length(facet) >= 2) facet[2] else NULL
   has_ <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
   plot_arg_report("plot_meanweight_at_length_age", list(
     list(bad = is.null(distributions) && (typed_dt || typed_cc),
@@ -1952,7 +1771,7 @@ plot_meanweight_at_length_age <- function(data, distributions = NULL,
                           catch_category_parts(catchCategory),
                           "meanweight", grp, dims)
   data <- pr$data
-  cl <- class_label %||% pr$class_label
+  cl <- pr$class_label
   cc_word   <- switch(catchCategory, Lan = "landings", Dis = "discards",
                       BMS = "BMS catch", All = "catch")
   cc_suffix <- if (!is.null(distributions)) paste0(" (", cc_word, ")") else ""
@@ -1963,7 +1782,7 @@ plot_meanweight_at_length_age <- function(data, distributions = NULL,
       cat("  catchCategory : ", catchCategory, "\n", sep = "")
     cat("  colour: ", if (has_(colour)) colour else "(none)", "\n", sep = "")
     cat("  shape : ", if (has_(shape))  shape  else "(none)", "\n", sep = "")
-    cat("  facet1 / facet2: ", if (has_(facet1)) facet1 else "(none)", " / ",
+    cat("  facet : ", if (has_(facet1)) facet1 else "(none)", " / ",
         if (has_(facet2)) facet2 else "(none)", "\n", sep = "")
     cat("  rows: ", if (is.null(data)) 0L else nrow(data), "\n", sep = "")
   }

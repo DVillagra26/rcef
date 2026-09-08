@@ -114,11 +114,17 @@ collapse_cells <- function(sc, keys, threshold, what = "discard", min_meas = 0,
   # of the real data - the heatmap's colouring would have been wrong
   # for any cell with more than one stratum in it.
   if (!"numTrips" %in% names(sc)) sc$numTrips <- NA_real_
+  # A merged cell "has a discard estimate" if ANY of the strata folded
+  # into it does - so a cell where no component stratum was ever sampled
+  # for discards still classifies as "no estimate at all" (red), not as
+  # a threshold miss.
+  if (!"has_disc_data" %in% names(sc)) sc$has_disc_data <- !is.na(sc$discards)
   sc %>%
     group_by(across(all_of(keys))) %>%
     summarise(landings = sum(landings, na.rm = TRUE),
               landings_with_discards = sum(landings_with_discards, na.rm = TRUE),
               discards = sum(discards, na.rm = TRUE),
+              has_disc_data = any(has_disc_data),
               n_measurements = sum(n_measurements, na.rm = TRUE),
               numTrips = if (!any(!is.na(numTrips))) NA_real_
                         else sum(numTrips, na.rm = TRUE),
@@ -626,11 +632,11 @@ build_coverage_strata <- function(catch, dims, y, fill, facet,
 #' Warn about arguments that do not fit the requested plot
 #'
 #' The plotting dispatchers accept a wide, shared set of arguments, only
-#' some of which apply to any one `type` / `engine` / `quantity`. This
-#' turns a list of "this argument was set but does nothing here" checks
-#' into `warning()`s, so a caller who sets, say, `fill =` on a
-#' discard-rate "raw" plot or `type = "histogram"` on a mean-weight plot
-#' hears about it instead of quietly getting something else.
+#' some of which apply to any one `engine` / `quantity`. This turns a
+#' list of "this argument was set but does nothing here" checks into
+#' `warning()`s, so a caller who sets, say, `n_per_screen =` on the
+#' ggplot engine hears about it instead of quietly getting something
+#' else.
 #'
 #' Each check is a `list(bad = <logical>, msg = <character>)`; only the
 #' ones whose `bad` is `TRUE` are reported. A dispatcher builds the list

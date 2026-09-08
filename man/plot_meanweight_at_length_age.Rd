@@ -10,12 +10,10 @@ plot_meanweight_at_length_age(
   distributionType = c("LengthTotal", "Age"),
   catchCategory = "All",
   colour = NULL,
-  facet1 = NULL,
-  facet2 = NULL,
+  facet = NULL,
   shape = NULL,
   show_points = TRUE,
   show_spread = TRUE,
-  class_label = NULL,
   ncol = 2,
   scales = "fixed",
   n_per_screen = NULL,
@@ -38,7 +36,7 @@ given, the resolved word goes in the plot title.}
 
 \item{colour}{Column mapped to line colour.}
 
-\item{facet1, facet2}{Up to two facet columns.}
+\item{facet}{Up to two facet columns (`"col"` or `c("row", "col")`).}
 
 \item{shape}{Column drawn as separate point shapes; opens the averaged
 group back up and drops the ribbon.}
@@ -46,8 +44,6 @@ group back up and drops the ribbon.}
 \item{show_points}{Draw the points.}
 
 \item{show_spread}{Draw the +/- 1 sd ribbon (averaged strata only).}
-
-\item{class_label}{Axis label; derived from the data when `NULL`.}
 
 \item{ncol}{Facet columns (ggplot).}
 

@@ -2,9 +2,10 @@
 ## engine colours the bars by the fill variable.
 ##
 ## 1. A bar chart shows sampled vs unsampled weight; a threshold or a
-##    trip floor changes nothing it draws. Passing either is now a hard
-##    ERROR with a message that points at plot_coverage_heat() /
-##    plot_coverage_bubble(), not a silent ignore.
+##    trip floor changes nothing it draws. The function does not accept
+##    min_cov / min_trip at all, so passing either is R's normal
+##    unused-argument error; verbose still spells out why they do not
+##    apply and points at plot_coverage_heat() / plot_coverage_bubble().
 ## 2. plot_coverage_bars_base() colours by var_palette() - the SAME
 ##    per-level assignment the ggplot engine uses - not a fixed
 ##    sampled/unsampled pair.
@@ -29,21 +30,19 @@ strata_raw <- data.frame(
 ## recognises it (via cat_key) as already built.
 strata <- classify_strata(strata_raw, 50, min_trips = 2)
 
-## ---- 1. min_cov / min_trip are an error for the bar chart --------
+## ---- 1. min_cov / min_trip are not accepted by the bar chart -----
 e1 <- tryCatch({
   plot_coverage_bar(strata, y = "metier4", fill = "Country", min_cov = 42)
   NA
 }, error = function(e) conditionMessage(e))
-ok(is.character(e1) && grepl("min_cov / min_trip do not apply", e1),
-   "plot_coverage_bar() with min_cov set is an error")
-ok(grepl("plot_coverage_heat", e1),
-   "and the message points at a coverage-threshold view")
+ok(is.character(e1) && grepl("unused argument", e1) && grepl("min_cov", e1),
+   "plot_coverage_bar() does not accept min_cov")
 
 e2 <- tryCatch({
   plot_coverage_bar(strata, y = "metier4", min_trip = 3); NA
 }, error = function(e) conditionMessage(e))
-ok(is.character(e2) && grepl("min_cov / min_trip do not apply", e2),
-   "min_trip is an error too")
+ok(is.character(e2) && grepl("unused argument", e2) && grepl("min_trip", e2),
+   "nor min_trip")
 
 grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
 p_ok <- tryCatch(plot_coverage_bar(strata, y = "metier4", fill = "Country"),
