@@ -18,10 +18,10 @@ plot_meanweight_at_length_age(
   class_label = NULL,
   ncol = 2,
   scales = "fixed",
-  engine = c("ggplot", "base"),
-  palette = c("default", "colorblind"),
   n_per_screen = NULL,
-  verbose = FALSE
+  verbose = FALSE,
+  palette = c("default", "colorblind"),
+  engine = c("ggplot", "base")
 )
 }
 \arguments{
@@ -51,13 +51,13 @@ group back up and drops the ribbon.}
 
 \item{scales}{Facet scales (ggplot).}
 
-\item{engine}{`"ggplot"` (default) or `"base"`.}
-
-\item{palette}{`"default"` or `"colorblind"`.}
-
 \item{n_per_screen}{Base engine: split a faceted figure across devices.}
 
 \item{verbose}{Print a short summary before drawing.}
+
+\item{palette}{`"default"` or `"colorblind"`.}
+
+\item{engine}{`"ggplot"` (default) or `"base"`.}
 }
 \value{
 A ggplot object, or `NULL` invisibly (base engine).

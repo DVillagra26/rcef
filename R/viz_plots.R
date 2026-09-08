@@ -107,8 +107,8 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
                               group = NULL, what = "discard",
                               catchCategory = NULL,
                               min_cov = 50, min_trip = 2, min_fish = 0,
-                              scale = 1,
-                              engine = c("base", "ggplot"), verbose = FALSE) {
+                              scale = 1, verbose = FALSE,
+                              engine = c("base", "ggplot")) {
   engine <- match.arg(engine)
   what   <- normalize_what(what)
   strata <- catch
@@ -326,32 +326,37 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #' `catchCategory`, choose whether to look at the sampling of the landings
 #' (`"Lan"`, the default), the discards (`"Dis"`) or BMS (`"BMS"`).
 #'
+#' The arguments run in the order you usually think about them: what data
+#' (`catch`, `distributions`, `what`, `catchCategory`), then which columns
+#' are the strata (`y`, `x` / `fill`, `facet`), then the pass / fail
+#' thresholds (`min_cov`, `min_trip`, `min_fish`), then rendering knobs
+#' (`ncol`, `n_per_screen`, `verbose`), and finally `palette` and
+#' `engine` last.
+#'
 #' @param catch Raw CEF catch data.
 #' @param distributions A CEF distributions table - needed for
 #'   `what = "length"`/`"age"`, ignored otherwise.
-#' @param y Row category. Required.
-#' @param x Column category - the second axis of the heatmap / bubble
-#'   grid. `NULL` collapses to a single column.
-#' @param fill Bar fill category (bars only). `NULL` uses `y`.
-#' @param facet Optional facet column.
 #' @param what `"discard"` (default), `"length"` or `"age"`. Plural and
 #'   mixed case are accepted (`"discards"`, `"Length"`, ...).
 #' @param catchCategory For `what = "length"`/`"age"`: `"Lan"` (default),
 #'   `"Dis"` or `"BMS"` - which catch part the distribution is linked to.
 #'   Not valid for `what = "discard"` (an error).
+#' @param y Row category. Required.
+#' @param x Column category - the second axis of the heatmap / bubble
+#'   grid. `NULL` collapses to a single column.
+#' @param fill Bar fill category (bars only). `NULL` uses `y`.
+#' @param facet Optional facet column.
 #' @param min_cov Minimum coverage, percent (heat / bubble only).
 #' @param min_trip Minimum sampling trips (heat / bubble only).
 #' @param min_fish Minimum measurements for `what = "length"`/`"age"`.
-#' @param show_fill_in_labels Bars only: append the fill level to each row
-#'   label.
-#' @param engine `"ggplot"` (default) or `"base"`.
-#' @param palette `"default"` or `"colorblind"` - recolours the bar fill.
-#'   The heatmap / bubble status colours are a fixed semantic scale;
-#'   asking for `"colorblind"` there warns.
 #' @param ncol Facet columns (bars, ggplot).
 #' @param n_per_screen Base engine: split a faceted figure across this
 #'   many devices.
 #' @param verbose Print a short summary before drawing.
+#' @param palette `"default"` or `"colorblind"` - recolours the bar fill.
+#'   The heatmap / bubble status colours are a fixed semantic scale;
+#'   asking for `"colorblind"` there warns.
+#' @param engine `"ggplot"` (default) or `"base"`.
 #' @return A ggplot object (`engine = "ggplot"`) or `NULL` invisibly
 #'   (`engine = "base"`).
 #' @seealso [classify_strata()], [plot_discard_rate()],
@@ -374,9 +379,9 @@ plot_coverage_heat <- function(catch, distributions = NULL, y, x = NULL,
                                facet = NULL, what = "discard",
                                catchCategory = NULL,
                                min_cov = 50, min_trip = 2, min_fish = 0,
-                               engine = c("ggplot", "base"),
+                               n_per_screen = NULL, verbose = FALSE,
                                palette = c("default", "colorblind"),
-                               n_per_screen = NULL, verbose = FALSE) {
+                               engine = c("ggplot", "base")) {
   view <- "heat"; fn <- "plot_coverage_heat"
   engine <- match.arg(engine); palette <- match.arg(palette)
   strata <- catch
@@ -530,13 +535,18 @@ plot_coverage_heat <- function(catch, distributions = NULL, y, x = NULL,
   fmt <- function(v) ifelse(is.na(v) | v <= 0, "",
                      ifelse(v > 99, sprintf("%.0f", v),
                      ifelse(v >= 10, sprintf("%.1f", v), sprintf("%.2f", v))))
+  stat_all <- names(status_palette(threshold, what, min_meas, min_trips))
+  d$Status <- factor(as.character(d$Status), levels = stat_all)
   p <- ggplot(d, aes(x = factor(.data[[x_var]]), y = .data[[y_var]], fill = Status)) +
     geom_tile(colour = OUTLINE, alpha = 0.9) +
     geom_text(aes(label = fmt(landings)), size = 2.6, fontface = "bold",
               colour = OUTLINE) +
+    # a zero-size mark per status, so the legend carries a filled key for
+    # categories that no cell in this particular figure lands in - added
+    # last so the real tiles stay layer 1
+    status_key_layer(d, stat_all, "tile") +
     scale_fill_manual(values = status_palette(threshold, what, min_meas, min_trips),
-                      limits = names(status_palette(threshold, what, min_meas,
-                                                    min_trips)),
+                      limits = stat_all,
                       labels = status_abbr(threshold, what, min_meas, min_trips),
                       drop = FALSE, name = "Sampling status") +
     maybe_facet(facet_var) +
@@ -564,10 +574,9 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
                                  facet = NULL, what = "discard",
                                  catchCategory = NULL,
                                  min_cov = 50, min_trip = 2, min_fish = 0,
-                                 engine = c("ggplot", "base"),
+                                 n_per_screen = NULL, verbose = FALSE,
                                  palette = c("default", "colorblind"),
-                                 n_per_screen = NULL,
-                                 verbose = FALSE) {
+                                 engine = c("ggplot", "base")) {
   view <- "bubble"; fn <- "plot_coverage_bubble"
   engine <- match.arg(engine); palette <- match.arg(palette)
   strata <- catch
@@ -843,6 +852,8 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
   } else {
     SZ$limits <- NULL; SZ$breaks <- ggplot2::waiver(); SZ$labels <- ggplot2::waiver()
   }
+  stat_all <- names(status_palette(threshold, what, min_meas, min_trips))
+  d$Status <- factor(as.character(d$Status), levels = stat_all)
   p <- ggplot(d, aes(x = factor(.data[[x_var]]), y = .data[[y_var]])) +
     geom_point(aes(size = plot_size, fill = Status), shape = 21,
                colour = OUTLINE, stroke = 0.8) +
@@ -852,12 +863,15 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
                              colour = "red3", box.padding = 0.6,
                              min.segment.length = 0, segment.size = 0.2,
                              segment.colour = "grey40", max.overlaps = Inf) +
+    # a zero-size mark per status, so the legend carries a filled key for
+    # categories no bubble in this particular figure lands in - added
+    # last so the real points stay layer 1
+    status_key_layer(d, stat_all, "point") +
     scale_size_continuous(range = SZ$range, limits = SZ$limits,
                           breaks = SZ$breaks, labels = SZ$labels,
                           name = SZ$name) +
     scale_fill_manual(values = status_palette(threshold, what, min_meas, min_trips),
-                      limits = names(status_palette(threshold, what, min_meas,
-                                                    min_trips)),
+                      limits = stat_all,
                       labels = status_abbr(threshold, what, min_meas, min_trips),
                       drop = FALSE, name = "Sampling status",
                       guide = guide_legend(override.aes = list(size = 5))) +
@@ -884,11 +898,10 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
 plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
                               facet = NULL, what = "discard",
                               catchCategory = NULL,
-                              show_fill_in_labels = FALSE,
-                              engine = c("ggplot", "base"),
-                              palette = c("default", "colorblind"), ncol = 2,
-                              n_per_screen = NULL, verbose = FALSE,
-                              min_cov = NULL, min_trip = NULL) {
+                              ncol = 2, n_per_screen = NULL, verbose = FALSE,
+                              min_cov = NULL, min_trip = NULL,
+                              palette = c("default", "colorblind"),
+                              engine = c("ggplot", "base")) {
   view <- "bar"; fn <- "plot_coverage_bar"
   engine <- match.arg(engine); palette <- match.arg(palette)
   strata <- catch
@@ -975,8 +988,7 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
     pal <- var_palette(if (has(fill_var)) fill_var else y_var, agg$.fill, palette)
 
     draw_one <- function(dd, main, subtitle, compact = FALSE) {
-      key <- if (has(fill_var) && isTRUE(show_fill_in_labels))
-        paste(dd$.lab, dd$.fill, sep = " / ") else dd$.lab
+      key <- dd$.lab
       # barplot() draws bottom-to-top, so the row vector is reversed here -
       # otherwise the first row (the largest "with sampling" bar) would be
       # drawn at the BOTTOM of the figure, the opposite of every other
@@ -1269,13 +1281,13 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 #' @param shape Column mapped to point shape.
 #' @param facet Optional facet column.
 #' @param jitter Jitter the points horizontally.
-#' @param engine `"ggplot"` (default) or `"base"`.
-#' @param palette `"default"` or `"colorblind"` (point colours, via
-#'   [var_palette()]).
 #' @param ncol Facet columns (ggplot).
 #' @param n_per_screen Base engine: split a faceted figure across this
 #'   many devices.
 #' @param verbose Print a short summary before drawing.
+#' @param palette `"default"` or `"colorblind"` (point colours, via
+#'   [var_palette()]).
+#' @param engine `"ggplot"` (default) or `"base"`.
 #' @return A ggplot object (`engine = "ggplot"`), or `NULL` invisibly
 #'   after drawing to the current device (`engine = "base"`).
 #' @seealso [sampled_for_discards()], [build_strata()]
@@ -1288,10 +1300,9 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 #' @export
 plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
                               facet = NULL, jitter = TRUE,
-                              engine = c("ggplot", "base"),
+                              ncol = 2, n_per_screen = NULL, verbose = FALSE,
                               palette = c("default", "colorblind"),
-                              ncol = 2, n_per_screen = NULL,
-                              verbose = FALSE) {
+                              engine = c("ggplot", "base")) {
   engine  <- match.arg(engine)
   palette <- match.arg(palette)
   angle   <- 45
@@ -1481,10 +1492,10 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
 #' @param ncol Facet columns (ggplot).
 #' @param scales Facet scales (ggplot): `"fixed"`, `"free_x"`,
 #'   `"free_y"` or `"free"`.
-#' @param engine `"ggplot"` (default) or `"base"`.
-#' @param palette `"default"` or `"colorblind"`.
 #' @param n_per_screen Base engine: split a faceted figure across devices.
 #' @param verbose Print a short summary before drawing.
+#' @param palette `"default"` or `"colorblind"`.
+#' @param engine `"ggplot"` (default) or `"base"`.
 #' @return A ggplot object, or `NULL` invisibly (base engine).
 #' @seealso [plot_meanweight_at_length_age()], [length_numbers()]
 #' @family distribution plots
@@ -1502,10 +1513,9 @@ plot_numbers_at_length_age <- function(data, distributions = NULL,
                                        stacked = TRUE, smooth = 1,
                                        class_label = NULL, value_label = NULL,
                                        ncol = 2, scales = "fixed",
-                                       engine = c("ggplot", "base"),
+                                       n_per_screen = NULL, verbose = FALSE,
                                        palette = c("default", "colorblind"),
-                                       n_per_screen = NULL,
-                                       verbose = FALSE) {
+                                       engine = c("ggplot", "base")) {
   typed_dt <- !missing(distributionType); typed_cc <- !missing(catchCategory)
   typed_stacked <- !missing(stacked)
   angle <- 45; dims <- NULL
@@ -1859,10 +1869,10 @@ plot_numbers_at_length_age <- function(data, distributions = NULL,
 #' @param class_label Axis label; derived from the data when `NULL`.
 #' @param ncol Facet columns (ggplot).
 #' @param scales Facet scales (ggplot).
-#' @param engine `"ggplot"` (default) or `"base"`.
-#' @param palette `"default"` or `"colorblind"`.
 #' @param n_per_screen Base engine: split a faceted figure across devices.
 #' @param verbose Print a short summary before drawing.
+#' @param palette `"default"` or `"colorblind"`.
+#' @param engine `"ggplot"` (default) or `"base"`.
 #' @return A ggplot object, or `NULL` invisibly (base engine).
 #' @seealso [plot_numbers_at_length_age()], [length_meanweight()]
 #' @family distribution plots
@@ -1880,10 +1890,9 @@ plot_meanweight_at_length_age <- function(data, distributions = NULL,
                                           show_points = TRUE, show_spread = TRUE,
                                           class_label = NULL,
                                           ncol = 2, scales = "fixed",
-                                          engine = c("ggplot", "base"),
+                                          n_per_screen = NULL, verbose = FALSE,
                                           palette = c("default", "colorblind"),
-                                          n_per_screen = NULL,
-                                          verbose = FALSE) {
+                                          engine = c("ggplot", "base")) {
   typed_dt <- !missing(distributionType); typed_cc <- !missing(catchCategory)
   angle <- 45; dims <- NULL
   distributionType <- match.arg(distributionType)

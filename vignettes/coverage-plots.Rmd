@@ -40,16 +40,22 @@ internally. There is nothing to pre-compute: no `build_strata()`, no
 `classify_strata()` call of your own.
 
 ```{r data}
-data(anchoveta_catch)   # ~3,950 rows of dummy Peruvian-anchoveta CEF catch
+data(anchoveta_catch)   # ~3,500 rows of dummy Southeast-Pacific anchoveta CEF catch
 data(anchoveta_dist)    # its length + age distributions
 
 dim(anchoveta_catch)
 table(anchoveta_catch$catchCategory)
+table(anchoveta_catch$Country)
 table(anchoveta_dist$distributionType)
 ```
 
-`anchoveta_catch` is already through `derive_fields()`, so the grouping
-columns the plots use (`Country`, `Season`, `metier4`, ...) are present.
+`anchoveta_catch` is a fully invented data set - nothing in it is copied
+from a real stock - covering seven flag states over FAO Area 87
+(Pacific, Southeast), four years and four quarters. It is already
+through `derive_fields()`, so the grouping columns the plots use
+(`Country`, `Season`, `metier4`, ...) are present. Coverage is
+deliberately uneven: Peru and Chile land the most and sample best, the
+distant-water fleets least.
 
 ## The four views
 
@@ -121,23 +127,24 @@ fishery is blind".
 plot_coverage_bar(anchoveta_catch, y = "metier4", fill = "Country")
 ```
 
-```{r disc-bar-labels, fig.alt = "The same bar chart with the fill level appended to each row label"}
+```{r disc-bar-facet, fig.height = 5, fig.alt = "The same bar chart, one panel per season"}
 plot_coverage_bar(anchoveta_catch, y = "metier4", fill = "Country",
-                  show_fill_in_labels = TRUE)
+                  facet = "Season")
 ```
 
 ## Map: where the gaps are
 
-```{r disc-map, eval = have_maps, fig.height = 5, fig.alt = "Coverage map, one sampled/not-sampled pie per ICES area"}
+```{r disc-map, eval = have_maps, fig.height = 5, fig.alt = "Coverage map, one sampled/not-sampled pie per FAO Area 87 division"}
 plot_coverage_map(anchoveta_catch, engine = "ggplot")
 ```
 
-```{r disc-map-grouped, eval = have_maps, fig.height = 5.5, fig.alt = "Coverage map with one boxed grid of pies per area, split by season"}
+```{r disc-map-grouped, eval = have_maps, fig.height = 5.5, fig.alt = "Coverage map with one boxed grid of pies per area, split by quarter"}
 plot_coverage_map(anchoveta_catch, group = "Season", engine = "ggplot")
 ```
 
-(The map needs the suggested `maps` package. `group` gives one labelled
-box of pies per area, one pie per level.)
+(The map needs the suggested `maps` package. It resolves the FAO Area 87
+divisions to centroids off the Peru and Chile coasts. `group` gives one
+labelled box of pies per area, one pie per level.)
 
 # Length coverage
 
@@ -204,6 +211,11 @@ amber = warning, grey = nothing to sample), so asking for
 `palette = "colorblind"` there does nothing and warns. `palette` *does*
 recolour the bar chart's fill.
 
+The status legend always lists **every** category with its colour, even
+the ones no cell in the current figure lands in - so the same figure
+drawn on two different subsets has the same key, and an absent category
+reads as "nothing here", not "not a category".
+
 # Base R vs ggplot2 on a heavier table
 
 Every function draws with either engine from the one call:
@@ -251,23 +263,29 @@ redraws, not in a single call.
 Shared across `plot_coverage_heat()` / `_bubble()` / `_bar()` /
 `_map()`:
 
-| Argument         | Meaning |
-|------------------|---------|
-| `catch`          | raw CEF catch (already `derive_fields()`-ed) |
-| `distributions`  | CEF distributions table; required for `what = "length"` / `"age"` |
-| `y`              | row category (required) |
-| `x` / `fill`     | second category - `x` for heat/bubble, `fill` for bar |
-| `facet`          | optional facet column |
-| `what`           | `"discard"` (default), `"length"`, `"age"` |
-| `catchCategory`  | `"Lan"` / `"Dis"` / `"BMS"` for `"length"` / `"age"`; invalid for `"discard"` |
-| `min_cov`        | minimum coverage, percent (heat / bubble) |
-| `min_trip`       | minimum sampling trips (heat / bubble) |
-| `min_fish`       | minimum measured fish (`"length"` / `"age"`) |
-| `engine`         | `"ggplot"` (default) or `"base"` |
-| `palette`        | `"default"` or `"colorblind"` (bar fill only) |
-| `n_per_screen`   | base engine: split a faceted figure across devices |
-| `verbose`        | print the resolved arguments and status breakdown |
+The arguments are ordered the way you build a call: **what data**, then
+**which columns**, then **thresholds**, then **rendering**, and
+`palette` then `engine` last.
 
-There is deliberately **no** `dims`, `weight_label` or `angle` argument:
-the strata come from `y` / `x` / `fill` / `facet`, the weight word from
-`what` / `catchCategory`, and the x-label rotation is fixed.
+| Group | Argument | Meaning |
+|-------|----------|---------|
+| data      | `catch`          | raw CEF catch (already `derive_fields()`-ed) |
+| data      | `distributions`  | CEF distributions table; required for `what = "length"` / `"age"` |
+| data      | `what`           | `"discard"` (default), `"length"`, `"age"` |
+| data      | `catchCategory`  | `"Lan"` / `"Dis"` / `"BMS"` for `"length"` / `"age"`; invalid for `"discard"` |
+| columns   | `y`              | row category (required) |
+| columns   | `x` / `fill`     | second category - `x` for heat/bubble, `fill` for bar |
+| columns   | `facet`          | optional facet column |
+| threshold | `min_cov`        | minimum coverage, percent (heat / bubble) |
+| threshold | `min_trip`       | minimum sampling trips (heat / bubble) |
+| threshold | `min_fish`       | minimum measured fish (`"length"` / `"age"`) |
+| render    | `ncol`           | facet columns (bars, ggplot) |
+| render    | `n_per_screen`   | base engine: split a faceted figure across devices |
+| render    | `verbose`        | print the resolved arguments and status breakdown |
+| last      | `palette`        | `"default"` or `"colorblind"` (bar fill only) |
+| last      | `engine`         | `"ggplot"` (default) or `"base"` |
+
+There is deliberately **no** `dims`, `weight_label`, `angle` or
+`show_fill_in_labels` argument: the strata come from
+`y` / `x` / `fill` / `facet`, the weight word from `what` /
+`catchCategory`, and the x-label rotation is fixed.

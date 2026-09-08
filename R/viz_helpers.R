@@ -239,6 +239,39 @@ status_legend_plot <- function(threshold, what = "discard", min_meas = 0,
   p + app_theme()
 }
 
+#' An invisible layer that completes a coverage plot's status legend
+#'
+#' A discrete scale can LIST an unused level (with `drop = FALSE` +
+#' `limits`), but a geom has no data row from which to draw that level's
+#' key swatch, so absent statuses show as a label with an empty box. This
+#' adds one zero-size mark per status - drawn from a copy of the first
+#' data row so every mapped column is present, positioned on top of a
+#' real cell and sized to nothing so it never shows in the panel - which
+#' gives the guide a row for every status and fills every swatch.
+#'
+#' @param d The data frame the plot is built from (its first row is
+#'   copied, so the layer inherits the same x / y / facet columns).
+#' @param all_status Every status label, in order - `names(status_palette())`.
+#' @param key `"tile"` for the heatmap, `"point"` for the bubble grid.
+#' @return A ggplot2 layer.
+#' @seealso [status_legend_plot()], [status_palette()]
+#' @keywords internal
+#' @export
+status_key_layer <- function(d, all_status, key = c("tile", "point")) {
+  key <- match.arg(key)
+  dummy <- d[rep(1L, length(all_status)), , drop = FALSE]
+  dummy$Status <- factor(all_status, levels = all_status)
+  if ("landings" %in% names(dummy)) dummy$landings <- NA_real_
+  if ("plot_size" %in% names(dummy)) dummy$plot_size <- NA_real_
+  if (identical(key, "tile"))
+    ggplot2::geom_tile(data = dummy, ggplot2::aes(fill = .data$Status),
+                       width = 0, height = 0, na.rm = TRUE, show.legend = TRUE)
+  else
+    ggplot2::geom_point(data = dummy, ggplot2::aes(fill = .data$Status),
+                        size = 0, shape = 21, stroke = 0, na.rm = TRUE,
+                        show.legend = TRUE)
+}
+
 #' Draw a status legend in the current figure's right margin
 #'
 #' Shared by the base-R heatmap and bubble plots: every possible status
@@ -450,7 +483,11 @@ ICES_AREA_CENTROID <- data.frame(
            "7.j", "7.k",
            "8", "8.a", "8.b", "8.c", "8.d", "8.e",
            "9", "9.a", "9.b",
-           "10.a", "12", "14.a", "14.b"),
+           "10.a", "12", "14.a", "14.b",
+           # FAO Major Fishing Area 87 (Pacific, Southeast) - so the
+           # bundled anchoveta example data can be mapped too
+           "87.1.1", "87.1.2", "87.2.4", "87.2.5",
+           "87.3.1", "87.3.2", "87.3.3", "87.3.4"),
   lon = c(20.0, 5.0, 0.0,
           10.5, 10.2, 11.6,
           10.7, 12.5, 12.0, 16.5, 19.0, 18.5,
@@ -462,7 +499,9 @@ ICES_AREA_CENTROID <- data.frame(
           -11.0, -14.0,
           -5.0, -3.0, -2.5, -4.2, -6.0, -10.0,
           -10.0, -9.5, -11.0,
-          -28.0, -10.0, -35.0, -25.0),
+          -28.0, -10.0, -35.0, -25.0,
+          -82.0, -80.0, -78.0, -73.0,
+          -71.0, -73.0, -74.0, -75.0),
   lat = c(73.0, 68.0, 64.0,
           57.5, 58.2, 56.9,
           55.2, 55.5, 55.0, 55.6, 55.6, 58.0,
@@ -474,7 +513,9 @@ ICES_AREA_CENTROID <- data.frame(
           50.6, 49.6,
           45.5, 46.4, 45.0, 44.0, 45.6, 45.5,
           39.0, 40.0, 38.0,
-          46.0, 74.0, 60.0, 62.0),
+          46.0, 74.0, 60.0, 62.0,
+          -6.0, -8.0, -13.0, -17.0,
+          -22.0, -30.0, -37.0, -43.0),
   stringsAsFactors = FALSE)
 
 #' Look up ICES-area centroids

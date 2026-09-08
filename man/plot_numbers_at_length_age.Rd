@@ -19,10 +19,10 @@ plot_numbers_at_length_age(
   value_label = NULL,
   ncol = 2,
   scales = "fixed",
-  engine = c("ggplot", "base"),
-  palette = c("default", "colorblind"),
   n_per_screen = NULL,
-  verbose = FALSE
+  verbose = FALSE,
+  palette = c("default", "colorblind"),
+  engine = c("ggplot", "base")
 )
 }
 \arguments{
@@ -53,13 +53,13 @@ when `NULL`.}
 \item{scales}{Facet scales (ggplot): `"fixed"`, `"free_x"`,
 `"free_y"` or `"free"`.}
 
-\item{engine}{`"ggplot"` (default) or `"base"`.}
-
-\item{palette}{`"default"` or `"colorblind"`.}
-
 \item{n_per_screen}{Base engine: split a faceted figure across devices.}
 
 \item{verbose}{Print a short summary before drawing.}
+
+\item{palette}{`"default"` or `"colorblind"`.}
+
+\item{engine}{`"ggplot"` (default) or `"base"`.}
 }
 \value{
 A ggplot object, or `NULL` invisibly (base engine).

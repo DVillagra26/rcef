@@ -22,12 +22,13 @@ anchoveta_dist
 }
 \description{
 The length- and age-distribution companion to [anchoveta_catch]: a
-dummy CEF distributions table carrying both `LengthTotal` rows (in mm)
-and `Age` rows (in years, ages 0--4, folded from the length classes
-with a rough growth curve). Every row links back to a catch stratum
-through `domainBiology` + `catchCategory`, so all three biology
-`what` values (`"length"`, `"age"`) and both distribution plots work
-straight off it.
+made-up CEF distributions table carrying both `LengthTotal` rows (mm,
+classes 40--200) and `Age` rows (years, ages 0--4). Every row links
+back to a catch stratum through `domainBiology` + `catchCategory`, so
+both biology `what` values (`"length"`, `"age"`) and both distribution
+plots work straight off it. Only a fraction of the covered strata
+carry a length distribution and fewer still an age one, so the
+`what = "length"` / `"age"` coverage views have gaps to show.
 }
 \details{
 Pass it as the `distributions` argument:

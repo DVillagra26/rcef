@@ -15,8 +15,8 @@ plot_coverage_map(
   min_trip = 2,
   min_fish = 0,
   scale = 1,
-  engine = c("base", "ggplot"),
-  verbose = FALSE
+  verbose = FALSE,
+  engine = c("base", "ggplot")
 )
 }
 \arguments{
@@ -33,9 +33,9 @@ from `what` and `catchCategory`.}
 \item{scale}{Multiplies every pie radius (and, when grouped, the box
 grid cell size).}
 
-\item{engine}{`"base"` (default) or `"ggplot"`.}
-
 \item{verbose}{Print a one-line summary before drawing.}
+
+\item{engine}{`"base"` (default) or `"ggplot"`.}
 }
 \value{
 `NULL` invisibly (`engine = "base"`) or a ggplot object.

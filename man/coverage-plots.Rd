@@ -18,10 +18,10 @@ plot_coverage_heat(
   min_cov = 50,
   min_trip = 2,
   min_fish = 0,
-  engine = c("ggplot", "base"),
-  palette = c("default", "colorblind"),
   n_per_screen = NULL,
-  verbose = FALSE
+  verbose = FALSE,
+  palette = c("default", "colorblind"),
+  engine = c("ggplot", "base")
 )
 
 plot_coverage_bubble(
@@ -35,10 +35,10 @@ plot_coverage_bubble(
   min_cov = 50,
   min_trip = 2,
   min_fish = 0,
-  engine = c("ggplot", "base"),
-  palette = c("default", "colorblind"),
   n_per_screen = NULL,
-  verbose = FALSE
+  verbose = FALSE,
+  palette = c("default", "colorblind"),
+  engine = c("ggplot", "base")
 )
 
 plot_coverage_bar(
@@ -49,14 +49,13 @@ plot_coverage_bar(
   facet = NULL,
   what = "discard",
   catchCategory = NULL,
-  show_fill_in_labels = FALSE,
-  engine = c("ggplot", "base"),
-  palette = c("default", "colorblind"),
   ncol = 2,
   n_per_screen = NULL,
   verbose = FALSE,
   min_cov = NULL,
-  min_trip = NULL
+  min_trip = NULL,
+  palette = c("default", "colorblind"),
+  engine = c("ggplot", "base")
 )
 }
 \arguments{
@@ -85,21 +84,18 @@ Not valid for `what = "discard"` (an error).}
 
 \item{min_fish}{Minimum measurements for `what = "length"`/`"age"`.}
 
-\item{engine}{`"ggplot"` (default) or `"base"`.}
-
-\item{palette}{`"default"` or `"colorblind"` - recolours the bar fill.
-The heatmap / bubble status colours are a fixed semantic scale;
-asking for `"colorblind"` there warns.}
-
 \item{n_per_screen}{Base engine: split a faceted figure across this
 many devices.}
 
 \item{verbose}{Print a short summary before drawing.}
 
-\item{fill}{Bar fill category (bars only). `NULL` uses `y`.}
+\item{palette}{`"default"` or `"colorblind"` - recolours the bar fill.
+The heatmap / bubble status colours are a fixed semantic scale;
+asking for `"colorblind"` there warns.}
 
-\item{show_fill_in_labels}{Bars only: append the fill level to each row
-label.}
+\item{engine}{`"ggplot"` (default) or `"base"`.}
+
+\item{fill}{Bar fill category (bars only). `NULL` uses `y`.}
 
 \item{ncol}{Facet columns (bars, ggplot).}
 }
@@ -121,6 +117,13 @@ exists), `"length"` or `"age"` (a length / age distribution exists).
 For `"length"` / `"age"`, pass `distributions` and, with
 `catchCategory`, choose whether to look at the sampling of the landings
 (`"Lan"`, the default), the discards (`"Dis"`) or BMS (`"BMS"`).
+
+The arguments run in the order you usually think about them: what data
+(`catch`, `distributions`, `what`, `catchCategory`), then which columns
+are the strata (`y`, `x` / `fill`, `facet`), then the pass / fail
+thresholds (`min_cov`, `min_trip`, `min_fish`), then rendering knobs
+(`ncol`, `n_per_screen`, `verbose`), and finally `palette` and
+`engine` last.
 }
 \examples{
 \dontrun{

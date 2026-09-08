@@ -6,14 +6,17 @@
 \title{Synthetic Peruvian-anchoveta CEF catch table}
 \format{
 A data frame of catch records, one row per
-  stock / catch category / season / area / fleet cell. Key columns:
+  stock / catch category / year / quarter / area / fleet cell. Key
+  columns:
 \describe{
   \item{catchCategory}{`"Lan"`, `"Dis"` or `"BMS"`.}
-  \item{vesselFlagCountry, Country}{Fleet region: `"Peru-North"`,
-    `"Peru-Central"`, `"Peru-South"`.}
-  \item{seasonValue, Season}{Fishing season, `"1"`--`"4"`.}
-  \item{areaValue, ICESDivision, ...}{Area code and its parsed parts.}
-  \item{metier6, metier4, ...}{Gear / metier and its parsed parts.}
+  \item{vesselFlagCountry, Country}{Flag state: `"Peru"`, `"Chile"`,
+    `"Ecuador"`, `"China"`, `"South Korea"`, `"Russia"`, `"Vanuatu"`.}
+  \item{seasonValue, Season}{Quarter, `"1"`--`"4"`.}
+  \item{areaValue, ICESDivision, ...}{FAO Area 87 (Pacific, Southeast)
+    division code and its parsed parts.}
+  \item{metier6, metier4, ...}{Gear / metier (`"PS"`, `"MPT"`,
+    `"LHP"`) and its parsed parts.}
   \item{fleetValue}{Fleet segment.}
   \item{total}{Weight (kg) for the row's `variableType`.}
   \item{numTrips, domainBiology}{Sampling-trip count and the key that
@@ -24,27 +27,26 @@ A data frame of catch records, one row per
 anchoveta_catch
 }
 \description{
-A dummy CEF (RDBES long-format) catch table for a fictional Peruvian
-anchoveta (\emph{Engraulis ringens}) fishery, for trying the plotting
-functions and for timing the base-R vs ggplot2 engines on a heavier
-table without needing real data. It is about four times the size of
-the turbot walkthrough table, spread over four years
-(2021--2024) with lognormal noise on the weights.
+A fully made-up CEF (RDBES long-format) catch table for a fictional
+Southeast-Pacific anchoveta (\emph{Engraulis ringens}) fishery, for
+trying the plotting functions and for timing the base-R vs ggplot2
+engines on a heavier table without needing real data. About 3,500
+rows - several times the turbot walkthrough table - over four years
+(2020--2023) and four quarters.
 }
 \details{
-Already through [derive_fields()], so it can go straight into any
-plot: the derived columns (`Country`, `Season`, `metier4`, the ICES
-area parts, ...) are present and consistent. Pair it with
-[anchoveta_dist] for the `what = "length"` / `what = "age"` coverage
-views and for [plot_numbers_at_length_age()] /
-[plot_meanweight_at_length_age()].
+Already through [derive_fields()], so it drops straight into any plot:
+the derived columns (`Country`, `Season`, `metier4`, the parsed area
+parts, ...) are present and consistent. Pair it with [anchoveta_dist]
+for the `what = "length"` / `what = "age"` coverage views and for
+[plot_numbers_at_length_age()] / [plot_meanweight_at_length_age()].
 
-The structure is seeded from the bundled bll turbot CEF files; the
-fleet countries, species, stock and working group are relabelled to
-the anchoveta fishery, everything else (metiers, areas, the
-`domainBiology` link keys) is kept so the catch <-> distribution
-linkage stays intact. The ICES-style area codes are left as they are,
-so [plot_coverage_map()] still resolves centroids.
+Nothing here comes from another data set: the fleets, areas, metiers,
+weights and sampling coverage are all drawn from invented
+distributions, deliberately uneven across countries and metiers so the
+coverage plots have a real pattern to show. Peru and Chile land the
+most and are the best sampled; the distant-water fleets (China, Korea,
+Russia, Vanuatu) are large and thinly covered.
 }
 \seealso{
 [anchoveta_dist], [coverage-plots], [plot_discard_rate()]
