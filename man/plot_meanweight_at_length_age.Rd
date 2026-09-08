@@ -15,13 +15,11 @@ plot_meanweight_at_length_age(
   shape = NULL,
   show_points = TRUE,
   show_spread = TRUE,
-  dims = NULL,
   class_label = NULL,
   ncol = 2,
   scales = "fixed",
   engine = c("ggplot", "base"),
   palette = c("default", "colorblind"),
-  angle = 45,
   n_per_screen = NULL,
   verbose = FALSE
 )
@@ -47,8 +45,6 @@ group back up and drops the ribbon.}
 
 \item{show_spread}{Draw the +/- 1 sd ribbon (averaged strata only).}
 
-\item{dims}{Stratum dimensions for the link (raw-catch form).}
-
 \item{class_label}{Axis label; derived from the data when `NULL`.}
 
 \item{ncol}{Facet columns (ggplot).}
@@ -58,8 +54,6 @@ group back up and drops the ribbon.}
 \item{engine}{`"ggplot"` (default) or `"base"`.}
 
 \item{palette}{`"default"` or `"colorblind"`.}
-
-\item{angle}{Rotation of the x labels.}
 
 \item{n_per_screen}{Base engine: split a faceted figure across devices.}
 

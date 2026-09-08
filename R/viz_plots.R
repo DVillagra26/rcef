@@ -85,18 +85,16 @@ NULL
 #' area's true centroid.
 #'
 #' Auto-builds from raw catch data (and `distributions` + `catchCategory`
-#' for a biology `what`) exactly like [coverage-plots]; an
-#' already-classified table is used as-is. Needs the suggested `maps`
-#' package.
+#' for a biology `what`) exactly like [coverage-plots]. Needs the
+#' suggested `maps` package.
 #'
-#' @param catch Raw CEF catch data (or a classified stratum table).
+#' @param catch Raw CEF catch data.
 #' @param area Column holding the ICES area code. Default `"areaValue"`.
 #' @param group Optional column - one boxed grid of pies per area, one
 #'   pie per level.
-#' @param what,catchCategory,min_cov,min_trip,min_fish,dims,distributions
-#'   As in [coverage-plots].
-#' @param weight_label Word for the weight (title only). `NULL` derives
-#'   it from `what` and `catchCategory`.
+#' @param what,catchCategory,min_cov,min_trip,min_fish,distributions
+#'   As in [coverage-plots]. The weight word in the title is derived
+#'   from `what` and `catchCategory`.
 #' @param scale Multiplies every pie radius (and, when grouped, the box
 #'   grid cell size).
 #' @param engine `"base"` (default) or `"ggplot"`.
@@ -109,7 +107,7 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
                               group = NULL, what = "discard",
                               catchCategory = NULL,
                               min_cov = 50, min_trip = 2, min_fish = 0,
-                              dims = NULL, weight_label = NULL, scale = 1,
+                              scale = 1,
                               engine = c("base", "ggplot"), verbose = FALSE) {
   engine <- match.arg(engine)
   what   <- normalize_what(what)
@@ -128,9 +126,8 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
     cc <- if (is.null(catchCategory)) "Lan"
           else match.arg(catchCategory, c("Lan", "Dis", "BMS"))
   }
-  weight_label <- weight_label %||% default_weight_label(what, cc)
-  if (is.null(dims))
-    dims <- unique(c(area_var, if (has(group_var)) group_var))
+  weight_label <- default_weight_label(what, cc)
+  dims <- unique(c(area_var, if (has(group_var)) group_var))
   sc <- build_coverage_strata(strata, dims, NULL, NULL, NULL, min_cov, what,
                                 min_fish, min_trip, distributions, cc)
   for (v in c(area_var, weight_var, covered_var))
@@ -345,17 +342,12 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #' @param min_cov Minimum coverage, percent (heat / bubble only).
 #' @param min_trip Minimum sampling trips (heat / bubble only).
 #' @param min_fish Minimum measurements for `what = "length"`/`"age"`.
-#' @param dims Columns to build the strata on. Defaults to the union of
-#'   the role columns.
-#' @param weight_label Word for the weight (axis / legend). `NULL` derives
-#'   it from `what` and `catchCategory`.
 #' @param show_fill_in_labels Bars only: append the fill level to each row
 #'   label.
 #' @param engine `"ggplot"` (default) or `"base"`.
 #' @param palette `"default"` or `"colorblind"` - recolours the bar fill.
 #'   The heatmap / bubble status colours are a fixed semantic scale;
 #'   asking for `"colorblind"` there warns.
-#' @param angle Rotation of the categorical x labels (heat / bubble).
 #' @param ncol Facet columns (bars, ggplot).
 #' @param n_per_screen Base engine: split a faceted figure across this
 #'   many devices.
@@ -382,13 +374,13 @@ plot_coverage_heat <- function(catch, distributions = NULL, y, x = NULL,
                                facet = NULL, what = "discard",
                                catchCategory = NULL,
                                min_cov = 50, min_trip = 2, min_fish = 0,
-                               dims = NULL, weight_label = NULL,
                                engine = c("ggplot", "base"),
-                               palette = c("default", "colorblind"), angle = 45,
+                               palette = c("default", "colorblind"),
                                n_per_screen = NULL, verbose = FALSE) {
   view <- "heat"; fn <- "plot_coverage_heat"
   engine <- match.arg(engine); palette <- match.arg(palette)
   strata <- catch
+  angle <- 45
   what <- normalize_what(what)
   if (is.null(y) || !nzchar(y)) stop(fn, "(): `y` is required", call. = FALSE)
 
@@ -418,10 +410,10 @@ plot_coverage_heat <- function(catch, distributions = NULL, y, x = NULL,
            !identical(ncol, 2),
          msg = "ncol only affects the ggplot bar chart")))
 
-  wl   <- weight_label %||% default_weight_label(what, cc)
-  xcol <- if (identical(view, "bar")) fill else x
+  wl   <- default_weight_label(what, cc)
+  xcol <- x
 
-  strata <- build_coverage_strata(strata, dims, y, xcol, facet, min_cov,
+  strata <- build_coverage_strata(strata, NULL, y, xcol, facet, min_cov,
                                     what, min_fish, min_trip, distributions, cc)
 
   if (isTRUE(verbose))
@@ -429,7 +421,7 @@ plot_coverage_heat <- function(catch, distributions = NULL, y, x = NULL,
                              what, wl, min_fish, min_trip, cc, palette, angle,
                              n_per_screen)
 
-  sc <- strata; y_var <- y; x_var <- x; fill_var <- fill
+  sc <- strata; y_var <- y; x_var <- x; fill_var <- NULL
   facet_var <- facet; threshold <- min_cov; weight_label <- wl
   min_meas <- min_fish; min_trips <- min_trip
 
@@ -563,10 +555,6 @@ plot_coverage_heat <- function(catch, distributions = NULL, y, x = NULL,
                                    min_meas = min_meas, min_trips = min_trips,
                                    key = "tile")
   p
-  if (!is.null(p) && !identical(angle, 45))
-    p <- p + theme(axis.text.x = element_text(
-      angle = angle, hjust = if (angle > 0) 1 else 0.5, vjust = 1))
-  p
 }
 
 
@@ -576,14 +564,14 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
                                  facet = NULL, what = "discard",
                                  catchCategory = NULL,
                                  min_cov = 50, min_trip = 2, min_fish = 0,
-                                 dims = NULL, weight_label = NULL,
                                  engine = c("ggplot", "base"),
                                  palette = c("default", "colorblind"),
-                                 angle = 45, n_per_screen = NULL,
+                                 n_per_screen = NULL,
                                  verbose = FALSE) {
   view <- "bubble"; fn <- "plot_coverage_bubble"
   engine <- match.arg(engine); palette <- match.arg(palette)
   strata <- catch
+  angle <- 45
   what <- normalize_what(what)
   if (is.null(y) || !nzchar(y)) stop(fn, "(): `y` is required", call. = FALSE)
 
@@ -613,10 +601,10 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
            !identical(ncol, 2),
          msg = "ncol only affects the ggplot bar chart")))
 
-  wl   <- weight_label %||% default_weight_label(what, cc)
-  xcol <- if (identical(view, "bar")) fill else x
+  wl   <- default_weight_label(what, cc)
+  xcol <- x
 
-  strata <- build_coverage_strata(strata, dims, y, xcol, facet, min_cov,
+  strata <- build_coverage_strata(strata, NULL, y, xcol, facet, min_cov,
                                     what, min_fish, min_trip, distributions, cc)
 
   if (isTRUE(verbose))
@@ -624,7 +612,7 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
                              what, wl, min_fish, min_trip, cc, palette, angle,
                              n_per_screen)
 
-  sc <- strata; y_var <- y; x_var <- x; fill_var <- fill
+  sc <- strata; y_var <- y; x_var <- x; fill_var <- NULL
   facet_var <- facet; threshold <- min_cov; weight_label <- wl
   min_meas <- min_fish; min_trips <- min_trip
 
@@ -888,10 +876,6 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
     min_trips = min_trips, key = "point",
     size = if (length(sz_vals)) SZ else NULL)
   p
-  if (!is.null(p) && !identical(angle, 45))
-    p <- p + theme(axis.text.x = element_text(
-      angle = angle, hjust = if (angle > 0) 1 else 0.5, vjust = 1))
-  p
 }
 
 
@@ -900,12 +884,11 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
 plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
                               facet = NULL, what = "discard",
                               catchCategory = NULL,
-                              dims = NULL, weight_label = NULL,
                               show_fill_in_labels = FALSE,
                               engine = c("ggplot", "base"),
                               palette = c("default", "colorblind"), ncol = 2,
                               n_per_screen = NULL, verbose = FALSE,
-                              min_cov = NULL, min_trip = NULL, angle = NULL) {
+                              min_cov = NULL, min_trip = NULL) {
   view <- "bar"; fn <- "plot_coverage_bar"
   engine <- match.arg(engine); palette <- match.arg(palette)
   strata <- catch
@@ -914,9 +897,6 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
          "chart shows sampled vs unsampled weight, which neither affects. ",
          "Use plot_coverage_heat() / plot_coverage_bubble() for a ",
          "coverage-threshold view.", call. = FALSE)
-  if (!is.null(angle))
-    stop("plot_coverage_bar(): angle does not apply - the x axis is a numeric ",
-         "weight, not rotated category labels.", call. = FALSE)
   x <- NULL; min_cov <- 50; min_trip <- 2; min_fish <- 0; angle <- 45
   what <- normalize_what(what)
   if (is.null(y) || !nzchar(y)) stop(fn, "(): `y` is required", call. = FALSE)
@@ -947,10 +927,10 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
            !identical(ncol, 2),
          msg = "ncol only affects the ggplot bar chart")))
 
-  wl   <- weight_label %||% default_weight_label(what, cc)
-  xcol <- if (identical(view, "bar")) fill else x
+  wl   <- default_weight_label(what, cc)
+  xcol <- fill
 
-  strata <- build_coverage_strata(strata, dims, y, xcol, facet, min_cov,
+  strata <- build_coverage_strata(strata, NULL, y, xcol, facet, min_cov,
                                     what, min_fish, min_trip, distributions, cc)
 
   if (isTRUE(verbose))
@@ -1289,12 +1269,9 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 #' @param shape Column mapped to point shape.
 #' @param facet Optional facet column.
 #' @param jitter Jitter the points horizontally.
-#' @param dims Columns to build the strata on when `catch` is raw.
-#'   Defaults to the union of `x`, `colour` and `facet`.
 #' @param engine `"ggplot"` (default) or `"base"`.
 #' @param palette `"default"` or `"colorblind"` (point colours, via
 #'   [var_palette()]).
-#' @param angle Rotation of the categorical x labels.
 #' @param ncol Facet columns (ggplot).
 #' @param n_per_screen Base engine: split a faceted figure across this
 #'   many devices.
@@ -1310,13 +1287,15 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 #' }
 #' @export
 plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
-                              facet = NULL, jitter = TRUE, dims = NULL,
+                              facet = NULL, jitter = TRUE,
                               engine = c("ggplot", "base"),
                               palette = c("default", "colorblind"),
-                              angle = 45, ncol = 2, n_per_screen = NULL,
+                              ncol = 2, n_per_screen = NULL,
                               verbose = FALSE) {
   engine  <- match.arg(engine)
   palette <- match.arg(palette)
+  angle   <- 45
+  dims    <- NULL
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
   plot_arg_report("plot_discard_rate", list(
     list(bad = identical(engine, "ggplot") && !is.null(n_per_screen),
@@ -1463,9 +1442,6 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
     theme(axis.text.x = element_text(angle = 45, hjust = 1),
           legend.text = element_text(size = 11),
           legend.key.size = unit(1.1, "lines"))
-  if (!identical(angle, 45))
-    p <- p + theme(axis.text.x = element_text(
-      angle = angle, hjust = if (angle > 0) 1 else 0.5, vjust = 1))
   p
 }
 
@@ -1500,7 +1476,6 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
 #' @param facet1,facet2 Up to two facet columns.
 #' @param stacked Histogram only: stack the bars on `fill` rather than dodge.
 #' @param smooth Density only: bandwidth multiplier.
-#' @param dims Stratum dimensions for the link (raw-catch form).
 #' @param class_label,value_label Axis labels; derived from the data
 #'   when `NULL`.
 #' @param ncol Facet columns (ggplot).
@@ -1508,7 +1483,6 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
 #'   `"free_y"` or `"free"`.
 #' @param engine `"ggplot"` (default) or `"base"`.
 #' @param palette `"default"` or `"colorblind"`.
-#' @param angle Rotation of the x labels.
 #' @param n_per_screen Base engine: split a faceted figure across devices.
 #' @param verbose Print a short summary before drawing.
 #' @return A ggplot object, or `NULL` invisibly (base engine).
@@ -1525,15 +1499,16 @@ plot_numbers_at_length_age <- function(data, distributions = NULL,
                                        catchCategory = "Lan",
                                        type = c("histogram", "density"),
                                        fill = NULL, facet1 = NULL, facet2 = NULL,
-                                       stacked = TRUE, smooth = 1, dims = NULL,
+                                       stacked = TRUE, smooth = 1,
                                        class_label = NULL, value_label = NULL,
                                        ncol = 2, scales = "fixed",
                                        engine = c("ggplot", "base"),
                                        palette = c("default", "colorblind"),
-                                       angle = 45, n_per_screen = NULL,
+                                       n_per_screen = NULL,
                                        verbose = FALSE) {
   typed_dt <- !missing(distributionType); typed_cc <- !missing(catchCategory)
   typed_stacked <- !missing(stacked)
+  angle <- 45; dims <- NULL
   distributionType <- match.arg(distributionType)
   type    <- match.arg(type)
   engine  <- match.arg(engine)
@@ -1854,9 +1829,6 @@ plot_numbers_at_length_age <- function(data, distributions = NULL,
              x = class_label, y = value_label, fill = fill_var) +
         app_theme()
   }
-  if (!is.null(p) && !identical(angle, 45))
-    p <- p + theme(axis.text.x = element_text(
-      angle = angle, hjust = if (angle > 0) 1 else 0.5, vjust = 1))
   p
 }
 
@@ -1884,13 +1856,11 @@ plot_numbers_at_length_age <- function(data, distributions = NULL,
 #'   group back up and drops the ribbon.
 #' @param show_points Draw the points.
 #' @param show_spread Draw the +/- 1 sd ribbon (averaged strata only).
-#' @param dims Stratum dimensions for the link (raw-catch form).
 #' @param class_label Axis label; derived from the data when `NULL`.
 #' @param ncol Facet columns (ggplot).
 #' @param scales Facet scales (ggplot).
 #' @param engine `"ggplot"` (default) or `"base"`.
 #' @param palette `"default"` or `"colorblind"`.
-#' @param angle Rotation of the x labels.
 #' @param n_per_screen Base engine: split a faceted figure across devices.
 #' @param verbose Print a short summary before drawing.
 #' @return A ggplot object, or `NULL` invisibly (base engine).
@@ -1908,13 +1878,14 @@ plot_meanweight_at_length_age <- function(data, distributions = NULL,
                                           colour = NULL, facet1 = NULL,
                                           facet2 = NULL, shape = NULL,
                                           show_points = TRUE, show_spread = TRUE,
-                                          dims = NULL, class_label = NULL,
+                                          class_label = NULL,
                                           ncol = 2, scales = "fixed",
                                           engine = c("ggplot", "base"),
                                           palette = c("default", "colorblind"),
-                                          angle = 45, n_per_screen = NULL,
+                                          n_per_screen = NULL,
                                           verbose = FALSE) {
   typed_dt <- !missing(distributionType); typed_cc <- !missing(catchCategory)
+  angle <- 45; dims <- NULL
   distributionType <- match.arg(distributionType)
   engine  <- match.arg(engine)
   palette <- match.arg(palette)
@@ -2101,8 +2072,5 @@ plot_meanweight_at_length_age <- function(data, distributions = NULL,
              colour = colour_var, fill = colour_var, shape = shape_var) +
         app_theme()
   }
-  if (!is.null(p) && !identical(angle, 45))
-    p <- p + theme(axis.text.x = element_text(
-      angle = angle, hjust = if (angle > 0) 1 else 0.5, vjust = 1))
   p
 }

@@ -14,25 +14,21 @@ plot_coverage_map(
   min_cov = 50,
   min_trip = 2,
   min_fish = 0,
-  dims = NULL,
-  weight_label = NULL,
   scale = 1,
   engine = c("base", "ggplot"),
   verbose = FALSE
 )
 }
 \arguments{
-\item{catch}{Raw CEF catch data (or a classified stratum table).}
+\item{catch}{Raw CEF catch data.}
 
 \item{area}{Column holding the ICES area code. Default `"areaValue"`.}
 
 \item{group}{Optional column - one boxed grid of pies per area, one
 pie per level.}
 
-\item{what, catchCategory, min_cov, min_trip, min_fish, dims, distributions}{As in [coverage-plots].}
-
-\item{weight_label}{Word for the weight (title only). `NULL` derives
-it from `what` and `catchCategory`.}
+\item{what, catchCategory, min_cov, min_trip, min_fish, distributions}{As in [coverage-plots]. The weight word in the title is derived
+from `what` and `catchCategory`.}
 
 \item{scale}{Multiplies every pie radius (and, when grouped, the box
 grid cell size).}
@@ -55,9 +51,8 @@ area's true centroid.
 }
 \details{
 Auto-builds from raw catch data (and `distributions` + `catchCategory`
-for a biology `what`) exactly like [coverage-plots]; an
-already-classified table is used as-is. Needs the suggested `maps`
-package.
+for a biology `what`) exactly like [coverage-plots]. Needs the
+suggested `maps` package.
 }
 \seealso{
 [coverage-plots], [ices_area_centroid()]

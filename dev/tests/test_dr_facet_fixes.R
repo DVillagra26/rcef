@@ -50,17 +50,17 @@ ok(grepl('mtext(x_var, outer = TRUE, side = 1', body_raw, fixed = TRUE),
 ok(!grepl("line = 4.2", body_raw, fixed = TRUE),
    "the old fixed line=4.2 offset (the source of the collision) is gone")
 
-## ---- 4. n_per_screen / palette / angle actually accepted and used -----
-ok(all(c("palette", "angle", "n_per_screen") %in%
+## ---- 4. n_per_screen / palette actually accepted and used ------------
+ok(all(c("palette", "n_per_screen") %in%
          names(formals(plot_discard_rate))),
-   "plot_discard_rate() accepts palette, angle and n_per_screen")
+   "plot_discard_rate() accepts palette and n_per_screen")
 
 r3 <- tryCatch({
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
   plot_discard_rate(strata, x = "fleetValue", colour = "Country",
-                    engine = "base", palette = "colorblind", angle = 0)
+                    engine = "base", palette = "colorblind")
   TRUE
 }, error = function(e) conditionMessage(e))
-ok(isTRUE(r3), paste("palette='colorblind' and angle=0 both work through the dispatcher:", r3))
+ok(isTRUE(r3), paste("palette='colorblind' works through the dispatcher:", r3))
 
 cat("\nDONE ", FAIL, "failure(s)", "\n")

@@ -54,36 +54,33 @@ if (length(fx) && length(fd)) {
 
   p4 <- plot_coverage_bar(cd, y = "fleetValue", fill = "Country",
                           what = "length", catchCategory = "Lan",
-                          distributions = dd, weight_label = "catch")
+                          distributions = dd)
   p5 <- plot_coverage_bar(bio_len, y = "fleetValue", fill = "Country",
-                          what = "length", weight_label = "catch")
+                          what = "length")
   ok(identical(p4$data, p5$data),
      "plot_coverage_bar(catch, what='length', distributions=) matches the four-step route")
 
   ## a pre-classified table (no distributions) still works
   p6 <- plot_coverage_heat(bio_len, y = "fleetValue", what = "length",
-                           min_cov = 50, min_fish = 0, min_trip = 2,
-                           weight_label = "catch")
+                           min_cov = 50, min_fish = 0, min_trip = 2)
   ok(inherits(p6, "gg"),
      "a pre-classified length table (no distributions) still works")
 
   ## age through the same interface
   p7 <- plot_coverage_bar(cd, y = "fleetValue", what = "age",
-                          distributions = dd, weight_label = "catch")
+                          distributions = dd)
   ok(inherits(p7, "gg"), "what='age' works through the two-dataset interface too")
 
   ## catchCategory = "Dis" links to a different catch part
   p8 <- plot_coverage_bar(cd, y = "fleetValue", what = "length",
-                          catchCategory = "Dis", distributions = dd,
-                          weight_label = "catch")
+                          catchCategory = "Dis", distributions = dd)
   ok(inherits(p8, "gg") && !isTRUE(all.equal(p4$data, p8$data)),
      "catchCategory = 'Dis' links to the discard part, a different figure")
 
   r2 <- tryCatch({
     grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
     plot_coverage_bar(cd, y = "fleetValue", fill = "Country", what = "length",
-                      distributions = dd, weight_label = "catch",
-                      engine = "base")
+                      distributions = dd, engine = "base")
     TRUE
   }, error = function(e) conditionMessage(e))
   ok(isTRUE(r2), paste("engine='base' also auto-builds for length coverage:", r2))

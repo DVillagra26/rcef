@@ -1,0 +1,273 @@
+---
+title: "Coverage plots: reading how well strata are sampled"
+output:
+  rmarkdown::pdf_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+vignette: >
+  %\VignetteIndexEntry{Coverage plots: reading how well strata are sampled}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE, comment = "#>",
+  fig.width = 7, fig.height = 4.4, dpi = 110,
+  warning = FALSE, message = FALSE
+)
+library(rcef)
+have_maps <- requireNamespace("maps", quietly = TRUE)
+```
+
+# What the coverage plots answer
+
+One question, four pictures: **for a set of strata, which ones are
+sampled well enough, and which are blind spots?** "Sampled well enough"
+means different things depending on what you are about to estimate, so
+`what` switches it:
+
+* `what = "discard"` (the default) - does the stratum have a discard
+  estimate at all, and from enough trips?
+* `what = "length"` - is there a length distribution linked to this
+  stratum's catch, from enough measured fish?
+* `what = "age"` - the same, for an age distribution.
+
+Every function here takes **raw CEF catch** (and, for `"length"` /
+`"age"`, a **distributions** table) and builds and classifies the strata
+internally. There is nothing to pre-compute: no `build_strata()`, no
+`classify_strata()` call of your own.
+
+```{r data}
+data(anchoveta_catch)   # ~3,950 rows of dummy Peruvian-anchoveta CEF catch
+data(anchoveta_dist)    # its length + age distributions
+
+dim(anchoveta_catch)
+table(anchoveta_catch$catchCategory)
+table(anchoveta_dist$distributionType)
+```
+
+`anchoveta_catch` is already through `derive_fields()`, so the grouping
+columns the plots use (`Country`, `Season`, `metier4`, ...) are present.
+
+## The four views
+
+| Function                 | Picture                                   | Best for |
+|--------------------------|-------------------------------------------|----------|
+| `plot_coverage_heat()`   | a status colour per `y` x `x` cell        | spotting blind spots across two categories at a glance |
+| `plot_coverage_bubble()` | the same grid, bubble area = weight       | when the *size* of the gap matters, not just its presence |
+| `plot_coverage_bar()`    | sampled vs un-sampled weight, per `y`     | "how much of the catch is behind the estimate?" |
+| `plot_coverage_map()`    | one sampled/not pie per ICES area         | where, geographically, the gaps are |
+
+`y` is the only required grouping argument. `heat` / `bubble` put a
+second category on `x`; `bar` puts it on `fill`.
+
+# Discard coverage
+
+## Start simple: one category
+
+```{r disc-heat-1, fig.alt = "Coverage heatmap of discard sampling status by metier"}
+plot_coverage_heat(anchoveta_catch, y = "metier4")
+```
+
+Each row is a metier; the single column collapses everything else. The
+cell colour is the stratum's classified status (see
+[Reading the status scale](#reading-the-status-scale)).
+
+## Add a second category and facets
+
+```{r disc-heat-2, fig.height = 5, fig.alt = "Coverage heatmap by metier and fleet region, faceted by season"}
+plot_coverage_heat(anchoveta_catch,
+                   y = "metier4", x = "Country", facet = "Season")
+```
+
+`y`, `x` and `facet` are the strata: the classification is done at that
+resolution. Change them and the picture, and the underlying pass/fail,
+changes with it.
+
+## The thresholds: `min_cov` and `min_trip`
+
+`min_cov` is the minimum share of the weight that must be covered
+(percent, 0-100); `min_trip` the minimum number of sampling trips. They
+sit next to each other in every signature, together with `min_fish`
+(measurements, used only for `"length"` / `"age"`):
+
+```{r disc-heat-thr, fig.height = 5, fig.alt = "The same heatmap with a stricter coverage threshold"}
+plot_coverage_heat(anchoveta_catch,
+                   y = "metier4", x = "Country", facet = "Season",
+                   min_cov = 80, min_trip = 3)
+```
+
+Raising `min_cov` from its default 50 to 80 demotes every stratum that
+was scraping by. A bar chart shows sampled-vs-unsampled *weight*, which
+neither threshold changes - passing `min_cov` or `min_trip` to
+`plot_coverage_bar()` is therefore an error, not a silent no-op.
+
+## Bubbles: weight the gaps
+
+```{r disc-bubble, fig.height = 5, fig.alt = "Coverage bubble grid, bubble area proportional to landed weight"}
+plot_coverage_bubble(anchoveta_catch,
+                     y = "metier4", x = "Country", min_cov = 50, min_trip = 2)
+```
+
+Same grid as the heatmap, but a tiny un-sampled stratum now reads as a
+tiny bubble - you can tell "small problem" from "the bulk of the
+fishery is blind".
+
+## Bars: how much weight is behind the estimate
+
+```{r disc-bar, fig.alt = "Sampled versus unsampled weight per metier, filled by fleet region"}
+plot_coverage_bar(anchoveta_catch, y = "metier4", fill = "Country")
+```
+
+```{r disc-bar-labels, fig.alt = "The same bar chart with the fill level appended to each row label"}
+plot_coverage_bar(anchoveta_catch, y = "metier4", fill = "Country",
+                  show_fill_in_labels = TRUE)
+```
+
+## Map: where the gaps are
+
+```{r disc-map, eval = have_maps, fig.height = 5, fig.alt = "Coverage map, one sampled/not-sampled pie per ICES area"}
+plot_coverage_map(anchoveta_catch, engine = "ggplot")
+```
+
+```{r disc-map-grouped, eval = have_maps, fig.height = 5.5, fig.alt = "Coverage map with one boxed grid of pies per area, split by season"}
+plot_coverage_map(anchoveta_catch, group = "Season", engine = "ggplot")
+```
+
+(The map needs the suggested `maps` package. `group` gives one labelled
+box of pies per area, one pie per level.)
+
+# Length coverage
+
+Pass `distributions` and `what = "length"`. `catchCategory` chooses
+which catch part the distribution is judged against: `"Lan"` (landings,
+the default), `"Dis"` (discards) or `"BMS"`. `min_fish` is the minimum
+number of measured fish for a stratum to count as covered.
+
+```{r len-lan, fig.height = 5, fig.alt = "Length-sampling coverage of the landings, by metier and fleet region"}
+plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
+                   what = "length", distributions = anchoveta_dist,
+                   min_cov = 50, min_fish = 50, min_trip = 2)
+```
+
+```{r len-dis, fig.height = 5, fig.alt = "Length-sampling coverage of the discards"}
+plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
+                   what = "length", catchCategory = "Dis",
+                   distributions = anchoveta_dist,
+                   min_cov = 50, min_fish = 50, min_trip = 2)
+```
+
+The weight word in the title ("landings", "discards", ...) is derived
+from `what` and `catchCategory` - there is no `weight_label` argument to
+set.
+
+The bar and bubble views take exactly the same arguments:
+
+```{r len-bar, fig.alt = "Length-sampled versus unsampled landed weight per metier"}
+plot_coverage_bar(anchoveta_catch, y = "metier4", fill = "Country",
+                  what = "length", distributions = anchoveta_dist)
+```
+
+# Age coverage
+
+Identical call, `what = "age"`. `anchoveta_dist` carries `Age` rows
+(ages 0-4) alongside the length rows.
+
+```{r age-heat, fig.height = 5, fig.alt = "Age-sampling coverage by metier and fleet region"}
+plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
+                   what = "age", distributions = anchoveta_dist,
+                   min_cov = 50, min_fish = 20, min_trip = 2)
+```
+
+```{r age-bubble, fig.height = 5, fig.alt = "Age-sampling coverage as a weighted bubble grid"}
+plot_coverage_bubble(anchoveta_catch, y = "metier4", x = "Country",
+                     what = "age", distributions = anchoveta_dist,
+                     min_cov = 50, min_fish = 20, min_trip = 2)
+```
+
+# Reading the status scale
+
+`verbose = TRUE` prints the resolved arguments and a breakdown of how
+many strata fell into each status before the figure is drawn:
+
+```{r verbose}
+invisible(plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
+                             what = "length", distributions = anchoveta_dist,
+                             min_cov = 50, min_fish = 50, min_trip = 2,
+                             verbose = TRUE))
+```
+
+The heatmap and bubble colours are a fixed semantic scale (green = safe,
+amber = warning, grey = nothing to sample), so asking for
+`palette = "colorblind"` there does nothing and warns. `palette` *does*
+recolour the bar chart's fill.
+
+# Base R vs ggplot2 on a heavier table
+
+Every function draws with either engine from the one call:
+`engine = "ggplot"` (default) returns a ggplot object; `engine = "base"`
+draws straight to the current device with base graphics and returns
+`NULL`. The base engine has no ggplot2 or grid on the call path, which
+can matter when a figure is redrawn on every input change in an app.
+
+```{r timing, echo = TRUE}
+bench <- function(expr) {
+  expr <- substitute(expr)
+  grDevices::pdf(NULL); on.exit(grDevices::dev.off())
+  min(replicate(5, system.time(eval(expr, parent.frame()))[["elapsed"]]))
+}
+
+gg   <- bench(plot_coverage_heat(anchoveta_catch, y = "metier4",
+                                 x = "Country", facet = "Season"))
+base <- bench(plot_coverage_heat(anchoveta_catch, y = "metier4",
+                                 x = "Country", facet = "Season",
+                                 engine = "base"))
+data.frame(engine = c("ggplot", "base"),
+           seconds = round(c(gg, base), 3),
+           row.names = NULL)
+```
+
+```{r timing-len, echo = TRUE}
+gg_l   <- bench(plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
+                                   what = "length", distributions = anchoveta_dist,
+                                   min_fish = 50))
+base_l <- bench(plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
+                                   what = "length", distributions = anchoveta_dist,
+                                   min_fish = 50, engine = "base"))
+data.frame(engine = c("ggplot", "base"),
+           seconds = round(c(gg_l, base_l), 3),
+           row.names = NULL)
+```
+
+For a static figure the difference is usually small - most of the time
+for a `"length"` / `"age"` figure is the link-and-classify step, which
+both engines share. The base engine's advantage shows up under repeated
+redraws, not in a single call.
+
+# Argument reference
+
+Shared across `plot_coverage_heat()` / `_bubble()` / `_bar()` /
+`_map()`:
+
+| Argument         | Meaning |
+|------------------|---------|
+| `catch`          | raw CEF catch (already `derive_fields()`-ed) |
+| `distributions`  | CEF distributions table; required for `what = "length"` / `"age"` |
+| `y`              | row category (required) |
+| `x` / `fill`     | second category - `x` for heat/bubble, `fill` for bar |
+| `facet`          | optional facet column |
+| `what`           | `"discard"` (default), `"length"`, `"age"` |
+| `catchCategory`  | `"Lan"` / `"Dis"` / `"BMS"` for `"length"` / `"age"`; invalid for `"discard"` |
+| `min_cov`        | minimum coverage, percent (heat / bubble) |
+| `min_trip`       | minimum sampling trips (heat / bubble) |
+| `min_fish`       | minimum measured fish (`"length"` / `"age"`) |
+| `engine`         | `"ggplot"` (default) or `"base"` |
+| `palette`        | `"default"` or `"colorblind"` (bar fill only) |
+| `n_per_screen`   | base engine: split a faceted figure across devices |
+| `verbose`        | print the resolved arguments and status breakdown |
+
+There is deliberately **no** `dims`, `weight_label` or `angle` argument:
+the strata come from `y` / `x` / `fill` / `facet`, the weight word from
+`what` / `catchCategory`, and the x-label rotation is fixed.

@@ -2544,7 +2544,7 @@ server <- function(input, output, session) {
   # heat / bubble only. `data` is a catch (or classified) table, or its
   # name for emit - no catchCategory here, that was chosen upstream.
   coverage_call <- function(data, view, y, second, facet,
-                            what = "discard", weight_label = NULL,
+                            what = "discard",
                             min_cov = 50, min_trip = 2, min_fish = 0,
                             emit = FALSE) {
     fn  <- switch(view, bars = "plot_coverage_bar",
@@ -2555,9 +2555,7 @@ server <- function(input, output, session) {
       a <- list(data, y = taf_q(y))
       a[[role]] <- taf_q(second)
       a$facet <- taf_q(facet)
-      if (!identical(what, "discard")) {
-        a$what <- taf_q(what); a$weight_label <- taf_q(weight_label)
-      }
+      if (!identical(what, "discard")) a$what <- taf_q(what)
       if (!is_bar) {
         a$min_cov <- min_cov; a$min_trip <- min_trip
         if (min_fish) a$min_fish <- min_fish
@@ -2566,8 +2564,7 @@ server <- function(input, output, session) {
     }
     a <- list(data, y = y, facet = facet)
     a[[role]] <- second
-    if (!identical(what, "discard")) { a$what <- what
-      a$weight_label <- weight_label }
+    if (!identical(what, "discard")) a$what <- what
     if (!is_bar) { a$min_cov <- min_cov; a$min_trip <- min_trip
       a$min_fish <- min_fish }
     do.call(fn, a)
@@ -3646,9 +3643,9 @@ server <- function(input, output, session) {
       sc <- classify_strata(sc, thr_cov(), what_word, thr_meas(), thr_trips())
       y <- rc("cov", "y"); f <- rc("cov", "fill"); fc <- rc("cov", "facet")
       validate(need(!is.null(y), "Pick a Y axis."))
-      wl <- cc_word("cov"); th <- thr_cov()
+      th <- thr_cov()
       coverage_call(sc, input[[paste0(p, "_cov_type")]] %||% "heatmap",
-        y = y, second = f, facet = fc, what = what_word, weight_label = wl,
+        y = y, second = f, facet = fc, what = what_word,
         min_cov = th, min_trip = thr_trips(), min_fish = thr_meas()) },
       live = cov_live)
 
@@ -3707,7 +3704,7 @@ server <- function(input, output, session) {
         input[[paste0(p, "_cov_type")]] %||% "heatmap",
         y = rc("cov", "y"), second = rc("cov", "fill"),
         facet = rc("cov", "facet"), what = what_word,
-        weight_label = cc_word("cov"), min_cov = thr_cov(), min_trip = thr_trips(), min_fish = thr_meas(), emit = TRUE))
+        min_cov = thr_cov(), min_trip = thr_trips(), min_fish = thr_meas(), emit = TRUE))
 
     # ---- view 2: numbers at length ------------------------------
     num_data <- reactive({

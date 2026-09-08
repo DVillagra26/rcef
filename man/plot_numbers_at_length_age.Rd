@@ -15,14 +15,12 @@ plot_numbers_at_length_age(
   facet2 = NULL,
   stacked = TRUE,
   smooth = 1,
-  dims = NULL,
   class_label = NULL,
   value_label = NULL,
   ncol = 2,
   scales = "fixed",
   engine = c("ggplot", "base"),
   palette = c("default", "colorblind"),
-  angle = 45,
   n_per_screen = NULL,
   verbose = FALSE
 )
@@ -47,8 +45,6 @@ catch.}
 
 \item{smooth}{Density only: bandwidth multiplier.}
 
-\item{dims}{Stratum dimensions for the link (raw-catch form).}
-
 \item{class_label, value_label}{Axis labels; derived from the data
 when `NULL`.}
 
@@ -60,8 +56,6 @@ when `NULL`.}
 \item{engine}{`"ggplot"` (default) or `"base"`.}
 
 \item{palette}{`"default"` or `"colorblind"`.}
-
-\item{angle}{Rotation of the x labels.}
 
 \item{n_per_screen}{Base engine: split a faceted figure across devices.}
 

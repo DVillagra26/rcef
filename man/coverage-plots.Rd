@@ -18,11 +18,8 @@ plot_coverage_heat(
   min_cov = 50,
   min_trip = 2,
   min_fish = 0,
-  dims = NULL,
-  weight_label = NULL,
   engine = c("ggplot", "base"),
   palette = c("default", "colorblind"),
-  angle = 45,
   n_per_screen = NULL,
   verbose = FALSE
 )
@@ -38,11 +35,8 @@ plot_coverage_bubble(
   min_cov = 50,
   min_trip = 2,
   min_fish = 0,
-  dims = NULL,
-  weight_label = NULL,
   engine = c("ggplot", "base"),
   palette = c("default", "colorblind"),
-  angle = 45,
   n_per_screen = NULL,
   verbose = FALSE
 )
@@ -55,8 +49,6 @@ plot_coverage_bar(
   facet = NULL,
   what = "discard",
   catchCategory = NULL,
-  dims = NULL,
-  weight_label = NULL,
   show_fill_in_labels = FALSE,
   engine = c("ggplot", "base"),
   palette = c("default", "colorblind"),
@@ -64,8 +56,7 @@ plot_coverage_bar(
   n_per_screen = NULL,
   verbose = FALSE,
   min_cov = NULL,
-  min_trip = NULL,
-  angle = NULL
+  min_trip = NULL
 )
 }
 \arguments{
@@ -94,19 +85,11 @@ Not valid for `what = "discard"` (an error).}
 
 \item{min_fish}{Minimum measurements for `what = "length"`/`"age"`.}
 
-\item{dims}{Columns to build the strata on. Defaults to the union of
-the role columns.}
-
-\item{weight_label}{Word for the weight (axis / legend). `NULL` derives
-it from `what` and `catchCategory`.}
-
 \item{engine}{`"ggplot"` (default) or `"base"`.}
 
 \item{palette}{`"default"` or `"colorblind"` - recolours the bar fill.
 The heatmap / bubble status colours are a fixed semantic scale;
 asking for `"colorblind"` there warns.}
-
-\item{angle}{Rotation of the categorical x labels (heat / bubble).}
 
 \item{n_per_screen}{Base engine: split a faceted figure across this
 many devices.}

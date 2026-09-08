@@ -11,10 +11,8 @@ plot_discard_rate(
   shape = NULL,
   facet = NULL,
   jitter = TRUE,
-  dims = NULL,
   engine = c("ggplot", "base"),
   palette = c("default", "colorblind"),
-  angle = 45,
   ncol = 2,
   n_per_screen = NULL,
   verbose = FALSE
@@ -33,15 +31,10 @@ plot_discard_rate(
 
 \item{jitter}{Jitter the points horizontally.}
 
-\item{dims}{Columns to build the strata on when `catch` is raw.
-Defaults to the union of `x`, `colour` and `facet`.}
-
 \item{engine}{`"ggplot"` (default) or `"base"`.}
 
 \item{palette}{`"default"` or `"colorblind"` (point colours, via
 [var_palette()]).}
-
-\item{angle}{Rotation of the categorical x labels.}
 
 \item{ncol}{Facet columns (ggplot).}
 

@@ -36,11 +36,11 @@ d_mw <- data.frame(
   fleetValue = rep(c("A", "B"), each = 9),
   stringsAsFactors = FALSE)
 
-## ---- 1. both distribution functions accept the three general params --
+## ---- 1. both distribution functions accept the general params --------
 for (fn in c("plot_numbers_at_length_age", "plot_meanweight_at_length_age"))
-  ok(all(c("palette", "angle", "n_per_screen") %in%
+  ok(all(c("palette", "n_per_screen") %in%
           names(formals(get(fn)))),
-     paste(fn, "accepts all three too, and threads them through"))
+     paste(fn, "accepts them too, and threads them through"))
 
 ## ---- 2. colorblind palette actually changes the colours used ---------
 r <- tryCatch({
@@ -82,9 +82,9 @@ ok(isTRUE(r2), paste("the base density branch runs:", r2))
 r3 <- tryCatch({
   grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
   plot_meanweight_at_length_age(d_mw, colour = "fleetValue",
-                            engine = "base", palette = "colorblind", angle = 0)
+                            engine = "base", palette = "colorblind")
   TRUE
 }, error = function(e) conditionMessage(e))
-ok(isTRUE(r3), paste("meanweight line with colorblind palette and angle=0:", r3))
+ok(isTRUE(r3), paste("meanweight line with colorblind palette:", r3))
 
 cat("\nDONE ", FAIL, "failure(s)", "\n")

@@ -7,7 +7,7 @@
 ## length distributions and age distributions - each with a few options
 ## to compare against each other, ggplot2 side by side with the base-R
 ## engine, and the general-purpose arguments (auto-build from raw data,
-## verbose, palette, angle, n_per_screen).
+## verbose, palette, n_per_screen).
 ##
 ## Data (both loaded up front):
 ##   bll  turbot, a LengthTotal distribution table - used for the
@@ -155,13 +155,13 @@ invisible(dev.off())
 ## ---- 2a. length coverage of the LANDINGS, bars -------------------
 p2a <- plot_coverage_bar(catch_data, y = "fleetValue", fill = "Country",
                          what = "length", catchCategory = "Lan",
-                         distributions = distributions, weight_label = "catch",
+                         distributions = distributions,
                          verbose = TRUE)
 print(p2a)
 png("12a_length_bars_base.png", width = 1300, height = 800, res = 110)
 plot_coverage_bar(catch_data, y = "fleetValue", fill = "Country",
                   what = "length", catchCategory = "Lan",
-                  distributions = distributions, weight_label = "catch",
+                  distributions = distributions,
                   engine = "base")
 invisible(dev.off())
 
@@ -169,73 +169,68 @@ invisible(dev.off())
 p2b <- plot_coverage_heat(catch_data, y = "fleetValue", x = "Country",
                           facet = "Season", what = "length",
                           catchCategory = "Dis", distributions = distributions,
-                          min_cov = 50, min_fish = 100, min_trip = 2,
-                          weight_label = "discards")
+                          min_cov = 50, min_fish = 100, min_trip = 2)
 print(p2b)
 png("12b_length_heatmap_base.png", width = 1400, height = 900, res = 110)
 plot_coverage_heat(catch_data, y = "fleetValue", x = "Country", facet = "Season",
                    what = "length", catchCategory = "Dis",
                    distributions = distributions, min_cov = 50,
-                   min_fish = 100, min_trip = 2, weight_label = "discards",
+                   min_fish = 100, min_trip = 2,
                    engine = "base")
 invisible(dev.off())
 
 ## ---- 2c. length coverage, bubbles (landings) -------------------
 p2c <- plot_coverage_bubble(catch_data, y = "fleetValue", x = "Country",
                             what = "length", distributions = distributions,
-                            min_cov = 50, min_fish = 100, min_trip = 2,
-                            weight_label = "catch")
+                            min_cov = 50, min_fish = 100, min_trip = 2)
 print(p2c)
 png("12c_length_bubbles_base.png", width = 1300, height = 800, res = 110)
 plot_coverage_bubble(catch_data, y = "fleetValue", x = "Country",
                      what = "length", distributions = distributions,
-                     min_cov = 50, min_fish = 100, min_trip = 2,
-                     weight_label = "catch", engine = "base")
+                     min_cov = 50, min_fish = 100, min_trip = 2, engine = "base")
 invisible(dev.off())
 
 ## ---- 2d-2h. AGE coverage, all four views + the map (pok) --------
 if (have_age) {
   p2d <- plot_coverage_bar(age_catch, y = "fleetValue", fill = "Country",
-                           what = "age", distributions = age_dist,
-                           weight_label = "catch", verbose = TRUE)
+                           what = "age", distributions = age_dist, verbose = TRUE)
   print(p2d)
   png("12d_age_bars_base.png", width = 1300, height = 800, res = 110)
   plot_coverage_bar(age_catch, y = "fleetValue", fill = "Country", what = "age",
-                    distributions = age_dist, weight_label = "catch",
+                    distributions = age_dist,
                     engine = "base")
   invisible(dev.off())
 
   p2e <- plot_coverage_heat(age_catch, y = "fleetValue", x = "Country",
                             facet = "Season", what = "age",
                             distributions = age_dist, min_cov = 50,
-                            min_fish = 50, min_trip = 2, weight_label = "catch")
+                            min_fish = 50, min_trip = 2)
   print(p2e)
   png("12e_age_heatmap_base.png", width = 1400, height = 900, res = 110)
   plot_coverage_heat(age_catch, y = "fleetValue", x = "Country", facet = "Season",
                      what = "age", distributions = age_dist, min_cov = 50,
-                     min_fish = 50, min_trip = 2, weight_label = "catch",
+                     min_fish = 50, min_trip = 2,
                      engine = "base")
   invisible(dev.off())
 
   p2f <- plot_coverage_bubble(age_catch, y = "fleetValue", x = "Country",
                               what = "age", distributions = age_dist,
-                              min_cov = 50, min_fish = 50, min_trip = 2,
-                              weight_label = "catch")
+                              min_cov = 50, min_fish = 50, min_trip = 2)
   print(p2f)
   png("12f_age_bubbles_base.png", width = 1300, height = 800, res = 110)
   plot_coverage_bubble(age_catch, y = "fleetValue", x = "Country", what = "age",
                        distributions = age_dist, min_cov = 50, min_fish = 50,
-                       min_trip = 2, weight_label = "catch", engine = "base")
+                       min_trip = 2, engine = "base")
   invisible(dev.off())
 
   if (requireNamespace("maps", quietly = TRUE)) {
     p2h <- plot_coverage_map(age_catch, what = "age", distributions = age_dist,
-                             group = "Season", weight_label = "catch",
+                             group = "Season",
                              engine = "ggplot")
     print(p2h)
     png("12h_age_map_season_base.png", width = 1050, height = 1000, res = 110)
     plot_coverage_map(age_catch, what = "age", distributions = age_dist,
-                      group = "Season", weight_label = "catch", engine = "base")
+                      group = "Season", engine = "base")
     invisible(dev.off())
   }
 } else message("2d-2h: age blocks skipped (no pok data)")
@@ -252,7 +247,7 @@ p3a <- plot_discard_rate(catch_data, x = "fleetValue", colour = "Country",
 print(p3a)
 png("13a_discard_rate_raw_base.png", width = 1400, height = 900, res = 110)
 plot_discard_rate(catch_data, x = "fleetValue", colour = "Country",
-                  engine = "base", angle = 45)
+                  engine = "base")
 invisible(dev.off())
 
 
@@ -385,9 +380,9 @@ try_show(plot_meanweight_at_length_age(catch_data, distributions,
 cat("  (no error: / warning: lines in section j = correct)\n")
 
 ## angle / palette that reach the ggplot engine
-say("k. ggplot heat, angle = 90; bar, colorblind palette - drawn")
+say("k. ggplot heat; bar, colorblind palette - drawn")
 p5k <- plot_coverage_heat(catch_data, y = "fleetValue", x = "Country",
-  engine = "ggplot", angle = 90)
+  engine = "ggplot")
 print(p5k)
 p5l <- plot_coverage_bar(catch_data, y = "fleetValue", fill = "Country",
   engine = "ggplot", palette = "colorblind")
