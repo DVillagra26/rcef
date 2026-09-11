@@ -132,23 +132,42 @@ neither threshold changes - passing `min_cov` or `min_trip` to
 
 `min_cov` is always part of the classification. `min_trip` (discard,
 length, age) and `min_fish` (length, age only) are each independently
-**optional** - pass `NULL` to drop that sampling-effort question
-entirely, rather than merely giving it an always-passing threshold:
+**optional**, and on the plot functions both default to `NULL` - so a
+call with no `min_trip` / `min_fish` at all, like every heatmap so far
+in this vignette, is coverage-only already:
 
 ```{r disc-heat-notrip, fig.alt = "Coverage heatmap using coverage alone, trips dropped from the scheme"}
 plot_coverage_heat(anchoveta_catch, y = "metier4", min_trip = NULL)
 ```
 
+Passing an explicit number turns that threshold ON:
+
+```{r disc-heat-withtrip, fig.height = 5, fig.alt = "Coverage heatmap with trips added back in"}
+plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
+                   min_trip = 2)
+```
+
+`min_trip = 0` is **not** the same as `min_trip = NULL`: it is still an
+active (if lenient) threshold, and a stratum with no reported trip
+count fails an active trips test no matter how low it is set - unknown
+is never treated as adequate. Passing `NULL` is the only way to take
+trips out of the picture entirely; a 100%-covered stratum with no trip
+count reads "full" at `min_trip = NULL` but stays a yellow warning at
+`min_trip = 0`.
+
 The categories and the legend both shrink to match: with trips out of
 the picture there is only one thing left that can go wrong, so
-`warn_cov` ("< 50% covered") is the only warning row. With trips back
-in, `warn_cov` / `warn_trip` / `warn_cov_trip` all appear - one row per
-SPECIFIC combination of what failed, not one row per count.
-`cat_lookup()` shows exactly what is reachable for a given combination:
+`warn_cov` ("< 50% covered") is the only warning row. With trips
+active, `warn_cov` / `warn_trip` / `warn_cov_trip` all appear - one row
+per SPECIFIC combination of what failed, not one row per count.
+`cat_lookup()` shows exactly what is reachable for a given combination
+- note it is a lower-level function than the plots and keeps its own
+default of `min_trips = 2` (active) when called directly, unlike
+`plot_coverage_heat()` / `_bubble()` / `_map()` above:
 
 ```{r thr-cat-lookup}
 cat_lookup(50, "discard", min_trips = NULL)$cat_key   # 1 active target
-cat_lookup(50, "discard")$cat_key                     # + trips (default)
+cat_lookup(50, "discard")$cat_key                     # + trips (its own default)
 cat_lookup(50, "length", min_meas = 100)$cat_key       # + measurements too
 ```
 
@@ -160,9 +179,10 @@ e.g. `warn_cov` and `warn_trip` are both yellow. The TEXT still says
 which one(s): `cat_lookup(50, "discard")$status` reads "< 50% covered
 and >= 2 trips" for `warn_cov` and ">= 50% covered and < 2 trips" for
 `warn_trip` - same colour, different label. Red is never a threshold
-miss: it is reserved for a stratum that carries no discard estimate, or
-no linked length/age distribution, at all - reachable no matter how
-strict the active thresholds are set.
+miss: it is reserved for a stratum that HAS weight but carries no
+discard estimate, or no linked length/age distribution, at all -
+reachable no matter how strict the active thresholds are set. A
+stratum with no weight at all draws no cell to begin with.
 
 ## Bubbles: weight the gaps
 
@@ -504,7 +524,7 @@ The arguments are ordered the way you build a call: **what data**, then
 | columns   | `x` / `fill`     | second category - `x` for heat/bubble, `fill` for bar |
 | columns   | `facet`          | optional facet column |
 | threshold | `min_cov`        | minimum coverage, percent (heat / bubble); always active |
-| threshold | `min_trip`       | minimum sampling trips (heat / bubble); `NULL` drops trips from the scheme, a number (default 2) activates it |
+| threshold | `min_trip`       | minimum sampling trips (heat / bubble); `NULL` (the default) leaves trips out of the scheme, a number activates it - `0` is a real, lenient threshold, not "off" |
 | threshold | `min_fish`       | minimum measured fish (`"length"` / `"age"`); `NULL` (the default) leaves measurements out, a number activates it |
 | render    | `n_per_screen`   | base engine: split a faceted figure across devices |
 | last      | `palette`        | `"default"` or `"colorblind"` (bar fill only) |

@@ -105,7 +105,7 @@ NULL
 plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
                               group = NULL, what = "discard",
                               catchCategory = NULL,
-                              min_cov = 50, min_trip = 2, min_fish = NULL,
+                              min_cov = 50, min_trip = NULL, min_fish = NULL,
                               scale = 1,
                               engine = c("base", "ggplot")) {
   engine <- match.arg(engine)
@@ -323,13 +323,21 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #'
 #' The sampling-status colours adapt to which thresholds are active.
 #' Coverage (`min_cov`) is always on; `min_trip` (discard, length, age)
-#' and `min_fish` (length, age) are each independently optional - `NULL`
-#' drops that question from the classification and the legend entirely,
-#' a number turns it on. The warning shade is a straight count of how
-#' many of the ACTIVE thresholds a stratum missed (yellow = 1, orange =
-#' 2, dark orange = 3 - only reachable with trips AND measurements both
-#' on); red is reserved for a stratum with no discard estimate / no
-#' linked distribution at all, never for a threshold miss.
+#' and `min_fish` (length, age) both default to `NULL` and are each
+#' independently optional - `NULL` drops that question from the
+#' classification and the legend entirely, a number turns it on. The
+#' warning shade is a straight count of how many of the ACTIVE
+#' thresholds a stratum missed (yellow = 1, orange = 2, dark orange = 3
+#' - only reachable with trips AND measurements both on); red is
+#' reserved for a stratum with no discard estimate / no linked
+#' distribution at all, never for a threshold miss.
+#'
+#' `min_trip = 0` is NOT the same as leaving trips out - it is still an
+#' ACTIVE (if lenient) threshold, and a stratum with no reported trip
+#' count fails an active trips test no matter how low it is set (unknown
+#' is not treated as adequate - see [classify_strata()]). A 100%-covered
+#' stratum with no trip count reported reads "safe"/"full" once
+#' `min_trip = NULL`, but stays a warning at `min_trip = 0`.
 #'
 #' The arguments run in the order you usually think about them: what data
 #' (`catch`, `distributions`, `what`, `catchCategory`), then which columns
@@ -355,9 +363,11 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #' @param min_cov Minimum coverage, percent (heat / bubble only). Always
 #'   active - coverage is never dropped from the classification.
 #' @param min_trip Minimum sampling trips (heat / bubble only), or
-#'   `NULL` to leave trips out of the classification altogether -
-#'   categories and legend both drop to a coverage-only scheme.
-#'   Defaults to 2 (active).
+#'   `NULL` (the default) to leave trips out of the classification
+#'   altogether - categories and legend both drop to a coverage-only
+#'   scheme. `0` is not the same as `NULL`: it still actively checks
+#'   trips, and a stratum with no reported trip count still fails that
+#'   check (see [classify_strata()]).
 #' @param min_fish Minimum measurements for `what = "length"`/`"age"`,
 #'   or `NULL` (the default) to leave measurements out of the
 #'   classification.
@@ -388,7 +398,7 @@ NULL
 plot_coverage_heat <- function(catch, distributions = NULL, y, x = NULL,
                                facet = NULL, what = "discard",
                                catchCategory = NULL,
-                               min_cov = 50, min_trip = 2, min_fish = NULL,
+                               min_cov = 50, min_trip = NULL, min_fish = NULL,
                                n_per_screen = NULL,
                                palette = c("default", "colorblind"),
                                engine = c("ggplot", "base")) {
@@ -595,7 +605,7 @@ plot_coverage_heat <- function(catch, distributions = NULL, y, x = NULL,
 plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
                                  facet = NULL, what = "discard",
                                  catchCategory = NULL,
-                                 min_cov = 50, min_trip = 2, min_fish = NULL,
+                                 min_cov = 50, min_trip = NULL, min_fish = NULL,
                                  n_per_screen = NULL,
                                  palette = c("default", "colorblind"),
                                  engine = c("ggplot", "base")) {

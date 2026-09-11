@@ -12,7 +12,7 @@ plot_coverage_map(
   what = "discard",
   catchCategory = NULL,
   min_cov = 50,
-  min_trip = 2,
+  min_trip = NULL,
   min_fish = NULL,
   scale = 1,
   engine = c("base", "ggplot")
