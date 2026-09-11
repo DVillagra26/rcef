@@ -430,15 +430,22 @@ plot_coverage_heat <- function(catch, distributions = NULL, y, x = NULL,
 
   ## ============ base engine ==========================================
   if (identical(engine, "base")) {
-    # keep cat_key == "none" (a stratum that landed nothing) so its cell
-    # is drawn in the "no landings / no discards" colour rather than
-    # left as a blank hole - collapse_cells() re-classifies below and a
-    # cell that mixes a real stratum with an empty one stays real
+    # A cell with no landed/caught weight at all has nothing to judge -
+    # not "not sampled" (that needs real weight behind it), not "sampled
+    # OK" either - so it draws no cell at all, rather than a "no
+    # landings" placeholder. collapse_cells() re-classifies below, so a
+    # cell that mixes a real stratum with an empty one is judged on the
+    # POOLED weight and still drawn if that pool has any.
     d <- sc
     if (!nrow(d)) { message("Nothing to plot."); return(invisible(NULL)) }
     if (is.null(x_var) || !nzchar(x_var)) { d$.x <- "All"; x_var <- ".x" }
     d <- collapse_cells(d, c(y_var, x_var, facet_var), threshold, what,
                         min_meas, min_trips)
+    d <- d[d$cat_key != "none", , drop = FALSE]
+    if (!nrow(d)) {
+      message("Nothing to plot (every stratum has zero weight).")
+      return(invisible(NULL))
+    }
     pal <- status_palette(threshold, what, min_meas, min_trips)
     # Every possible status, in the SAME order cat_lookup() defines them
     # (safest first) - a legend built only from the statuses actually
@@ -446,8 +453,10 @@ plot_coverage_heat <- function(catch, distributions = NULL, y, x = NULL,
     # cut of the data did not happen to hit, which is exactly backwards:
     # the reader needs the full scale to judge where what they ARE
     # seeing sits, especially when the worst (or best) category is
-    # exactly the one absent here.
+    # exactly the one absent here. "none" itself never draws a cell, so
+    # it is dropped from the legend too.
     lk_all <- cat_lookup(threshold, what, min_meas, min_trips)
+    lk_all <- lk_all[lk_all$cat_key != "none", , drop = FALSE]
 
     draw_one <- function(dd, main) {
       ys <- sort(unique(as.character(dd[[y_var]])))
@@ -531,17 +540,22 @@ plot_coverage_heat <- function(catch, distributions = NULL, y, x = NULL,
   }
 
   ## ============ ggplot engine ========================================
-  # keep cat_key == "none" (a stratum that landed nothing) so its cell
-  # shows in the "no landings / no discards" colour, not as a blank hole
+  # A cell with no landed/caught weight at all draws no tile - it has
+  # nothing to judge, so it stays a blank hole rather than a "no
+  # landings" placeholder.
   d <- sc
   if (!nrow(d)) return(NULL)
   if (is.null(x_var) || !nzchar(x_var)) { d$.x <- "All"; x_var <- ".x" }
   d <- collapse_cells(d, c(y_var, x_var, facet_var), threshold, what, min_meas,
                       min_trips)
+  d <- d[d$cat_key != "none", , drop = FALSE]
+  if (!nrow(d)) return(NULL)
   fmt <- function(v) ifelse(is.na(v) | v <= 0, "",
                      ifelse(v > 99, sprintf("%.0f", v),
                      ifelse(v >= 10, sprintf("%.1f", v), sprintf("%.2f", v))))
-  stat_all <- names(status_palette(threshold, what, min_meas, min_trips))
+  # "none" never draws a tile, so it is dropped from the legend too.
+  lk_no_none <- cat_lookup(threshold, what, min_meas, min_trips)
+  stat_all <- lk_no_none$status[lk_no_none$cat_key != "none"]
   d$Status <- factor(as.character(d$Status), levels = stat_all)
   p <- ggplot(d, aes(x = factor(.data[[x_var]]), y = .data[[y_var]], fill = Status)) +
     geom_tile(colour = OUTLINE, alpha = 0.9) +
@@ -623,15 +637,21 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
 
   ## ============ base engine ==========================================
   if (identical(engine, "base")) {
-    # keep cat_key == "none" (a stratum that landed nothing) so its cell
-    # is drawn in the "no landings / no discards" colour rather than
-    # left as a blank hole - collapse_cells() re-classifies below and a
-    # cell that mixes a real stratum with an empty one stays real
+    # A cell with no landed/caught weight at all draws no bubble - it
+    # has nothing to judge, so it stays a blank hole rather than a "no
+    # landings" placeholder. collapse_cells() re-classifies below, so a
+    # cell that mixes a real stratum with an empty one is judged on the
+    # POOLED weight and still drawn if that pool has any.
     d <- sc
     if (!nrow(d)) { message("Nothing to plot."); return(invisible(NULL)) }
     if (is.null(x_var) || !nzchar(x_var)) { d$.x <- "All"; x_var <- ".x" }
     d <- collapse_cells(d, c(y_var, x_var, facet_var), threshold, what,
                         min_meas, min_trips)
+    d <- d[d$cat_key != "none", , drop = FALSE]
+    if (!nrow(d)) {
+      message("Nothing to plot (every stratum has zero weight).")
+      return(invisible(NULL))
+    }
     smallest <- suppressWarnings(min(d$landings[d$landings > 0], na.rm = TRUE))
     if (!is.finite(smallest)) smallest <- 1
     d$plot_size <- ifelse(d$cat_key == "disc_only", smallest, d$landings)
@@ -730,7 +750,9 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
     lmar <- max(6, max(nchar(as.character(d[[y_var]]))) * 0.42)
     bmar <- cat_axis_mar(unique(as.character(d[[x_var]])), 0.8, angle)
     main_txt <- sprintf("%s coverage vs %s", cov_title_what(what), weight_label)
+    # "none" never draws a bubble, so it is dropped from the legend too.
     lk_all <- cat_lookup(threshold, what, min_meas, min_trips)
+    lk_all <- lk_all[lk_all$cat_key != "none", , drop = FALSE]
     draw_legends <- function() {
       legend_status_base(lk_all)
       if (length(sz_vals) && diff(range(sz_vals)) > 1e-9) {
@@ -779,8 +801,9 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
   }
 
   ## ============ ggplot engine ========================================
-  # keep cat_key == "none" (a stratum that landed nothing) so its cell
-  # shows in the "no landings / no discards" colour, not as a blank hole
+  # A cell with no landed/caught weight at all draws no bubble - it has
+  # nothing to judge, so it stays a blank hole rather than a "no
+  # landings" placeholder.
   d <- sc
   if (!nrow(d)) return(NULL)
   if (is.null(x_var) || !nzchar(x_var)) { d$.x <- "All"; x_var <- ".x" }
@@ -788,6 +811,8 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
   # labels overlapping
   d <- collapse_cells(d, c(y_var, x_var, facet_var), threshold, what, min_meas,
                       min_trips)
+  d <- d[d$cat_key != "none", , drop = FALSE]
+  if (!nrow(d)) return(NULL)
   smallest <- suppressWarnings(min(d$landings[d$landings > 0], na.rm = TRUE))
   if (!is.finite(smallest)) smallest <- 1
   d$plot_size <- ifelse(d$cat_key == "disc_only", smallest, d$landings)
@@ -849,7 +874,9 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
   } else {
     SZ$limits <- NULL; SZ$breaks <- ggplot2::waiver(); SZ$labels <- ggplot2::waiver()
   }
-  stat_all <- names(status_palette(threshold, what, min_meas, min_trips))
+  # "none" never draws a bubble, so it is dropped from the legend too.
+  lk_no_none <- cat_lookup(threshold, what, min_meas, min_trips)
+  stat_all <- lk_no_none$status[lk_no_none$cat_key != "none"]
   d$Status <- factor(as.character(d$Status), levels = stat_all)
   p <- ggplot(d, aes(x = factor(.data[[x_var]]), y = .data[[y_var]])) +
     geom_point(aes(size = plot_size, fill = Status), shape = 21,

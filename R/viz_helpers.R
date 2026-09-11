@@ -131,6 +131,12 @@ collapse_cells <- function(sc, keys, threshold, what = "discard", min_meas = 0,
               n_strata = dplyr::n(), .groups = "drop") %>%
     mutate(coverage = ifelse(landings > 0,
                              landings_with_discards / landings * 100, NA_real_),
+           # classify_strata()'s length/age branch reads a `weight` column
+           # for its "nothing to sample" check; the summarise() above only
+           # keeps `landings` (the discard-side name), so a collapsed cell
+           # otherwise lost that check entirely and a zero-weight cell fell
+           # through to "no distribution linked" (red) instead of "none".
+           weight = landings,
            discard_rate = ifelse(landings_with_discards + discards > 0,
                                  discards / (landings_with_discards + discards),
                                  NA_real_)) %>%
