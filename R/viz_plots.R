@@ -960,9 +960,17 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
   wl   <- default_weight_label(what, cc)
   xcol <- fill
 
-  strata <- build_coverage_strata(strata, NULL, y, xcol, facet, min_cov,
-                                    what, min_fish, min_trip, distributions,
-                                    catch_category_parts(cc))
+  # min_cov / min_trip / min_fish here are fixed internals (this plot
+  # takes no threshold arguments at all - see the "does not accept
+  # min_cov" test) used only to decide cat_key == "none" vs not; the
+  # warn1/warn2-style shortfall a threshold misses never reaches the
+  # bar chart's own colouring (that is the `fill` variable, not
+  # Status), so classify_strata()'s "min_trips can't discriminate on
+  # this data" nudge would be noise here, not signal.
+  strata <- suppressWarnings(
+    build_coverage_strata(strata, NULL, y, xcol, facet, min_cov,
+                          what, min_fish, min_trip, distributions,
+                          catch_category_parts(cc)))
 
   sc <- strata; y_var <- y; x_var <- x; fill_var <- fill
   facet_var <- facet; threshold <- min_cov; weight_label <- wl

@@ -458,6 +458,18 @@ classify_strata <- function(s, threshold, what = "discard", min_meas = 0,
   trips2 <- if (trip_active) ifelse(is.na(s$numTrips), min_trips - 1, s$numTrips)
             else rep(NA_real_, nrow(s))
   trip_ok <- if (trip_active) trips2 >= min_trips else rep(TRUE, nrow(s))
+  # min_trips being LOW does not make the trips test easier to pass when
+  # numTrips is unknown everywhere - an unreported trip count fails an
+  # active threshold no matter how lenient it is (min_trips = 0 included).
+  # A caller who set min_trips expecting it to discriminate, on data that
+  # never carries a trip count at all, would otherwise see the exact same
+  # result at every threshold and have no way to tell why.
+  if (trip_active && nrow(s) && all(is.na(s$numTrips)))
+    warning("classify_strata(): min_trips is active but every stratum's ",
+            "numTrips is unknown (NA) - none of them can pass the trips ",
+            "test, at any min_trips value including 0. Pass min_trips = ",
+            "NULL to drop trips from the classification, or check that ",
+            "the data actually carries a trip count.", call. = FALSE)
 
   # Length / age: classify on coverage plus whichever of {trips,
   # measurements} are active. The warning shade is just a count of how
@@ -486,6 +498,17 @@ classify_strata <- function(s, threshold, what = "discard", min_meas = 0,
       (!is.na(s$weight_measured) & s$weight_measured > 0)
     else rep(TRUE, nrow(s))
     nm      <- ifelse(is.na(s$n_measurements), 0, s$n_measurements)
+    # same nudge as the trips one above: a positive min_meas that no
+    # stratum can EVER meet, because n_measurements is 0 everywhere, is
+    # far more likely a data gap (no measurement counts came through)
+    # than every stratum genuinely having zero measurements.
+    if (meas_active && isTRUE(min_meas > 0) && nrow(s) && all(nm == 0))
+      warning("classify_strata(): min_meas is active but every stratum's ",
+              "n_measurements is 0 - none of them can pass the ",
+              "measurements test, at any min_meas value above 0. Pass ",
+              "min_meas = NULL to drop measurements from the ",
+              "classification, or check that the data actually carries ",
+              "measurement counts.", call. = FALSE)
     cov_ok  <- !is.na(s$coverage) & s$coverage >= threshold
     meas_ok <- if (meas_active) nm >= min_meas else rep(TRUE, nrow(s))
     n_miss  <- (!cov_ok) + (if (trip_active) (!trip_ok) else 0) +
