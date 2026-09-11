@@ -8,43 +8,48 @@ cat_lookup(threshold, what = "discard", min_meas = 0, min_trips = 2)
 }
 \arguments{
 \item{threshold}{Coverage threshold in percent that separates "enough"
-from "too little".}
+from "too little". Always active.}
 
 \item{what}{"discard" (default), "length" or "age".}
 
 \item{min_meas}{Minimum number of measurements for a length/age stratum to
-count as well measured. Ignored for discards.}
+count as well measured, or `NULL` to leave measurements out of the
+classification entirely. Ignored for discards.}
 
 \item{min_trips}{Minimum number of trips for a stratum to count as
 adequately covered in EFFORT terms, separately from coverage in
-WEIGHT terms. Defaults to 2, matching ICES practice.}
+WEIGHT terms, or `NULL` to leave trips out of the classification
+entirely. Defaults to 2, matching ICES practice.}
 }
 \value{
 A data frame with columns `cat_key`, `status`, `decision`,
-  `abbr` and `colour`, one row per category, ordered best to worst.
+  `abbr` and `colour`, one row per REACHABLE category (fewer rows
+  when `min_trips` / `min_meas` are off), ordered best to worst.
 }
 \description{
 The single source of truth for how a stratum's sampling is described.
 Coverage alone says how much of the landings weight carries a discard
 estimate; it says nothing about how many TRIPS that estimate rests
 on, and a stratum 100% covered by one unusually large trip is a
-thinner basis than the same coverage spread across a dozen. Every
-scheme here is therefore at least two-axis: coverage and trips for
-discards, coverage, trips and measurements for lengths and ages -
-three sampling-effort questions asked at once, not folded into one
-number.
+thinner basis than the same coverage spread across a dozen. Coverage
+is always part of the scheme; `min_trips` (discards, length/age) and
+`min_meas` (length/age only) are each independently optional - pass
+`NULL` to drop that question entirely rather than merely giving it an
+always-passing threshold. The categories and labels adapt to however
+many of {coverage, trips, measurements} are actually active.
 }
 \details{
 Colours run one direction only: dark green (nothing to fix) -> green
--> yellow -> orange -> dark orange as more sampling targets are
-missed, with a single reserved red for the one qualitatively
-different case - a stratum that carries NO discard estimate (or, for
-length/age, NO linked distribution) at all, so there is nothing to
-judge against a threshold. A near-white marks a stratum with no catch
-to classify. Every colour is reachable: for discards the warning
-shade counts how many of {coverage, trips} were missed (yellow = 1,
-orange = 2); for length/age it counts {coverage, trips, measurements}
-(yellow = 1, orange = 2, dark orange = 3).
+-> yellow -> orange -> dark orange as more of the ACTIVE sampling
+targets are missed, with a single reserved red for the one
+qualitatively different case - a stratum that carries NO discard
+estimate (or, for length/age, NO linked distribution) at all, so
+there is nothing to judge against a threshold. A near-white marks a
+stratum with no catch to classify. Every reachable colour is reached:
+the warning shade is a straight count of how many active targets a
+stratum missed (yellow = 1, orange = 2, dark orange = 3 - only
+possible when trips AND measurements are both active), the same
+shade regardless of WHICH targets those were.
 
 `min_trips` and the trips comparison are unknown-averse: a stratum
 with no trip count reported is treated as failing the trips test

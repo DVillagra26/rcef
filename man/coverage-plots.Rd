@@ -17,7 +17,7 @@ plot_coverage_heat(
   catchCategory = NULL,
   min_cov = 50,
   min_trip = 2,
-  min_fish = 0,
+  min_fish = NULL,
   n_per_screen = NULL,
   palette = c("default", "colorblind"),
   engine = c("ggplot", "base")
@@ -33,7 +33,7 @@ plot_coverage_bubble(
   catchCategory = NULL,
   min_cov = 50,
   min_trip = 2,
-  min_fish = 0,
+  min_fish = NULL,
   n_per_screen = NULL,
   palette = c("default", "colorblind"),
   engine = c("ggplot", "base")
@@ -74,11 +74,17 @@ landings and discards together, titled "catch"), `"Lan"`, `"Dis"` or
 weight word in the plot title. Not valid for `what = "discard"`
 (an error).}
 
-\item{min_cov}{Minimum coverage, percent (heat / bubble only).}
+\item{min_cov}{Minimum coverage, percent (heat / bubble only). Always
+active - coverage is never dropped from the classification.}
 
-\item{min_trip}{Minimum sampling trips (heat / bubble only).}
+\item{min_trip}{Minimum sampling trips (heat / bubble only), or
+`NULL` to leave trips out of the classification altogether -
+categories and legend both drop to a coverage-only scheme.
+Defaults to 2 (active).}
 
-\item{min_fish}{Minimum measurements for `what = "length"`/`"age"`.}
+\item{min_fish}{Minimum measurements for `what = "length"`/`"age"`,
+or `NULL` (the default) to leave measurements out of the
+classification.}
 
 \item{n_per_screen}{Base engine: split a faceted figure across this
 many devices.}
@@ -109,6 +115,16 @@ exists), `"length"` or `"age"` (a length / age distribution exists).
 For `"length"` / `"age"`, pass `distributions` and, with
 `catchCategory`, choose whether to look at the sampling of the landings
 (`"Lan"`, the default), the discards (`"Dis"`) or BMS (`"BMS"`).
+
+The sampling-status colours adapt to which thresholds are active.
+Coverage (`min_cov`) is always on; `min_trip` (discard, length, age)
+and `min_fish` (length, age) are each independently optional - `NULL`
+drops that question from the classification and the legend entirely,
+a number turns it on. The warning shade is a straight count of how
+many of the ACTIVE thresholds a stratum missed (yellow = 1, orange =
+2, dark orange = 3 - only reachable with trips AND measurements both
+on); red is reserved for a stratum with no discard estimate / no
+linked distribution at all, never for a threshold miss.
 
 The arguments run in the order you usually think about them: what data
 (`catch`, `distributions`, `what`, `catchCategory`), then which columns

@@ -15,12 +15,13 @@ status_legend_plot(
 }
 \arguments{
 \item{threshold}{Coverage threshold in percent that separates "enough"
-from "too little".}
+from "too little". Always active.}
 
 \item{what}{"discard" (default), "length" or "age".}
 
 \item{min_meas}{Minimum number of measurements for a length/age stratum to
-count as well measured. Ignored for discards.}
+count as well measured, or `NULL` to leave measurements out of the
+classification entirely. Ignored for discards.}
 
 \item{key}{Glyph the status keys are drawn with: `"tile"` for the heatmap,
 `"point"` for the bubble plot. The legend should look like the thing it
@@ -34,7 +35,8 @@ the plot and can be read off it.}
 
 \item{min_trips}{Minimum number of trips for a stratum to count as
 adequately covered in EFFORT terms, separately from coverage in
-WEIGHT terms. Defaults to 2, matching ICES practice.}
+WEIGHT terms, or `NULL` to leave trips out of the classification
+entirely. Defaults to 2, matching ICES practice.}
 }
 \value{
 A ggplot object; only its legend is meant to be used.

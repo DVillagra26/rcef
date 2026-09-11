@@ -128,6 +128,37 @@ was scraping by. A bar chart shows sampled-vs-unsampled *weight*, which
 neither threshold changes - passing `min_cov` or `min_trip` to
 `plot_coverage_bar()` is therefore an error, not a silent no-op.
 
+### `min_trip` and `min_fish` are optional
+
+`min_cov` is always part of the classification. `min_trip` (discard,
+length, age) and `min_fish` (length, age only) are each independently
+**optional** - pass `NULL` to drop that sampling-effort question
+entirely, rather than merely giving it an always-passing threshold:
+
+```{r disc-heat-notrip, fig.alt = "Coverage heatmap using coverage alone, trips dropped from the scheme"}
+plot_coverage_heat(anchoveta_catch, y = "metier4", min_trip = NULL)
+```
+
+The categories and the legend both shrink to match: with trips out of
+the picture there is no longer a "both coverage and trips missed"
+orange - only "coverage below target" (yellow), since coverage is the
+only thing left to miss. `cat_lookup()` shows exactly what is reachable
+for a given combination:
+
+```{r thr-cat-lookup}
+cat_lookup(50, "discard", min_trips = NULL)$cat_key   # 1 active target
+cat_lookup(50, "discard")$cat_key                     # + trips (default)
+cat_lookup(50, "length", min_meas = 100)$cat_key       # + measurements too
+```
+
+The warning shade is always a straight count of how many *active*
+targets a stratum missed - yellow for one, orange for two, dark orange
+for three (only reachable with trips AND measurements both on for
+`"length"` / `"age"`) - the same shade regardless of which targets
+those were. Red is never a threshold miss: it is reserved for a stratum
+that carries no discard estimate, or no linked length/age distribution,
+at all - reachable no matter how strict the active thresholds are set.
+
 ## Bubbles: weight the gaps
 
 ```{r disc-bubble, fig.height = 5, fig.alt = "Coverage bubble grid, bubble area proportional to landed weight"}
@@ -467,9 +498,9 @@ The arguments are ordered the way you build a call: **what data**, then
 | columns   | `y`              | row category (required) |
 | columns   | `x` / `fill`     | second category - `x` for heat/bubble, `fill` for bar |
 | columns   | `facet`          | optional facet column |
-| threshold | `min_cov`        | minimum coverage, percent (heat / bubble) |
-| threshold | `min_trip`       | minimum sampling trips (heat / bubble) |
-| threshold | `min_fish`       | minimum measured fish (`"length"` / `"age"`) |
+| threshold | `min_cov`        | minimum coverage, percent (heat / bubble); always active |
+| threshold | `min_trip`       | minimum sampling trips (heat / bubble); `NULL` drops trips from the scheme, a number (default 2) activates it |
+| threshold | `min_fish`       | minimum measured fish (`"length"` / `"age"`); `NULL` (the default) leaves measurements out, a number activates it |
 | render    | `n_per_screen`   | base engine: split a faceted figure across devices |
 | last      | `palette`        | `"default"` or `"colorblind"` (bar fill only) |
 | last      | `engine`         | `"ggplot"` (default) or `"base"` |

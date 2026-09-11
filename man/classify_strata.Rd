@@ -12,16 +12,19 @@ classify_strata(s, threshold, what = "discard", min_meas = 0, min_trips = 2)
 length/age classification also reads `n_measurements`. Both carry
 `numTrips` when the loaded CEF file reported it; a stratum with no
 trip count is treated as failing the trips test, not passing it -
-unknown is not the same as adequate.}
+unknown is not the same as adequate. `numTrips` / `n_measurements`
+are only read when `min_trips` / `min_meas` are active.}
 
 \item{threshold}{Coverage threshold in percent.}
 
 \item{what}{"discard" (default), "length" or "age".}
 
-\item{min_meas}{Minimum number of measurements for length/age; ignored for
-discards.}
+\item{min_meas}{Minimum number of measurements for length/age well
+measured, or `NULL` to leave measurements out of the classification.
+Ignored for discards.}
 
-\item{min_trips}{Minimum number of trips. Defaults to 2.}
+\item{min_trips}{Minimum number of trips, or `NULL` to leave trips out
+of the classification. Defaults to 2.}
 }
 \value{
 `s` with `cat_key`, `Status` and `Raising_Decision` added.
@@ -29,10 +32,14 @@ discards.}
 \description{
 Adds the sampling verdict to a stratum table: `cat_key` (a stable key),
 `Status` (a factor with every level from [cat_lookup()], so legends stay
-complete) and `Raising_Decision` (what to do about it). Discards are
-classified on coverage and trips; lengths and ages on coverage, trips
-AND measurements - three sampling-effort questions at once, none of
-which substitutes for the others.
+complete) and `Raising_Decision` (what to do about it). Coverage is
+always part of the verdict; `min_trips` (discards, length/age) and
+`min_meas` (length/age only) are each independently optional - pass
+`NULL` to drop that sampling-effort question from the classification
+entirely rather than merely giving it an always-passing threshold. The
+warning shade counts how many of the ACTIVE targets a stratum missed
+(yellow = 1, orange = 2, dark orange = 3 - reachable only with both
+trips and measurements active).
 }
 \seealso{
 [build_strata()], [cat_lookup()]

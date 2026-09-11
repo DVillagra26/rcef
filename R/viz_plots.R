@@ -105,7 +105,7 @@ NULL
 plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
                               group = NULL, what = "discard",
                               catchCategory = NULL,
-                              min_cov = 50, min_trip = 2, min_fish = 0,
+                              min_cov = 50, min_trip = 2, min_fish = NULL,
                               scale = 1,
                               engine = c("base", "ggplot")) {
   engine <- match.arg(engine)
@@ -321,6 +321,16 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #' `catchCategory`, choose whether to look at the sampling of the landings
 #' (`"Lan"`, the default), the discards (`"Dis"`) or BMS (`"BMS"`).
 #'
+#' The sampling-status colours adapt to which thresholds are active.
+#' Coverage (`min_cov`) is always on; `min_trip` (discard, length, age)
+#' and `min_fish` (length, age) are each independently optional - `NULL`
+#' drops that question from the classification and the legend entirely,
+#' a number turns it on. The warning shade is a straight count of how
+#' many of the ACTIVE thresholds a stratum missed (yellow = 1, orange =
+#' 2, dark orange = 3 - only reachable with trips AND measurements both
+#' on); red is reserved for a stratum with no discard estimate / no
+#' linked distribution at all, never for a threshold miss.
+#'
 #' The arguments run in the order you usually think about them: what data
 #' (`catch`, `distributions`, `what`, `catchCategory`), then which columns
 #' are the strata (`y`, `x` / `fill`, `facet`), then the pass / fail
@@ -342,9 +352,15 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #'   grid. `NULL` collapses to a single column.
 #' @param fill Bar fill category (bars only). `NULL` uses `y`.
 #' @param facet Optional facet column.
-#' @param min_cov Minimum coverage, percent (heat / bubble only).
-#' @param min_trip Minimum sampling trips (heat / bubble only).
-#' @param min_fish Minimum measurements for `what = "length"`/`"age"`.
+#' @param min_cov Minimum coverage, percent (heat / bubble only). Always
+#'   active - coverage is never dropped from the classification.
+#' @param min_trip Minimum sampling trips (heat / bubble only), or
+#'   `NULL` to leave trips out of the classification altogether -
+#'   categories and legend both drop to a coverage-only scheme.
+#'   Defaults to 2 (active).
+#' @param min_fish Minimum measurements for `what = "length"`/`"age"`,
+#'   or `NULL` (the default) to leave measurements out of the
+#'   classification.
 #' @param n_per_screen Base engine: split a faceted figure across this
 #'   many devices.
 #' @param palette `"default"` or `"colorblind"` - recolours the bar fill.
@@ -372,7 +388,7 @@ NULL
 plot_coverage_heat <- function(catch, distributions = NULL, y, x = NULL,
                                facet = NULL, what = "discard",
                                catchCategory = NULL,
-                               min_cov = 50, min_trip = 2, min_fish = 0,
+                               min_cov = 50, min_trip = 2, min_fish = NULL,
                                n_per_screen = NULL,
                                palette = c("default", "colorblind"),
                                engine = c("ggplot", "base")) {
@@ -565,7 +581,7 @@ plot_coverage_heat <- function(catch, distributions = NULL, y, x = NULL,
 plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
                                  facet = NULL, what = "discard",
                                  catchCategory = NULL,
-                                 min_cov = 50, min_trip = 2, min_fish = 0,
+                                 min_cov = 50, min_trip = 2, min_fish = NULL,
                                  n_per_screen = NULL,
                                  palette = c("default", "colorblind"),
                                  engine = c("ggplot", "base")) {
@@ -621,16 +637,17 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
     d$plot_size <- ifelse(d$cat_key == "disc_only", smallest, d$landings)
     pal <- status_palette(threshold, what, min_meas, min_trips)
 
-    trp_bit <- if ("numTrips" %in% names(d))
+    trp_bit <- if (thr_active(min_trips) && "numTrips" %in% names(d))
       ifelse(!is.na(d$numTrips) & d$numTrips < min_trips,
              paste0(round(d$numTrips), " trip",
                     ifelse(round(d$numTrips) == 1, "", "s")), "") else ""
     if (what %in% c("length", "age")) {
       cov_bit <- ifelse(!is.na(d$coverage) & d$coverage < threshold,
                         paste0(round(d$coverage, 1), "%"), "")
-      mea_bit <- ifelse(!is.na(d$n_measurements) & d$n_measurements < min_meas,
-                        paste0("n=", format(round(d$n_measurements),
-                                            big.mark = ",", trim = TRUE)), "")
+      mea_bit <- if (thr_active(min_meas))
+        ifelse(!is.na(d$n_measurements) & d$n_measurements < min_meas,
+              paste0("n=", format(round(d$n_measurements),
+                                  big.mark = ",", trim = TRUE)), "") else ""
       lab_me <- d$cat_key %in% c("warn1", "warn2", "warn3")
       d$lab <- ifelse(lab_me,
                       paste0(cov_bit, ifelse(nzchar(cov_bit) & nzchar(mea_bit),
@@ -780,10 +797,11 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
     # measurement threshold, both when it misses both
     cov_bit <- ifelse(!is.na(d$coverage) & d$coverage < threshold,
                       paste0(round(d$coverage, 1), "%"), "")
-    mea_bit <- ifelse(!is.na(d$n_measurements) & d$n_measurements < min_meas,
-                      paste0("n=", format(round(d$n_measurements),
-                                          big.mark = ",", trim = TRUE)), "")
-    trp_bit <- if ("numTrips" %in% names(d))
+    mea_bit <- if (thr_active(min_meas))
+      ifelse(!is.na(d$n_measurements) & d$n_measurements < min_meas,
+            paste0("n=", format(round(d$n_measurements),
+                                big.mark = ",", trim = TRUE)), "") else ""
+    trp_bit <- if (thr_active(min_trips) && "numTrips" %in% names(d))
       ifelse(!is.na(d$numTrips) & d$numTrips < min_trips,
              paste0(round(d$numTrips), " trip",
                     ifelse(round(d$numTrips) == 1, "", "s")), "") else ""
@@ -803,7 +821,7 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
                            trp_bit),
                     "")
   } else {
-    trp_bit <- if ("numTrips" %in% names(d))
+    trp_bit <- if (thr_active(min_trips) && "numTrips" %in% names(d))
       ifelse(!is.na(d$numTrips) & d$numTrips < min_trips,
              paste0(round(d$numTrips), " trip",
                     ifelse(round(d$numTrips) == 1, "", "s")), "") else ""

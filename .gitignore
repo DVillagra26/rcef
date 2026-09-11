@@ -16,3 +16,6 @@ Rplots*.pdf
 # local vignette render output
 vignettes/*.pdf
 vignettes/*.html
+# real fleet data used locally by dev/test_coverage_plots.R section 0 -
+# never committed, machine-local only
+inst/extdata/

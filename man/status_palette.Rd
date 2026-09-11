@@ -8,16 +8,18 @@ status_palette(threshold, what = "discard", min_meas = 0, min_trips = 2)
 }
 \arguments{
 \item{threshold}{Coverage threshold in percent that separates "enough"
-from "too little".}
+from "too little". Always active.}
 
 \item{what}{"discard" (default), "length" or "age".}
 
 \item{min_meas}{Minimum number of measurements for a length/age stratum to
-count as well measured. Ignored for discards.}
+count as well measured, or `NULL` to leave measurements out of the
+classification entirely. Ignored for discards.}
 
 \item{min_trips}{Minimum number of trips for a stratum to count as
 adequately covered in EFFORT terms, separately from coverage in
-WEIGHT terms. Defaults to 2, matching ICES practice.}
+WEIGHT terms, or `NULL` to leave trips out of the classification
+entirely. Defaults to 2, matching ICES practice.}
 }
 \value{
 A character vector of hex colours named by status label.

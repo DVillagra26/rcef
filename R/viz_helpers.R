@@ -622,7 +622,13 @@ build_coverage_strata <- function(catch, dims, y, fill, facet,
   cc <- catch_category %||% "Lan"
   bl  <- biology_link(strata, distributions, dims, cc, type = dist_type)
   ms  <- stratum_measurements(strata, distributions, dims, cc, type = dist_type)
-  bl  <- add_sufficiency(bl, ms, min_cov, min_fish)
+  # add_sufficiency()'s own ok_measurements/sufficient columns are a
+  # SEPARATE, always-on sufficiency flag used elsewhere (donor exclusion
+  # etc.) - not the classification below, which reads min_fish directly
+  # and treats NULL as "measurements not part of this classification" -
+  # so an inactive min_fish here is passed through as its always-passing
+  # equivalent (0) rather than left NULL.
+  bl  <- add_sufficiency(bl, ms, min_cov, min_fish %||% 0)
   bio <- bl %>% mutate(landings = weight,
                        landings_with_discards = weight_measured,
                        discards = 0, discard_rate = NA_real_)

@@ -27,6 +27,75 @@
 library(dplyr)
 library(rcef)
 
+
+## =====================================================================
+##  0. REAL DATA (bll, 2025) - InterCatch "output" format -> CEF ->
+##     derive_fields(), the same conversion the app's "Load from IC"
+##     route runs. Best-effort and entirely local:
+##       - reads inst/extdata/data_overviews_format/bll/2025 (StockOverview
+##         / NumbersAtAgeLength / MeanWeigthAtAgeLength .txt) - never
+##         committed, .gitignore'd, present on this machine only.
+##       - funICoutCEF() auto-builds a stock_relation via funMakeRelation(),
+##         which calls the ICES vocab/stock-list web services - needs the
+##         icesVocab + icesSD packages AND a network connection.
+##     Either missing degrades to a skip message, not a stopped script -
+##     everything from section 1 on runs on anchoveta_* regardless.
+## =====================================================================
+bll_dir  <- file.path("inst", "extdata", "data_overviews_format", "bll")
+bll_year <- 2025
+bll_catch <- NULL; bll_dist <- NULL
+
+if (dir.exists(file.path(bll_dir, bll_year)) &&
+    requireNamespace("icesVocab", quietly = TRUE) &&
+    requireNamespace("icesSD", quietly = TRUE)) {
+  bll_ic <- tryCatch(
+    funICoutCEF(dat_path = bll_dir, years = bll_year, output_format = "to_list"),
+    error = function(e) {
+      message("section 0 skipped - funICoutCEF() failed: ", conditionMessage(e))
+      NULL
+    })
+  if (!is.null(bll_ic) && !is.null(bll_ic$catches) && nrow(bll_ic$catches)) {
+    # derive_fields() is what turns raw CEF into strata-ready data: it
+    # parses metier4/5/6 + gear/target/mesh out of fleetValue and the
+    # ICES area levels (Subarea/Division/Subdivision) out of areaValue,
+    # plus Country/Season/Stratum/FleetType - the same columns every
+    # plot function below reads on y / x / fill / facet.
+    bll_catch <- derive_fields(as.data.frame(bll_ic$catches))
+    bll_dist  <- if (!is.null(bll_ic$distributions))
+      as.data.frame(bll_ic$distributions) else NULL
+    cat(sprintf(
+      "bll %s: %d catch rows after derive_fields()%s\n", bll_year,
+      nrow(bll_catch),
+      if (!is.null(bll_dist))
+        sprintf(", %d distribution rows", nrow(bll_dist)) else ""))
+  }
+} else {
+  cat("section 0 skipped - bll extdata and/or icesVocab+icesSD not available\n")
+}
+
+if (!is.null(bll_catch)) {
+  ## The same flexible-threshold scheme from section 6, exercised on a
+  ## real, messy fleet (many countries, gears and areas at once) rather
+  ## than the tidy synthetic set - the point being that min_trip / min_fish
+  ## staying optional, and red staying reserved for "no estimate at all",
+  ## holds regardless of how lopsided the real coverage actually is.
+  grDevices::pdf(tempfile())
+  print(plot_coverage_heat(bll_catch, y = "metier4", x = "Country"))
+  print(plot_coverage_heat(bll_catch, y = "metier4", x = "Country",
+                           min_trip = NULL))                 # coverage only
+  print(plot_coverage_bar(bll_catch, y = "metier4", fill = "Country"))
+  print(plot_discard_rate(bll_catch, x = "metier4", colour = "Country"))
+  if (!is.null(bll_dist) && nrow(bll_dist)) {
+    print(plot_coverage_heat(bll_catch, y = "metier4", x = "Country",
+                             what = "length", distributions = bll_dist,
+                             min_fish = 25))
+    print(plot_numbers_at_length_age(bll_catch, bll_dist, fill = "Country"))
+  }
+  invisible(dev.off())
+  cat("bll plots drew without error\n")
+}
+
+
 ## ---- Load the example tables ------------------------------------
 ## Bundled with the package. Swap in derive_fields(read.csv("your CEF
 ## catches")) and read.csv("your CEF distributions") to run the same
@@ -362,6 +431,76 @@ p5l <- plot_coverage_bar(catch_data, y = "metier4", fill = "Country",
   engine = "ggplot", palette = "colorblind")
 print(p5l)
 invisible(grDevices::dev.off())
+
+
+## =====================================================================
+##  6. FLEXIBLE THRESHOLDS - min_trip / min_fish are each independently
+##     optional (NULL = dropped from the classification and the legend
+##     entirely, a number = active). Coverage (min_cov) is always on.
+##     The warning shade is a straight count of how many ACTIVE targets
+##     a stratum missed - yellow (1), orange (2), dark orange (3, only
+##     reachable with trips AND measurements both active) - and red
+##     stays reserved for "no discard estimate" / "no distribution
+##     linked at all", never for a threshold miss, no matter how strict
+##     the thresholds are set.
+## =====================================================================
+
+say <- function(l) cat("\n---- 6", l, "----\n")
+
+## ---- 6a. discard: 1 param (coverage only) vs 2 params (+ trips) ------
+say("a. discard coverage - min_trip = NULL drops trips from the scheme")
+lk_d1 <- cat_lookup(50, "discard", min_trips = NULL)
+lk_d2 <- cat_lookup(50, "discard")            # min_trip = 2, active (default)
+cat("  1 param categories:", paste(lk_d1$cat_key, collapse = ", "), "\n")
+cat("  2 param categories:", paste(lk_d2$cat_key, collapse = ", "), "\n")
+stopifnot(nrow(lk_d1) == 6L, nrow(lk_d2) == 7L,   # no warn2 at all with 1 param
+         !"warn2" %in% lk_d1$cat_key, "warn2" %in% lk_d2$cat_key)
+
+grDevices::pdf(tempfile())
+p6a1 <- plot_coverage_heat(catch_data, y = "metier4", x = "Country",
+                           min_trip = NULL)
+p6a2 <- plot_coverage_heat(catch_data, y = "metier4", x = "Country")
+invisible(dev.off())
+cat("  both heatmaps drew:", !is.null(p6a1) && !is.null(p6a2), "\n")
+
+## ---- 6b. length/age: 1, 2 (either extra) or 3 active parameters -----
+say("b. length coverage - trips and measurements toggle independently")
+lk_l1 <- cat_lookup(50, "length", min_trips = NULL, min_meas = NULL)
+lk_l2t <- cat_lookup(50, "length", min_meas = NULL)            # + trips only
+lk_l2m <- cat_lookup(50, "length", min_meas = 25, min_trips = NULL) # + meas only
+lk_l3  <- cat_lookup(50, "length", min_meas = 25)               # + both
+cat("  coverage only        :", paste(lk_l1$cat_key, collapse = ", "), "\n")
+cat("  + trips               :", paste(lk_l2t$cat_key, collapse = ", "), "\n")
+cat("  + measurements        :", paste(lk_l2m$cat_key, collapse = ", "), "\n")
+cat("  + trips & measurements:", paste(lk_l3$cat_key, collapse = ", "), "\n")
+stopifnot(nrow(lk_l1) == 5L, nrow(lk_l2t) == 6L, nrow(lk_l2m) == 6L,
+         nrow(lk_l3) == 7L,
+         !"warn3" %in% lk_l2t$cat_key, "warn3" %in% lk_l3$cat_key)
+
+grDevices::pdf(tempfile())
+p6b1 <- plot_coverage_heat(catch_data, y = "metier4", x = "Country",
+                           what = "length", distributions = distributions,
+                           min_trip = NULL)                     # coverage only
+p6b2 <- plot_coverage_heat(catch_data, y = "metier4", x = "Country",
+                           what = "length", distributions = distributions,
+                           min_fish = 25)                       # + measurements
+invisible(dev.off())
+cat("  both length heatmaps drew:", !is.null(p6b1) && !is.null(p6b2), "\n")
+
+## ---- 6c. red stays reserved for "no estimate/distribution at all" ---
+## Setting the thresholds absurdly high must NOT turn every stratum red -
+## it should crowd them into the worst-active warning shade instead. Red
+## (no_dist / no discard estimate) only ever comes from has_disc_data /
+## has_dist, never from a threshold comparison.
+say("c. extreme thresholds still resolve to a warning shade, not all-red")
+sc_extreme <- classify_strata(build_strata(catch_data, c("metier4", "Country")),
+                              1500, min_trips = 1000)
+tb <- table(sc_extreme$cat_key)
+print(tb)
+n_no_dist <- if ("no_dist" %in% names(tb)) tb[["no_dist"]] else 0L
+stopifnot(n_no_dist < sum(tb))   # not everything fell through to red
+cat("  no_dist only where has_disc_data is FALSE:",
+   all(!sc_extreme$has_disc_data[sc_extreme$cat_key == "no_dist"]), "\n")
 
 cat("\nDone - ggplot figures in Rplots.pdf; base-R figures are the PNGs",
    "written alongside this script:\n",

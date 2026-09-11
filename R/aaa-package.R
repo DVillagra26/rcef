@@ -41,8 +41,9 @@
 #' @import dplyr
 #' @import ggplot2
 #' @import rlang
-#' @importFrom data.table setDT rbindlist dcast
+#' @importFrom data.table setDT rbindlist dcast melt %like%
 #' @importFrom tidyr pivot_longer pivot_wider
+#' @importFrom stringr str_extract
 #' @keywords internal
 "_PACKAGE"
 
