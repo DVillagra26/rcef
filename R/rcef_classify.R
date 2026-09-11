@@ -63,6 +63,32 @@ NULL
 #' @export
 thr_active <- function(v) !is.null(v) && !(length(v) == 1 && is.na(v))
 
+#' Per-row "warn_..." key from which active thresholds a stratum missed
+#'
+#' The same key [cat_lookup()] generates for its warning rows - one
+#' `"warn_"` + underscore-joined threshold names per SPECIFIC combination
+#' of pass/fail, not a generic count. Both must stay in lockstep: this is
+#' what [classify_strata()] assigns per row, and `cat_lookup()`'s
+#' `combn()` walk is what pre-declares every reachable value of it.
+#'
+#' @param ... Named logical vectors, same length, one per ACTIVE
+#'   threshold, TRUE where that threshold failed for that row - passed
+#'   in the canonical `cov`, `trip`, `meas` order. A row with every entry
+#'   `FALSE` is not meaningful here (the caller only reaches this for
+#'   rows that missed at least one).
+#' @return A character vector, one `"warn_<names>"` key per row.
+#' @keywords internal
+#' @export
+combo_key <- function(...) {
+  bad <- list(...)
+  nm  <- names(bad)
+  n   <- length(bad[[1]])
+  vapply(seq_len(n), function(i) {
+    hit <- nm[vapply(bad, `[[`, FALSE, i)]
+    paste0("warn_", paste(hit, collapse = "_"))
+  }, character(1))
+}
+
 #' Sampling-status categories, decisions and colours
 #'
 #' The single source of truth for how a stratum's sampling is described.
@@ -82,11 +108,13 @@ thr_active <- function(v) !is.null(v) && !(length(v) == 1 && is.na(v))
 #' qualitatively different case - a stratum that carries NO discard
 #' estimate (or, for length/age, NO linked distribution) at all, so
 #' there is nothing to judge against a threshold. A near-white marks a
-#' stratum with no catch to classify. Every reachable colour is reached:
-#' the warning shade is a straight count of how many active targets a
-#' stratum missed (yellow = 1, orange = 2, dark orange = 3 - only
-#' possible when trips AND measurements are both active), the same
-#' shade regardless of WHICH targets those were.
+#' stratum with no catch to classify. The colour is a straight count of
+#' how many ACTIVE targets a stratum missed (yellow = 1, orange = 2,
+#' dark orange = 3 - only possible when trips AND measurements are both
+#' active); every SPECIFIC combination that reaches a given count still
+#' gets its own row and its own label - "<50% covered, >= 2 trips" reads
+#' differently from ">= 50% covered, < 2 trips" even though both are one
+#' target missed and both are yellow.
 #'
 #' `min_trips` and the trips comparison are unknown-averse: a stratum
 #' with no trip count reported is treated as failing the trips test
@@ -120,59 +148,59 @@ cat_lookup <- function(threshold, what = "discard", min_meas = 0,
 
   trip_active <- thr_active(min_trips)
   meas_active <- is_bio && thr_active(min_meas)
-  parts <- c("coverage", if (trip_active) "trips",
-            if (meas_active) "measurements")
-  n_active <- length(parts)
 
-  full_bits <- c("100% covered",
-                if (trip_active) sprintf("> %s trips", min_trips),
-                if (meas_active) sprintf("%s+ measurements", min_meas))
-  safe_bits <- c(sprintf(">= %s%% covered", threshold),
-                if (trip_active) sprintf("%s+ trips", min_trips),
-                if (meas_active) sprintf("%s+ measurements", min_meas))
-  # discard status text reads "A and B"; length/age (up to 3 bits) reads
-  # "A, B, C" - matches the wording this already had for the configs
+  # One entry per active threshold, fixed (cov, trip, meas) order. Each
+  # carries the phrase used when it PASSES vs FAILS inside a combination
+  # row, plus the (stricter, coverage/trips only) phrase for the "full"
+  # row specifically - matches classify_strata()'s `is_full` condition.
+  defs <- list(cov = list(
+    full = "100% covered",              full_abbr = "100% cov",
+    pass = sprintf(">= %s%% covered", threshold), pass_abbr = sprintf(">=%s%% cov", threshold),
+    fail = sprintf("< %s%% covered", threshold),  fail_abbr = sprintf("<%s%% cov", threshold)))
+  if (trip_active) defs$trip <- list(
+    full = sprintf("> %s trips", min_trips),  full_abbr = sprintf(">%st", min_trips),
+    pass = sprintf(">= %s trips", min_trips), pass_abbr = sprintf(">=%st", min_trips),
+    fail = sprintf("< %s trips", min_trips),  fail_abbr = sprintf("<%st", min_trips))
+  if (meas_active) defs$meas <- list(
+    full = sprintf(">= %s measurements", min_meas), full_abbr = sprintf(">=%sm", min_meas),
+    pass = sprintf(">= %s measurements", min_meas), pass_abbr = sprintf(">=%sm", min_meas),
+    fail = sprintf("< %s measurements", min_meas),  fail_abbr = sprintf("<%sm", min_meas))
+  n_active <- length(defs)
+
+  # length/age (up to 3 bits) reads "A, B, C"; discard (up to 2) reads
+  # "A and B" - matches the wording this already had for the configs
   # that pre-date the optional thresholds.
-  join_bits <- function(bits)
-    if (length(bits) <= 1) paste(bits, collapse = "")
-    else if (is_bio) paste(bits, collapse = ", ")
-    else paste(bits, collapse = " and ")
-  full_status <- paste0("SAFE: ", join_bits(full_bits))
-  safe_status <- paste0("SAFE: ", join_bits(safe_bits))
+  join_txt  <- function(v) if (length(v) <= 1) paste(v, collapse = "")
+                           else if (is_bio) paste(v, collapse = ", ")
+                           else paste(v, collapse = " and ")
+  join_abbr <- function(v) paste(v, collapse = ", ")
 
-  full_abbr <- paste(c("100% cov",
-                       if (trip_active) sprintf(">%st", min_trips),
-                       if (meas_active) sprintf(">=%sm", min_meas)),
-                     collapse = ", ")
-  safe_abbr <- paste(c(sprintf(">=%s%% cov", threshold),
-                       if (trip_active) sprintf(">=%st", min_trips),
-                       if (meas_active) sprintf(">=%sm", min_meas)),
-                     collapse = ", ")
+  full_status <- paste0("SAFE: ", join_txt(vapply(defs, `[[`, "", "full")))
+  safe_status <- paste0("SAFE: ", join_txt(vapply(defs, `[[`, "", "pass")))
+  full_abbr   <- join_abbr(vapply(defs, `[[`, "", "full_abbr"))
+  safe_abbr   <- join_abbr(vapply(defs, `[[`, "", "pass_abbr"))
 
-  # warnN status/abbr: a straight count of how many of the ACTIVE
-  # targets were missed, phrased against however many are in play.
-  warn_status <- function(n_missed) {
-    if (n_missed >= n_active) {
-      if (n_active == 1) return(sprintf("WARNING: %s below target", parts))
-      joined <- if (n_active == 2) paste(parts, collapse = " and ")
-                else paste0(paste(parts[-n_active], collapse = ", "),
-                            " and ", parts[n_active])
-      if (n_active == 2)
-        return(sprintf("WARNING: both %s below target", joined))
-      return(sprintf("WARNING: %s all below target", joined))
-    }
-    sprintf("WARNING: %s of %s below target", c("one", "two")[n_missed],
-           paste(parts, collapse = " / "))
+  # Every non-empty subset of the active thresholds is one warning row -
+  # colour is the subset's SIZE (how many missed); the text names
+  # exactly which ones, with every other active threshold shown passing.
+  combos <- unlist(lapply(seq_len(n_active), function(k)
+    utils::combn(names(defs), k, simplify = FALSE)), recursive = FALSE)
+  warn_row <- function(miss) {
+    ph <- vapply(names(defs), function(nm)
+      if (nm %in% miss) defs[[nm]]$fail else defs[[nm]]$pass, character(1))
+    ab <- vapply(names(defs), function(nm)
+      if (nm %in% miss) defs[[nm]]$fail_abbr else defs[[nm]]$pass_abbr, character(1))
+    list(cat_key = paste0("warn_", paste(miss, collapse = "_")),
+        status  = paste0("WARNING: ", join_txt(ph)),
+        abbr    = join_abbr(ab),
+        colour  = col_w[[length(miss)]])
   }
-  warn_abbr <- function(n_missed)
-    if (n_missed >= n_active && n_active > 2)
-      sprintf("all %d targets short", n_active)
-    else sprintf("%d target%s short", n_missed, if (n_missed == 1) "" else "s")
-
-  warn_keys   <- paste0("warn", seq_len(n_active))
-  warn_stat   <- vapply(seq_len(n_active), warn_status, character(1))
-  warn_abb    <- vapply(seq_len(n_active), warn_abbr, character(1))
-  warn_colour <- col_w[seq_len(n_active)]
+  warn_rows   <- lapply(combos, warn_row)
+  warn_keys   <- vapply(warn_rows, `[[`, "", "cat_key")
+  warn_stat   <- vapply(warn_rows, `[[`, "", "status")
+  warn_abb    <- vapply(warn_rows, `[[`, "", "abbr")
+  warn_colour <- vapply(warn_rows, `[[`, "", "colour")
+  n_warn      <- length(warn_keys)
 
   if (is_bio) {
     unit <- if (what == "age") "age" else "length"
@@ -183,7 +211,7 @@ cat_lookup <- function(threshold, what = "discard", min_meas = 0,
                 "No catch to classify"),
       decision = c("No raising needed (fully sampled, well measured)",
                    "Raise with own strata",
-                   rep(borrow, n_active),
+                   rep(borrow, n_warn),
                    borrow, "Excluded: no data"),
       abbr = c(full_abbr, safe_abbr, warn_abb,
               sprintf("no %s dist", unit), "no catch"),
@@ -201,7 +229,7 @@ cat_lookup <- function(threshold, what = "discard", min_meas = 0,
               "No landings / no discards"),
     decision = c("No raising needed (fully sampled)",
                  "Direct raising",
-                 rep("POOL: group with adjacent strata", n_active),
+                 rep("POOL: group with adjacent strata", n_warn),
                  borrow,
                  "No raising needed (all catch discarded)",
                  "Excluded: no data"),
@@ -464,6 +492,11 @@ classify_strata <- function(s, threshold, what = "discard", min_meas = 0,
       (if (meas_active) (!meas_ok) else 0)
     is_full <- cov_ok & trip_ok & meas_ok & !is.na(s$coverage) & s$coverage >= 100 &
       (if (trip_active) trips2 > min_trips else TRUE)
+    # one "warn_cov"/"warn_trip"/"warn_cov_meas"/... key per row, matching
+    # exactly the rows cat_lookup() pre-declared via its combn() walk
+    combo <- do.call(combo_key, c(list(cov = !cov_ok),
+                                  if (trip_active) list(trip = !trip_ok),
+                                  if (meas_active) list(meas = !meas_ok)))
     return(s %>%
              mutate(
                n_measurements = nm,
@@ -472,9 +505,7 @@ classify_strata <- function(s, threshold, what = "discard", min_meas = 0,
                  !has_dist   ~ "no_dist",
                  is_full     ~ "full",
                  n_miss == 0 ~ "safe",
-                 n_miss == 1 ~ "warn1",
-                 n_miss == 2 ~ "warn2",
-                 TRUE        ~ "warn3"
+                 TRUE        ~ combo
                ),
                Status = factor(lk$status[match(cat_key, lk$cat_key)],
                                levels = unique(lk$status)),
@@ -493,6 +524,8 @@ classify_strata <- function(s, threshold, what = "discard", min_meas = 0,
   n_miss   <- (!cov_ok) + (if (trip_active) (!trip_ok) else 0)
   is_full  <- cov_ok & trip_ok & !is.na(s$coverage) & s$coverage >= 100 &
     (if (trip_active) trips2 > min_trips else TRUE)
+  combo <- do.call(combo_key, c(list(cov = !cov_ok),
+                                if (trip_active) list(trip = !trip_ok)))
   s %>%
     mutate(
       cat_key = case_when(
@@ -501,8 +534,7 @@ classify_strata <- function(s, threshold, what = "discard", min_meas = 0,
         !has_disc                      ~ "no_dist",
         is_full                        ~ "full",
         n_miss == 0                    ~ "safe",
-        n_miss == 1                    ~ "warn1",
-        TRUE                           ~ "warn2"
+        TRUE                           ~ combo
       ),
       Status = factor(lk$status[match(cat_key, lk$cat_key)],
                       levels = unique(lk$status)),

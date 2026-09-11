@@ -648,7 +648,7 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
         ifelse(!is.na(d$n_measurements) & d$n_measurements < min_meas,
               paste0("n=", format(round(d$n_measurements),
                                   big.mark = ",", trim = TRUE)), "") else ""
-      lab_me <- d$cat_key %in% c("warn1", "warn2", "warn3")
+      lab_me <- grepl("^warn_", d$cat_key)
       d$lab <- ifelse(lab_me,
                       paste0(cov_bit, ifelse(nzchar(cov_bit) & nzchar(mea_bit),
                                              " ", ""), mea_bit,
@@ -658,7 +658,7 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
     } else {
       d$lab <- dplyr::case_when(
         d$cat_key == "disc_only" ~ "100% Disc",
-        d$cat_key %in% c("warn1", "warn2") ~
+        grepl("^warn_", d$cat_key) ~
           paste0(round(d$coverage, 1), "%",
                  ifelse(nzchar(trp_bit), paste0("\n", trp_bit), "")),
         TRUE ~ "")
@@ -810,7 +810,7 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
     # measurement shortfalls spelled out. The SAFE cells need no
     # explanation; the "no distribution linked" cells (red) have no
     # numbers to show.
-    lab_me <- d$cat_key %in% c("warn1", "warn2", "warn3")
+    lab_me <- grepl("^warn_", d$cat_key)
     d$lab <- ifelse(lab_me,
                     paste0(cov_bit,
                            ifelse(nzchar(cov_bit) & nzchar(mea_bit), "\n", ""),
@@ -827,7 +827,7 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
                     ifelse(round(d$numTrips) == 1, "", "s")), "") else ""
     d$lab <- with(d, case_when(
       cat_key == "disc_only" ~ "100%\nDisc",
-      cat_key %in% c("warn1", "warn2") ~
+      grepl("^warn_", cat_key) ~
         paste0(round(coverage, 1), "%",
                ifelse(nzchar(trp_bit), paste0("\n", trp_bit), "")),
       TRUE ~ ""))

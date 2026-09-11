@@ -17,18 +17,24 @@ ok <- function(cond, what) {
 }
 
 ## ---- 1. discard classification: every specified combination ----------
-## Two tests only - coverage vs threshold and trips vs min_trips - so the
-## warning shade is a straight count of how many were missed: yellow
-## (warn1) for one, orange (warn2) for both. Red is NOT reachable from a
-## threshold miss; it is reserved for "no discard estimate at all".
+## Two ACTIVE targets - coverage vs threshold and trips vs min_trips - so
+## the warning shade is a straight count of how many were missed: yellow
+## for one, orange for both. Which one(s) failed is a distinct category
+## (warn_cov / warn_trip / warn_cov_trip), same colour within a count,
+## different key and label. Red is NOT reachable from a threshold miss;
+## it is reserved for "no discard estimate at all".
 d <- data.frame(
   landings = 100, discards = 10,
   coverage = c(100, 70, 30, 70, 30),
   numTrips = c(3, 2, 3, 1, 1), stringsAsFactors = FALSE)
 d <- classify_strata(d, threshold = 50)
-expect_d <- c("full", "safe", "warn1", "warn1", "warn2")
+expect_d <- c("full", "safe", "warn_cov", "warn_trip", "warn_cov_trip")
 ok(identical(d$cat_key, expect_d),
    "every discard combination lands in the specified category")
+lk_d2 <- cat_lookup(50, "discard")
+ok(identical(lk_d2$colour[lk_d2$cat_key == "warn_cov"],
+            lk_d2$colour[lk_d2$cat_key == "warn_trip"]),
+   "warn_cov and warn_trip share the same (one-missed) colour")
 
 ## red only when the stratum carries NO discard estimate (has_disc_data)
 nd <- classify_strata(data.frame(landings = 100, discards = 0,
@@ -40,8 +46,8 @@ ok(nd$cat_key == "no_dist",
 wd <- classify_strata(data.frame(landings = 100, discards = 0,
                                  coverage = 0, numTrips = 0,
                                  has_disc_data = TRUE), 50)
-ok(wd$cat_key == "warn2",
-   "with an estimate present, missing both thresholds is warn2 (orange), not red")
+ok(wd$cat_key == "warn_cov_trip",
+   "with an estimate present, missing both thresholds is warn_cov_trip (orange), not red")
 
 ## boundary: exactly 2 trips is NOT "more than 2" (full needs > min_trips)
 b <- classify_strata(data.frame(landings = 100, discards = 0,
@@ -49,23 +55,30 @@ b <- classify_strata(data.frame(landings = 100, discards = 0,
 ok(b$cat_key == "safe",
    "100% coverage with exactly 2 trips is safe, not full (needs > 2)")
 
-## ---- 2. length/age classification: the missed-target count -----------
-## Three tests - coverage, trips, measurements - so warn1/warn2/warn3
-## count exactly how many were missed (yellow / orange / dark orange).
+## ---- 2. length/age classification: which target(s) were missed -------
+## Three ACTIVE targets - coverage, trips, measurements - so the warning
+## shade is a count (yellow / orange / dark orange) but the category is
+## the SPECIFIC combination: one row per non-empty subset of the three.
 l <- data.frame(
   coverage       = c(100, 70, 30, 70, 70, 70, 30, 30),
   numTrips       = c(3,   3,  3,  3,  1,  1,  3,  1),
   n_measurements = c(150, 150, 150, 50, 150, 50, 50, 150),
   stringsAsFactors = FALSE)
 l <- classify_strata(l, threshold = 50, what = "length", min_meas = 100)
-expect_l <- c("full", "safe", "warn1", "warn1", "warn1", "warn2", "warn2", "warn2")
+expect_l <- c("full", "safe", "warn_cov", "warn_meas", "warn_trip",
+             "warn_trip_meas", "warn_cov_meas", "warn_cov_trip")
 ok(identical(l$cat_key, expect_l),
-   "the length/age warning shade counts how many targets were missed")
+   "each length/age corner lands in its specific missed-target category")
+lk_l3 <- cat_lookup(50, "length", min_meas = 100)
+one_missed <- c("warn_cov", "warn_trip", "warn_meas")
+ok(length(unique(lk_l3$colour[lk_l3$cat_key %in% one_missed])) == 1,
+   "all three one-missed categories share the same (yellow) colour")
 
-## all three missed -> dark orange (warn3), NOT red
+## all three missed -> dark orange, NOT red
 r <- classify_strata(data.frame(coverage = 30, numTrips = 1,
                                 n_measurements = 50), 50, "length", 100)
-ok(r$cat_key == "warn3", "coverage, trips and measurements all missed is warn3")
+ok(r$cat_key == "warn_cov_trip_meas",
+   "coverage, trips and measurements all missed is warn_cov_trip_meas")
 
 ## red only when NO distribution is linked at all
 nl <- classify_strata(data.frame(weight = 100, landings_with_discards = 0,
@@ -83,7 +96,7 @@ z <- classify_strata(z, threshold = 50, what = "length", min_meas = 100)
 ok(z$cat_key[1] == "none", "zero weight is 'none'")
 ok(z$cat_key[2] == "none", "NA weight is 'none' too")
 ok(z$cat_key[3] != "none", "real weight is unaffected by the none check")
-ok(all(c("full", "safe", "warn1", "warn2", "warn3", "no_dist") != "none"),
+ok(!"none" %in% c("full", "safe", "warn_cov", "warn_cov_trip_meas", "no_dist"),
    "none is a distinct category from every sampling-status one")
 
 ## a caller with no weight column at all (works from coverage directly)
@@ -111,24 +124,32 @@ ok(identical(lk_none$colour[lk_none$cat_key == "no_dist"],
             lk_disc$colour[lk_disc$cat_key == "no_dist"]),
    "the no_dist (red) colour matches on the length and discard sides")
 
-## the length/age scheme: full, safe, warn1..3, no_dist, none = 7 rows,
-## with a distinct colour each and one direction of increasing severity
+## the length/age 3-param scheme: full, safe, the seven non-empty
+## coverage/trips/measurements combinations, no_dist, none = 11 rows.
+## Colour is shared within a missed-count (3 ones, 3 twos), never across
+## counts, and never reused by full/safe/no_dist/none.
 lk <- cat_lookup(50, "length", min_meas = 100)
-ok(nrow(lk) == 7L && !anyDuplicated(lk$colour),
-   "seven length/age categories, every colour distinct")
+ok(nrow(lk) == 11L, "eleven length/age categories (2 + 7 combinations + 2)")
 ok(identical(lk$cat_key,
-             c("full", "safe", "warn1", "warn2", "warn3", "no_dist", "none")),
-   "ordered best to worst")
+             c("full", "safe", "warn_cov", "warn_trip", "warn_meas",
+               "warn_cov_trip", "warn_cov_meas", "warn_trip_meas",
+               "warn_cov_trip_meas", "no_dist", "none")),
+   "ordered best to worst, single misses before double before triple")
+is_warn <- grepl("^warn_", lk$cat_key)
+n_missed <- lengths(strsplit(sub("^warn_", "", lk$cat_key[is_warn]), "_"))
+by_count <- split(lk$colour[is_warn], n_missed)
+ok(all(vapply(by_count, function(v) length(unique(v)) == 1, logical(1))),
+   "every combination with the same missed-count shares one colour")
 
 ## ---- 3. unknown trips are treated as failing, not passing -------------
 u <- classify_strata(data.frame(landings = 100, discards = 10,
                                 coverage = 70, numTrips = NA), 50)
-ok(u$cat_key == "warn1",
+ok(u$cat_key == "warn_trip",
    "no reported trip count fails the trips test (unknown is not adequate)")
 ## and the same stratum with no numTrips COLUMN at all behaves identically
 u2 <- classify_strata(data.frame(landings = 100, discards = 10,
                                  coverage = 70), 50)
-ok(u2$cat_key == "warn1",
+ok(u2$cat_key == "warn_trip",
    "a table with no numTrips column at all gets the same treatment")
 
 ## ---- 4. aggregation direction: max within a build, sum across a pool -

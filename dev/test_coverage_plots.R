@@ -453,8 +453,14 @@ lk_d1 <- cat_lookup(50, "discard", min_trips = NULL)
 lk_d2 <- cat_lookup(50, "discard")            # min_trip = 2, active (default)
 cat("  1 param categories:", paste(lk_d1$cat_key, collapse = ", "), "\n")
 cat("  2 param categories:", paste(lk_d2$cat_key, collapse = ", "), "\n")
-stopifnot(nrow(lk_d1) == 6L, nrow(lk_d2) == 7L,   # no warn2 at all with 1 param
-         !"warn2" %in% lk_d1$cat_key, "warn2" %in% lk_d2$cat_key)
+# 1 param: only "warn_cov" is reachable (coverage is the only thing that
+# CAN fail). 2 params: warn_cov / warn_trip / warn_cov_trip - one row per
+# specific combination, not per count - so 3 warning rows, not 2.
+stopifnot(nrow(lk_d1) == 6L, nrow(lk_d2) == 8L,
+         sum(grepl("^warn_", lk_d1$cat_key)) == 1L,
+         sum(grepl("^warn_", lk_d2$cat_key)) == 3L,
+         "warn_cov_trip" %in% lk_d2$cat_key,
+         !"warn_cov_trip" %in% lk_d1$cat_key)
 
 grDevices::pdf(tempfile())
 p6a1 <- plot_coverage_heat(catch_data, y = "metier4", x = "Country",
@@ -473,9 +479,13 @@ cat("  coverage only        :", paste(lk_l1$cat_key, collapse = ", "), "\n")
 cat("  + trips               :", paste(lk_l2t$cat_key, collapse = ", "), "\n")
 cat("  + measurements        :", paste(lk_l2m$cat_key, collapse = ", "), "\n")
 cat("  + trips & measurements:", paste(lk_l3$cat_key, collapse = ", "), "\n")
-stopifnot(nrow(lk_l1) == 5L, nrow(lk_l2t) == 6L, nrow(lk_l2m) == 6L,
-         nrow(lk_l3) == 7L,
-         !"warn3" %in% lk_l2t$cat_key, "warn3" %in% lk_l3$cat_key)
+# one row per active PARAMETER COUNT choose k (k = 1..n_active), so
+# n_active = 1 -> 1 warn row, 2 -> 3, 3 -> 7 (the "all missed" key,
+# warn_cov_trip_meas, only exists once trips AND measurements are both on)
+stopifnot(nrow(lk_l1) == 5L, nrow(lk_l2t) == 7L, nrow(lk_l2m) == 7L,
+         nrow(lk_l3) == 11L,
+         !"warn_cov_trip_meas" %in% lk_l2t$cat_key,
+         "warn_cov_trip_meas" %in% lk_l3$cat_key)
 
 grDevices::pdf(tempfile())
 p6b1 <- plot_coverage_heat(catch_data, y = "metier4", x = "Country",

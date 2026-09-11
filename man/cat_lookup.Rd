@@ -45,11 +45,13 @@ targets are missed, with a single reserved red for the one
 qualitatively different case - a stratum that carries NO discard
 estimate (or, for length/age, NO linked distribution) at all, so
 there is nothing to judge against a threshold. A near-white marks a
-stratum with no catch to classify. Every reachable colour is reached:
-the warning shade is a straight count of how many active targets a
-stratum missed (yellow = 1, orange = 2, dark orange = 3 - only
-possible when trips AND measurements are both active), the same
-shade regardless of WHICH targets those were.
+stratum with no catch to classify. The colour is a straight count of
+how many ACTIVE targets a stratum missed (yellow = 1, orange = 2,
+dark orange = 3 - only possible when trips AND measurements are both
+active); every SPECIFIC combination that reaches a given count still
+gets its own row and its own label - "<50% covered, >= 2 trips" reads
+differently from ">= 50% covered, < 2 trips" even though both are one
+target missed and both are yellow.
 
 `min_trips` and the trips comparison are unknown-averse: a stratum
 with no trip count reported is treated as failing the trips test

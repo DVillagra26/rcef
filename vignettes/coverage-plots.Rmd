@@ -140,10 +140,11 @@ plot_coverage_heat(anchoveta_catch, y = "metier4", min_trip = NULL)
 ```
 
 The categories and the legend both shrink to match: with trips out of
-the picture there is no longer a "both coverage and trips missed"
-orange - only "coverage below target" (yellow), since coverage is the
-only thing left to miss. `cat_lookup()` shows exactly what is reachable
-for a given combination:
+the picture there is only one thing left that can go wrong, so
+`warn_cov` ("< 50% covered") is the only warning row. With trips back
+in, `warn_cov` / `warn_trip` / `warn_cov_trip` all appear - one row per
+SPECIFIC combination of what failed, not one row per count.
+`cat_lookup()` shows exactly what is reachable for a given combination:
 
 ```{r thr-cat-lookup}
 cat_lookup(50, "discard", min_trips = NULL)$cat_key   # 1 active target
@@ -151,13 +152,17 @@ cat_lookup(50, "discard")$cat_key                     # + trips (default)
 cat_lookup(50, "length", min_meas = 100)$cat_key       # + measurements too
 ```
 
-The warning shade is always a straight count of how many *active*
-targets a stratum missed - yellow for one, orange for two, dark orange
-for three (only reachable with trips AND measurements both on for
-`"length"` / `"age"`) - the same shade regardless of which targets
-those were. Red is never a threshold miss: it is reserved for a stratum
-that carries no discard estimate, or no linked length/age distribution,
-at all - reachable no matter how strict the active thresholds are set.
+The COLOUR is always a straight count of how many *active* targets a
+stratum missed - yellow for one, orange for two, dark orange for three
+(only reachable with trips AND measurements both on for `"length"` /
+`"age"`) - the same shade for every combination that misses that many,
+e.g. `warn_cov` and `warn_trip` are both yellow. The TEXT still says
+which one(s): `cat_lookup(50, "discard")$status` reads "< 50% covered
+and >= 2 trips" for `warn_cov` and ">= 50% covered and < 2 trips" for
+`warn_trip` - same colour, different label. Red is never a threshold
+miss: it is reserved for a stratum that carries no discard estimate, or
+no linked length/age distribution, at all - reachable no matter how
+strict the active thresholds are set.
 
 ## Bubbles: weight the gaps
 
