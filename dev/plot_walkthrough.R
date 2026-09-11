@@ -1,11 +1,13 @@
 ## ===========================================================
-## test_coverage_plots.R
+## plot_walkthrough.R
 ##
-## A standalone script for trying out rcef's exploratory plots without
-## running the Shiny app. It walks through every plot family the package
-## has - discard coverage, length coverage, AGE coverage, discard rate,
-## length distributions and age distributions - each with a few options
-## to compare against each other, ggplot2 side by side with the base-R
+## NOT a test - nothing here asserts pass/fail (the actual test suite is
+## dev/tests/*.R, run via the "ok"/"FAIL" pattern and checked by
+## dev/check_*.R). This is a template you run by hand to LOOK at every
+## plot family the package has and confirm it draws sensibly: discard
+## coverage, length coverage, AGE coverage, discard rate, length
+## distributions and age distributions - each with a few options to
+## compare against each other, ggplot2 side by side with the base-R
 ## engine, and the general-purpose arguments (auto-build from raw data,
 ## palette, n_per_screen).
 ##
