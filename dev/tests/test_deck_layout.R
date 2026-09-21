@@ -185,23 +185,23 @@ if (requireNamespace("shiny", quietly = TRUE)) {
                regexpr("mg_bdeck", h, fixed = TRUE))
   at <- function(seg, k) as.integer(regexpr(k, seg, fixed = TRUE))
 
-  ## The strata-definition box added a real step 1 ahead of everything
-  ## else, so every step that used to start at 1 now starts at 2:
-  ## defining the groups is 2, exclusions is 3, assigning the clause is
-  ## 4 (across the bottom under 2 and 3 only), the catch-all is 5 (full
-  ## height on the right).
-  steps_mg <- c("1. Definition of the strata", "2. Define the groups",
-                "3. Exclusion rules for donor",
-                "4. Assign the clause", "5. Include a Catch All",
+  ## The strata are always as reported now - no definition box - so
+  ## the manual deck starts at 1 like the length/age one: defining the
+  ## groups is 1, exclusions is 2, assigning the clause is 3 (across the
+  ## bottom under 1 and 2 only), the catch-all is 4 (full height on the
+  ## right).
+  steps_mg <- c("1. Define the groups",
+                "2. Exclusion rules for donor",
+                "3. Assign the clause", "4. Include a Catch All",
                 "Add group", "save_manual", "man_out")
   ok(all(vapply(steps_mg, function(k) at(mg, k), integer(1)) > 0),
      "every manual step is present")
-  ## Source order, not step number: the catch-all is step 5 but is
+  ## Source order, not step number: the catch-all is step 4 but is
   ## emitted as the third grid child, because it occupies the right-hand
-  ## column beside the step-4 row rather than following it.
-  src_order <- c("1. Definition of the strata", "2. Define the groups",
-                 "3. Exclusion rules for donor",
-                 "5. Include a Catch All", "4. Assign the clause",
+  ## column beside the step-3 row rather than following it.
+  src_order <- c("1. Define the groups",
+                 "2. Exclusion rules for donor",
+                 "4. Include a Catch All", "3. Assign the clause",
                  "Add group", "save_manual", "man_out")
   ok(all(diff(vapply(src_order, function(k) at(mg, k), integer(1))) > 0),
      "the manual deck emits its boxes, then the wide row, then the actions")
@@ -228,12 +228,12 @@ if (requireNamespace("shiny", quietly = TRUE)) {
               "2.4 Exclude a specific stratum",
               "Summary of currently excluded strata"))
     ok(grepl(k, ar, fixed = TRUE), paste("the cascade box states:", k))
-  for (k in c("3.1 Exclude by discard rate",
-              "3.3 Exclude by number of trips",
-              "3.4 Exclude a specific stratum",
-              "5.1 Exclude by discard rate",
-              "5.3 Exclude by number of trips",
-              "5.4 Exclude a specific stratum"))
+  for (k in c("2.1 Exclude by discard rate",
+              "2.3 Exclude by number of trips",
+              "2.4 Exclude a specific stratum",
+              "4.1 Exclude by discard rate",
+              "4.3 Exclude by number of trips",
+              "4.4 Exclude a specific stratum"))
     ok(grepl(k, mg, fixed = TRUE), paste("the manual builder states:", k))
 
   ## ---- 8b. length/age manual builder renumbered after the read-only
@@ -312,9 +312,9 @@ if (requireNamespace("shiny", quietly = TRUE)) {
   for (k in c("Hierarchical strata allocation builder",
               "Manual strata allocation builder"))
     ok(grepl(k, h, fixed = TRUE), paste("titled:", k))
-  for (k in c("1. Definition of the strata", "2. Define the groups",
-              "3. Exclusion rules", "4. Assign the clause",
-              "5. Include a Catch All by All"))
+  for (k in c("1. Define the groups",
+              "2. Exclusion rules", "3. Assign the clause",
+              "4. Include a Catch All by All"))
     ok(grepl(k, mg, fixed = TRUE), paste("manual step present:", k))
 
   ## ---- measurements is a BIOLOGY test only -------------------------

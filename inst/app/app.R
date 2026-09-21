@@ -1017,55 +1017,19 @@ deck_box <- function(title, ..., cls = "") div(class = paste("deckbox", cls),
 # the figure decks, so it can be pushed out of the way once the groups
 # are settled and the reader is working through the output tabs.
 # ------------------------------------------------------------
-#  Definition of the strata
+#  The strata are the strata as reported
 # ------------------------------------------------------------
 #
-# What a "stratum" IS, for a builder. Before this there was one answer:
-# the raw uploaded stratum - Country + fleetValue + areaValue + Season,
-# the four native CEF keys - was the only resolution "own data" could
-# mean, and a manual group's exclusion bars were measured at that same
-# raw resolution. A single uploaded stratum is never itself split by a
-# discard sample, so its coverage is always exactly 0% or 100% - there
-# is no in-between until strata are grouped into something coarser.
-#
-# This box is that grouping. "Use as provided" keeps the four native
-# keys - the resolution the data was submitted at, unchanged. "Customize"
-# offers five slots drawn from the same vocabulary as everything else in
-# the workbench: swap fleetValue for metier4, drop Area or Country
-# entirely, leave a slot empty for a coarser definition than the
-# default. Whatever is resolved becomes what "own stratum" means to a
-# hierarchical cascade, and the resolution a manual group's donor pool is
-# measured at.
+# A stratum here is the resolution the data was SUBMITTED at - Country +
+# fleetValue + areaValue + Season, the four native CEF keys - for every
+# builder, discard or length/age, hierarchical or manual. There used to be
+# a "Definition of the strata" box that let it be regrouped; it is gone,
+# because a stratum that changes under the reader's feet made every
+# coverage bar, exclusion and group mean something different from one
+# screen to the next. Columns a group's clause or a cascade key names are
+# still added to the table (metier4 is read off fleetValue, so that never
+# splits a stratum), but what a stratum IS does not move.
 DEFAULT_STRATA_VARS <- c("Country", "fleetValue", "areaValue", "Season")
-
-# p is a full, unique prefix - callers with more than one strata
-# definition on a page (length/age, which has an independent one for
-# the hierarchical builder and the manual builder) pass distinct
-# prefixes, not the panel's bare id, or the two would collide on the
-# same input ids.
-strata_def_ui <- function(p) {
-  ns <- function(x) paste0(p, "_", x)
-  slot <- function(i) column(2, selectInput(ns(paste0("sd", i)),
-    sprintf("Variable %d", i), NONE, DEFAULT_STRATA_VARS[i] %||% "",
-    width = "100%"))
-  tagList(
-    radioButtons(ns("sdmode"), NULL,
-                 c("Use as provided" = "asis",
-                   "Customize strata definition" = "custom"),
-                 "asis", inline = TRUE),
-    conditionalPanel(sprintf("input.%s == 'asis'", ns("sdmode")),
-      span(class = "note",
-           sprintf("The four native CEF keys, as submitted: %s.",
-                   paste(DEFAULT_STRATA_VARS, collapse = ", ")))),
-    conditionalPanel(sprintf("input.%s == 'custom'", ns("sdmode")),
-      span(class = "note",
-           "Up to five variables. A slot left at \"-- none --\" is simply ",
-           "not used - a coarser definition than the default, never a ",
-           "narrower one. This changes what every group and every rung ",
-           "below is built on."),
-      fluidRow(slot(1), slot(2), slot(3), slot(4), slot(5))),
-    uiOutput(ns("sd_summary")))
-}
 
 
 builder_deck <- function(id, label, boxes, actions, cols = NULL,
@@ -1285,42 +1249,19 @@ exclude_box <- function(p, metrics = c("coverage", "measurements", "rate"),
     rate_blk, cov_ui, trips_ui, meas_ui,
     sub("Exclude a specific stratum"),
     span(class = "note",
-         "By expert judgement, at either resolution. Picking from BOTH ",
-         "lists is fine - an outlier spotted in the raw submission and a ",
-         "pooled group that never reached its coverage bar are different ",
-         "kinds of decision, and either can apply. A pick moves to the ",
-         "list beneath its dropdown (click the cross to bring it back); ",
-         "the dropdown only offers strata inside this group's current ",
-         "matched condition. DR is discards / (landings + discards), D/L ",
-         "is discards / landings."),
+         "Strata as reported (Country | fleet | area | season). The ",
+         "dropdown only offers strata inside this group's current matched ",
+         "condition, and never one with no landings and no discards - that ",
+         "is not a data point. A pick moves to the list beneath it (click ",
+         "the cross to bring it back). DR is discards / (landings + ",
+         "discards), D/L is discards / landings."),
     radioButtons(n("sort"), "Order the list by", ord, ord[[1]], inline = TRUE),
-    tags$b("As submitted", style = "font-size:11px;display:block;margin-top:4px"),
-    span(class = "note",
-         "The four native CEF keys - the resolution coverage is always ",
-         "either 0% or 100% at, since a submitted row is never itself ",
-         "split by a sample."),
-    uiOutput(n("ui_sub")),
-    uiOutput(n("xlist_sub")),
-    tags$b("As aggregated",
-           style = "font-size:11px;display:block;margin-top:6px"),
-    span(class = "note",
-         "Whatever the Definition of the strata box resolved to. A group ",
-         "here can be partially covered, which the submitted list above ",
-         "cannot show."),
     uiOutput(n("ui")),
-    uiOutput(n("xlist")),
+    uiOutput(n("list")),
     uiOutput(n("note")),
     tags$b("Summary of currently excluded strata",
            style = "font-size:11.5px;display:block;margin-top:6px"),
-    tbl_slot(n("tbl")),
-    tags$b("Summary of data that will be used to raise",
-           style = "font-size:11.5px;display:block;margin-top:8px"),
-    span(class = "note",
-         "The donor pool as it stands: everything matching matchedDataCond, ",
-         "after every bar above. A warning here means the pool that is ",
-         "left may not be enough to raise from."),
-    uiOutput(n("used_warn")),
-    tbl_slot(n("used_tbl")))
+    tbl_slot(n("tbl")))
 }
 
 # Built like the clause builder on the grouping tabs: pick a variable
@@ -2223,18 +2164,17 @@ ui <- navbarPage(
           )))),
           conditionalPanel("input.grp_method == 'manual'", 
           builder_deck("mg", "Manual strata allocation builder",
-            # Catch-all is step 5 on the right, assigning the clause is
-            # step 4 across the bottom - as in the mock-up, shifted one
-            # place by the new strata-definition box at step 1.
-            top = list("Definition of the strata" = strata_def_ui("mg_sd")),
-            numbers = c("2", "3", "5"), grid = "mg-grid",
+            # Catch-all is step 4 on the right, assigning the clause is
+            # step 3 across the bottom - the same numbering as the
+            # length/age manual builder.
+            numbers = c("1", "2", "4"), grid = "mg-grid",
             boxes = list(
               "Define the groups of strata to raise / allocate" = tagList(
-                tags$b("2.1 Name the group",
+                tags$b("1.1 Name the group",
                        style = "font-size:11.5px;display:block"),
                 fluidRow(column(5, textInput("rule_id", "Id", "G1")),
                          column(7, textInput("rule_label", "Label", ""))),
-                tags$b("2.2 Rules to group",
+                tags$b("1.2 Rules to group",
                        style = "font-size:11.5px;display:block;margin-top:4px"),
                 span(class = "note", "A clause is one or more variable ",
                      "restrictions combined with AND. Add them one at a time."),
@@ -2252,7 +2192,7 @@ ui <- navbarPage(
                 uiOutput("rule_order")),
               "Exclusion rules for donor strata" = exclude_box(
                 "mg", metrics = c("coverage", "trips"), title = NULL,
-                num = "3", rate_ui = uiOutput("rule_dr_ui"),
+                num = "2", rate_ui = uiOutput("rule_dr_ui"),
                 note = paste("Narrows THIS group's matchedDataCond only -",
                              "never the strata being raised. The stratum",
                              "stays available to later groups and to the",
@@ -2266,7 +2206,7 @@ ui <- navbarPage(
                      "those earlier groups already used: a donor may be ",
                      "reused, only a raised stratum may not."),
                 exclude_box("ca", metrics = c("coverage", "trips"),
-                            title = NULL, num = "5",
+                            title = NULL, num = "4",
                             rate_ui = tagList(
                               fluidRow(
                                 column(6, numericInput("catchall_dr_min",
@@ -2285,7 +2225,7 @@ ui <- navbarPage(
                              class = "btn btn-addgrp btn-block",
                              style = "margin-top:6px"))),
             wide = list(
-              "4. Assign the clause" = div(
+              "3. Assign the clause" = div(
                 style = "display:flex;gap:8px;align-items:stretch",
                 div(style = "flex:1",
                   div(class = "condbox",
@@ -2525,16 +2465,6 @@ server <- function(input, output, session) {
   # unrelated-looking 'could not find flt_inputs' errors: they were all
   # one failure.
   #
-  # Server half of strata_def_ui(). Nested inside server() rather than a
-  # top-level function like the discard/manual servers below, because it
-  # needs input/output/session directly - dir_picker_server() takes
-  # those as explicit arguments instead, and either shape works, but
-  # this one has no other reason to live outside the server body.
-  #
-  # Returns a reactive() of the resolved column names. Called once per
-  # strata-definition box; the id passed here must match the one given
-  # to strata_def_ui().
-
   # One place that maps a coverage "view" (heatmap / bubbles / bars) onto
   # its split function, for the live plot (emit = FALSE) and the emitted
   # script line (emit = TRUE). `second` is the x column for heat / bubble
@@ -2568,71 +2498,14 @@ server <- function(input, output, session) {
     do.call(fn, a)
   }
 
-  strata_def_server <- function(p) {
-    ns <- function(x) paste0(p, "_", x)
-    observe({
-      ch <- c(NONE, gvars())
-      for (i in 1:5) {
-        id  <- ns(paste0("sd", i))
-        cur <- isolate(input[[id]])
-        def <- DEFAULT_STRATA_VARS[i] %||% ""
-        sel <- if (!is.null(cur) && (identical(cur, "") || cur %in% ch)) cur
-               else if (def %in% ch) def else ""
-        updateSelectInput(session, id, choices = ch, selected = sel)
-      }
-    })
-    dims <- reactive({
-      v <- if (identical(input[[ns("sdmode")]] %||% "asis", "custom")) {
-        picked <- vapply(1:5, function(i) input[[ns(paste0("sd", i))]] %||% "",
-                         character(1))
-        avail(unique(Filter(nzchar, picked)))
-      } else avail(DEFAULT_STRATA_VARS)
-      if (!length(v)) avail(DEFAULT_STRATA_VARS) else v
-    })
-    output[[ns("sd_summary")]] <- renderUI({
-      v <- dims()
-      div(class = "note", style = "margin-top:5px;color:#12324f;font-weight:600",
-          "Strata resolved to: ", paste(v, collapse = " + "))
-    })
-    dims
-  }
-  # Server half of the compact strata definition embedded in Key 1 of a
-  # hierarchical builder (see key1_strata_ui() further down, defined
-  # inline where it is used since it is small and specific to one
-  # layout). Same "as provided / customize" shape as strata_def_server(),
-  # but four family-named slots instead of five generic ones, each
-  # restricted to its OWN family's variables via key_vocab_grouped() -
-  # the Fleet slot only ever offers Fleet columns.
-  own_key_strata_server <- function(p) {
-    ns <- function(x) paste0(p, "_", x)
-    observe({
-      kv <- key_vocab_grouped(tryCatch(dat(), error = function(e) NULL))
-      upd <- function(fam, id, dflt) {
-        ch <- c(NONE, kv[[fam]] %||% character(0))
-        cur <- isolate(input[[id]])
-        sel <- if (!is.null(cur) && (identical(cur, "") || cur %in% ch)) cur
-               else if (dflt %in% ch) dflt else ""
-        updateSelectInput(session, id, choices = ch, selected = sel)
-      }
-      upd("Fleet",   ns("fleet"),   "fleetValue")
-      upd("Country", ns("country"), "Country")
-      upd("Area",    ns("area"),    "areaValue")
-      upd("Season",  ns("season"),  "Season")
-    })
-    dims <- reactive({
-      v <- if (identical(input[[ns("mode")]] %||% "asis", "custom")) {
-        picked <- c(input[[ns("fleet")]], input[[ns("country")]],
-                   input[[ns("area")]], input[[ns("season")]])
-        avail(unique(Filter(nzchar, picked)))
-      } else avail(DEFAULT_STRATA_VARS)
-      if (!length(v)) avail(DEFAULT_STRATA_VARS) else v
-    })
-    output[[ns("summary")]] <- renderUI({
-      div(class = "note", style = "margin-top:3px;color:#12324f;font-weight:600",
-          "Own stratum resolved to: ", paste(dims(), collapse = " + "))
-    })
-    dims
-  }
+  # The strata, always as reported. One reactive for every builder (the
+  # discard cascade's Key 1, the discard manual rules, and the length /
+  # age allocation builders) - there is no per-builder definition to
+  # keep in step any more.
+  as_reported_strata <- reactive({
+    v <- avail(DEFAULT_STRATA_VARS)
+    if (length(v)) v else DEFAULT_STRATA_VARS
+  })
 
 
   # ---------------------------------------------------------
@@ -2828,7 +2701,8 @@ server <- function(input, output, session) {
                                metrics = c("coverage", "measurements", "rate"),
                                dr_of = function() c(NA, NA),
                                scope_of = function() NULL,
-                               pool_of = function(st) NULL) {
+                               pool_of = function(st) NULL,
+                               pool_vars_of = function() character(0)) {
     # pool_of(st) is what narrows the "exclude a specific stratum"
     # DROPDOWN to the strata inside the group's current matched (donor)
     # condition: a logical over the rows of `st`, or NULL for "all". It is
@@ -2848,23 +2722,27 @@ server <- function(input, output, session) {
     # its dropdown, which then fills with chips until the list cannot be
     # read. The dropdown is a plain one-shot picker now; a pick lands in
     # the list below it and leaves the dropdown.
-    xsel <- reactiveValues(agg = character(0), sub = character(0))
+    xsel <- reactiveValues(keys = character(0))
     tbl <- function() {
       st <- try(strata_of(), silent = TRUE)
       if (inherits(st, "try-error") || is.null(st) || !nrow(st)) NULL else st
     }
 
-    # A second strata table, at the resolution the data was SUBMITTED
-    # at (the strata-definition box's "Use as provided"), built fresh
-    # from the raw catch data rather than re-aggregating tbl() - tbl()
-    # is already collapsed to dims_of() and the finer columns are gone
-    # by the time it exists. Carries both resolutions' columns, which is
-    # what lets a submitted-level pick be translated up to dims_of() via
-    # roll_up_excluded_keys() without guessing.
+    # The strata as REPORTED (Country + fleet + area + season), which is
+    # what a hand-picked exclusion is a pick of. Built fresh from the raw
+    # catch rather than re-aggregating tbl(), and carrying whatever extra
+    # columns the pool condition names (metier4 is read off fleetValue, so
+    # it never splits a stratum) - without them a condition on metier4
+    # cannot be evaluated here and the dropdown would silently offer every
+    # stratum. catchCategory is left out: as-reported strata do not have
+    # one, and a condition on it says nothing about which of them are worth
+    # offering.
     fine_tbl <- reactive({
       d <- tryCatch(dat(), error = function(e) NULL)
       if (is.null(d)) return(NULL)
-      fd <- unique(c(DEFAULT_STRATA_VARS, dims_of()))
+      fd <- setdiff(unique(c(DEFAULT_STRATA_VARS, dims_of(), pool_vars_of())),
+                    "catchCategory")
+      fd <- intersect(fd, names(d))
       tryCatch(build_strata(d, fd), error = function(e) NULL)
     })
 
@@ -2907,18 +2785,14 @@ server <- function(input, output, session) {
                     0, top, c(val, top), step = 1, width = "100%")
       })
 
-    # Submitted-level picks, rolled up to dims_of() resolution so
-    # everything downstream (the expression, the report, the pool
-    # summary) sees ONE unified named set and never has to know two
-    # resolutions were involved.
+    # The picks are stratum keys at the reported resolution; rolled up to
+    # dims_of() so everything downstream (the expression, the report) sees
+    # ONE named set at the resolution the group is built on.
     named_resolved <- reactive({
-      agg <- xsel$agg
-      sub <- xsel$sub
-      ft  <- fine_tbl()
-      rolled <- if (length(sub) && !is.null(ft))
-        roll_up_excluded_keys(ft, sub, DEFAULT_STRATA_VARS, dims_of())
+      ft <- fine_tbl()
+      if (length(xsel$keys) && !is.null(ft))
+        roll_up_excluded_keys(ft, xsel$keys, DEFAULT_STRATA_VARS, dims_of())
       else character(0)
-      unique(c(agg, rolled))
     })
 
     # One settings object, so the expression on screen, the expression in
@@ -2958,55 +2832,54 @@ server <- function(input, output, session) {
       d <- report(); if (is.null(d)) character(0) else d$key
     })
 
-    # One-shot pickers. The blank first entry is the resting state, so a
+    # A stratum with no landings and no discards is not a data point - it
+    # is a cell the grid happened to contain - so it is never offered. One
+    # with landings and a discard rate of 0 IS real, and stays.
+    real_rows <- function(st) {
+      if (is.null(st) || !nrow(st)) return(st)
+      nz <- function(v) { v <- suppressWarnings(as.numeric(v)); v[is.na(v)] <- 0; v }
+      keep <- if (all(c("landings", "discards") %in% names(st)))
+        nz(st$landings) > 0 | nz(st$discards) > 0
+      else if ("weight" %in% names(st)) nz(st$weight) > 0
+      else rep(TRUE, nrow(st))
+      st[keep, , drop = FALSE]
+    }
+
+    # One-shot picker. The blank first entry is the resting state, so a
     # re-render (which happens on every pick, because the list of choices
     # shrinks) comes back empty rather than showing the last pick.
-    pick_ui <- function(id, st, dims, already) {
+    output[[paste0(p, "_xui")]] <- renderUI({
+      st <- fine_tbl()
       ch <- if (is.null(st)) character(0)
-            else exclusion_choices(in_pool(st), dims,
+            else exclusion_choices(in_pool(real_rows(st)), DEFAULT_STRATA_VARS,
                    order_by = input[[paste0(p, "_xsort")]] %||% "weight")
-      ch <- ch[!ch %in% already]
-      selectizeInput(id, NULL,
+      ch <- ch[!ch %in% xsel$keys]
+      selectizeInput(paste0(p, "_xpick"), NULL,
         choices = c(stats::setNames("", if (length(ch)) "Pick a stratum to exclude..."
                                          else "(nothing left to offer)"), ch),
         selected = "", multiple = FALSE, width = "100%",
         options = list(placeholder = "Pick a stratum to exclude..."))
-    }
-    output[[paste0(p, "_xui")]] <- renderUI(
-      pick_ui(paste0(p, "_xpick"), tbl(), dims_of(), xsel$agg))
-
-    # The submitted-resolution twin. Built on fine_tbl(), grouped down
-    # to DEFAULT_STRATA_VARS rather than dims_of() - "as submitted" means
-    # the four native CEF keys regardless of what the strata-definition
-    # box currently resolves to, so a customised (coarser) definition
-    # does not also coarsen this list.
-    output[[paste0(p, "_xui_sub")]] <- renderUI(
-      pick_ui(paste0(p, "_xpick_sub"), fine_tbl(), DEFAULT_STRATA_VARS,
-              xsel$sub))
-
+    })
     observeEvent(input[[paste0(p, "_xpick")]], {
       k <- input[[paste0(p, "_xpick")]]
-      if (length(k) == 1L && nzchar(k) && !k %in% xsel$agg)
-        xsel$agg <- c(xsel$agg, k)
-    }, ignoreInit = TRUE)
-    observeEvent(input[[paste0(p, "_xpick_sub")]], {
-      k <- input[[paste0(p, "_xpick_sub")]]
-      if (length(k) == 1L && nzchar(k) && !k %in% xsel$sub)
-        xsel$sub <- c(xsel$sub, k)
+      if (length(k) == 1L && nzchar(k) && !k %in% xsel$keys)
+        xsel$keys <- c(xsel$keys, k)
     }, ignoreInit = TRUE)
 
     # Already-excluded list, one removable chip per pick, carrying the same
     # numbers the dropdown showed so the decision can be re-read.
-    picked_ui <- function(keys, st, dims, which) {
+    output[[paste0(p, "_xlist")]] <- renderUI({
+      keys <- xsel$keys
       if (!length(keys))
         return(div(class = "note", "Nothing picked by hand."))
-      lab <- if (is.null(st)) NULL else exclusion_choices(st, dims)
+      st <- fine_tbl()
+      lab <- if (is.null(st)) NULL else exclusion_choices(st, DEFAULT_STRATA_VARS)
       tags$div(style = "margin:3px 0 6px 0",
         lapply(keys, function(k) {
           txt <- if (!is.null(lab) && k %in% lab) names(lab)[match(k, lab)] else k
           js <- sprintf("Shiny.setInputValue('%s', %s, {priority:'event'})",
                         paste0(p, "_xdel"),
-                        jsonlite::toJSON(list(k = k, w = which), auto_unbox = TRUE))
+                        jsonlite::toJSON(list(k = k), auto_unbox = TRUE))
           div(style = paste("display:flex;align-items:flex-start;gap:6px;",
                             "background:#fff3f3;border:1px solid #e3b1b1;",
                             "border-radius:5px;padding:2px 6px;margin:2px 0;",
@@ -3016,15 +2889,9 @@ server <- function(input, output, session) {
               tags$button(type = "button", class = "rulebtn", title = "Put back",
                           HTML("&#10005;"), onclick = js))
         }))
-    }
-    output[[paste0(p, "_xlist")]] <- renderUI(
-      picked_ui(xsel$agg, tbl(), dims_of(), "agg"))
-    output[[paste0(p, "_xlist_sub")]] <- renderUI(
-      picked_ui(xsel$sub, fine_tbl(), DEFAULT_STRATA_VARS, "sub"))
+    })
     observeEvent(input[[paste0(p, "_xdel")]], {
-      x <- input[[paste0(p, "_xdel")]]
-      if (identical(x$w, "agg")) xsel$agg <- setdiff(xsel$agg, x$k)
-      else if (identical(x$w, "sub")) xsel$sub <- setdiff(xsel$sub, x$k)
+      xsel$keys <- setdiff(xsel$keys, input[[paste0(p, "_xdel")]]$k)
     })
 
     output[[paste0(p, "_xnote")]] <- renderUI({
@@ -3050,78 +2917,6 @@ server <- function(input, output, session) {
       d[num] <- lapply(d[num], function(x) round(x, 3))
       datatable(d, rownames = FALSE,
                 options = list(scrollX = TRUE, pageLength = 8)) })
-
-    # The pool as it stands after every bar: what a group would actually
-    # borrow from. donor_pool_summary() checks the POOL's own combined
-    # coverage against a sanity threshold (50% by default) that is
-    # deliberately separate from cov_min - a pool built with no
-    # per-stratum floor at all can still look too thin once combined,
-    # which is exactly what a per-stratum bar cannot catch.
-    pool <- reactive({
-      st <- tbl(); if (is.null(st)) return(NULL)
-      sp <- spec()
-      warn_meas  <- if ("measurements" %in% metrics) 100 else NA
-      warn_trips <- if ("trips" %in% metrics) 2 else NA
-      donor_pool_summary(st, dims_of(), sp$named, sp$cov_min, sp$meas_min,
-                         sp$dr_min, sp$dr_max,
-                         warn_cov_min = 50, warn_meas_min = warn_meas,
-                         trips_min = sp$trips_min, warn_trips_min = warn_trips)
-    })
-    # Every coverage / trips / measurements slider above feeds spec(),
-    # which feeds pool() directly and un-gated (there is no Apply here -
-    # a donor bar is meant to react as you set it). A slider fires many
-    # input events per second while being dragged, and donor_pool_summary()
-    # is not cheap (it walks the strata table twice, once for its own
-    # aggregate and once inside exclusion_overview()'s per-stratum
-    # pass) - so on a real dataset the render queue never caught up with
-    # the drag, and the "recalculating" overlay looked stuck rather than
-    # slow. debounce() lets pool() keep recomputing on every tick
-    # internally (cheap consumers can still read it live), but only
-    # pool_d() - what the two expensive renders below actually use -
-    # settles 400ms after the LAST tick, so a drag produces one render
-    # instead of dozens.
-    pool_d <- debounce(pool, 400)
-
-    output[[paste0(p, "_used_warn")]] <- renderUI({
-      s <- pool_d()
-      if (is.null(s) || s$n_strata == 0)
-        return(div(class = "note", style = "color:#7a1f1f;font-weight:600",
-                   "Nothing is left to raise from - every stratum was excluded."))
-      if (isTRUE(s$ok)) return(NULL)
-      bits <- character(0)
-      if (!is.na(s$n_measurements) && "measurements" %in% metrics &&
-            s$n_measurements < 100)
-        bits <- c(bits, sprintf("only %d measurements", round(s$n_measurements)))
-      if (!is.na(s$numTrips) && "trips" %in% metrics && s$numTrips < 2)
-        bits <- c(bits, sprintf("only %d trips", round(s$numTrips)))
-      div(class = "note", style = "color:#9a5000;font-weight:600",
-          sprintf("Warning: the combined pool covers %s%% of its weight%s. ",
-                  if (is.na(s$coverage)) "an unknown" else round(s$coverage, 1),
-                  if (length(bits)) paste0(" with ", paste(bits, collapse = " and "))
-                  else ""),
-          "That may not be enough to raise from - widen the group, loosen ",
-          "a bar, or accept the risk knowingly.")
-    })
-
-    output[[paste0(p, "_used_tbl")]] <- renderDT({
-      s <- pool_d()
-      validate(need(!is.null(s) && s$n_strata > 0, "Nothing left to raise from."))
-      d <- data.frame(
-        `strata in`   = s$n_strata,
-        `weight`      = round(s$weight, 2),
-        `coverage %`  = if (is.na(s$coverage)) NA else round(s$coverage, 1),
-        check.names = FALSE, stringsAsFactors = FALSE)
-      if ("rate" %in% metrics) {
-        d[["discard rate"]] <- if (is.na(s$discard_rate)) NA
-                                else round(s$discard_rate, 4)
-        d[["D/L"]] <- if (is.null(s$dl_ratio) || is.na(s$dl_ratio)) NA
-                       else round(s$dl_ratio, 4)
-      }
-      if ("trips" %in% metrics)
-        d[["trips"]] <- if (is.na(s$numTrips)) NA else round(s$numTrips)
-      if ("measurements" %in% metrics)
-        d[["measurements"]] <- round(s$n_measurements)
-      datatable(d, rownames = FALSE, options = list(dom = "t")) })
 
     # `bars` is what a rule should STORE: the thresholds themselves plus
     # only the hand-picked keys. `keys` is the resolved list, for the
@@ -3908,7 +3703,7 @@ server <- function(input, output, session) {
     # sub-mode within the SAME p) neither method actually asked for.
     # The editable box lives on the hierarchical panel; the manual panel
     # shows a read-only mirror of the same resolved columns.
-    strata_dims <- own_key_strata_server(ns("hsd"))
+    strata_dims <- reactive(as_reported_strata())
     # Every column a saved group's clause names has to be on the strata
     # table the groups are evaluated against, or the clause errors
     # inside assign_alloc_groups() and the group silently takes nothing:
@@ -4036,31 +3831,19 @@ server <- function(input, output, session) {
           actionButton(ns("setall_both"), "Apply to all", class="btn-xs btn-primary"),
           actionButton(ns("setall_lan"),  "To landings",  class="btn-xs"),
           actionButton(ns("setall_dis"),  "To discards",  class="btn-xs")))
-      # Key 1 carries its OWN strata-definition choice now, the same
-      # compact "Use as provided / Customize" widget the discard cascade
-      # uses - what "own stratum" means IS a Key 1 decision, not a
-      # preamble to it. Wider than the other rows' keybox (8 columns
-      # instead of 4) and the threshold panes narrower to match, since
-      # four family slots need more room than a fixed label did.
-      k1ns <- function(x) paste0(ns("hsd"), "_", x)
+      # Key 1 is the stratum as reported - fixed, so it shows what it is
+      # rather than offering to change it.
       kv <- key_vocab_grouped(tryCatch(dat(), error = function(e) NULL))
-      slot <- function(fam, id) column(3,
-        selectInput(k1ns(id), fam, c(NONE, kv[[fam]] %||% character(0)),
-                   input[[k1ns(id)]] %||% "", width = "100%"))
       k1 <- tagList(
         fluidRow(class = "hier-key-row",
           column(8,
             tags$b("Key 1"), tags$span(class = "note", " - Own stratum"),
-            radioButtons(k1ns("mode"), NULL,
-                         c("Use as provided" = "asis",
-                           "Customize" = "custom"), "asis", inline = TRUE)),
+            div(class = "note",
+                style = "margin-top:3px;color:#12324f;font-weight:600",
+                "Strata as reported: ",
+                paste(DEFAULT_STRATA_VARS, collapse = " + "))),
           column(2, cc_pane(1, "lan", 50, 0)),
-          column(2, cc_pane(1, "dis", 30, 0))),
-        conditionalPanel(sprintf("input.%s == 'custom'", k1ns("mode")),
-          fluidRow(class = "hier-key-row",
-            slot("Fleet", "fleet"), slot("Country", "country"),
-            slot("Area", "area"), slot("Season", "season"))),
-        uiOutput(k1ns("summary")))
+          column(2, cc_pane(1, "dis", 30, 0))))
       cc <- fluidRow(class = "hier-key-row",
         column(4, div(class = "hier-key-fixed",
                       style = if (keep_cc()) "border-left:5px solid #59A14F" else
@@ -4429,8 +4212,14 @@ server <- function(input, output, session) {
     # group's matched (donor) condition selects. Until a matched clause
     # is set it mirrors the allocation clause, exactly as saving a group
     # does; with neither, every stratum is on offer.
-    donor_scope <- function(st) {
+    donor_clause <- function() {
       cl <- getrv("match_pend") %||% getrv("alloc_pend")
+      # the strata offered are the ones as reported, which carry no
+      # catch category - a clause on it cannot narrow them
+      cl[setdiff(names(cl), "catchCategory")]
+    }
+    donor_scope <- function(st) {
+      cl <- donor_clause()
       if (!length(cl)) return(NULL)
       rlang::eval_tidy(alloc_quo(cl), data = st)
     }
@@ -4438,7 +4227,8 @@ server <- function(input, output, session) {
       strata_of = function() bl_metrics(),
       dims_of   = alloc_dims,
       metrics   = c("coverage", "trips", "measurements"),
-      pool_of   = donor_scope)
+      pool_of   = donor_scope,
+      pool_vars_of = function() names(donor_clause()))
 
     ca_keys_srv <- exclusion_server(ns("ca"),
       strata_of = function() bl_metrics(),
@@ -5578,7 +5368,7 @@ server <- function(input, output, session) {
   # fragile: it only works because nothing forces hier_keys to render
   # before this line runs once at session start, which is not a
   # guarantee worth relying on when moving the assignment costs nothing.
-  ar_strata_dims <- own_key_strata_server("ar_k1")
+  ar_strata_dims <- reactive(as_reported_strata())
   ar_dims <- reactive(avail(unique(c(ar_strata_dims(), hier_cols()))))
 
   # the own-stratum threshold is Key 1's slider
@@ -5587,29 +5377,18 @@ server <- function(input, output, session) {
     if (is.null(x) || all(is.na(x))) 50 else as.numeric(x)[1] })
 
   output$hier_keys <- renderUI({
-    # Key 1: own stratum, with its OWN strata-definition mini-widget
-    # ("Use as provided" / "Customize", four family-named slots) instead
-    # of a separate top box - what "own stratum" means IS a Key 1
-    # decision, not a preamble to it.
-    k1ns <- function(x) paste0("ar_k1_", x)
+    # Key 1: own stratum - the stratum as reported, fixed.
     kv <- key_vocab_grouped(tryCatch(dat(), error = function(e) NULL))
-    slot <- function(fam, id) column(3,
-      selectInput(k1ns(id), fam, c(NONE, kv[[fam]] %||% character(0)),
-                 input[[k1ns(id)]] %||% "", width = "100%"))
     key1 <- tagList(
       fluidRow(class = "hier-key-row",
         column(8,
           tags$b("Key 1"), tags$span(class = "note", " - Own stratum"),
-          radioButtons(k1ns("mode"), NULL,
-                       c("Use as provided" = "asis",
-                         "Customize" = "custom"), "asis", inline = TRUE)),
+          div(class = "note",
+              style = "margin-top:3px;color:#12324f;font-weight:600",
+              "Strata as reported: ",
+              paste(DEFAULT_STRATA_VARS, collapse = " + "))),
         column(4, sliderInput("thr_1", "threshold %", 0, 100,
-                              c(input$threshold %||% 50, 100), 5))),
-      conditionalPanel(sprintf("input.%s == 'custom'", k1ns("mode")),
-        fluidRow(class = "hier-key-row",
-          slot("Fleet", "fleet"), slot("Country", "country"),
-          slot("Area", "area"), slot("Season", "season"))),
-      uiOutput(k1ns("summary")))
+                              c(input$threshold %||% 50, 100), 5))))
 
     # Keys 2..N: the cascade-key vocabulary, grouped into Fleet / Country
     # / Area / Season optgroups so the dropdown reads as four questions
@@ -5820,6 +5599,11 @@ server <- function(input, output, session) {
       src <- rv$pend_source %||% rv$pend_raise
       if (!length(src)) return(NULL)
       eval_clauses(st, src, rv$sets)
+    },
+    pool_vars_of = function() {
+      src <- rv$pend_source %||% rv$pend_raise
+      setdiff(vapply(src %||% list(), function(cl) cl$var %||% "", character(1)),
+              c("", "catchCategory"))
     })
 
   ca_excl_keys_srv <- exclusion_server("ca",
@@ -6109,7 +5893,7 @@ server <- function(input, output, session) {
   # its coverage was always exactly 0% or 100% - no group could ever be
   # "50% covered". Grouping the strata coarser than submission is what
   # makes a coverage bar mean anything here.
-  mg_strata_dims <- strata_def_server("mg_sd")
+  mg_strata_dims <- reactive(as_reported_strata())
   mg_dims <- reactive({
     vars <- unlist(lapply(rv$rules, function(r) {
       cl <- fld(r, "clauses", list())

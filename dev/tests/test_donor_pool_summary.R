@@ -116,12 +116,16 @@ if (nzchar(app)) {
   ok(!grepl('if ("rate" %in% metrics) c("Discard rate" = "rate")',
             txt, fixed = TRUE),
      "not on a metrics flag no caller ever set")
-  ## the two-resolution dropdowns and the used-to-raise summary exist
-  for (k in c('output[[paste0(p, "_xui_sub")]]',
-              'output[[paste0(p, "_used_warn")]]',
-              'output[[paste0(p, "_used_tbl")]]',
+  ## one picker over the strata as reported, and its list of picks
+  for (k in c('output[[paste0(p, "_xui")]]',
+              'output[[paste0(p, "_xlist")]]',
               "fine_tbl <- reactive", "named_resolved <- reactive"))
     ok(grepl(k, txt, fixed = TRUE), paste("exclusion_server defines:", k))
+  ## ...and no longer the aggregated twin or the always-recomputing
+  ## "used to raise" summary (donor_pool_summary() itself stays: it is
+  ## exported and tested above, just not rendered in the exclusion box)
+  for (k in c('_xui_sub', '_used_warn', '_used_tbl', 'pool_d <- debounce'))
+    ok(!grepl(k, txt, fixed = TRUE), paste("exclusion_server no longer has:", k))
 }
 
 cat("\nDONE ", FAIL, "failure(s)", "\n")
