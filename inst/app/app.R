@@ -1272,7 +1272,7 @@ exclude_box <- function(p, metrics = c("coverage", "measurements", "rate"),
            # slider via rate_ui, but none of them ever added "rate" to
            # metrics, so this option never appeared - the sort-by-rate
            # feature was there in code but unreachable from any screen.
-           if (!is.null(rate_ui)) c("Discard rate" = "rate"),
+           if (!is.null(rate_ui)) c("Discard rate" = "rate", "D/L" = "dl"),
            if ("measurements" %in% metrics) c("Measurements" = "measurements"),
            if ("trips" %in% metrics) c("Trips" = "trips"))
   tagList(
@@ -1288,7 +1288,11 @@ exclude_box <- function(p, metrics = c("coverage", "measurements", "rate"),
          "By expert judgement, at either resolution. Picking from BOTH ",
          "lists is fine - an outlier spotted in the raw submission and a ",
          "pooled group that never reached its coverage bar are different ",
-         "kinds of decision, and either can apply."),
+         "kinds of decision, and either can apply. A pick moves to the ",
+         "list beneath its dropdown (click the cross to bring it back); ",
+         "the dropdown only offers strata inside this group's current ",
+         "matched condition. DR is discards / (landings + discards), D/L ",
+         "is discards / landings."),
     radioButtons(n("sort"), "Order the list by", ord, ord[[1]], inline = TRUE),
     tags$b("As submitted", style = "font-size:11px;display:block;margin-top:4px"),
     span(class = "note",
@@ -1296,6 +1300,7 @@ exclude_box <- function(p, metrics = c("coverage", "measurements", "rate"),
          "either 0% or 100% at, since a submitted row is never itself ",
          "split by a sample."),
     uiOutput(n("ui_sub")),
+    uiOutput(n("xlist_sub")),
     tags$b("As aggregated",
            style = "font-size:11px;display:block;margin-top:6px"),
     span(class = "note",
@@ -1303,6 +1308,7 @@ exclude_box <- function(p, metrics = c("coverage", "measurements", "rate"),
          "here can be partially covered, which the submitted list above ",
          "cannot show."),
     uiOutput(n("ui")),
+    uiOutput(n("xlist")),
     uiOutput(n("note")),
     tags$b("Summary of currently excluded strata",
            style = "font-size:11.5px;display:block;margin-top:6px"),
@@ -2821,7 +2827,28 @@ server <- function(input, output, session) {
   exclusion_server <- function(p, strata_of, dims_of,
                                metrics = c("coverage", "measurements", "rate"),
                                dr_of = function() c(NA, NA),
-                               scope_of = function() NULL) {
+                               scope_of = function() NULL,
+                               pool_of = function(st) NULL) {
+    # pool_of(st) is what narrows the "exclude a specific stratum"
+    # DROPDOWN to the strata inside the group's current matched (donor)
+    # condition: a logical over the rows of `st`, or NULL for "all". It is
+    # separate from scope_of, which shapes the table of what is excluded -
+    # the dropdown is only about what is worth OFFERING.
+    in_pool <- function(st) {
+      if (is.null(st) || !nrow(st)) return(st)
+      h <- tryCatch(pool_of(st), error = function(e) NULL)
+      if (is.null(h)) return(st)
+      if (length(h) == 1L) h <- rep(h, nrow(st))
+      if (length(h) != nrow(st)) return(st)
+      h[is.na(h)] <- FALSE
+      st[h, , drop = FALSE]
+    }
+    # What has been picked by hand, per resolution. Kept here rather than
+    # in a multi-select's own value: a multi-select keeps every pick INSIDE
+    # its dropdown, which then fills with chips until the list cannot be
+    # read. The dropdown is a plain one-shot picker now; a pick lands in
+    # the list below it and leaves the dropdown.
+    xsel <- reactiveValues(agg = character(0), sub = character(0))
     tbl <- function() {
       st <- try(strata_of(), silent = TRUE)
       if (inherits(st, "try-error") || is.null(st) || !nrow(st)) NULL else st
@@ -2885,8 +2912,8 @@ server <- function(input, output, session) {
     # summary) sees ONE unified named set and never has to know two
     # resolutions were involved.
     named_resolved <- reactive({
-      agg <- input[[paste0(p, "_xnamed")]] %||% character(0)
-      sub <- input[[paste0(p, "_xnamed_sub")]] %||% character(0)
+      agg <- xsel$agg
+      sub <- xsel$sub
       ft  <- fine_tbl()
       rolled <- if (length(sub) && !is.null(ft))
         roll_up_excluded_keys(ft, sub, DEFAULT_STRATA_VARS, dims_of())
@@ -2931,30 +2958,74 @@ server <- function(input, output, session) {
       d <- report(); if (is.null(d)) character(0) else d$key
     })
 
-    output[[paste0(p, "_xui")]] <- renderUI({
-      st <- tbl()
-      selectizeInput(paste0(p, "_xnamed"), NULL,
-        choices = if (is.null(st)) character(0)
-                  else exclusion_choices(st, dims_of(),
-                         order_by = input[[paste0(p, "_xsort")]] %||% "weight"),
-        selected = isolate(input[[paste0(p, "_xnamed")]]),
-        multiple = TRUE, width = "100%",
-        options = list(placeholder = "no stratum excluded")) })
+    # One-shot pickers. The blank first entry is the resting state, so a
+    # re-render (which happens on every pick, because the list of choices
+    # shrinks) comes back empty rather than showing the last pick.
+    pick_ui <- function(id, st, dims, already) {
+      ch <- if (is.null(st)) character(0)
+            else exclusion_choices(in_pool(st), dims,
+                   order_by = input[[paste0(p, "_xsort")]] %||% "weight")
+      ch <- ch[!ch %in% already]
+      selectizeInput(id, NULL,
+        choices = c(stats::setNames("", if (length(ch)) "Pick a stratum to exclude..."
+                                         else "(nothing left to offer)"), ch),
+        selected = "", multiple = FALSE, width = "100%",
+        options = list(placeholder = "Pick a stratum to exclude..."))
+    }
+    output[[paste0(p, "_xui")]] <- renderUI(
+      pick_ui(paste0(p, "_xpick"), tbl(), dims_of(), xsel$agg))
 
     # The submitted-resolution twin. Built on fine_tbl(), grouped down
     # to DEFAULT_STRATA_VARS rather than dims_of() - "as submitted" means
     # the four native CEF keys regardless of what the strata-definition
     # box currently resolves to, so a customised (coarser) definition
     # does not also coarsen this list.
-    output[[paste0(p, "_xui_sub")]] <- renderUI({
-      st <- fine_tbl()
-      selectizeInput(paste0(p, "_xnamed_sub"), NULL,
-        choices = if (is.null(st)) character(0)
-                  else exclusion_choices(st, DEFAULT_STRATA_VARS,
-                         order_by = input[[paste0(p, "_xsort")]] %||% "weight"),
-        selected = isolate(input[[paste0(p, "_xnamed_sub")]]),
-        multiple = TRUE, width = "100%",
-        options = list(placeholder = "no stratum excluded")) })
+    output[[paste0(p, "_xui_sub")]] <- renderUI(
+      pick_ui(paste0(p, "_xpick_sub"), fine_tbl(), DEFAULT_STRATA_VARS,
+              xsel$sub))
+
+    observeEvent(input[[paste0(p, "_xpick")]], {
+      k <- input[[paste0(p, "_xpick")]]
+      if (length(k) == 1L && nzchar(k) && !k %in% xsel$agg)
+        xsel$agg <- c(xsel$agg, k)
+    }, ignoreInit = TRUE)
+    observeEvent(input[[paste0(p, "_xpick_sub")]], {
+      k <- input[[paste0(p, "_xpick_sub")]]
+      if (length(k) == 1L && nzchar(k) && !k %in% xsel$sub)
+        xsel$sub <- c(xsel$sub, k)
+    }, ignoreInit = TRUE)
+
+    # Already-excluded list, one removable chip per pick, carrying the same
+    # numbers the dropdown showed so the decision can be re-read.
+    picked_ui <- function(keys, st, dims, which) {
+      if (!length(keys))
+        return(div(class = "note", "Nothing picked by hand."))
+      lab <- if (is.null(st)) NULL else exclusion_choices(st, dims)
+      tags$div(style = "margin:3px 0 6px 0",
+        lapply(keys, function(k) {
+          txt <- if (!is.null(lab) && k %in% lab) names(lab)[match(k, lab)] else k
+          js <- sprintf("Shiny.setInputValue('%s', %s, {priority:'event'})",
+                        paste0(p, "_xdel"),
+                        jsonlite::toJSON(list(k = k, w = which), auto_unbox = TRUE))
+          div(style = paste("display:flex;align-items:flex-start;gap:6px;",
+                            "background:#fff3f3;border:1px solid #e3b1b1;",
+                            "border-radius:5px;padding:2px 6px;margin:2px 0;",
+                            "font-size:11px"),
+              tags$span(style = "flex:1;font-family:monospace;word-break:break-all",
+                        txt),
+              tags$button(type = "button", class = "rulebtn", title = "Put back",
+                          HTML("&#10005;"), onclick = js))
+        }))
+    }
+    output[[paste0(p, "_xlist")]] <- renderUI(
+      picked_ui(xsel$agg, tbl(), dims_of(), "agg"))
+    output[[paste0(p, "_xlist_sub")]] <- renderUI(
+      picked_ui(xsel$sub, fine_tbl(), DEFAULT_STRATA_VARS, "sub"))
+    observeEvent(input[[paste0(p, "_xdel")]], {
+      x <- input[[paste0(p, "_xdel")]]
+      if (identical(x$w, "agg")) xsel$agg <- setdiff(xsel$agg, x$k)
+      else if (identical(x$w, "sub")) xsel$sub <- setdiff(xsel$sub, x$k)
+    })
 
     output[[paste0(p, "_xnote")]] <- renderUI({
       e <- expr(); n <- length(keys())
@@ -3040,9 +3111,12 @@ server <- function(input, output, session) {
         `weight`      = round(s$weight, 2),
         `coverage %`  = if (is.na(s$coverage)) NA else round(s$coverage, 1),
         check.names = FALSE, stringsAsFactors = FALSE)
-      if ("rate" %in% metrics)
+      if ("rate" %in% metrics) {
         d[["discard rate"]] <- if (is.na(s$discard_rate)) NA
                                 else round(s$discard_rate, 4)
+        d[["D/L"]] <- if (is.null(s$dl_ratio) || is.na(s$dl_ratio)) NA
+                       else round(s$dl_ratio, 4)
+      }
       if ("trips" %in% metrics)
         d[["trips"]] <- if (is.na(s$numTrips)) NA else round(s$numTrips)
       if ("measurements" %in% metrics)
@@ -3848,6 +3922,11 @@ server <- function(input, output, session) {
         list(x$alloc_expr, x$matched_expr), function(q)
           if (is.null(q)) character(0)
           else all.vars(if (rlang::is_quosure(q)) rlang::quo_get_expr(q) else q)))))
+      # ...and the clauses still being built: the exclusion dropdown is
+      # narrowed to the CURRENT matched condition, which is not a saved
+      # group yet, so its columns have to be there too
+      v <- c(v, names(getrv("clause")), names(getrv("alloc_pend")),
+             names(getrv("match_pend")))
       setdiff(unique(v), c("coverage", "n_measurements", "numTrips",
                            "discard_rate", "stratum_weight", "weight"))
     }
@@ -4346,10 +4425,20 @@ server <- function(input, output, session) {
       intersect(c("catchCategory", len_dims(p)),
                 names(bl_metrics() %||% data.frame()))
 
+    # The strata worth OFFERING in the exclusion dropdown: the ones the
+    # group's matched (donor) condition selects. Until a matched clause
+    # is set it mirrors the allocation clause, exactly as saving a group
+    # does; with neither, every stratum is on offer.
+    donor_scope <- function(st) {
+      cl <- getrv("match_pend") %||% getrv("alloc_pend")
+      if (!length(cl)) return(NULL)
+      rlang::eval_tidy(alloc_quo(cl), data = st)
+    }
     x_keys_srv <- exclusion_server(ns("x"),
       strata_of = function() bl_metrics(),
       dims_of   = alloc_dims,
-      metrics   = c("coverage", "trips", "measurements"))
+      metrics   = c("coverage", "trips", "measurements"),
+      pool_of   = donor_scope)
 
     ca_keys_srv <- exclusion_server(ns("ca"),
       strata_of = function() bl_metrics(),
@@ -5724,7 +5813,14 @@ server <- function(input, output, session) {
     strata_of = function() build_strata(dat(), mg_dims()),
     dims_of   = function() mg_dims(),
     metrics   = c("coverage", "trips", "rate"),
-    dr_of     = function() rule_dr())
+    dr_of     = function() rule_dr(),
+    # only the strata the rule's matched (source) condition selects; it
+    # mirrors the raise condition until one is set, as saving a rule does
+    pool_of   = function(st) {
+      src <- rv$pend_source %||% rv$pend_raise
+      if (!length(src)) return(NULL)
+      eval_clauses(st, src, rv$sets)
+    })
 
   ca_excl_keys_srv <- exclusion_server("ca",
     strata_of = function() build_strata(dat(), mg_dims()),

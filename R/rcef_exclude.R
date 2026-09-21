@@ -57,7 +57,8 @@ stratum_keys <- function(strata, dims) {
 #' @param strata A stratum table.
 #' @param dims The key columns.
 #' @return A data frame with `key`, and whichever of `weight`,
-#'   `coverage`, `discard_rate` and `n_measurements` could be computed.
+#'   `coverage`, `discard_rate`, `dl_ratio` (discards / landings) and
+#'   `n_measurements` could be computed.
 #' @seealso [exclusion_choices()], [excluded_keys()]
 #' @export
 stratum_metrics <- function(strata, dims) {
@@ -82,6 +83,12 @@ stratum_metrics <- function(strata, dims) {
   parts <- split(seq_len(nrow(d)), key)
   cov <- col("coverage"); dr <- col("discard_rate"); nm <- col("n_measurements")
   tr  <- col("numTrips")
+  # D/L: discards over landings, the plain ratio some people read more
+  # naturally than the discard rate (which divides by landings PLUS
+  # discards). A ratio of sums, not a weighted mean of ratios, so a
+  # stratum's D/L is its own total discards over its own total landings.
+  # Only where both columns exist - a biology link carries no discards.
+  dis <- col("discards"); lan <- col("landings")
 
   out <- data.frame(
     key = names(parts),
@@ -98,6 +105,10 @@ stratum_metrics <- function(strata, dims) {
         if (!any(ok)) NA_real_
         else if (sum(ww[ok]) > 0) sum(xx[ok] * ww[ok]) / sum(ww[ok])
         else mean(xx[ok]) } }, numeric(1)),
+    dl_ratio = vapply(parts, function(i) {
+      if (is.null(dis) || is.null(lan)) NA_real_ else {
+        L <- sum(lan[i], na.rm = TRUE)
+        if (L > 0) sum(dis[i], na.rm = TRUE) / L else NA_real_ } }, numeric(1)),
     n_measurements = vapply(parts, function(i)
       if (is.null(nm)) NA_real_ else sum(nm[i], na.rm = TRUE), numeric(1)),
     # Summed across the DIFFERENT strata being pooled here - unlike
@@ -118,14 +129,15 @@ stratum_metrics <- function(strata, dims) {
 #'
 #' The label carries the numbers the decision is made on, so the list can
 #' be read and acted on without cross-referencing a table beside it.
-#' Whichever of coverage, discard rate, measurements and weight are
-#' available appear; the rest are left out rather than shown as blanks.
+#' Whichever of coverage, discard rate (DR), discards / landings (D/L),
+#' measurements and weight are available appear; the rest are left out rather than shown as blanks.
 #'
 #' @param strata A stratum table.
 #' @param dims The key columns.
 #' @param order_by `"weight"` (heaviest first, the default),
 #'   `"coverage"` (thinnest first - the ones most likely to be excluded),
-#'   `"rate"` (highest discard rate first) or `"measurements"`.
+#'   `"rate"` (highest discard rate first), `"dl"` (highest
+#'   discards / landings first), `"measurements"` or `"trips"`.
 #' @param show Which metrics to put in the label. Defaults to all that
 #'   are present.
 #' @return A named character vector: values are the keys, names are the
@@ -133,9 +145,9 @@ stratum_metrics <- function(strata, dims) {
 #' @seealso [excluded_keys()], [exclusion_overview()]
 #' @export
 exclusion_choices <- function(strata, dims,
-                              order_by = c("weight", "coverage", "rate",
+                              order_by = c("weight", "coverage", "rate", "dl",
                                            "measurements", "trips"),
-                              show = c("coverage", "rate", "measurements",
+                              show = c("coverage", "rate", "dl", "measurements",
                                        "weight", "trips")) {
   order_by <- match.arg(order_by)
   m <- stratum_metrics(strata, dims)
@@ -146,6 +158,7 @@ exclusion_choices <- function(strata, dims,
     weight       = order(-m$weight),
     coverage     = order(m$coverage, na.last = TRUE),
     rate         = order(-m$discard_rate, na.last = TRUE),
+    dl           = order(-m$dl_ratio, na.last = TRUE),
     measurements = order(m$n_measurements, na.last = TRUE),
     trips        = order(m$numTrips, na.last = TRUE))
   m <- m[ord, , drop = FALSE]
@@ -158,6 +171,8 @@ exclusion_choices <- function(strata, dims,
     bits$cov <- paste0("cov ", num(m$coverage, 0, "%"))
   if ("rate" %in% show && has("discard_rate"))
     bits$dr <- paste0("DR ", num(m$discard_rate * 100, 1, "%"))
+  if ("dl" %in% show && has("dl_ratio"))
+    bits$dl <- paste0("D/L ", num(m$dl_ratio * 100, 1, "%"))
   if ("measurements" %in% show && has("n_measurements"))
     bits$ms <- paste0(num(m$n_measurements, 0), " meas")
   if ("trips" %in% show && has("numTrips"))
@@ -472,7 +487,7 @@ exclusion_report <- function(strata, dims, named = character(0),
 #'   universal reference (a discard pool has nothing to measure, and
 #'   "enough trips" is stock-specific), so both default off.
 #' @return A list: `n_strata`, `weight`, `coverage`, `discard_rate`,
-#'   `n_measurements`, and `ok` (does the POOL clear the sanity bars).
+#'   `dl_ratio`, `n_measurements`, and `ok` (does the POOL clear the sanity bars).
 #'   `NULL` if there is nothing to summarise.
 #' @seealso [exclusion_overview()], [stratum_metrics()]
 #' @export
@@ -488,8 +503,8 @@ donor_pool_summary <- function(strata, dims, named = character(0),
   kept <- if (is.null(excl)) m else m[!m$key %in% excl$key, , drop = FALSE]
   if (!nrow(kept))
     return(list(n_strata = 0L, weight = 0, coverage = NA_real_,
-               discard_rate = NA_real_, n_measurements = 0, numTrips = 0,
-               ok = FALSE))
+               discard_rate = NA_real_, dl_ratio = NA_real_,
+               n_measurements = 0, numTrips = 0, ok = FALSE))
 
   w <- kept$weight; w[is.na(w)] <- 0
   wmean <- function(x) {
@@ -499,6 +514,9 @@ donor_pool_summary <- function(strata, dims, named = character(0),
   }
   cov <- wmean(kept$coverage)
   dr  <- wmean(kept$discard_rate)
+  # pooled D/L: every stratum's weight IS its landings, so weighting the
+  # per-stratum ratios by it gives sum(discards) / sum(landings) exactly
+  dl  <- if ("dl_ratio" %in% names(kept)) wmean(kept$dl_ratio) else NA_real_
   nmeas <- sum(kept$n_measurements, na.rm = TRUE)
   # Summed, not weight-weighted: numTrips is an EFFORT count (how many
   # trips back the pool), not a rate, so the pool's total is the sum of
@@ -511,6 +529,6 @@ donor_pool_summary <- function(strata, dims, named = character(0),
         (is.na(warn_meas_min)  || is.na(nmeas)  || nmeas  >= warn_meas_min)  &&
         (is.na(warn_trips_min) || is.na(ntrips) || ntrips >= warn_trips_min)
   list(n_strata = nrow(kept), weight = sum(kept$weight, na.rm = TRUE),
-       coverage = cov, discard_rate = dr, n_measurements = nmeas,
-       numTrips = ntrips, ok = ok)
+       coverage = cov, discard_rate = dr, dl_ratio = dl,
+       n_measurements = nmeas, numTrips = ntrips, ok = ok)
 }

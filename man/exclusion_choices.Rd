@@ -7,8 +7,8 @@
 exclusion_choices(
   strata,
   dims,
-  order_by = c("weight", "coverage", "rate", "measurements", "trips"),
-  show = c("coverage", "rate", "measurements", "weight", "trips")
+  order_by = c("weight", "coverage", "rate", "dl", "measurements", "trips"),
+  show = c("coverage", "rate", "dl", "measurements", "weight", "trips")
 )
 }
 \arguments{
@@ -18,7 +18,8 @@ exclusion_choices(
 
 \item{order_by}{`"weight"` (heaviest first, the default),
 `"coverage"` (thinnest first - the ones most likely to be excluded),
-`"rate"` (highest discard rate first) or `"measurements"`.}
+`"rate"` (highest discard rate first), `"dl"` (highest
+discards / landings first), `"measurements"` or `"trips"`.}
 
 \item{show}{Which metrics to put in the label. Defaults to all that
 are present.}
@@ -30,8 +31,8 @@ A named character vector: values are the keys, names are the
 \description{
 The label carries the numbers the decision is made on, so the list can
 be read and acted on without cross-referencing a table beside it.
-Whichever of coverage, discard rate, measurements and weight are
-available appear; the rest are left out rather than shown as blanks.
+Whichever of coverage, discard rate (DR), discards / landings (D/L),
+measurements and weight are available appear; the rest are left out rather than shown as blanks.
 }
 \seealso{
 [excluded_keys()], [exclusion_overview()]

@@ -35,7 +35,7 @@ universal reference (a discard pool has nothing to measure, and
 }
 \value{
 A list: `n_strata`, `weight`, `coverage`, `discard_rate`,
-  `n_measurements`, and `ok` (does the POOL clear the sanity bars).
+  `dl_ratio`, `n_measurements`, and `ok` (does the POOL clear the sanity bars).
   `NULL` if there is nothing to summarise.
 }
 \description{

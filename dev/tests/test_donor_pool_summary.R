@@ -108,7 +108,9 @@ ok(is.null(donor_pool_summary(thin[0, ], "metier4")), "empty strata gives NULL")
 app <- system.file("app/app.R", package = "rcef")
 if (nzchar(app)) {
   txt <- paste(readLines(app, warn = FALSE), collapse = "\n")
-  ok(grepl('if (!is.null(rate_ui)) c("Discard rate" = "rate")',
+  ## D/L sits beside the discard rate under the same gate: both need the
+  ## discard columns the rate control implies
+  ok(grepl('if (!is.null(rate_ui)) c("Discard rate" = "rate", "D/L" = "dl")',
            txt, fixed = TRUE),
      "sort-by-discard-rate is gated on the rate control being present")
   ok(!grepl('if ("rate" %in% metrics) c("Discard rate" = "rate")',

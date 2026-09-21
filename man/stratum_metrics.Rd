@@ -13,7 +13,8 @@ stratum_metrics(strata, dims)
 }
 \value{
 A data frame with `key`, and whichever of `weight`,
-  `coverage`, `discard_rate` and `n_measurements` could be computed.
+  `coverage`, `discard_rate`, `dl_ratio` (discards / landings) and
+  `n_measurements` could be computed.
 }
 \description{
 Aggregated to one row per key, because the exclusion list is per
