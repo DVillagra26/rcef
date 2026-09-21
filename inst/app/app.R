@@ -3835,8 +3835,25 @@ server <- function(input, output, session) {
     # The editable box lives on the hierarchical panel; the manual panel
     # shows a read-only mirror of the same resolved columns.
     strata_dims <- own_key_strata_server(ns("hsd"))
+    # Every column a saved group's clause names has to be on the strata
+    # table the groups are evaluated against, or the clause errors
+    # inside assign_alloc_groups() and the group silently takes nothing:
+    # a group "metier4 == TBB" on the default strata (Country, fleetValue,
+    # areaValue, Season) has no metier4 column to test. Adding it does not
+    # split the strata - metier4 is read off fleetValue - it just puts the
+    # column there. The stratum metrics are computed, not dimensions.
+    group_vars <- function() {
+      g <- getrv("groups") %||% list()
+      v <- unlist(lapply(g, function(x) unlist(lapply(
+        list(x$alloc_expr, x$matched_expr), function(q)
+          if (is.null(q)) character(0)
+          else all.vars(if (rlang::is_quosure(q)) rlang::quo_get_expr(q) else q)))))
+      setdiff(unique(v), c("coverage", "n_measurements", "numTrips",
+                           "discard_rate", "stratum_weight", "weight"))
+    }
     dims_of <- function()
-      avail(unique(c("catchCategory", strata_dims(), alloc_cols())))
+      avail(unique(c("catchCategory", strata_dims(), alloc_cols(),
+                     group_vars())))
 
     dist_tbl <- reactive({
       if (!is.null(rv$dist)) rv$dist
@@ -4416,7 +4433,10 @@ server <- function(input, output, session) {
     man_assigned <- reactive({
       g <- getrv("groups") %||% list()
       validate(need(length(g), "No groups yet."))
-      bl <- blink_for("cov")
+      # bl_metrics() is the same link plus the measurement counts, so a
+      # donor condition like `n_measurements >= 100` can be evaluated
+      # rather than erroring into "matches nothing"
+      bl <- bl_metrics() %||% blink_for("cov")
       validate(need(!is.null(bl) && nrow(bl), "No catch rows."))
       assign_alloc_groups(bl, g, bms_on()) })
 
@@ -4425,11 +4445,25 @@ server <- function(input, output, session) {
     check_ui <- reactive({
       g <- getrv("groups") %||% list()
       if (!length(g)) return(NULL)
-      d <- tryCatch(manual_progress(man_assigned(), g), error = function(e) NULL)
+      a <- tryCatch(man_assigned(), error = function(e) NULL)
+      d <- tryCatch(manual_progress(a, g), error = function(e) NULL)
       if (is.null(d)) return(NULL)
       miss <- d[d$group == "STILL MISSING", , drop = FALSE]
       ok <- !nrow(miss) || miss$n_strata[1] == 0
-      div(style = sprintf(
+      # A group whose clause names a column the strata table lacks matches
+      # nothing - say which, instead of leaving an empty assignment to be
+      # puzzled over. (dims_of() already widens the strata to the columns
+      # saved groups name, so this is only reached by something unexpected.)
+      mc <- attr(a, "missing_clause_cols")
+      warn_cols <- if (length(mc))
+        div(style = "background:#fff3f3;border:1px solid #c0392b;color:#7a1f1f;
+                     border-radius:7px;padding:7px 10px;font-size:12px;margin:6px 0",
+            tags$b("A group matches nothing: "),
+            paste(vapply(names(mc), function(k)
+              sprintf("%s names %s, which is not a column of the strata",
+                      k, paste(mc[[k]], collapse = ", ")), character(1)),
+              collapse = "; "))
+      tagList(warn_cols, div(style = sprintf(
         "border-radius:7px;padding:7px 10px;font-size:12px;margin:6px 0;
          background:%s;border:1px solid %s;color:%s",
         if (ok) "#eef7ee" else "#fff3f3", if (ok) "#59A14F" else "#c0392b",
@@ -4441,7 +4475,7 @@ server <- function(input, output, session) {
           "%s strata (%s t) are not covered by any group.",
           miss$n_strata[1], fmt_t3(miss$weight[1]))),
           " They will reach catchAllocationAoL() in no group. Add a ",
-          "catch-all as the last group, or widen one above.")) })
+          "catch-all as the last group, or widen one above."))) })
     output[[ns("check")]]  <- renderUI(check_ui())
     output[[ns("check2")]] <- renderUI(check_ui())
 

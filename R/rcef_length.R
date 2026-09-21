@@ -1020,6 +1020,31 @@ assign_alloc_groups <- function(strata, groups, bms_as_dis = TRUE) {
     h
   }
 
+  # A clause that names a column the strata table does not carry cannot
+  # match anything - eval_hit() turns the resulting "object not found"
+  # into an all-FALSE, so the group would silently take nothing and the
+  # only symptom is an empty assignment. Say so instead: which group,
+  # which column. (The app also widens its strata to these columns, so
+  # this is the safety net for every other caller.)
+  clause_vars <- function(cond)
+    all.vars(if (rlang::is_quosure(cond)) rlang::quo_get_expr(cond) else cond)
+  missing_cols <- list()
+  for (g in names(groups))
+    for (slot in c("alloc_expr", "matched_expr")) {
+      cond <- groups[[g]][[slot]]
+      if (is.null(cond)) next
+      m <- setdiff(clause_vars(cond), names(strata))
+      if (length(m)) missing_cols[[g]] <- union(missing_cols[[g]], m)
+    }
+  if (length(missing_cols))
+    warning("assign_alloc_groups(): ",
+            paste(vapply(names(missing_cols), function(g)
+              sprintf("group %s names %s", g,
+                      paste(missing_cols[[g]], collapse = ", ")),
+              character(1)), collapse = "; "),
+            " - not a column of the strata table, so the clause matches ",
+            "nothing. Add it to the strata definition.", call. = FALSE)
+
   for (g in names(groups)) {
     cond <- groups[[g]]$alloc_expr
     if (is.null(cond)) next
@@ -1048,6 +1073,7 @@ assign_alloc_groups <- function(strata, groups, bms_as_dis = TRUE) {
   strata$usedToAllocGroups_txt <- vapply(used, paste, character(1),
                                          collapse = ", ")
   strata$n_donates_to <- lengths(used)
+  attr(strata, "missing_clause_cols") <- missing_cols
   strata
 }
 
