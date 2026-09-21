@@ -5894,11 +5894,26 @@ server <- function(input, output, session) {
   # "50% covered". Grouping the strata coarser than submission is what
   # makes a coverage bar mean anything here.
   mg_strata_dims <- reactive(as_reported_strata())
+  # The manual builder's strata: the strata as reported, plus every column
+  # a clause names - a group "metier4 == TBB" needs a metier4 column to be
+  # tested against, and with the strata fixed as reported (no definition
+  # box to add it through) this is the ONLY way it gets there. metier4 is
+  # read off fleetValue, so adding it never splits a stratum.
+  #
+  # A rule keeps its clauses in $raise (the strata it raises) and $source
+  # (the matched / donor data) - not $clauses, which is what this used to
+  # read, so no clause column was ever collected and the group silently
+  # matched nothing whenever the column was not already a stratum key.
+  # The clauses still being built (the box, the two drop zones) count as
+  # well: the exclusion picker is narrowed by them before anything is saved.
   mg_dims <- reactive({
-    vars <- unlist(lapply(rv$rules, function(r) {
-      cl <- fld(r, "clauses", list())
-      vapply(cl, function(c) fld(c, "var", ""), character(1))
-    }), use.names = FALSE)
+    clause_vars <- function(cl)
+      vapply(cl %||% list(), function(c) fld(c, "var", ""), character(1))
+    vars <- unlist(lapply(rv$rules, function(r)
+      c(clause_vars(fld(r, "raise", list())),
+        clause_vars(fld(r, "source", list())))), use.names = FALSE)
+    vars <- c(vars, clause_vars(rv$clause), clause_vars(rv$pend_raise),
+              clause_vars(rv$pend_source))
     vars <- c(vars, unlist(lapply(rv$sets %||% list(), function(z)
       vapply(z, function(c) fld(c, "var", ""), character(1))),
       use.names = FALSE))
