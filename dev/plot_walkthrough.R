@@ -75,6 +75,7 @@ if (dir.exists(file.path(bll_dir, bll_year)) &&
                sum(distribution_data$distributionType == "LengthTotal"),
                sum(distribution_data$distributionType == "Age"))
       else ""))
+    
   }
 } else {
   cat("load skipped - bll extdata and/or icesVocab+icesSD not available\n")
@@ -115,13 +116,19 @@ plot_coverage_heat(catch_data, y = "metier4", x = "Country",
                    facet = "Season", engine = "base")
 invisible(dev.off())
 
+plot_coverage_heat(catch_data, y = "metier4", x = "Country",
+                   facet = "Season", engine = "base",min_cov = 50, min_trip = 0)
+
+plot_coverage_heat(catch_data, y = "metier4", x = "Country",
+                   facet = "Season", engine = "base",min_cov = 50, min_trip = 100)
+
 ## ---- 1c. bubbles: weighted status grid ---------------------------
 p1c <- plot_coverage_bubble(catch_data, y = "metier4", x = "Country",
                             min_cov = 50, min_trip = 2)
 print(p1c)
 png("11e_discard_bubbles_base.png", width = 1300, height = 800, res = 110)
 plot_coverage_bubble(catch_data, y = "metier4", x = "Country",
-                     min_cov = 50, min_trip = 2, engine = "base")
+                     min_cov = 50, engine = "base")
 invisible(dev.off())
 
 ## ---- 1d-1f. coverage map - one sampled/not-sampled pie per FAO
@@ -163,13 +170,16 @@ invisible(dev.off())
 ## changes. 2a-2c LENGTH, landings then discards.  2d-2h AGE.
 
 ## ---- 2a. length coverage of the LANDINGS, bars -------------------
-p2a <- plot_coverage_bar(catch_data, y = "metier4", fill = "Country",
-                         what = "length", catchCategory = "Lan",
+p2a <- plot_coverage_bar(catch_data %>% filter(metier4 == "TBB"), y = "metier4", fill = "Country",
+                         what = "length", catchCategory = "Dis",
+                         # distributions attach to catch by domainBiology, so
+                         # filtering the catch alone is enough (`gear` is a
+                         # catch-table column, not one of the distributions)
                          distributions = distribution_data)
 print(p2a)
 png("12a_length_bars_base.png", width = 1300, height = 800, res = 110)
 plot_coverage_bar(catch_data, y = "metier4", fill = "Country",
-                  what = "length", catchCategory = "Lan",
+                  what = "length", catchCategory = "Dis",
                   distributions = distribution_data,
                   engine = "base")
 invisible(dev.off())
@@ -184,7 +194,7 @@ png("12b_length_heatmap_base.png", width = 1400, height = 900, res = 110)
 plot_coverage_heat(catch_data, y = "metier4", x = "Country", facet = "Season",
                    what = "length", catchCategory = "Dis",
                    distributions = distribution_data, min_cov = 50,
-                   min_fish = 25, min_trip = 2,
+                   min_fish = 0,
                    engine = "base")
 invisible(dev.off())
 

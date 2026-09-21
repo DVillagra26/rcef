@@ -10,7 +10,8 @@ status_legend_plot(
   min_meas = 0,
   key = c("point", "tile"),
   size = NULL,
-  min_trips = 2
+  min_trips = 2,
+  drop_none = TRUE
 )
 }
 \arguments{
@@ -37,6 +38,9 @@ the plot and can be read off it.}
 adequately covered in EFFORT terms, separately from coverage in
 WEIGHT terms, or `NULL` to leave trips out of the classification
 entirely. Defaults to 2, matching ICES practice.}
+
+\item{drop_none}{Drop the "none" (no weight at all) category, which
+the coverage plots never draw. Default `TRUE`.}
 }
 \value{
 A ggplot object; only its legend is meant to be used.

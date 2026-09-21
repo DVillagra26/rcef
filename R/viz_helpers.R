@@ -214,13 +214,19 @@ normalize_what <- function(what) {
 #'   the plot and can be read off it.
 #' @return A ggplot object; only its legend is meant to be used.
 #' @seealso [coverage-plots], [cat_lookup()]
+#' @param drop_none Drop the "none" (no weight at all) category, which
+#'   the coverage plots never draw. Default `TRUE`.
 #' @family coverage plots
 #' @export
 status_legend_plot <- function(threshold, what = "discard", min_meas = 0,
                                key = c("point", "tile"), size = NULL,
-                               min_trips = 2) {
+                               min_trips = 2, drop_none = TRUE) {
   key <- match.arg(key)
   lk <- cat_lookup(threshold, what, min_meas, min_trips)
+  # A stratum with no weight draws no cell on the coverage plots, so its
+  # "none" category has no swatch to explain - dropped, matching the
+  # plots' own legends, unless a caller asks for the full table.
+  if (isTRUE(drop_none)) lk <- lk[lk$cat_key != "none", , drop = FALSE]
   d <- data.frame(.x = seq_len(nrow(lk)), .y = 1,
                   Status = factor(lk$status, levels = lk$status))
   p <- ggplot(d, aes(x = .data$.x, y = .data$.y, fill = .data$Status)) +
@@ -229,8 +235,12 @@ status_legend_plot <- function(threshold, what = "discard", min_meas = 0,
     (if (identical(key, "tile")) geom_tile(colour = OUTLINE, alpha = 0.9)
      else geom_point(shape = 21, colour = OUTLINE)) +
     scale_fill_manual(values = setNames(lk$colour, lk$status),
-                      limits = lk$status, drop = FALSE,
-                      name = "Sampling status")
+                      limits = lk$status,
+                      # the compact codes, like the plots' own legends - a
+                      # full sentence per combination is too wide once
+                      # trips and measurements are both active
+                      labels = setNames(lk$abbr, lk$status),
+                      drop = FALSE, name = "Sampling status")
   # A bubble plot carries two messages at once - status in the colour,
   # weight in the diameter - and the second one is unreadable without a
   # scale bar. This adds a throwaway layer whose only purpose is to make

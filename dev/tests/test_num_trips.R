@@ -274,4 +274,22 @@ ok(grepl('id_trips = "cov_trips"', txt, fixed = TRUE),
 ok(grepl('id_trips = paste0(p, "_thr_trips")', txt, fixed = TRUE),
    "the biology Sufficiency box renders the trips slider")
 
+## ---- 8. the app's separate legend panel rebuilds from status_legend_plot()
+## It must show exactly the categories the plot itself does: no "none"
+## swatch (a no-weight stratum draws no cell), and a NULL min_trips must
+## give the coverage-only legend, not silently fall back to the trips one.
+lv <- function(...) levels(status_legend_plot(...)$data$Status)
+ok(!any(grepl("No landings", lv(50, "discard", min_trips = NULL))),
+   "status_legend_plot() drops the 'none' category by default")
+ok(any(grepl("No landings", levels(status_legend_plot(50, "discard",
+     min_trips = NULL, drop_none = FALSE)$data$Status))),
+   "... and drop_none = FALSE brings it back")
+ok(length(lv(50, "discard", min_trips = NULL)) == 5L &&
+   length(lv(50, "discard", min_trips = 2)) == 7L,
+   "NULL trips gives the 5-row coverage-only legend, 2 gives the 7-row one")
+p_null <- plot_coverage_heat(strata, y = "metier4", min_cov = 50)
+ok("min_trips" %in% names(attr(p_null, "status_legend")) &&
+   is.null(attr(p_null, "status_legend")$min_trips),
+   "a plot built with the default records min_trips = NULL in its legend spec")
+
 cat("\nDONE ", FAIL, "failure(s)", "\n")

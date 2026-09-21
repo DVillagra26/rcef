@@ -566,7 +566,11 @@ draw_legend <- function(p) {
     sz  <- spec$size
     p <- tryCatch(status_legend_plot(spec$threshold, spec$what, spec$min_meas,
                                      key = key, size = sz,
-                                     min_trips = spec$min_trips %||% 2),
+                                     # NULL is meaningful here (trips off) -
+                                     # only a spec with no such field at all
+                                     # falls back to the old default of 2
+                                     min_trips = if ("min_trips" %in% names(spec))
+                                                   spec$min_trips else 2),
                   error = function(e) p)
   }
   lg <- tryCatch(extract_legend(p, key = key, keep_size = !is.null(sz)),
