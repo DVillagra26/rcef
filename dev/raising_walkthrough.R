@@ -547,6 +547,63 @@ print(plot_comparison(cmp, x_var = "metier4"))
 print(plot_comparison(cmp, x_var = "Country", facet_var = "metier4"))
 invisible(dev.off())
 
+
+## =====================================================================
+##  6. FINAL OUTPUT - one table, raised catch above, donor rates below
+## =====================================================================
+## Every imported/raised CEF row in one table, tagged with the GROUP
+## that raised it (blank for imported rows - nothing raised them);
+## underneath, one row per group showing the rate it actually applied
+## and what that rate was computed from. catchRaising() does not tag its
+## own output with the group that raised a row (its DrGroup is commented
+## out in the vendored engine - not something this script turns on
+## without touching RDBESStockCoord_raising.R directly), so the tag is
+## added here, the same way section 4 finds a stratum's group: by its
+## stratum_id, against rec's own group_id. Built off the hierarchical
+## run (raised_hier / rec) since it is the richer of the two - 52 real
+## donor groups here, against manual's 6.
+
+## ---- 6a. upper table: every row, group-tagged --------------------------
+raised_hier$stratum_id <- stratum_keys(raised_hier, dims)
+final_raised <- raised_hier %>%
+  mutate(group_id = if_else(importedOrRaised == "raised",
+                            rec$group_id[match(stratum_id, rec$stratum_id)],
+                            NA_character_)) %>%
+  select(importedOrRaised, group_id, catchCategory, metier4, Country, Season,
+         fleetValue, areaValue, domainCatchDis, total, everything())
+
+cat(sprintf("%d rows: %d imported, %d raised across %d donor groups\n",
+           nrow(final_raised),
+           sum(final_raised$importedOrRaised == "imported"),
+           sum(final_raised$importedOrRaised == "raised"),
+           n_distinct(final_raised$group_id, na.rm = TRUE)))
+print(head(final_raised %>%
+             arrange(desc(importedOrRaised == "raised"), group_id), 15))
+
+## ---- 6b. lower table: what raised each group, and from what -----------
+## rate is discards / (landings + discards) over the group's OWN donor
+## strata - the same quantity section 4b's mean_DR already is, at the
+## group level instead of per donor stratum, shown here alongside the
+## weight it was computed from.
+final_donors <- rec %>%
+  group_by(group_id) %>%
+  summarise(n_donor_strata = n(),
+           landings_t = round(sum(landings, na.rm = TRUE) / 1000, 2),
+           discards_t = round(sum(discards, na.rm = TRUE) / 1000, 2),
+           rate = round(sum(discards, na.rm = TRUE) /
+                         (sum(landings, na.rm = TRUE) + sum(discards, na.rm = TRUE)), 4),
+           .groups = "drop") %>%
+  arrange(desc(landings_t))
+print(final_donors)
+
+## every raised row's group must appear in the donor table below it -
+## the two halves of this output describing the same 52 groups, not two
+## different countings
+ok_linked <- setequal(na.omit(unique(final_raised$group_id)), final_donors$group_id)
+cat(sprintf("\nevery raised row's group_id appears in the donor table below it: %s\n",
+           ok_linked))
+
+
 cat("\nDone - every figure above went to a throwaway pdf() device (there is",
    "\nnothing worth keeping as a file here, unlike plot_walkthrough.R's PNGs -",
    "\nrun a block in an interactive session to actually look at one).\n")
