@@ -116,7 +116,7 @@ plot_river_level <- function(rec_g, step_id, dims, pal,
   plot_river(d, left_var = NULL, right_var = "group_id",
              value_var = value_var, pal = pal, title = ttl,
              left_label = stratum_label(d, dims),
-             right_label = rule_label(d),
+             right_label = rule_label(d, dims),
              stratum_axis = stratum_axis_label(dims))
 }
 

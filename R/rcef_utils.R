@@ -477,14 +477,19 @@ stratum_axis_label <- function(dims) {
 #'
 #' @param rec_g A recommendation table carrying `raise_condition`,
 #'   `raise_level` and optionally `group_id`.
+#' @param dims The stratum dimensions passed to [recommend_raising()], so
+#'   the own-stratum level (`raise_level` there is every dims column
+#'   joined, not the word "own stratum") can still be recognised. `NULL`
+#'   still matches the literal string, for older saved recommendations.
 #' @return A character vector of labels.
 #' @export
-rule_label <- function(rec_g) {
+rule_label <- function(rec_g, dims = NULL) {
   cond <- rec_g$raise_condition
   lvl  <- rec_g$raise_level
   out <- cond
+  self_lvl <- c("own stratum", if (!is.null(dims)) paste(dims, collapse = " + "))
   out[lvl == "no raising needed"] <- "not raised (100% sampled)"
-  out[lvl == "own stratum"]       <- "raised on its own data"
+  out[lvl %in% self_lvl]          <- "raised on its own data"
   out[cond == "TRUE"]             <- "raised from ALL strata"
   # add the group id in brackets so it can still be cross-referenced
   gid <- if ("group_id" %in% names(rec_g)) rec_g$group_id else NA

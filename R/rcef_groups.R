@@ -404,7 +404,11 @@ recommend_raising <- function(strata, hierarchy, thresholds,
         keys <- if (is.null(dims)) hierarchy else dims
         cond[take] <- vapply(which(take), function(j)
           row_condition(strata[j, , drop = FALSE], keys), character(1))
-        lvl[take] <- "own stratum"; stp[take] <- st$id
+        # same convention raising_steps() uses for this step's own label:
+        # every dims column at once, nothing pooled, spelled out rather
+        # than the word "own stratum" - this is what a reader actually
+        # sees per stratum (raise_level), not just in the step table.
+        lvl[take] <- paste(keys, collapse = " + "); stp[take] <- st$id
         cov[take] <- strata$coverage[take]; nstr[take] <- 1L
       }
       next
