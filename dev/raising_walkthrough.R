@@ -24,6 +24,11 @@
 
 library(dplyr)
 library(rcef)
+# Section 2a's cascade plot is a one-off ggplot2 call (no rcef plot
+# function takes a decision_tree() table), so its geoms/scales need
+# ggplot2 attached - the same reason the RDBESStockCoord example attaches
+# it.
+library(ggplot2)
 
 
 ## =====================================================================
@@ -180,8 +185,8 @@ cat(sprintf("manual raising: %d rows (%d imported, %d raised)\n",
 ## recommendation into the same strataCond/matchedDataCond shape as
 ## section 1 - the raising call itself is, again, catchRaising() directly.
 hierarchy <- c("Country", "metier4", "Season")
-thresholds <- c(70, 60, 40)          # one per hierarchy level
-self_threshold <- 90                 # own-stratum bar, before any pooling
+thresholds <- c(50, 50, 50)          # one per hierarchy level
+self_threshold <- 50                 # own-stratum bar, before any pooling
 
 rec <- recommend_raising(strata0, hierarchy, thresholds,
                          self_threshold = self_threshold, dims = dims)
@@ -196,6 +201,33 @@ cat(sprintf("partition check: %s strata / %s landings accounted for%s\n",
            if (chk$l_ok) "all" else sprintf("%s of %s t", chk$l_steps, chk$l_total),
            if (chk$unassigned > 0)
              sprintf(" (%d unassigned)", chk$unassigned) else ""))
+
+## How much of the landings each step actually settles - the same
+## `tree` above, drawn instead of read: bars are the share FIRST solved
+## AT that step (pct_landings), the line is the running total once every
+## step up to and including it has applied (cum_pct_landings). Both
+## columns are already there from decision_tree(..., cumulative = TRUE);
+## nothing new is computed here, only plotted. No rcef plot function
+## takes a decision_tree() table (its shape is one row per CASCADE STEP,
+## not one row per stratum), so this is a small one-off ggplot rather
+## than a reused function - styled with app_theme() to match the rest.
+tree$step <- factor(tree$step, levels = tree$step)   # cascade order, not alphabetical
+p_tree <- ggplot(tree, aes(x = step)) +
+  geom_col(aes(y = pct_landings), fill = "#4292C6", width = 0.6) +
+  geom_line(aes(y = cum_pct_landings, group = 1), colour = "#D7191C", linewidth = 0.8) +
+  geom_point(aes(y = cum_pct_landings), colour = "#D7191C", size = 2) +
+  geom_text(aes(y = cum_pct_landings, label = paste0(cum_pct_landings, "%")),
+            vjust = -0.6, size = 3, colour = "#D7191C") +
+  scale_x_discrete(labels = tree$pool) +
+  scale_y_continuous(limits = c(0, 105), expand = c(0, 0)) +
+  labs(title = "Landings resolved at each step of the hierarchical cascade",
+       subtitle = "bars: share first solved at that step - line: running total solved so far",
+       x = NULL, y = "% of total landings") +
+  app_theme() +
+  theme(axis.text.x = element_text(angle = 40, hjust = 1))
+grDevices::pdf(tempfile())
+print(p_tree)
+invisible(dev.off())
 
 auto_conds <- conds_from_auto(rec)
 ## group_id per stratum, for the homogeneity check below - the same
@@ -238,6 +270,105 @@ cat(sprintf("hierarchical raising: %d rows (%d imported, %d raised)\n",
            nrow(raised_hier),
            sum(raised_hier$importedOrRaised == "imported"),
            sum(raised_hier$importedOrRaised == "raised")))
+
+
+## =====================================================================
+##  2c. HIERARCHICAL METHOD, DONOR DISCARD RATE CAPPED - CATCH-ALL ONLY
+## =====================================================================
+## Same cascade mechanics as above (recommend_raising() ->
+## conds_from_auto()), with one addition: a stratum whose own discard
+## rate exceeds 70% may not DONATE to the catch-all/fallback pool - the
+## widest, least targeted group, the one every stratum lands in only
+## because nothing more specific worked for it, where a single outlier
+## stratum can otherwise drag the whole pool's rate with it. Every group
+## resolved at a more specific level (its own stratum, or any of the
+## metier4/Season pools above) is untouched: an OTB-only pool still
+## draws on every OTB discard rate there is, 70% or not - only a
+## stratum that clears NONE of those and falls all the way to the
+## catch-all has its donor pool capped once it gets there.
+##
+## Deliberately stricter thresholds than section 2's own cascade: at
+## 50/50/50 nothing ever reaches the catch-all (its tree's Fallback row
+## has n_strata = 0), so there would be nothing to cap. 80/80/80 leaves
+## a genuine one on this data - checked against this bll load, not
+## assumed: 118 of 181 strata, 24% of landings.
+thresholds_ex <- c(80, 80, 80)
+self_threshold_ex <- 90
+
+rec_ex <- recommend_raising(strata0, hierarchy, thresholds_ex,
+                            self_threshold = self_threshold_ex, dims = dims)
+tree_ex <- decision_tree(rec_ex, hierarchy, thresholds_ex, self_threshold_ex,
+                         dims = dims, cumulative = TRUE)
+print(tree_ex)
+
+auto_conds_ex <- conds_from_auto(rec_ex)
+catch_data_hier_ex <- add_stratum_metrics(catch_data, dims)
+
+## The catch-all is always the group whose raise_condition is the
+## literal string "TRUE" (recommend_raising()'s own convention for the
+## fallback step). At thresholds where nothing falls that far, it is
+## simply not one of the group_ids below - and nothing gets capped,
+## correctly, since there is nothing to cap.
+fb_gid <- auto_conds_ex$groups$group_id[auto_conds_ex$groups$raise_condition == "TRUE"]
+
+if (length(fb_gid)) {
+  old_cond <- auto_conds_ex$matchedDataCond[[fb_gid]]
+  new_cond <- quo(!!old_cond & (is.na(discard_rate) | discard_rate <= 0.7))
+
+  ## What the cap actually changes: the catch-all's own aggregate donor
+  ## ratio, before and after - the same filter-and-sum idiom section 4a
+  ## already uses on catch_data, read straight off the two conditions
+  ## rather than picked apart from catchRaising()'s output afterwards.
+  fb_ratio <- function(cond) {
+    d <- catch_data_hier_ex %>%
+      filter(!!cond, !is.na(domainCatchDis), originType == "WGEstimate",
+             variableType == "WeightLive")
+    lan <- sum(d$total[d$catchCategory == "Lan"], na.rm = TRUE)
+    dis <- sum(d$total[d$catchCategory == "Dis"], na.rm = TRUE)
+    data.frame(n_domains = n_distinct(d$domainCatchDis),
+              landings_t = round(lan / 1000, 2), discards_t = round(dis / 1000, 2),
+              discard_rate = round(dis / (lan + dis), 3))
+  }
+  cat(sprintf("catch-all group is %s (%d strata)\n", fb_gid,
+             auto_conds_ex$groups$n_strata[auto_conds_ex$groups$group_id == fb_gid]))
+  cat("catch-all donor ratio, uncapped:\n");            print(fb_ratio(old_cond))
+  cat("catch-all donor ratio, capped at DR <= 0.7:\n"); print(fb_ratio(new_cond))
+
+  auto_conds_ex$matchedDataCond[[fb_gid]] <- new_cond
+} else {
+  cat("no stratum reached the catch-all at these thresholds - nothing to cap\n")
+}
+
+## check_group_conditions() will now WARN that the excluded high-DR
+## strata's own discard estimates are "not matched to any raising
+## stratum" - that is not a bug surfacing, it is the point: those
+## strata's own data no longer informs anyone's rate, not even their
+## own group's.
+cond_st_ex <- check_group_conditions(catch_data_hier_ex, auto_conds_ex$strataCond,
+                                     domain = "domainCatchDis",
+                                     originType = "WGEstimate",
+                                     variableType = "WeightLive",
+                                     logFile = NULL, append = TRUE)
+cond_md_ex <- check_group_conditions(catch_data_hier_ex, auto_conds_ex$matchedDataCond,
+                                     conditionType = "matched_data",
+                                     domain = "domainCatchDis",
+                                     originType = "WGEstimate",
+                                     variableType = "WeightLive",
+                                     logFile = NULL, append = TRUE)
+strata_matrix_ex <- do.call(cbind, cond_st_ex)
+cat(sprintf("hierarchical, DR-capped catch-all: %d rows in no group, %d rows in more than one (both should be 0)\n",
+           sum(rowSums(strata_matrix_ex) == 0), sum(rowSums(strata_matrix_ex) > 1)))
+
+raised_hier_ex <- catchRaising(catch_data = catch_data_hier_ex,
+                               condition_raising_st_list = auto_conds_ex$strataCond,
+                               condition_matched_data_list = auto_conds_ex$matchedDataCond,
+                               type = "discards",
+                               originType = "WGEstimate",
+                               variableType = "WeightLive")
+cat(sprintf("hierarchical, DR-capped catch-all: %d rows (%d imported, %d raised)\n",
+           nrow(raised_hier_ex),
+           sum(raised_hier_ex$importedOrRaised == "imported"),
+           sum(raised_hier_ex$importedOrRaised == "raised")))
 
 
 ## =====================================================================
@@ -302,7 +433,8 @@ print(plot_discard_rate(donor_detail_manual, x = "donor_group", colour = "gear",
                         jitter = TRUE))
 invisible(dev.off())
 donor_detail_manual %>% group_by(donor_group) %>%
-  summarise(n = n(), mean_DR = round(mean(discard_rate, na.rm = TRUE), 3),
+  summarise(n = n(),
+           mean_DR = round(weighted.mean(discard_rate, w = landings, na.rm = TRUE), 3),
            sd_DR = round(sd(discard_rate, na.rm = TRUE), 3),
            min_DR = round(min(discard_rate, na.rm = TRUE), 3),
            max_DR = round(max(discard_rate, na.rm = TRUE), 3),
@@ -322,7 +454,7 @@ rec %>% group_by(group_id) %>%
 
 
 ## =====================================================================
-##  5. COMPARING SCENARIOS
+##  5. COMPARING SCENARIOS - what the hierarchy's SHAPE changes
 ## =====================================================================
 ## A scenario is a whole grouping configuration under a name -
 ## scenario_auto() / scenario_manual() describe one, run_scenario() runs
@@ -331,6 +463,22 @@ rec %>% group_by(group_id) %>%
 ## CEF-row catchRaising() run above, which is what makes running several
 ## of these cheap enough to compare). compare_scenarios() lines the runs
 ## up on the same stratum keys; plot_comparison() draws them.
+##
+## Threshold policy is held FIXED (50% at every level, section 2's own
+## self_threshold too) and only the hierarchy itself varies - which keys
+## get pooled over, in what order. "Nested" mode (recommend_raising()'s
+## default) pools the FIRST key listed over soonest and keeps the LAST
+## one longest - c("Country", "metier4") means "join countries first,
+## then metier4 alone"; c("Country", "areaValue", "metier4") means "join
+## countries, then areas, then metier4 alone". Every variant below keeps
+## metier4 as the last, most-protected key except the first, which
+## considers it alone from the start.
+##
+## scenario_auto()'s own `dims` can be WIDER than the shared comparison
+## `dims` below (the Country > area > metier4 variant needs areaValue in
+## its OWN strata) but never narrower: compare_scenarios() re-aggregates
+## every run onto the fixed metier4+Country+Season keys, so a run
+## missing one of those three on its own output would fail right there.
 ##
 ## scenario_manual() takes rules in new_rule() shape - the one place this
 ## script uses new_rule()/assign_rule_groups(), only because that is the
@@ -353,14 +501,24 @@ manual_rules <- list(
                             negate = FALSE))),
   new_rule("G4", "Rest of the gears"))
 
+dims_area <- c(dims, "areaValue")    # only the Country > area > metier4 variant needs it
+
 scenarios <- list(
-  manual_used   = scenario_manual("Manual (gear split)", dims, manual_rules, list()),
-  hier_used     = scenario_auto("Hierarchical (as above)", dims, hierarchy,
-                                thresholds, self_threshold = self_threshold),
-  hier_stricter = scenario_auto("Hierarchical, stricter", dims, hierarchy,
-                                thresholds + 15, self_threshold = self_threshold),
-  hier_looser   = scenario_auto("Hierarchical, looser", dims, hierarchy,
-                                pmax(thresholds - 20, 0), self_threshold = 70))
+  manual_used = scenario_manual("Manual (gear split)", dims, manual_rules, list()),
+  hier_used   = scenario_auto("Country > metier4 > Season (section 2's cascade)",
+                              dims, hierarchy, thresholds,
+                              self_threshold = self_threshold),
+  hier_metier_only            = scenario_auto("metier4 only", dims,
+                                              "metier4", 50, self_threshold = 50),
+  hier_country_metier         = scenario_auto("Country > metier4", dims,
+                                              c("Country", "metier4"), c(50, 50),
+                                              self_threshold = 50),
+  hier_country_season_metier  = scenario_auto("Country > Season > metier4", dims,
+                                              c("Country", "Season", "metier4"),
+                                              c(50, 50, 50), self_threshold = 50),
+  hier_country_area_metier    = scenario_auto("Country > area > metier4", dims_area,
+                                              c("Country", "areaValue", "metier4"),
+                                              c(50, 50, 50), self_threshold = 50))
 
 runs <- lapply(scenarios, run_scenario, catch_data = catch_data)
 cmp  <- compare_scenarios(runs, dims)
@@ -375,7 +533,7 @@ print(head(ct[order(-rowSums(ct[val_cols], na.rm = TRUE)), ], 10))
 
 grDevices::pdf(tempfile())
 print(plot_comparison(cmp, x_var = "metier4"))
-print(plot_comparison(cmp, x_var = "Country", facet_var = "Season"))
+print(plot_comparison(cmp, x_var = "Country", facet_var = "metier4"))
 invisible(dev.off())
 
 cat("\nDone - every figure above went to a throwaway pdf() device (there is",
