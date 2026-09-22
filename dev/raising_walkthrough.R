@@ -3,28 +3,27 @@
 ##
 ## NOT a test - nothing here asserts pass/fail (the actual test suite is
 ## dev/tests/*.R). This is a template you run by hand to see the discard
-## RAISING side of the package end to end: define groups by both methods
-## (manual rules, the automatic hierarchical cascade), raise the actual
-## catch with each, and look at the result - the raised weight (imported
-## vs raised, at whatever aggregation), whether the strata feeding a
-## group's rate are homogeneous, and how the two methods (and a couple
-## of variants of each) compare.
+## RAISING side of the package end to end.
 ##
-## Data: the same two objects as plot_walkthrough.R - `catch_data` (raw
-## CEF catch, already through derive_fields()) and `distribution_data`
-## (not actually needed for raising itself, loaded anyway since it comes
-## for free and section 6's scenarios reuse the same catch_data). Swap in
-## your own for elsewhere; nothing past section 0 needs to change either
-## way.
+## Driven directly with the vendored RDBESStockCoord functions -
+## check_group_conditions() and catchRaising() (R/RDBESStockCoord_utils.R,
+## R/RDBESStockCoord_raising.R) - the same pattern ICES's own
+## discard-raising scripts use: a named list of quosures per method
+## (strataCond = which strata a group claims, matchedDataCond = which
+## data its discard rate is estimated from), checked, then raised.
+## Nothing wraps that call. rcef's own group-definition helpers
+## (recommend_raising(), and in section 5 only, new_rule()) still do the
+## one thing RDBESStockCoord itself has no opinion on - HOW to define a
+## group from a hierarchy or a rule set - but the raising call they feed
+## is the same catchRaising() either way.
+##
+## Data: the same `catch_data` as plot_walkthrough.R - raw CEF catch,
+## already through derive_fields(). Swap in your own; nothing past
+## section 0 needs to change either way.
 ## ===========================================================
 
 library(dplyr)
 library(rcef)
-# plot_river()/plot_river_level() call geom_text(stat = "stratum") by name,
-# which ggplot2 only resolves against the attached search path - qualifying
-# every OTHER ggalluvial call inside rcef (geom_alluvium/geom_stratum) is not
-# enough for that one. Attach it here, same as the app does.
-library(ggalluvial)
 
 
 ## =====================================================================
@@ -46,6 +45,16 @@ if (dir.exists(file.path(bll_dir, bll_year)) &&
     })
   if (!is.null(bll_ic) && !is.null(bll_ic$catches) && nrow(bll_ic$catches)) {
     catch_data <- derive_fields(as.data.frame(bll_ic$catches))
+    # catchRaising() multiplies `total` by a unit-conversion ratio inside
+    # convert_field(), so it must be numeric - funICoutCEF()'s CEF output
+    # brings the numeric CEF fields in as character. Coerce them once,
+    # here, before either raising method below touches them.
+    num_fields <- intersect(c("total", "variance", "numPSUs", "numTrips"),
+                            names(catch_data))
+    for (f in num_fields)
+      if (!is.numeric(catch_data[[f]]))
+        catch_data[[f]] <- suppressWarnings(
+          as.numeric(gsub("[, ]", "", as.character(catch_data[[f]]))))
     distribution_data <- if (!is.null(bll_ic$distributions))
       as.data.frame(bll_ic$distributions) else NULL
     cat(sprintf("bll %s: %d catch rows after derive_fields()\n",
@@ -62,9 +71,10 @@ if (is.null(catch_data)) {
 } else {
 
 
-## The stratum resolution every section below shares. "Own stratum" IS
-## this set of columns - a stratum finer than this cannot be raised
-## on its own data, because there IS no finer resolution defined.
+## The stratum resolution the hierarchical method and the homogeneity
+## check (section 4) share. "Own stratum" IS this set of columns - a
+## stratum finer than this cannot be raised on its own data, because
+## there IS no finer resolution defined.
 dims <- c("metier4", "Country", "Season")
 strata0 <- build_strata(catch_data, dims)
 cat(sprintf("\n%d strata at metier4 + Country + Season, %s t landed\n",
@@ -72,53 +82,56 @@ cat(sprintf("\n%d strata at metier4 + Country + Season, %s t landed\n",
 
 
 ## =====================================================================
-##  1. MANUAL GROUPING - new_rule() + assign_rule_groups()
+##  1. MANUAL GROUPING - hand-written quosures, checked and raised with
+##     check_group_conditions() / catchRaising() directly.
 ## =====================================================================
-## A rule is one group: a `raise` clause (which strata it claims) and a
-## `source` clause (which strata may donate to it - defaults to `raise`).
-## Rules apply in order, first match wins, so a clause-less last rule is
-## the catch-all. Real bll metier4 levels used below: TBB, OTB/OTM (otter
-## and otter-twin trawls), everything else falls to the catch-all.
+## One condition per group: strataCond says which strata a group claims,
+## matchedDataCond which data its discard rate is estimated from - here
+## the same set, so every group is raised on its own strata only. Real
+## bll metier4 levels used: TBB, OTB/OTM (otter and otter-twin trawls), a
+## catch-all last, written as the explicit complement (a bare TRUE would
+## re-claim rows G1/G2 already took, and catchRaising() would stop with
+## "records assigned to more than one stratum").
+strataCond_manual <- list(
+  G1 = quo(metier4 == "TBB"),
+  G2 = quo(metier4 %in% c("OTB", "OTM")),
+  G3 = quo(!metier4 %in% c("TBB", "OTB", "OTM")))
+matchedDataCond_manual <- strataCond_manual
 
-g_tbb <- new_rule("G1", "Beam trawl (TBB)",
-                  raise = list(list(var = "metier4", values = "TBB", negate = FALSE)))
-g_ott <- new_rule("G2", "Otter trawls (OTB, OTM)",
-                  raise = list(list(var = "metier4", values = c("OTB", "OTM"),
-                                    negate = FALSE)))
-g_all <- new_rule("G3", "Everything else")     # no clause = catch-all
-manual_rules <- list(g_tbb, g_ott, g_all)
+## ---- 1a. condition diagnostics ---------------------------------------
+## check_group_conditions() is what catchRaising() runs internally before
+## it raises anything; running it here too, separately, is the "optional,
+## automatically run with raising, but good practice" step of the
+## RDBESStockCoord scripts - every stratum checked for both a gap
+## (claimed by no group) and an overlap (claimed twice) before any weight
+## moves.
+cond_st <- check_group_conditions(catch_data, strataCond_manual,
+                                  domain = "domainCatchDis",
+                                  originType = "WGEstimate",
+                                  variableType = "WeightLive",
+                                  logFile = NULL, append = TRUE)
+cond_md <- check_group_conditions(catch_data, matchedDataCond_manual,
+                                  conditionType = "matched_data",
+                                  domain = "domainCatchDis",
+                                  originType = "WGEstimate",
+                                  variableType = "WeightLive",
+                                  logFile = NULL, append = TRUE)
+strata_matrix <- do.call(cbind, cond_st)
+cat(sprintf("manual: %d rows in no group, %d rows in more than one (both should be 0)\n",
+           sum(rowSums(strata_matrix) == 0), sum(rowSums(strata_matrix) > 1)))
+print(colSums(strata_matrix))
 
-strata_manual <- assign_rule_groups(strata0, manual_rules)
-
-## ---- 1a. does the partition actually cover every stratum? -----------
-prog <- rules_progress(strata0, manual_rules)
-print(prog)
-miss <- rules_unassigned(strata0, manual_rules, dims = dims)
-cat(if (is.null(miss)) "every stratum is covered\n"
-   else sprintf("%d strata still uncovered\n", nrow(miss)))
-
-## ---- 1b. the river: which strata raise from which group -------------
-## One ribbon per stratum, width = landings, running from the stratum to
-## the group raising it - the visual the table above cannot give: how
-## LOPSIDED the groups are, at a glance.
-grDevices::pdf(tempfile())
-print(plot_river(strata_manual, left_var = NULL, right_var = "toBeRaisedGroup",
-                 left_label = stratum_label(strata_manual, dims),
-                 stratum_axis = stratum_axis_label(dims),
-                 title = "Manual grouping: which strata raise from which group"))
-invisible(dev.off())
-
-## ---- 1c. actually raise the catch ------------------------------------
-## conds_from_rules() turns the rules into the two condition lists
-## catchRaising() takes (the complements are made explicit, since
-## first-match-wins is an app/script convention, not something the
-## engine itself understands); run_native_raising() wraps catchRaising()
-## with the column preparation it needs. catchRaising() prints its own
-## "Condition diagnostics" banner per condition pair, unconditionally -
-## that noise below is the ENGINE's own logging, not this script's.
-manual_conds <- conds_from_rules(manual_rules, dims = dims)
-raised_manual <- run_native_raising(catch_data, dims, manual_conds,
-                                    type = "discards")
+## ---- 1b. raise the catch ----------------------------------------------
+## catchRaising() prints its own "Condition diagnostics" banner per
+## condition pair, unconditionally (the check above, run again,
+## internally) - that noise below is the ENGINE's own logging, not this
+## script's.
+raised_manual <- catchRaising(catch_data = catch_data,
+                              condition_raising_st_list = strataCond_manual,
+                              condition_matched_data_list = matchedDataCond_manual,
+                              type = "discards",
+                              originType = "WGEstimate",
+                              variableType = "WeightLive")
 cat(sprintf("manual raising: %d rows (%d imported, %d raised)\n",
            nrow(raised_manual),
            sum(raised_manual$importedOrRaised == "imported"),
@@ -128,12 +141,15 @@ cat(sprintf("manual raising: %d rows (%d imported, %d raised)\n",
 ## =====================================================================
 ##  2. HIERARCHICAL GROUPING - recommend_raising()
 ## =====================================================================
-## A cascade of pools, coarsening from "own stratum" outward: a stratum
-## with enough of its OWN sampling (self_threshold) is not pooled at
-## all; otherwise it is pooled with strata sharing less and less of the
-## hierarchy, in the order given (the first key listed is the first one
-## POOLED OVER, i.e. dropped soonest), each level with its own coverage
-## threshold. Read top to bottom, widen top to bottom.
+## RDBESStockCoord has no notion of "cascade fine to coarse until
+## coverage clears a bar" - that is rcef's own recommend_raising(), a
+## cascade of pools coarsening from "own stratum" outward: a stratum with
+## enough of its OWN sampling (self_threshold) is not pooled at all;
+## otherwise it is pooled with strata sharing less and less of the
+## hierarchy, in the order given, each level with its own coverage
+## threshold. conds_from_auto() is the minimal glue turning that
+## recommendation into the same strataCond/matchedDataCond shape as
+## section 1 - the raising call itself is, again, catchRaising() directly.
 hierarchy <- c("Country", "metier4", "Season")
 thresholds <- c(70, 60, 40)          # one per hierarchy level
 self_threshold <- 90                 # own-stratum bar, before any pooling
@@ -141,7 +157,7 @@ self_threshold <- 90                 # own-stratum bar, before any pooling
 rec <- recommend_raising(strata0, hierarchy, thresholds,
                          self_threshold = self_threshold, dims = dims)
 
-## ---- 2a. the cascade, step by step -----------------------------------
+## ---- 2a. the cascade, step by step -------------------------------------
 tree <- decision_tree(rec, hierarchy, thresholds, self_threshold,
                       dims = dims, cumulative = TRUE)
 print(tree)
@@ -152,22 +168,43 @@ cat(sprintf("partition check: %s strata / %s landings accounted for%s\n",
            if (chk$unassigned > 0)
              sprintf(" (%d unassigned)", chk$unassigned) else ""))
 
-## ---- 2b. the same river, this time for the cascade -------------------
-grp_lookup <- raising_groups(rec)
-rec$group_id <- grp_lookup$group_id[match(rec$raise_condition,
-                                          grp_lookup$raise_condition)]
-grDevices::pdf(tempfile())
-print(plot_river(rec, left_var = NULL, right_var = "group_id",
-                 left_label = stratum_label(rec, dims),
-                 right_label = rule_label(rec),
-                 stratum_axis = stratum_axis_label(dims),
-                 title = "Hierarchical cascade: which strata raise from which group"))
-invisible(dev.off())
-
-## ---- 2c. raise the catch with the cascade ----------------------------
 auto_conds <- conds_from_auto(rec)
-raised_hier <- run_native_raising(catch_data, dims, auto_conds,
-                                  type = "discards")
+## group_id per stratum, for the homogeneity check below - the same
+## lookup conds_from_auto() itself already built (auto_conds$groups), no
+## need to call raising_groups() a second time.
+rec$group_id <- auto_conds$groups$group_id[match(rec$raise_condition,
+                                                  auto_conds$groups$raise_condition)]
+print(auto_conds$groups)
+
+## ---- 2b. condition diagnostics, and the raise itself --------------------
+## conds_from_auto() writes its conditions as `stratum_id %in% c(...)` -
+## the id add_stratum_metrics() puts on each row. Without that column
+## first, check_group_conditions()/catchRaising() error on "object
+## 'stratum_id' not found"; with it, everything else here is identical to
+## section 1.
+catch_data_hier <- add_stratum_metrics(catch_data, dims)
+
+cond_st_h <- check_group_conditions(catch_data_hier, auto_conds$strataCond,
+                                    domain = "domainCatchDis",
+                                    originType = "WGEstimate",
+                                    variableType = "WeightLive",
+                                    logFile = NULL, append = TRUE)
+cond_md_h <- check_group_conditions(catch_data_hier, auto_conds$matchedDataCond,
+                                    conditionType = "matched_data",
+                                    domain = "domainCatchDis",
+                                    originType = "WGEstimate",
+                                    variableType = "WeightLive",
+                                    logFile = NULL, append = TRUE)
+strata_matrix_h <- do.call(cbind, cond_st_h)
+cat(sprintf("hierarchical: %d rows in no group, %d rows in more than one (both should be 0)\n",
+           sum(rowSums(strata_matrix_h) == 0), sum(rowSums(strata_matrix_h) > 1)))
+
+raised_hier <- catchRaising(catch_data = catch_data_hier,
+                            condition_raising_st_list = auto_conds$strataCond,
+                            condition_matched_data_list = auto_conds$matchedDataCond,
+                            type = "discards",
+                            originType = "WGEstimate",
+                            variableType = "WeightLive")
 cat(sprintf("hierarchical raising: %d rows (%d imported, %d raised)\n",
            nrow(raised_hier),
            sum(raised_hier$importedOrRaised == "imported"),
@@ -203,29 +240,34 @@ invisible(dev.off())
 ## The question this answers is different from section 3: not how much
 ## weight moved, but whether the STRATA A GROUP DRAWS ITS RATE FROM agree
 ## with each other. plot_discard_rate() already draws one point per
-## stratum from any table carrying discard_rate; put the raising GROUP
-## on x and every point under a group is one of the strata that fed its
-## rate - a group with points scattered from 2% to 40% is not a group,
-## it is a guess, no matter how well it covers the stock.
+## stratum from any table carrying discard_rate; put the raising GROUP on
+## x and every point under a group is one of the strata that fed its rate
+## - a group with points scattered from 2% to 40% is not a group, it is a
+## guess, no matter how well it covers the stock.
 
-## ---- 4a. manual: unnest usedToRaiseGroup - a stratum can donate to
-## more than one group, so it appears once per group it feeds
-donor_long <- strata_manual %>%
-  tidyr::unnest(usedToRaiseGroup) %>%
-  rename(donor_group = usedToRaiseGroup)
+## ---- 4a. manual: matchedDataCond_manual filtered against strata0, the
+## same per-group filter check_group_conditions() itself applies to
+## catch_data - just against the STRATUM table instead of the CEF rows,
+## since that is what already carries a discard_rate. Here the groups do
+## not overlap, so each stratum lands in exactly one donor_group; a
+## matchedDataCond with a shared donor pool across groups would need the
+## same filter run once per group and stacked, exactly as below.
+donor_long_manual <- bind_rows(lapply(names(matchedDataCond_manual), function(g)
+  strata0 %>% filter(!!matchedDataCond_manual[[g]]) %>% mutate(donor_group = g)))
+
 grDevices::pdf(tempfile())
-print(plot_discard_rate(donor_long, x = "donor_group", colour = "metier4",
+print(plot_discard_rate(donor_long_manual, x = "donor_group", colour = "metier4",
                         jitter = TRUE))
 invisible(dev.off())
-donor_long %>% group_by(donor_group) %>%
+donor_long_manual %>% group_by(donor_group) %>%
   summarise(n = n(), mean_DR = round(mean(discard_rate, na.rm = TRUE), 3),
            sd_DR = round(sd(discard_rate, na.rm = TRUE), 3),
            min_DR = round(min(discard_rate, na.rm = TRUE), 3),
            max_DR = round(max(discard_rate, na.rm = TRUE), 3),
            .groups = "drop") %>% print()
 
-## ---- 4b. hierarchical: the cascade is a strict partition (one group
-## per stratum), so the group IS the donor pool - no unnesting needed
+## ---- 4b. hierarchical: the cascade is a strict partition (one group per
+## stratum), so the group IS the donor pool - no filtering needed
 grDevices::pdf(tempfile())
 print(plot_discard_rate(rec, x = "group_id", colour = "metier4", jitter = TRUE))
 invisible(dev.off())
@@ -242,11 +284,23 @@ rec %>% group_by(group_id) %>%
 ## =====================================================================
 ## A scenario is a whole grouping configuration under a name -
 ## scenario_auto() / scenario_manual() describe one, run_scenario() runs
-## it end to end (build the strata, define the groups, apply the
-## raising - the light STRATUM-level raising apply_raising() does, not
-## the full CEF-row catchRaising() run above, which is what makes running
-## several of these cheap enough to compare). compare_scenarios() lines
-## the runs up on the same stratum keys; plot_comparison() draws them.
+## it end to end (build the strata, define the groups, apply the raising
+## - the light STRATUM-level raising apply_raising() does, not the full
+## CEF-row catchRaising() run above, which is what makes running several
+## of these cheap enough to compare). compare_scenarios() lines the runs
+## up on the same stratum keys; plot_comparison() draws them.
+##
+## scenario_manual() takes rules in new_rule() shape - the one place this
+## script uses new_rule()/assign_rule_groups(), only because that is the
+## input this particular comparison function needs, not because the
+## raising in sections 1-2 above does. Same three groups as section 1.
+manual_rules <- list(
+  new_rule("G1", "Beam trawl (TBB)",
+          raise = list(list(var = "metier4", values = "TBB", negate = FALSE))),
+  new_rule("G2", "Otter trawls (OTB, OTM)",
+          raise = list(list(var = "metier4", values = c("OTB", "OTM"),
+                            negate = FALSE))),
+  new_rule("G3", "Everything else"))
 
 scenarios <- list(
   manual_used   = scenario_manual("Manual (as above)", dims, manual_rules, list()),
