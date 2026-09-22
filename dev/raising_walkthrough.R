@@ -85,18 +85,47 @@ cat(sprintf("\n%d strata at metier4 + Country + Season, %s t landed\n",
 ##  1. MANUAL GROUPING - hand-written quosures, checked and raised with
 ##     check_group_conditions() / catchRaising() directly.
 ## =====================================================================
-## One condition per group: strataCond says which strata a group claims,
-## matchedDataCond which data its discard rate is estimated from - here
-## the same set, so every group is raised on its own strata only. Real
-## bll metier4 levels used: TBB, OTB/OTM (otter and otter-twin trawls), a
-## catch-all last, written as the explicit complement (a bare TRUE would
-## re-claim rows G1/G2 already took, and catchRaising() would stop with
-## "records assigned to more than one stratum").
+## Same six groups as the RDBESStockCoord example this is based on
+## (gear is derive_fields()'s literal alias for metier4 - one column
+## under two names; kept as `gear` here because that is the name the
+## source conditions use). G1-G3 split the main gears, G4 is a REST
+## group for everything else, G5 pulls out the fleetValue sentinel for
+## incidental bycatch (IBC), G6 is BMS on its own - between them every
+## row is claimed exactly once, discards or not.
 strataCond_manual <- list(
-  G1 = quo(metier4 == "TBB"),
-  G2 = quo(metier4 %in% c("OTB", "OTM")),
-  G3 = quo(!metier4 %in% c("TBB", "OTB", "OTM")))
-matchedDataCond_manual <- strataCond_manual
+  G1 = quo(gear == "TBB" & catchCategory != "BMS"),
+  G2 = quo(gear %in% c("GTR", "GNS") & catchCategory != "BMS"),
+  G3 = quo(gear %in% c("OTB", "SSC", "SDN") & catchCategory != "BMS"),
+  G4 = quo(!gear %in% c("TBB", "GTR", "GNS", "OTB", "SSC", "SDN") &
+             catchCategory != "BMS" & fleetValue != "MIS_MIS_0_0_0_IBC"),
+  G5 = quo(fleetValue == "MIS_MIS_0_0_0_IBC" & catchCategory != "BMS"),
+  G6 = quo(catchCategory == "BMS"))
+
+## matchedDataCond: G1-G3, G5 and G6 are raised on their own strata (the
+## same condition, reused). G4 (REST) has too little discard data of its
+## own and draws on every gear instead - minus five strata whose own
+## discard ratio the source example flagged as implausible (verified
+## present in this bll 2025 data too: Sweden/27.3.a.21 and France/27.7.e
+## both occur). Comment out the `!(...)` block to see their effect on
+## G4's rate.
+matchedDataCond_manual <- list(
+  G1 = strataCond_manual$G1,
+  G2 = strataCond_manual$G2,
+  G3 = strataCond_manual$G3,
+  G4 = quo(catchCategory != "BMS" &
+             fleetValue != "MIS_MIS_0_0_0_IBC" &
+             !((vesselFlagCountry == "Sweden" & areaValue == "27.3.a.21" &
+                  fleetValue == "GNS_DEF_all_0_0_all" & seasonValue %in% c(2, 3)) |
+                 (vesselFlagCountry == "Sweden" & areaValue == "27.3.a.21" &
+                    fleetValue == "GTR_DEF_all_0_0_all" & seasonValue %in% c(2, 4)) |
+                 (vesselFlagCountry == "France" & areaValue == "27.7.e" &
+                    fleetValue == "GTR_DEF_100-119_0_0_all" & seasonValue == 2) |
+                 (vesselFlagCountry == "Sweden" & areaValue == "27.3.a.21" &
+                    fleetValue == "OTB_CRU_90-119_0_0_all" & seasonValue == 3) |
+                 (vesselFlagCountry == "Sweden" & areaValue == "27.3.a.21" &
+                    fleetValue == "OTB_CRU_70-89_2_35_all" & seasonValue == 1))),
+  G5 = strataCond_manual$G5,
+  G6 = strataCond_manual$G6)
 
 ## ---- 1a. condition diagnostics ---------------------------------------
 ## check_group_conditions() is what catchRaising() runs internally before
@@ -245,21 +274,34 @@ invisible(dev.off())
 ## - a group with points scattered from 2% to 40% is not a group, it is a
 ## guess, no matter how well it covers the stock.
 
-## ---- 4a. manual: matchedDataCond_manual filtered against strata0, the
-## same per-group filter check_group_conditions() itself applies to
-## catch_data - just against the STRATUM table instead of the CEF rows,
-## since that is what already carries a discard_rate. Here the groups do
-## not overlap, so each stratum lands in exactly one donor_group; a
-## matchedDataCond with a shared donor pool across groups would need the
-## same filter run once per group and stacked, exactly as below.
-donor_long_manual <- bind_rows(lapply(names(matchedDataCond_manual), function(g)
-  strata0 %>% filter(!!matchedDataCond_manual[[g]]) %>% mutate(donor_group = g)))
+## ---- 4a. manual: matchedDataCond_manual filtered straight against
+## catch_data, at the domainCatchDis granularity catchRaising() itself
+## estimates a ratio from - the same check the source example runs
+## before raising ("Per-stratum spread behind each group average"), fed
+## into plot_discard_rate() instead of a hand-rolled table. strata0's
+## metier4+Country+Season resolution cannot stand in here: catchCategory
+## and fleetValue (both load-bearing above, G4's exclusions especially)
+## do not survive that aggregation. discard_rate is discards / (landings
+## + discards) - rcef's own convention (what build_strata() computes,
+## and what plot_discard_rate()'s percent axis expects), not the source
+## example's unbounded discards/landings dis_ratio.
+donor_detail_manual <- bind_rows(lapply(names(matchedDataCond_manual), function(g)
+  catch_data %>%
+    filter(!!matchedDataCond_manual[[g]],
+           !is.na(domainCatchDis),
+           originType == "WGEstimate",
+           variableType == "WeightLive") %>%
+    group_by(donor_group = g, domainCatchDis, gear) %>%
+    summarise(landings = sum(total[catchCategory == "Lan"], na.rm = TRUE),
+             discards = sum(total[catchCategory == "Dis"], na.rm = TRUE),
+             discard_rate = discards / (landings + discards),
+             .groups = "drop")))
 
 grDevices::pdf(tempfile())
-print(plot_discard_rate(donor_long_manual, x = "donor_group", colour = "metier4",
+print(plot_discard_rate(donor_detail_manual, x = "donor_group", colour = "gear",
                         jitter = TRUE))
 invisible(dev.off())
-donor_long_manual %>% group_by(donor_group) %>%
+donor_detail_manual %>% group_by(donor_group) %>%
   summarise(n = n(), mean_DR = round(mean(discard_rate, na.rm = TRUE), 3),
            sd_DR = round(sd(discard_rate, na.rm = TRUE), 3),
            min_DR = round(min(discard_rate, na.rm = TRUE), 3),
@@ -293,17 +335,26 @@ rec %>% group_by(group_id) %>%
 ## scenario_manual() takes rules in new_rule() shape - the one place this
 ## script uses new_rule()/assign_rule_groups(), only because that is the
 ## input this particular comparison function needs, not because the
-## raising in sections 1-2 above does. Same three groups as section 1.
+## raising in sections 1-2 above does. It runs at build_strata()'s
+## metier4+Country+Season resolution, where catchCategory has already
+## been summed away into landings/discards and fleetValue no longer
+## exists - so section 1's BMS/IBC groups and G4's hand-picked exclusion
+## have no equivalent here. This is the closest structural analogue at
+## that resolution: the same G1-G3 gear split, with a plain catch-all
+## in place of G4-G6 (new_rule() with no clause claims whatever is left).
 manual_rules <- list(
-  new_rule("G1", "Beam trawl (TBB)",
+  new_rule("G1", "TBB",
           raise = list(list(var = "metier4", values = "TBB", negate = FALSE))),
-  new_rule("G2", "Otter trawls (OTB, OTM)",
-          raise = list(list(var = "metier4", values = c("OTB", "OTM"),
+  new_rule("G2", "GTR / GNS",
+          raise = list(list(var = "metier4", values = c("GTR", "GNS"),
                             negate = FALSE))),
-  new_rule("G3", "Everything else"))
+  new_rule("G3", "OTB / SSC / SDN",
+          raise = list(list(var = "metier4", values = c("OTB", "SSC", "SDN"),
+                            negate = FALSE))),
+  new_rule("G4", "Rest of the gears"))
 
 scenarios <- list(
-  manual_used   = scenario_manual("Manual (as above)", dims, manual_rules, list()),
+  manual_used   = scenario_manual("Manual (gear split)", dims, manual_rules, list()),
   hier_used     = scenario_auto("Hierarchical (as above)", dims, hierarchy,
                                 thresholds, self_threshold = self_threshold),
   hier_stricter = scenario_auto("Hierarchical, stricter", dims, hierarchy,
@@ -316,10 +367,11 @@ cmp  <- compare_scenarios(runs, dims)
 
 ## the wide table: one row per stratum, one column per scenario's
 ## estimated discards, so a single stratum's answer can be read straight
-## across
+## across - sorted by every non-key column (Imported + one per scenario,
+## named after `scenarios`'s own list names) summed, biggest strata first
 ct <- comparison_table(cmp, dims)
-print(head(ct[order(-rowSums(ct[grepl("^Imported$|Hierarchical|Manual", names(ct))],
-                            na.rm = TRUE)), ], 10))
+val_cols <- setdiff(names(ct), dims)
+print(head(ct[order(-rowSums(ct[val_cols], na.rm = TRUE)), ], 10))
 
 grDevices::pdf(tempfile())
 print(plot_comparison(cmp, x_var = "metier4"))
