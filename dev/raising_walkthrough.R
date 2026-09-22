@@ -85,6 +85,15 @@ strata0 <- build_strata(catch_data, dims)
 cat(sprintf("\n%d strata at metier4 + Country + Season, %s t landed\n",
            nrow(strata0), format(round(sum(strata0$landings), 1), big.mark = ",")))
 
+## stratum_id/coverage/discard_rate/n_measurements/numTrips added onto
+## catch_data ITSELF, once, here - not a second "catch_data_hier" table
+## kept alongside it. Only the hierarchical method (section 2 on) reads
+## them (its conditions are stratum_id %in% c(...), written against
+## whichever stratum a row belongs to), but they are harmless extra
+## columns for section 1's plain gear/catchCategory conditions, so one
+## catch_data serves both without a second name to keep track of.
+catch_data <- add_stratum_metrics(catch_data, dims, strata = strata0)
+
 
 ## =====================================================================
 ##  1. MANUAL GROUPING - hand-written quosures, checked and raised with
@@ -177,23 +186,29 @@ cat(sprintf("manual raising: %d rows (%d imported, %d raised)\n",
 ## =====================================================================
 ## RDBESStockCoord has no notion of "cascade fine to coarse until
 ## coverage clears a bar" - that is rcef's own recommend_raising(), a
-## cascade of pools coarsening from "own stratum" outward: a stratum with
-## enough of its OWN sampling (self_threshold) is not pooled at all;
-## otherwise it is pooled with strata sharing less and less of the
-## hierarchy, in the order given, each level with its own coverage
-## threshold. conds_from_auto() is the minimal glue turning that
-## recommendation into the same strataCond/matchedDataCond shape as
-## section 1 - the raising call itself is, again, catchRaising() directly.
+## cascade of pools coarsening from the stratum's own data outward:
+## enough of its OWN sampling and it is not pooled at all; otherwise it
+## is pooled with strata sharing less and less of the hierarchy, in the
+## order given, each level with its own coverage threshold.
+## conds_from_auto() is the minimal glue turning that recommendation
+## into the same strataCond/matchedDataCond shape as section 1 - the
+## raising call itself is, again, catchRaising() directly.
+##
+## thresholds is the own-stratum bar FIRST, then one per hierarchy
+## level - length(hierarchy) + 1 values, not length(hierarchy); a single
+## value (as here) recycles to that length, so all four read 50%.
 hierarchy <- c("Country", "metier4", "Season")
-thresholds <- c(50, 50, 50)          # one per hierarchy level
-self_threshold <- 50                 # own-stratum bar, before any pooling
+thresholds <- 50
 
-rec <- recommend_raising(strata0, hierarchy, thresholds,
-                         self_threshold = self_threshold, dims = dims)
+rec <- recommend_raising(strata0, hierarchy, thresholds, dims = dims)
 
 ## ---- 2a. the cascade, step by step -------------------------------------
-tree <- decision_tree(rec, hierarchy, thresholds, self_threshold,
-                      dims = dims, cumulative = TRUE)
+## The first row used to just say "own stratum" - true, but not
+## checkable against the data the way every other row's "metier4 +
+## Season" / "Season" already is. It now reads the same way: every dims
+## column at once, nothing pooled - so the whole table is one
+## consistent progression from all three kept to none.
+tree <- decision_tree(rec, hierarchy, thresholds, dims = dims, cumulative = TRUE)
 print(tree)
 chk <- check_partition(rec, tree)
 cat(sprintf("partition check: %s strata / %s landings accounted for%s\n",
@@ -239,18 +254,14 @@ print(auto_conds$groups)
 
 ## ---- 2b. condition diagnostics, and the raise itself --------------------
 ## conds_from_auto() writes its conditions as `stratum_id %in% c(...)` -
-## the id add_stratum_metrics() puts on each row. Without that column
-## first, check_group_conditions()/catchRaising() error on "object
-## 'stratum_id' not found"; with it, everything else here is identical to
-## section 1.
-catch_data_hier <- add_stratum_metrics(catch_data, dims)
-
-cond_st_h <- check_group_conditions(catch_data_hier, auto_conds$strataCond,
+## the id already on catch_data since the add_stratum_metrics() call
+## above section 1. Everything else here is identical to section 1.
+cond_st_h <- check_group_conditions(catch_data, auto_conds$strataCond,
                                     domain = "domainCatchDis",
                                     originType = "WGEstimate",
                                     variableType = "WeightLive",
                                     logFile = NULL, append = TRUE)
-cond_md_h <- check_group_conditions(catch_data_hier, auto_conds$matchedDataCond,
+cond_md_h <- check_group_conditions(catch_data, auto_conds$matchedDataCond,
                                     conditionType = "matched_data",
                                     domain = "domainCatchDis",
                                     originType = "WGEstimate",
@@ -260,7 +271,7 @@ strata_matrix_h <- do.call(cbind, cond_st_h)
 cat(sprintf("hierarchical: %d rows in no group, %d rows in more than one (both should be 0)\n",
            sum(rowSums(strata_matrix_h) == 0), sum(rowSums(strata_matrix_h) > 1)))
 
-raised_hier <- catchRaising(catch_data = catch_data_hier,
+raised_hier <- catchRaising(catch_data = catch_data,
                             condition_raising_st_list = auto_conds$strataCond,
                             condition_matched_data_list = auto_conds$matchedDataCond,
                             type = "discards",
@@ -287,22 +298,22 @@ cat(sprintf("hierarchical raising: %d rows (%d imported, %d raised)\n",
 ## stratum that clears NONE of those and falls all the way to the
 ## catch-all has its donor pool capped once it gets there.
 ##
-## Deliberately stricter thresholds than section 2's own cascade: at
-## 50/50/50 nothing ever reaches the catch-all (its tree's Fallback row
-## has n_strata = 0), so there would be nothing to cap. 80/80/80 leaves
-## a genuine one on this data - checked against this bll load, not
-## assumed: 118 of 181 strata, 24% of landings.
-thresholds_ex <- c(80, 80, 80)
-self_threshold_ex <- 90
+## Same 50% policy as section 2 throughout, own-stratum bar included -
+## on THIS data that resolves everything by the Season-pooling step, so
+## the catch-all ends up with nothing in it (see section 2's own tree:
+## Fallback's n_strata is 0) and there is nothing to cap here today. The
+## mechanism below still runs end to end regardless - raise the
+## threshold and it starts capping - the empty case is a real, valid
+## outcome the code has to handle cleanly, not a reason to special-case
+## the thresholds just to force a non-empty demo.
+thresholds_ex <- 50
 
-rec_ex <- recommend_raising(strata0, hierarchy, thresholds_ex,
-                            self_threshold = self_threshold_ex, dims = dims)
-tree_ex <- decision_tree(rec_ex, hierarchy, thresholds_ex, self_threshold_ex,
-                         dims = dims, cumulative = TRUE)
+rec_ex <- recommend_raising(strata0, hierarchy, thresholds_ex, dims = dims)
+tree_ex <- decision_tree(rec_ex, hierarchy, thresholds_ex, dims = dims,
+                         cumulative = TRUE)
 print(tree_ex)
 
 auto_conds_ex <- conds_from_auto(rec_ex)
-catch_data_hier_ex <- add_stratum_metrics(catch_data, dims)
 
 ## The catch-all is always the group whose raise_condition is the
 ## literal string "TRUE" (recommend_raising()'s own convention for the
@@ -320,7 +331,7 @@ if (length(fb_gid)) {
   ## already uses on catch_data, read straight off the two conditions
   ## rather than picked apart from catchRaising()'s output afterwards.
   fb_ratio <- function(cond) {
-    d <- catch_data_hier_ex %>%
+    d <- catch_data %>%
       filter(!!cond, !is.na(domainCatchDis), originType == "WGEstimate",
              variableType == "WeightLive")
     lan <- sum(d$total[d$catchCategory == "Lan"], na.rm = TRUE)
@@ -344,12 +355,12 @@ if (length(fb_gid)) {
 ## stratum" - that is not a bug surfacing, it is the point: those
 ## strata's own data no longer informs anyone's rate, not even their
 ## own group's.
-cond_st_ex <- check_group_conditions(catch_data_hier_ex, auto_conds_ex$strataCond,
+cond_st_ex <- check_group_conditions(catch_data, auto_conds_ex$strataCond,
                                      domain = "domainCatchDis",
                                      originType = "WGEstimate",
                                      variableType = "WeightLive",
                                      logFile = NULL, append = TRUE)
-cond_md_ex <- check_group_conditions(catch_data_hier_ex, auto_conds_ex$matchedDataCond,
+cond_md_ex <- check_group_conditions(catch_data, auto_conds_ex$matchedDataCond,
                                      conditionType = "matched_data",
                                      domain = "domainCatchDis",
                                      originType = "WGEstimate",
@@ -359,7 +370,7 @@ strata_matrix_ex <- do.call(cbind, cond_st_ex)
 cat(sprintf("hierarchical, DR-capped catch-all: %d rows in no group, %d rows in more than one (both should be 0)\n",
            sum(rowSums(strata_matrix_ex) == 0), sum(rowSums(strata_matrix_ex) > 1)))
 
-raised_hier_ex <- catchRaising(catch_data = catch_data_hier_ex,
+raised_hier_ex <- catchRaising(catch_data = catch_data,
                                condition_raising_st_list = auto_conds_ex$strataCond,
                                condition_matched_data_list = auto_conds_ex$matchedDataCond,
                                type = "discards",
@@ -507,7 +518,7 @@ scenarios <- list(
   manual_used = scenario_manual("Manual (gear split)", dims, manual_rules, list()),
   hier_used   = scenario_auto("Country > metier4 > Season (section 2's cascade)",
                               dims, hierarchy, thresholds,
-                              self_threshold = self_threshold),
+                              self_threshold = thresholds[1]),
   hier_metier_only            = scenario_auto("metier4 only", dims,
                                               "metier4", 50, self_threshold = 50),
   hier_country_metier         = scenario_auto("Country > metier4", dims,

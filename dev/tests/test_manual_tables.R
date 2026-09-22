@@ -174,7 +174,7 @@ if (length(fx)) {
   cd <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
   dm <- c("metier4", "Country", "ICESDivision", "Season")
   st <- classify_strata(build_strata(cd, dm), 50)
-  rec <- recommend_raising(st, dm, rep(50, 4), 50, "nested", "Catch All by All", dm)
+  rec <- recommend_raising(st, dm, rep(50, 5), "nested", "Catch All by All", dm)
 
   rt <- strata_raise_table(rec, dm)
   ok(!is.null(rt) && "raised_by" %in% names(rt),
@@ -191,7 +191,7 @@ if (length(fx)) {
   ## checked directly with unreachable thresholds instead, which
   ## deterministically forces every stratum to the fallback regardless
   ## of how well the cascade otherwise performs.
-  rec_forced <- recommend_raising(st, dm, rep(101, 4), 101, "nested",
+  rec_forced <- recommend_raising(st, dm, rep(101, 5), "nested",
                                   "Catch All by All", dm)
   rt_forced <- strata_raise_table(rec_forced, dm)
   ok(any(rt_forced$raised_by == "Catch All by All"),

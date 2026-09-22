@@ -4,20 +4,12 @@
 \alias{decision_tree2}
 \title{Cascade step table with running totals}
 \usage{
-decision_tree2(
-  rec,
-  hierarchy,
-  thresholds,
-  self_threshold,
-  mode = "nested",
-  dims = NULL
-)
+decision_tree2(rec, hierarchy, thresholds, mode = "nested", dims = NULL)
 }
 \arguments{
 \item{rec}{Output of [recommend_raising()].}
 
-\item{hierarchy, thresholds, self_threshold, mode, dims}{As passed to
-[recommend_raising()].}
+\item{hierarchy, thresholds, mode, dims}{As passed to [recommend_raising()].}
 }
 \value{
 A data frame, one row per step, with cumulative columns.

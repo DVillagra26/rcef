@@ -27,8 +27,8 @@ ok <- function(cond, what) {
 keys <- c("Stratum", "metier4", "Country", "areaValue", "ICESSubArea", "Season")
 
 ## ---- 1. the two modes really differ ----------------------------------
-lad <- raising_steps(keys, rep(50, 6), 50, "ladder", keys)
-nes <- raising_steps(keys, rep(50, 6), 50, "nested", keys)
+lad <- raising_steps(keys, rep(50, 7), "ladder", keys)
+nes <- raising_steps(keys, rep(50, 7), "nested", keys)
 lab <- function(st) vapply(st, `[[`, character(1), "label")
 ok(!identical(lab(lad), lab(nes)), "mode is honoured, not overridden")
 
@@ -47,14 +47,19 @@ ok(all(vapply(nk, function(k) keys[length(keys)] %in% k, logical(1))),
 
 ## ---- 2. Stratum is not offered twice ---------------------------------
 ##
-## "own stratum" and a Stratum key are the same rung. Emitted twice, the
-## second always resolves nothing because the first took everything.
+## the own-stratum rung and a Stratum key are the same rung. Emitted
+## twice, the second always resolves nothing because the first took
+## everything. The rung's label spells out every dims column (the
+## own-stratum pool IS all of them, nothing pooled) rather than the word
+## "own stratum", so here that is the full key list joined - Stratum
+## included, since dims == keys in this fixture.
 ok(sum(lab(lad) == "Stratum") == 0,
    "a Stratum key collapses into the own-stratum rung")
-ok(sum(lab(lad) == "own stratum") == 1, "which is present exactly once")
+ok(sum(lab(lad) == paste(keys, collapse = " + ")) == 1,
+   "which is present exactly once")
 ## without a self threshold there is no own-stratum rung, so Stratum
 ## must survive as a pool in its own right
-nos <- raising_steps(keys, rep(50, 6), NA, "ladder", keys)
+nos <- raising_steps(keys, c(NA, rep(50, 6)), "ladder", keys)
 ok("Stratum" %in% lab(nos),
    "with no own-stratum bar, Stratum stays as its own rung")
 
@@ -72,11 +77,11 @@ if (!length(fx)) {
      "Stratum is exactly the four native CEF keys")
 
   st <- classify_strata(build_strata(cd, keys), 50)
-  rl <- recommend_raising(st, keys, rep(50, 6), 50, "ladder",
+  rl <- recommend_raising(st, keys, rep(50, 7), "ladder",
                           "Catch All by All", keys)
   ok(sum(is.na(rl$raise_step)) == 0, "every stratum is assigned a rung")
 
-  tl <- decision_tree(rl, keys, rep(50, 6), 50, "ladder", keys,
+  tl <- decision_tree(rl, keys, rep(50, 7), "ladder", keys,
                       cumulative = TRUE)
   ok(abs(utils::tail(tl$cum_pct_landings, 1) - 100) < 0.51,
      "the ladder accounts for all the landings")
@@ -89,9 +94,9 @@ if (!length(fx)) {
   ok(sum(mid$n_strata[mid$pool %in% c("metier4", "Country")]) > 0,
      "the fleet and country rungs both do work")
 
-  rn <- recommend_raising(st, keys, rep(50, 6), 50, "nested",
+  rn <- recommend_raising(st, keys, rep(50, 7), "nested",
                           "Catch All by All", keys)
-  tn <- decision_tree(rn, keys, rep(50, 6), 50, "nested", keys,
+  tn <- decision_tree(rn, keys, rep(50, 7), "nested", keys,
                       cumulative = TRUE)
   fb <- function(t) t$n_strata[t$step == "Fallback"]
   # "ladder" mode existed because nested mode was broken by a Stratum-
@@ -110,9 +115,9 @@ if (!length(fx)) {
   ## two resolutions of one family must be distinguishable
   fam <- c("Stratum", "metier6", "metier4")
   sf <- classify_strata(build_strata(cd, fam), 50)
-  rf <- recommend_raising(sf, fam, rep(50, 3), 50, "ladder",
+  rf <- recommend_raising(sf, fam, rep(50, 4), "ladder",
                           "Catch All by All", fam)
-  tf <- decision_tree(rf, fam, rep(50, 3), 50, "ladder", fam)
+  tf <- decision_tree(rf, fam, rep(50, 4), "ladder", fam)
   ok(all(c("metier6", "metier4") %in% tf$pool),
      "metier6 and metier4 are separate rungs, not one 'Fleet'")
 

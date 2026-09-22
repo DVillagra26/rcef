@@ -184,8 +184,9 @@ run_scenario <- function(sc, catch_data) {
   if (sc$method == "auto") {
     # auto keeps one global window; manual carries it per group instead
     s <- flag_donor_exclusion(s, sc$dr_min %||% NA, sc$dr_max %||% NA)
-    r <- recommend_raising(s, sc$hierarchy, sc$thresholds,
-                           self_threshold = sc$self_threshold %||% NA,
+    r <- recommend_raising(s, sc$hierarchy,
+                           combine_thresholds(sc$self_threshold %||% NA,
+                                              sc$thresholds, sc$hierarchy),
                            mode = sc$mode %||% "nested", dims = sc$dims)
     apply_raising(r, "raise_condition")
   } else {

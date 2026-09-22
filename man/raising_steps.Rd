@@ -4,21 +4,15 @@
 \alias{raising_steps}
 \title{Build the fine-to-coarse cascade of donor pools}
 \usage{
-raising_steps(
-  hierarchy,
-  thresholds,
-  self_threshold = NA,
-  mode = "nested",
-  dims = NULL
-)
+raising_steps(hierarchy, thresholds, mode = "nested", dims = NULL)
 }
 \arguments{
 \item{hierarchy}{Key columns, finest first (e.g. `c("metier4",
 "Country", "Season")`).}
 
-\item{thresholds}{One threshold, or one per hierarchy level.}
-
-\item{self_threshold}{Threshold for the own-stratum step; `NA` to omit it.}
+\item{thresholds}{The own-stratum threshold, followed by one per hierarchy
+level - length `length(hierarchy) + 1` - or a single value recycled to
+that length. `NA` in the first slot omits the own-stratum step.}
 
 \item{mode}{Retained for older saved scenarios; the cascade always widens
 one key at a time.}

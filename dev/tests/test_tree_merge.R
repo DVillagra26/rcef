@@ -22,13 +22,13 @@ if (!length(fx)) {
   cd <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
   dm <- c("metier4", "Country", "ICESDivision", "Season")
   st <- classify_strata(build_strata(cd, dm), 50)
-  rec <- recommend_raising(st, dm, rep(50, 4), 50, "nested",
+  rec <- recommend_raising(st, dm, rep(50, 5), "nested",
                            "Catch All by All", dm)
 
-  plain <- decision_tree(rec, dm, rep(50, 4), 50, "nested", dm)
-  rich  <- decision_tree(rec, dm, rep(50, 4), 50, "nested", dm,
+  plain <- decision_tree(rec, dm, rep(50, 5), "nested", dm)
+  rich  <- decision_tree(rec, dm, rep(50, 5), "nested", dm,
                          cumulative = TRUE)
-  old   <- decision_tree2(rec, dm, rep(50, 4), 50, "nested", dm)
+  old   <- decision_tree2(rec, dm, rep(50, 5), "nested", dm)
 
   ## ---- the delegate returns exactly what it always did ---------------
   ok(identical(rich, old),

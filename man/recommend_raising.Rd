@@ -8,7 +8,6 @@ recommend_raising(
   strata,
   hierarchy,
   thresholds,
-  self_threshold = NA,
   mode = "nested",
   all_label = "ALL",
   dims = NULL
@@ -20,10 +19,10 @@ recommend_raising(
 
 \item{hierarchy}{Key columns, finest first.}
 
-\item{thresholds}{One threshold, or one per hierarchy level.}
-
-\item{self_threshold}{Threshold for raising on the stratum's own data;
-`NA` folds it into the first cascade step.}
+\item{thresholds}{The own-stratum threshold, followed by one per hierarchy
+level - length `length(hierarchy) + 1` - or a single value recycled to
+that length. `NA` in the first slot folds the own-stratum step into the
+first cascade step.}
 
 \item{mode}{Retained for older saved scenarios.}
 

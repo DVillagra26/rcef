@@ -5436,8 +5436,7 @@ server <- function(input, output, session) {
     tagList(dir, key1, tags$hr(style = "margin:6px 0"), krows, warn) })
 
   output$hier_chain <- renderUI({
-    st <- raising_steps(hier_cols(), hier_thr(),
-                        self_thr_val(),
+    st <- raising_steps(hier_cols(), c(self_thr_val(), hier_thr()),
                         "nested", ar_dims())
     div(class = "chain", tags$b("Order actually tested:"), tags$br(),
         HTML(paste(c(vapply(st, `[[`, character(1), "label"), "ALL"),
@@ -5483,8 +5482,7 @@ server <- function(input, output, session) {
   # one table that was a prefix of the other. check_partition() reads only
   # n_strata and landings, both present here.
   tree_tbl_r <- reactive(decision_tree(
-    rec(), hier_cols(), hier_thr(),
-    self_thr_val(),
+    rec(), hier_cols(), c(self_thr_val(), hier_thr()),
     "nested", ar_dims(), cumulative = TRUE))
 
   output$tree_tbl <- renderDT(datatable(
@@ -5494,8 +5492,7 @@ server <- function(input, output, session) {
   observe({
     tr <- tree_tbl_r()
     ids <- c("0", vapply(raising_steps(
-      hier_cols(), hier_thr(),
-      self_thr_val(),
+      hier_cols(), c(self_thr_val(), hier_thr()),
       "nested", ar_dims()),
       `[[`, character(1), "id"), "fallback")
     rg <- rec_g(); pal <- auto_pal(); dd <- ar_dims()
@@ -5753,8 +5750,7 @@ server <- function(input, output, session) {
     s <- classify_strata(build_strata(dat(), dms), thr0)
     s <- flag_donor_exclusion(s, dr[1], dr[2],
                               excluded = excl, dims = dms)
-    recommend_raising(s, cols, thr,
-                      self_threshold = self,
+    recommend_raising(s, cols, c(self, thr),
                       mode = "nested",
                       dims = dms) })
 
@@ -6702,8 +6698,8 @@ server <- function(input, output, session) {
     conds <- if (sc$method == "auto") {
       st <- flag_donor_exclusion(build_strata(dat(), sc$dims),
                                  sc$dr_min %||% NA, sc$dr_max %||% NA)
-      conds_from_auto(recommend_raising(st, sc$hierarchy, sc$thresholds,
-        self_threshold = sc$self_threshold %||% NA,
+      conds_from_auto(recommend_raising(st, sc$hierarchy,
+        combine_thresholds(sc$self_threshold %||% NA, sc$thresholds, sc$hierarchy),
         mode = sc$mode %||% "nested", dims = sc$dims))
     } else conds_from_rules(sc$rules, sc$sets %||% list(), sc$dims)
     r <- with_busy(sprintf("Raising with '%s'...", input$final_alloc),

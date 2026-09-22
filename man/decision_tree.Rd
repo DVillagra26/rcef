@@ -8,7 +8,6 @@ decision_tree(
   rec,
   hierarchy,
   thresholds,
-  self_threshold,
   mode = "nested",
   dims = NULL,
   cumulative = FALSE
@@ -17,8 +16,7 @@ decision_tree(
 \arguments{
 \item{rec}{Output of [recommend_raising()].}
 
-\item{hierarchy, thresholds, self_threshold, mode, dims}{As passed to
-[recommend_raising()].}
+\item{hierarchy, thresholds, mode, dims}{As passed to [recommend_raising()].}
 
 \item{cumulative}{Add the running totals (`pct_strata`, `cum_pct_strata`,
 `cum_pct_landings`), so it is visible how much of the stock is settled

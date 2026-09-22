@@ -1351,6 +1351,14 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
   }
   d <- sampled_for_discards(catch)
   x_var <- x; colour_var <- colour; shape_var <- shape; facet_var <- facet
+  # A point is one (x/colour/shape/facet) stratum - sizing it by that
+  # stratum's landings turns "how much of the catch is this dot" from a
+  # question the reader has to go look up into something the plot itself
+  # answers. Off when landings is absent or degenerate (every value 0 or
+  # NA), so a caller passing a hand-built table without it still gets
+  # the old fixed-size points instead of an error or a blank legend.
+  has_landings <- "landings" %in% names(d) &&
+    any(is.finite(d$landings) & d$landings > 0)
 
   ## ============ base engine ============================================
   if (identical(engine, "base")) {
@@ -1373,6 +1381,13 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
       lv <- sort(unique(as.character(d[[shape_var]])))
       pch_lv[match(as.character(d[[shape_var]]), lv)]
     } else 21
+    # cex is roughly proportional to RADIUS, not area, so the scaling
+    # factor is sqrt(weight) - the same area-proportional convention
+    # scale_size_area() applies in the ggplot engine below.
+    d$.ptcex <- if (has_landings) {
+      mx <- max(d$landings, na.rm = TRUE)
+      0.6 + 2.2 * sqrt(pmax(d$landings, 0, na.rm = TRUE) / mx)
+    } else rep(1.3, nrow(d))
 
     draw_one <- function(dd, main) {
       graphics::plot(dd$.xi, dd$.rate, xlim = c(0.5, length(xs) + 0.5),
@@ -1380,7 +1395,7 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
                      main = main)
       grid_base(v = seq_along(xs), h = graphics::axTicks(2))
       graphics::points(dd$.xi, dd$.rate, pch = dd$.ptpch, bg = dd$.ptcol,
-                       col = OUTLINE, cex = 1.3)
+                       col = OUTLINE, cex = dd$.ptcex)
       graphics::box()
       axis_x_cat(seq_along(xs), xs, angle = angle, cex = 0.7)
       graphics::axis(2, at = graphics::axTicks(2),
@@ -1436,14 +1451,16 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
   ae <- aes(x = .data[[x_var]], y = discard_rate * 100)
   if (has(colour_var)) ae <- modifyList(ae, aes(fill = .data[[colour_var]]))
   if (has(shape_var))  ae <- modifyList(ae, aes(shape = .data[[shape_var]]))
+  if (has_landings)    ae <- modifyList(ae, aes(size = landings))
 
-  # only shapes 21-25 take a fill, so pin shape 21 when nothing maps to shape
-  p <- ggplot(d, ae) +
-    (if (has(shape_var))
-       geom_point(size = 3, alpha = 0.85, colour = OUTLINE, stroke = 0.5, position = pos)
-     else
-       geom_point(size = 3, alpha = 0.85, colour = OUTLINE, stroke = 0.5,
-                  shape = 21, position = pos))
+  # only shapes 21-25 take a fill, so pin shape 21 when nothing maps to shape.
+  # size is either mapped (added to ae above, scaled below) or fixed at the
+  # old constant - never both, which is what a geom_point(size = ...) call
+  # alongside an aes(size = ...) mapping would otherwise silently conflict on.
+  pt_args <- list(alpha = 0.85, colour = OUTLINE, stroke = 0.5, position = pos)
+  if (!has(shape_var))  pt_args$shape <- 21
+  if (!has_landings)    pt_args$size  <- 3
+  p <- ggplot(d, ae) + do.call(geom_point, pt_args)
   if (has(shape_var))
     p <- p + scale_shape_manual(values = c(21, 22, 23, 24, 25, 8, 3, 4))
   # the fill legend keys inherit the default shape (19), which takes no
@@ -1457,12 +1474,17 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
   if (has(colour_var))
     p <- p + scale_fill_var(colour_var, d[[colour_var]], name = colour_var,
                             palette = palette)
+  # area-, not radius-, proportional - the honest way to size a point by
+  # a weight, and the same convention the coverage bubble plots already use.
+  if (has_landings)
+    p <- p + scale_size_area(max_size = 8, labels = scales::comma, name = "Landings")
 
   p <- p +
     scale_y_continuous(labels = function(z) paste0(z, "%")) +
     maybe_facet(facet_var, free_y = FALSE, ncol = 2) +
     labs(title = "Discard rate - one point per stratum (raw, no averaging)",
-         subtitle = "One point per x / colour / shape / facet stratum with discard data",
+         subtitle = paste0("One point per x / colour / shape / facet stratum with discard data",
+                           if (has_landings) ", point size = landings" else ""),
          y = "Discard rate", x = x_var,
          fill = if (has(colour_var)) colour_var else NULL,
          shape = if (has(shape_var)) shape_var else NULL) +
