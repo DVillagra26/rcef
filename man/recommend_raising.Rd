@@ -8,14 +8,21 @@ recommend_raising(
   strata,
   hierarchy,
   thresholds,
-  mode = "nested",
   all_label = "ALL",
   dims = NULL
 )
 }
 \arguments{
-\item{strata}{A classified stratum table with `coverage`, `landings` and
-`landings_with_discards`, plus the hierarchy columns.}
+\item{strata}{Raw catch data, OR an already-built stratum table
+carrying `coverage`, `landings` and `landings_with_discards` plus the
+hierarchy columns (the output of [build_strata()], or of an earlier
+[recommend_raising()] call). Told apart by whether `landings` is
+already a column - a stratum-level aggregate name [build_strata()]
+always adds and raw catch data never has, even after
+[add_stratum_metrics()] (which adds a row-level `coverage` of its
+own - not a safe discriminator here) - so raw data is built into
+strata here, at `dims` (`hierarchy` by default), the same one call
+would do by hand.}
 
 \item{hierarchy}{Key columns, finest first.}
 
@@ -24,11 +31,13 @@ level - length `length(hierarchy) + 1` - or a single value recycled to
 that length. `NA` in the first slot folds the own-stratum step into the
 first cascade step.}
 
-\item{mode}{Retained for older saved scenarios.}
-
 \item{all_label}{Label for the final fallback pool.}
 
-\item{dims}{The full stratum dimensions; defaults to `hierarchy`.}
+\item{dims}{The full stratum dimensions; defaults to `hierarchy`. Only
+worth passing separately from a wider set of columns than `hierarchy`
+itself names - e.g. comparing several hierarchies at one shared,
+wider resolution (see [compare_scenarios()]) - not in the common
+case where the two already agree.}
 }
 \value{
 `strata` with `raise_step`, `raise_level`, `raise_condition`

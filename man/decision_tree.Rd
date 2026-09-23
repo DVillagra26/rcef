@@ -4,19 +4,12 @@
 \alias{decision_tree}
 \title{Step-by-step table of the automatic cascade}
 \usage{
-decision_tree(
-  rec,
-  hierarchy,
-  thresholds,
-  mode = "nested",
-  dims = NULL,
-  cumulative = FALSE
-)
+decision_tree(rec, hierarchy, thresholds, dims = NULL, cumulative = FALSE)
 }
 \arguments{
 \item{rec}{Output of [recommend_raising()].}
 
-\item{hierarchy, thresholds, mode, dims}{As passed to [recommend_raising()].}
+\item{hierarchy, thresholds, dims}{As passed to [recommend_raising()].}
 
 \item{cumulative}{Add the running totals (`pct_strata`, `cum_pct_strata`,
 `cum_pct_landings`), so it is visible how much of the stock is settled

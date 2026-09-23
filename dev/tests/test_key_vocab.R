@@ -75,7 +75,7 @@ ok(length(key_order_warnings(character(0))) == 0, "no keys - nothing to warn abo
 keys <- c("metier4", "Country", "areaValue", "ICESSubArea", "Season")
 ok(length(key_order_warnings(keys)) == 0,
    "a well-formed key list (as documented for raising_steps) has no order warnings")
-st <- raising_steps(keys, rep(50, 6), mode = "nested", dims = keys)
+st <- raising_steps(keys, rep(50, 6), dims = keys)
 ok(identical(st[[2]]$id, "2") && grepl("^Country", st[[2]]$label),
    "and metier4 (Key 2) is indeed the first one dropped in the cascade")
 

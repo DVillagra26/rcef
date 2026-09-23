@@ -5436,8 +5436,7 @@ server <- function(input, output, session) {
     tagList(dir, key1, tags$hr(style = "margin:6px 0"), krows, warn) })
 
   output$hier_chain <- renderUI({
-    st <- raising_steps(hier_cols(), c(self_thr_val(), hier_thr()),
-                        "nested", ar_dims())
+    st <- raising_steps(hier_cols(), c(self_thr_val(), hier_thr()), ar_dims())
     div(class = "chain", tags$b("Order actually tested:"), tags$br(),
         HTML(paste(c(vapply(st, `[[`, character(1), "label"), "ALL"),
                    collapse = " &rarr; "))) })
@@ -5483,7 +5482,7 @@ server <- function(input, output, session) {
   # n_strata and landings, both present here.
   tree_tbl_r <- reactive(decision_tree(
     rec(), hier_cols(), c(self_thr_val(), hier_thr()),
-    "nested", ar_dims(), cumulative = TRUE))
+    ar_dims(), cumulative = TRUE))
 
   output$tree_tbl <- renderDT(datatable(
     tree_tbl_r(), rownames = FALSE, options = list(dom = "t", scrollX = TRUE)))
@@ -5492,8 +5491,7 @@ server <- function(input, output, session) {
   observe({
     tr <- tree_tbl_r()
     ids <- c("0", vapply(raising_steps(
-      hier_cols(), c(self_thr_val(), hier_thr()),
-      "nested", ar_dims()),
+      hier_cols(), c(self_thr_val(), hier_thr()), ar_dims()),
       `[[`, character(1), "id"), "fallback")
     rg <- rec_g(); pal <- auto_pal(); dd <- ar_dims()
     for (i in seq_along(ids)) local({
@@ -5750,9 +5748,7 @@ server <- function(input, output, session) {
     s <- classify_strata(build_strata(dat(), dms), thr0)
     s <- flag_donor_exclusion(s, dr[1], dr[2],
                               excluded = excl, dims = dms)
-    recommend_raising(s, cols, c(self, thr),
-                      mode = "nested",
-                      dims = dms) })
+    recommend_raising(s, cols, c(self, thr), dims = dms) })
 
   auto_groups <- reactive(raising_groups(rec()))
   auto_pal <- reactive(group_palette(auto_groups()$group_id))
@@ -6121,7 +6117,6 @@ server <- function(input, output, session) {
     save_sc(input$auto_name, scenario_auto(
       input$auto_name, ar_dims(), hier_cols(), hier_thr(),
       self_threshold = self_thr_val(),
-      mode = "nested",
       dr_min = ar_dr()[1], dr_max = ar_dr()[2])) })
 
   observeEvent(input$save_manual, {
@@ -6700,7 +6695,7 @@ server <- function(input, output, session) {
                                  sc$dr_min %||% NA, sc$dr_max %||% NA)
       conds_from_auto(recommend_raising(st, sc$hierarchy,
         combine_thresholds(sc$self_threshold %||% NA, sc$thresholds, sc$hierarchy),
-        mode = sc$mode %||% "nested", dims = sc$dims))
+        dims = sc$dims))
     } else conds_from_rules(sc$rules, sc$sets %||% list(), sc$dims)
     r <- with_busy(sprintf("Raising with '%s'...", input$final_alloc),
       tryCatch(run_native_raising(dat(), sc$dims, conds,
@@ -6805,7 +6800,7 @@ server <- function(input, output, session) {
           sprintf("## ===== Saved allocation '%s' =====", nm),
           if (sc$method == "auto")
             code_auto_rule(nm, sc$dims, sc$hierarchy, sc$thresholds,
-                           sc$self_threshold %||% NA, sc$mode %||% "nested",
+                           sc$self_threshold %||% NA,
                            sc$dr_min %||% NA, sc$dr_max %||% NA)
           else code_manual_rule(nm, sc$dims, sc$rules, sc$sets %||% list()),
           code_raise(nm, sc$dims, input$nr_type %||% "discards",
@@ -6821,7 +6816,6 @@ server <- function(input, output, session) {
         live_auto <- tryCatch(
           code_auto_rule("unsaved_auto", ar_dims(),
                          hier_cols(), hier_thr(), self_thr_val(),
-                         "nested",
                          ar_dr()[1], ar_dr()[2]),
           error = function(e) NULL)
         if (!is.null(live_auto)) {

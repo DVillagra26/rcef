@@ -9,10 +9,12 @@ rsconnect/
 inst/doc/
 docs/
 .DS_Store
-# stray figures written to the repo root by dev/test_coverage_plots.R
+# stray figures written to the repo root by dev/plot_walkthrough.R and
+# dev/raising_walkthrough.R
 Rplots*.pdf
 /[0-9][0-9][a-z]_*.png
 /[0-9][0-9][a-z]_*.pdf
+/[0-9][0-9][a-z]_*.jpg
 # local vignette render output
 vignettes/*.pdf
 vignettes/*.html

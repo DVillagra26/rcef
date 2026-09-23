@@ -69,21 +69,27 @@ if (dir.exists(file.path(bll_dir, bll_year)) &&
   cat("load skipped - bll extdata and/or icesVocab+icesSD not available\n")
 }
 
-if (is.null(catch_data)) {
-  cat("\nNothing to raise: catch_data did not load (see the message above).\n",
-     "Point bll_dir / bll_year at your own data, or set catch_data by\n",
-     "hand, and re-source this script.\n")
-} else {
-
 
 ## The stratum resolution the hierarchical method and the homogeneity
 ## check (section 4) share. "Own stratum" IS this set of columns - a
 ## stratum finer than this cannot be raised on its own data, because
 ## there IS no finer resolution defined.
-dims <- c("metier4", "Country", "Season")
+## Same column ORDER section 2's hierarchy below uses, and not by
+## accident: stratum_id (added to catch_data just below, read again
+## inside recommend_raising() every time it builds its own strata) is
+## `paste(dims values, sep = " | ")` - order-sensitive. dims and
+## hierarchy naming the same three columns in two different orders
+## would build two different stratum_id strings for the same stratum,
+## and every stratum_id %in% c(...) condition downstream would silently
+## match nothing. One order, used everywhere, is what keeps
+## recommend_raising(catch_data, hierarchy, thresholds) - no separate
+## dims - safe to call at all.
+dims <- c("Country", "metier4", "Season")
 strata0 <- build_strata(catch_data, dims)
-cat(sprintf("\n%d strata at metier4 + Country + Season, %s t landed\n",
+cat(sprintf("\n%d strata at Country + metier4 + Season, %s t landed\n",
            nrow(strata0), format(round(sum(strata0$landings), 1), big.mark = ",")))
+rm(strata0)  # read once, right here, for the line above - nothing below
+             # reads it; recommend_raising() builds its own from catch_data
 
 ## stratum_id/coverage/discard_rate/n_measurements/numTrips added onto
 ## catch_data ITSELF, once, here - not a second "catch_data_hier" table
@@ -92,7 +98,12 @@ cat(sprintf("\n%d strata at metier4 + Country + Season, %s t landed\n",
 ## whichever stratum a row belongs to), but they are harmless extra
 ## columns for section 1's plain gear/catchCategory conditions, so one
 ## catch_data serves both without a second name to keep track of.
-catch_data <- add_stratum_metrics(catch_data, dims, strata = strata0)
+catch_data <- add_stratum_metrics(catch_data, dims)
+## dims itself stays in scope for section 5 (the shared key several
+## scenarios' results get compared on) and for that add_stratum_metrics()
+## call above - but not for recommend_raising()/decision_tree() below:
+## they default it to hierarchy, the same three columns here, so passing
+## it again would just be saying the same thing twice.
 
 
 ## =====================================================================
@@ -175,6 +186,7 @@ raised_manual <- catchRaising(catch_data = catch_data,
                               type = "discards",
                               originType = "WGEstimate",
                               variableType = "WeightLive")
+
 cat(sprintf("manual raising: %d rows (%d imported, %d raised)\n",
            nrow(raised_manual),
            sum(raised_manual$importedOrRaised == "imported"),
@@ -200,7 +212,12 @@ cat(sprintf("manual raising: %d rows (%d imported, %d raised)\n",
 hierarchy <- c("Country", "metier4", "Season")
 thresholds <- 50
 
-rec <- recommend_raising(strata0, hierarchy, thresholds, dims = dims)
+## catch_data straight in - recommend_raising() builds its own strata
+## (build_strata(catch_data, dims), dims defaulting to hierarchy here,
+## the same three columns) rather than being handed one pre-built. Pass
+## an already-built stratum table instead (as section 5's scenarios do,
+## at a dims wider than their own hierarchy) and it is used as is.
+rec <- recommend_raising(catch_data, hierarchy, thresholds)
 
 ## ---- 2a. the cascade, step by step -------------------------------------
 ## The first row used to just say "own stratum" - true, but not
@@ -208,7 +225,7 @@ rec <- recommend_raising(strata0, hierarchy, thresholds, dims = dims)
 ## Season" / "Season" already is. It now reads the same way: every dims
 ## column at once, nothing pooled - so the whole table is one
 ## consistent progression from all three kept to none.
-tree <- decision_tree(rec, hierarchy, thresholds, dims = dims, cumulative = TRUE)
+tree <- decision_tree(rec, hierarchy, thresholds, cumulative = TRUE)
 print(tree)
 chk <- check_partition(rec, tree)
 cat(sprintf("partition check: %s strata / %s landings accounted for%s\n",
@@ -240,7 +257,8 @@ p_tree <- ggplot(tree, aes(x = step)) +
        x = NULL, y = "% of total landings") +
   app_theme() +
   theme(axis.text.x = element_text(angle = 40, hjust = 1))
-grDevices::pdf(tempfile())
+jpeg("21a_cascade_landings_resolved.jpg", width = 1300, height = 850,
+    res = 110, quality = 90)
 print(p_tree)
 invisible(dev.off())
 
@@ -308,9 +326,8 @@ cat(sprintf("hierarchical raising: %d rows (%d imported, %d raised)\n",
 ## the thresholds just to force a non-empty demo.
 thresholds_ex <- 50
 
-rec_ex <- recommend_raising(strata0, hierarchy, thresholds_ex, dims = dims)
-tree_ex <- decision_tree(rec_ex, hierarchy, thresholds_ex, dims = dims,
-                         cumulative = TRUE)
+rec_ex <- recommend_raising(catch_data, hierarchy, thresholds_ex)
+tree_ex <- decision_tree(rec_ex, hierarchy, thresholds_ex, cumulative = TRUE)
 print(tree_ex)
 
 auto_conds_ex <- conds_from_auto(rec_ex)
@@ -394,14 +411,24 @@ cat(sprintf("hierarchical, DR-capped catch-all: %d rows (%d imported, %d raised)
 raised_overview_table(raised_manual)
 raised_overview_table(raised_hier)
 
-grDevices::pdf(tempfile())
 ## by metier
+jpeg("31a_raised_composition_metier_manual.jpg", width = 1300, height = 800,
+    res = 110, quality = 90)
 print(plot_raised_composition(raised_manual, x_var = "metier4"))
-print(plot_raised_composition(raised_hier,   x_var = "metier4"))
+invisible(dev.off())
+jpeg("31b_raised_composition_metier_hier.jpg", width = 1300, height = 800,
+    res = 110, quality = 90)
+print(plot_raised_composition(raised_hier, x_var = "metier4"))
+invisible(dev.off())
 ## by country, faceted by season - a finer aggregation than the group
 ## definitions themselves ever used
+jpeg("31c_raised_composition_country_season_manual.jpg", width = 1400,
+    height = 900, res = 110, quality = 90)
 print(plot_raised_composition(raised_manual, x_var = "Country", facet_var = "Season"))
-print(plot_raised_composition(raised_hier,   x_var = "Country", facet_var = "Season"))
+invisible(dev.off())
+jpeg("31d_raised_composition_country_season_hier.jpg", width = 1400,
+    height = 900, res = 110, quality = 90)
+print(plot_raised_composition(raised_hier, x_var = "Country", facet_var = "Season"))
 invisible(dev.off())
 
 
@@ -420,8 +447,8 @@ invisible(dev.off())
 ## catch_data, at the domainCatchDis granularity catchRaising() itself
 ## estimates a ratio from - the same check the source example runs
 ## before raising ("Per-stratum spread behind each group average"), fed
-## into plot_discard_rate() instead of a hand-rolled table. strata0's
-## metier4+Country+Season resolution cannot stand in here: catchCategory
+## into plot_discard_rate() instead of a hand-rolled table. A stratum
+## table at metier4+Country+Season cannot stand in here: catchCategory
 ## and fleetValue (both load-bearing above, G4's exclusions especially)
 ## do not survive that aggregation. discard_rate is discards / (landings
 ## + discards) - rcef's own convention (what build_strata() computes,
@@ -439,7 +466,8 @@ donor_detail_manual <- bind_rows(lapply(names(matchedDataCond_manual), function(
              discard_rate = discards / (landings + discards),
              .groups = "drop")))
 
-grDevices::pdf(tempfile())
+jpeg("41a_discard_rate_manual_donors.jpg", width = 1300, height = 800,
+    res = 110, quality = 90)
 print(plot_discard_rate(donor_detail_manual, x = "donor_group", colour = "gear",
                         jitter = TRUE))
 invisible(dev.off())
@@ -453,7 +481,8 @@ donor_detail_manual %>% group_by(donor_group) %>%
 
 ## ---- 4b. hierarchical: the cascade is a strict partition (one group per
 ## stratum), so the group IS the donor pool - no filtering needed
-grDevices::pdf(tempfile())
+jpeg("41b_discard_rate_hier_donors.jpg", width = 1300, height = 800,
+    res = 110, quality = 90)
 print(plot_discard_rate(rec, x = "group_id", colour = "metier4", jitter = TRUE))
 invisible(dev.off())
 rec %>% group_by(group_id) %>%
@@ -516,9 +545,9 @@ dims_area <- c(dims, "areaValue")    # only the Country > area > metier4 variant
 
 scenarios <- list(
   manual_used = scenario_manual("Manual (gear split)", dims, manual_rules, list()),
-  hier_used   = scenario_auto("Country > metier4 > Season (section 2's cascade)",
-                              dims, hierarchy, thresholds,
-                              self_threshold = thresholds[1]),
+  # hier_used   = scenario_auto("Country > metier4 > Season (section 2's cascade)",
+                              # dims, hierarchy, thresholds,
+                              # self_threshold = thresholds[1]),
   hier_metier_only            = scenario_auto("metier4 only", dims,
                                               "metier4", 50, self_threshold = 50),
   hier_country_metier         = scenario_auto("Country > metier4", dims,
@@ -542,8 +571,12 @@ ct <- comparison_table(cmp, dims)
 val_cols <- setdiff(names(ct), dims)
 print(head(ct[order(-rowSums(ct[val_cols], na.rm = TRUE)), ], 10))
 
-grDevices::pdf(tempfile())
+jpeg("51a_scenario_comparison_metier.jpg", width = 1300, height = 800,
+    res = 110, quality = 90)
 print(plot_comparison(cmp, x_var = "metier4"))
+invisible(dev.off())
+jpeg("51b_scenario_comparison_country_season.jpg", width = 1400, height = 900,
+    res = 110, quality = 90)
 print(plot_comparison(cmp, x_var = "Country", facet_var = "metier4"))
 invisible(dev.off())
 
@@ -604,8 +637,10 @@ cat(sprintf("\nevery raised row's group_id appears in the donor table below it: 
            ok_linked))
 
 
-cat("\nDone - every figure above went to a throwaway pdf() device (there is",
-   "\nnothing worth keeping as a file here, unlike plot_walkthrough.R's PNGs -",
-   "\nrun a block in an interactive session to actually look at one).\n")
+cat("\nDone - every figure above was saved as a numbered .jpg in the current\n",
+   "working directory (repo root, if run from there), the same convention\n",
+   "plot_walkthrough.R's PNGs use - both gitignored, neither meant to be\n",
+   "committed.\n")
 
-}  # end: if (!is.null(catch_data))
+
+

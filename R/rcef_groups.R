@@ -266,16 +266,13 @@ donor_exclusion_expr <- function(excluded, dims) {
 #' @param thresholds The own-stratum threshold, followed by one per hierarchy
 #'   level - length `length(hierarchy) + 1` - or a single value recycled to
 #'   that length. `NA` in the first slot omits the own-stratum step.
-#' @param mode Retained for older saved scenarios; the cascade always widens
-#'   one key at a time.
 #' @param dims The full stratum dimensions, for the "pooled across ..." note;
 #'   defaults to `hierarchy`.
 #' @return A list of steps, each with `keys`, `threshold`, `label`, `note`
 #'   and `id`.
 #' @seealso [recommend_raising()], [decision_tree()]
 #' @export
-raising_steps <- function(hierarchy, thresholds, mode = "nested", dims = NULL) {
-  mode <- match.arg(mode, c("ladder", "nested"))
+raising_steps <- function(hierarchy, thresholds, dims = NULL) {
   if (length(thresholds) == 1) thresholds <- rep(thresholds, length(hierarchy) + 1)
   stopifnot(length(thresholds) == length(hierarchy) + 1)
   if (is.null(dims)) dims <- hierarchy
@@ -301,40 +298,23 @@ raising_steps <- function(hierarchy, thresholds, mode = "nested", dims = NULL) {
                        label = paste(dims, collapse = " + "),
                        note = describe(dims))
 
-  # Two ways to turn an ordered list of keys into a cascade of pools.
-  #
-  # "nested" (the current one): the keys are read in the order a reader
-  # picks them - Key 2 first, Key 3 second, and so on - and that is also
-  # the order they are GROUPED OVER. Own stratum is tried first; then Key
-  # 2 is the first dimension pooled across, so pool k retains
-  # hierarchy[(n-k+1):n] - a shrinking SUFFIX, dropping from the front.
-  # Key 2 is therefore dropped soonest and Key (n+1) (the last one
-  # picked) is retained longest, right up to the last resort before
-  # everything is pooled.
+  # The keys are read in the order a reader picks them - Key 2 first, Key
+  # 3 second, and so on - and that is also the order they are GROUPED
+  # OVER. Own stratum is tried first; then Key 2 is the first dimension
+  # pooled across, so pool k retains hierarchy[(n-k+1):n] - a shrinking
+  # SUFFIX, dropping from the front. Key 2 is therefore dropped soonest
+  # and Key (n+1) (the last one picked) is retained longest, right up to
+  # the last resort before everything is pooled.
   #
   # This was flipped before: pool k retained hierarchy[1:k], a shrinking
   # PREFIX dropping from the END, so Key 2 (read first, meant to be
   # grouped over first) was actually retained the LONGEST and the last
   # key picked was dropped first - the reverse of "read top to bottom,
   # widen top to bottom".
-  #
-  # "ladder": pool i is keys[i] ALONE, walked in the order given, finest
-  # first. Each rung is one grouping, so a rung can be coarser than the
-  # rung above it in the same family - Stratum, then metier4, then
-  # Country, then areaValue, then ICESSubArea, then Season - which is
-  # exactly "use the finer detail when possible and the coarser when
-  # needed".
   n_hier <- length(hierarchy)
-  key_sets <- if (identical(mode, "ladder"))
-    lapply(seq_along(hierarchy), function(k) hierarchy[k])
-  else
-    lapply(rev(seq_along(hierarchy)),
-           function(k) hierarchy[(n_hier - k + 1):n_hier])
-
-  thr_of <- if (identical(mode, "ladder"))
-    function(ks) thresholds[match(ks[1], hierarchy)]
-  else
-    function(ks) thresholds[n_hier - length(ks) + 1]
+  key_sets <- lapply(rev(seq_along(hierarchy)),
+                     function(k) hierarchy[(n_hier - k + 1):n_hier])
+  thr_of <- function(ks) thresholds[n_hier - length(ks) + 1]
 
   for (ks in key_sets) {
     # grouping by every dimension is the same thing as the stratum itself,
@@ -362,25 +342,38 @@ raising_steps <- function(hierarchy, thresholds, mode = "nested", dims = NULL) {
 #' Fully sampled strata (coverage >= 100) need no raising and are labelled so.
 #' Excluded donors (see [flag_donor_exclusion()]) never enter a pool.
 #'
-#' @param strata A classified stratum table with `coverage`, `landings` and
-#'   `landings_with_discards`, plus the hierarchy columns.
+#' @param strata Raw catch data, OR an already-built stratum table
+#'   carrying `coverage`, `landings` and `landings_with_discards` plus the
+#'   hierarchy columns (the output of [build_strata()], or of an earlier
+#'   [recommend_raising()] call). Told apart by whether `landings` is
+#'   already a column - a stratum-level aggregate name [build_strata()]
+#'   always adds and raw catch data never has, even after
+#'   [add_stratum_metrics()] (which adds a row-level `coverage` of its
+#'   own - not a safe discriminator here) - so raw data is built into
+#'   strata here, at `dims` (`hierarchy` by default), the same one call
+#'   would do by hand.
 #' @param hierarchy Key columns, finest first.
 #' @param thresholds The own-stratum threshold, followed by one per hierarchy
 #'   level - length `length(hierarchy) + 1` - or a single value recycled to
 #'   that length. `NA` in the first slot folds the own-stratum step into the
 #'   first cascade step.
-#' @param mode Retained for older saved scenarios.
 #' @param all_label Label for the final fallback pool.
-#' @param dims The full stratum dimensions; defaults to `hierarchy`.
+#' @param dims The full stratum dimensions; defaults to `hierarchy`. Only
+#'   worth passing separately from a wider set of columns than `hierarchy`
+#'   itself names - e.g. comparing several hierarchies at one shared,
+#'   wider resolution (see [compare_scenarios()]) - not in the common
+#'   case where the two already agree.
 #' @return `strata` with `raise_step`, `raise_level`, `raise_condition`
 #'   (the donor-selecting expression), `raise_coverage` and
 #'   `raise_n_strata` added.
 #' @seealso [raising_groups()], [conds_from_auto()], [decision_tree()]
 #' @export
 recommend_raising <- function(strata, hierarchy, thresholds,
-                              mode = "nested", all_label = "ALL", dims = NULL) {
+                              all_label = "ALL", dims = NULL) {
+  if (is.null(dims)) dims <- hierarchy
+  if (!"landings" %in% names(strata)) strata <- build_strata(strata, dims)
   stopifnot(length(hierarchy) >= 1, all(hierarchy %in% names(strata)))
-  steps <- raising_steps(hierarchy, thresholds, mode, dims)
+  steps <- raising_steps(hierarchy, thresholds, dims)
 
   n <- nrow(strata); dok <- donor_ok_of(strata)
   cond <- rep(NA_character_, n); lvl <- rep(NA_character_, n)
@@ -455,7 +448,7 @@ recommend_raising <- function(strata, hierarchy, thresholds,
 #' conflated.
 #'
 #' @param rec Output of [recommend_raising()].
-#' @param hierarchy,thresholds,mode,dims As passed to [recommend_raising()].
+#' @param hierarchy,thresholds,dims As passed to [recommend_raising()].
 #' @param cumulative Add the running totals (`pct_strata`, `cum_pct_strata`,
 #'   `cum_pct_landings`), so it is visible how much of the stock is settled
 #'   by the time the cascade reaches the fallback.
@@ -463,8 +456,8 @@ recommend_raising <- function(strata, hierarchy, thresholds,
 #' @seealso [recommend_raising()], [check_partition()]
 #' @export
 decision_tree <- function(rec, hierarchy, thresholds,
-                          mode = "nested", dims = NULL, cumulative = FALSE) {
-  steps <- raising_steps(hierarchy, thresholds, mode, dims)
+                          dims = NULL, cumulative = FALSE) {
+  steps <- raising_steps(hierarchy, thresholds, dims)
   ids  <- c("0", vapply(steps, `[[`, character(1), "id"), "fallback")
   labs <- c("no raising needed",
             vapply(steps, `[[`, character(1), "label"), "Catch All by All")
@@ -1040,13 +1033,12 @@ define_raising_groups_manual <- function(strata, rules, sets = list()) {
 #' Kept so saved scripts that name it keep running.
 #'
 #' @param rec Output of [recommend_raising()].
-#' @param hierarchy,thresholds,mode,dims As passed to [recommend_raising()].
+#' @param hierarchy,thresholds,dims As passed to [recommend_raising()].
 #' @return A data frame, one row per step, with cumulative columns.
 #' @seealso [decision_tree()], [check_partition()]
 #' @export
-decision_tree2 <- function(rec, hierarchy, thresholds, mode = "nested",
-                           dims = NULL)
-  decision_tree(rec, hierarchy, thresholds, mode, dims, cumulative = TRUE)
+decision_tree2 <- function(rec, hierarchy, thresholds, dims = NULL)
+  decision_tree(rec, hierarchy, thresholds, dims, cumulative = TRUE)
 
 # The running totals, split out so decision_tree() can add them itself.
 #' @param tr A decision tree table.

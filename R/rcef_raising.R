@@ -114,16 +114,14 @@ apply_raising <- function(strata, donor_key = "raise_condition",
 #' @param hierarchy Key columns, finest first.
 #' @param thresholds One threshold, or one per level.
 #' @param self_threshold Own-stratum threshold, or `NA`.
-#' @param mode Retained for older saved scenarios.
 #' @param dr_min,dr_max Donor discard-rate window.
 #' @return A scenario list, ready for [run_scenario()] or [scenarios_to_json()].
 #' @seealso [scenario_manual()], [run_scenario()]
 #' @export
 scenario_auto <- function(name, dims, hierarchy, thresholds,
-                          self_threshold = NA, mode = "nested",
-                          dr_min = NA, dr_max = NA) {
+                          self_threshold = NA, dr_min = NA, dr_max = NA) {
   list(name = name, method = "auto", dims = dims, hierarchy = hierarchy,
-       thresholds = thresholds, self_threshold = self_threshold, mode = mode,
+       thresholds = thresholds, self_threshold = self_threshold,
        dr_min = dr_min, dr_max = dr_max,
        saved = format(Sys.time(), "%Y-%m-%d %H:%M:%S"))
 }
@@ -175,7 +173,7 @@ scenarios_from_json <- function(txt) {
 #' @examples
 #' \dontrun{
 #' sc  <- scenario_auto("base", dims, c("metier4", "Country"), 50,
-#'                      "metier4", "ICESDivision")
+#'                      self_threshold = 90)
 #' out <- run_scenario(sc, catch)
 #' }
 #' @export
@@ -187,7 +185,7 @@ run_scenario <- function(sc, catch_data) {
     r <- recommend_raising(s, sc$hierarchy,
                            combine_thresholds(sc$self_threshold %||% NA,
                                               sc$thresholds, sc$hierarchy),
-                           mode = sc$mode %||% "nested", dims = sc$dims)
+                           dims = sc$dims)
     apply_raising(r, "raise_condition")
   } else {
     a <- assign_rule_groups(s, sc$rules, sc$sets)

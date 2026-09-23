@@ -174,7 +174,7 @@ code_session <- function(st_path) c(
 #' @noRd
 #' @export
 code_auto_rule <- function(name, dims, hierarchy, thresholds, self_threshold,
-                           mode, dr_min = NA, dr_max = NA) {
+                           dr_min = NA, dr_max = NA) {
   c(sprintf("## ---- Allocation '%s' (automatic rule) --------------------", name),
     "## Re-running this on another year reapplies the same policy and",
     "## produces that year's grouping. Nothing is hard-coded.",
@@ -185,7 +185,6 @@ code_auto_rule <- function(name, dims, hierarchy, thresholds, self_threshold,
     sprintf("  thresholds    = c(%s),", paste(thresholds, collapse = ", ")),
     sprintf("  self_threshold = %s,",
             if (is.na(self_threshold)) "NA" else self_threshold),
-    sprintf('  mode          = "%s",', mode),
     sprintf("  donor_dr_min  = %s,", if (is.na(dr_min)) "NA" else dr_min),
     sprintf("  donor_dr_max  = %s)", if (is.na(dr_max)) "NA" else dr_max),
     "",
@@ -198,7 +197,6 @@ code_auto_rule <- function(name, dims, hierarchy, thresholds, self_threshold,
     sprintf("    thresholds  = combine_thresholds(alloc_%s$self_threshold,", name),
     sprintf("                                     alloc_%s$thresholds, alloc_%s$hierarchy),",
             name, name),
-    sprintf("    mode        = alloc_%s$mode,", name),
     sprintf("    dims        = alloc_%s$dims)", name),
     "",
     sprintf("## the two condition lists fall out of the rule:"),

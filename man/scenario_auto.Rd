@@ -10,7 +10,6 @@ scenario_auto(
   hierarchy,
   thresholds,
   self_threshold = NA,
-  mode = "nested",
   dr_min = NA,
   dr_max = NA
 )
@@ -25,8 +24,6 @@ scenario_auto(
 \item{thresholds}{One threshold, or one per level.}
 
 \item{self_threshold}{Own-stratum threshold, or `NA`.}
-
-\item{mode}{Retained for older saved scenarios.}
 
 \item{dr_min, dr_max}{Donor discard-rate window.}
 }
