@@ -5,27 +5,44 @@
 ## dev/tests/*.R, run via the "ok"/"FAIL" pattern and checked by
 ## dev/check_*.R). This is a template you run by hand to LOOK at every
 ## plot family the package has and confirm it draws sensibly: discard
-## coverage, length coverage, AGE coverage, discard rate, length
-## distributions and age distributions - each with a few options to
-## compare against each other, ggplot2 side by side with the base-R
-## engine, and the general-purpose arguments (auto-build from raw data,
-## palette, n_per_screen).
+## coverage, length coverage, discard rate and length distributions -
+## each with a few options to compare against each other, and the
+## general-purpose arguments (auto-build from raw data, palette,
+## n_per_screen). ggplot2 only - the base-R engine existed to compare the
+## two side by side; run one figure with engine = "base" by hand if you
+## need to check that path specifically.
 ##
 ## Data: exactly two tables, loaded once below - `catch_data` (raw CEF
 ## catch, already through derive_fields()) and `distribution_data` (its
 ## length + age distributions, both types in the one table). Everything
-## from section 1 on reads only those two names; LENGTH vs AGE is just
-## `distributionType` / `what` on the same pair, not a second data set.
-## Swap in your own derive_fields(read.csv(...)) / read.csv(...) for
-## `catch_data` / `distribution_data` to run the same figures elsewhere -
-## nothing past this point needs to change either way.
+## from section 1 on reads only those two names. Swap in your own
+## derive_fields(read.csv(...)) / read.csv(...) for `catch_data` /
+## `distribution_data` to run the same figures elsewhere - nothing past
+## this point needs to change either way.
 ##
-## Nothing here filters the data first. The app lets you narrow a figure
-## to a subset before drawing it (a country, a year, an area); this
-## script always plots everything in the loaded table. If you want a
-## subset, filter the catch / distributions frame yourself before the
-## calls below - every function here takes a plain data frame, so a
-## dplyr::filter() upstream is all that is needed.
+## LENGTH only, no AGE: this stock has no age data, so an age coverage or
+## distribution plot would draw an empty or misleading panel rather than
+## erroring - there is nothing here to catch that mistake for you. Length
+## plots also stay on catchCategory = "Lan" throughout: this script only
+## ever has raw catch_data, never a raised or allocated table, so a
+## length plot on catchCategory = "Dis" would show the DISCARDS' own,
+## un-raised length sample as if it were the whole picture - a coverage
+## plot would look fully sampled when it isn't, and a distribution plot
+## would show a shape that has not been weighted up to what was actually
+## discarded.
+##
+## Nothing here filters the data first (except one demo call that narrows
+## to a single metier on purpose - see 2a). The app lets you narrow a
+## figure to a subset before drawing it (a country, a year, an area);
+## this script otherwise always plots everything in the loaded table. If
+## you want a subset, filter the catch / distributions frame yourself
+## before the calls below - every function here takes a plain data
+## frame, so a dplyr::filter() upstream is all that is needed.
+##
+## Every figure below is drawn with print() and nothing else - no pdf()/
+## png()/jpeg() device, no dev.off(). Run it in an interactive session
+## (RStudio, or R itself) and each print() lands in the live graphics
+## window / Plots pane, one after another, to actually look at.
 ## ===========================================================
 
 library(dplyr)
@@ -75,7 +92,7 @@ if (dir.exists(file.path(bll_dir, bll_year)) &&
                sum(distribution_data$distributionType == "LengthTotal"),
                sum(distribution_data$distributionType == "Age"))
       else ""))
-    
+
   }
 } else {
   cat("load skipped - bll extdata and/or icesVocab+icesSD not available\n")
@@ -94,163 +111,70 @@ if (is.null(catch_data)) {
 ## Each takes raw catch and builds + classifies the strata internally.
 ## `y` is required. heat / bubble put the second category on `x`; bars
 ## put it on `fill`. min_cov / min_trip colour the heat / bubble status -
-## a bar chart ignores them (passing them is an error). Every variant is
-## drawn in BOTH engines. The status legend always lists every REACHABLE
-## category - a stratum with no landed/caught weight at all draws no
-## cell (nothing to judge), so "no landings" is not one of them.
+## a bar chart ignores them (passing them is an error). The status legend
+## always lists every REACHABLE category - a stratum with no landed/
+## caught weight at all draws no cell (nothing to judge), so "no
+## landings" is not one of them.
 
 ## ---- 1a. bars: sampled vs not-sampled weight + cumulative staircase -
 p1a <- plot_coverage_bar(catch_data, y = "metier4", fill = "Country")
 print(p1a)
-png("11a_discard_bars_base.png", width = 1300, height = 800, res = 110)
-plot_coverage_bar(catch_data, y = "metier4", fill = "Country",
-                  engine = "base", palette = "colorblind")
-invisible(dev.off())
 
 ## ---- 1b. heatmap: status per metier x country x season ------------
 p1b <- plot_coverage_heat(catch_data, y = "metier4", x = "Country",
                           facet = "Season")
 print(p1b)
-png("11d_discard_heatmap_base.png", width = 1400, height = 900, res = 110)
-plot_coverage_heat(catch_data, y = "metier4", x = "Country",
-                   facet = "Season", engine = "base")
-invisible(dev.off())
-
-plot_coverage_heat(catch_data, y = "metier4", x = "Country",
-                   facet = "Season", engine = "base",min_cov = 50, min_trip = 0)
-
-plot_coverage_heat(catch_data, y = "metier4", x = "Country",
-                   facet = "Season", engine = "base",min_cov = 50, min_trip = 100)
 
 ## ---- 1c. bubbles: weighted status grid ---------------------------
 p1c <- plot_coverage_bubble(catch_data, y = "metier4", x = "Country",
                             min_cov = 50, min_trip = 2)
 print(p1c)
-png("11e_discard_bubbles_base.png", width = 1300, height = 800, res = 110)
-plot_coverage_bubble(catch_data, y = "metier4", x = "Country",
-                     min_cov = 50, engine = "base")
-invisible(dev.off())
 
 ## ---- 1d-1f. coverage map - one sampled/not-sampled pie per FAO
 ## area, radius = landings; `group` puts a labelled box of pies per area.
 if (requireNamespace("maps", quietly = TRUE)) {
-  p1d <- plot_coverage_map(catch_data, engine = "ggplot")
+  p1d <- plot_coverage_map(catch_data)
   print(p1d)
-  png("11i_coverage_map_base.png", width = 1000, height = 950, res = 110)
-  plot_coverage_map(catch_data, engine = "base")
-  invisible(dev.off())
 
-  p1e <- plot_coverage_map(catch_data, group = "Season", engine = "ggplot")
+  p1e <- plot_coverage_map(catch_data, group = "Season")
   print(p1e)
-  png("11j_coverage_map_season_base.png", width = 1050, height = 1000, res = 110)
-  plot_coverage_map(catch_data, group = "Season", engine = "base")
-  invisible(dev.off())
 
-  p1f <- plot_coverage_map(catch_data, group = "Country", engine = "ggplot")
+  p1f <- plot_coverage_map(catch_data, group = "Country")
   print(p1f)
-  png("11k_coverage_map_country_base.png", width = 1050, height = 1000, res = 110)
-  plot_coverage_map(catch_data, group = "Country", engine = "base")
-  invisible(dev.off())
 } else message("1d-1f: 'maps' not installed - coverage map skipped")
 
-## ---- 1g. n_per_screen - split a faceted base figure across devices -
-grDevices::pdf("13f_discard_heatmap_screens.pdf", width = 10, height = 7)
-plot_coverage_heat(catch_data, y = "metier4", x = "Country",
-                   facet = "Season", engine = "base", n_per_screen = 2)
-invisible(dev.off())
-
 
 ## =====================================================================
-##  2. LENGTH & AGE COVERAGE - what = "length" / "age", + catchCategory
+##  2. LENGTH COVERAGE - what = "length", catchCategory = "Lan"
 ## =====================================================================
-## Pass `distribution_data` and a biology `what`; `catchCategory` chooses
-## the landings ("Lan", default), discards ("Dis") or BMS ("BMS") part.
-## LENGTH and AGE are the SAME catch_data / distribution_data pair - only
-## `what` (and `min_fish`, tuned to each unit's typical sample size)
-## changes. 2a-2c LENGTH, landings then discards.  2d-2h AGE.
+## Pass `distribution_data` and what = "length". catchCategory is always
+## "Lan" here - see the header for why: this script never raises or
+## allocates, so a discard-side length plot would show the discards'
+## OWN, un-raised sampling as if it were the final picture.
 
-## ---- 2a. length coverage of the LANDINGS, bars -------------------
+## ---- 2a. length coverage of the LANDINGS, bars (TBB only, on purpose -
+## a smaller y to make the bars readable) --------------------------
 p2a <- plot_coverage_bar(catch_data %>% filter(metier4 == "TBB"), y = "metier4", fill = "Country",
-                         what = "length", catchCategory = "Dis",
+                         what = "length", catchCategory = "Lan",
                          # distributions attach to catch by domainBiology, so
-                         # filtering the catch alone is enough (`gear` is a
+                         # filtering the catch alone is enough (`metier4` is a
                          # catch-table column, not one of the distributions)
                          distributions = distribution_data)
 print(p2a)
-png("12a_length_bars_base.png", width = 1300, height = 800, res = 110)
-plot_coverage_bar(catch_data, y = "metier4", fill = "Country",
-                  what = "length", catchCategory = "Dis",
-                  distributions = distribution_data,
-                  engine = "base")
-invisible(dev.off())
 
-## ---- 2b. length coverage of the DISCARDS, heatmap ---------------
+## ---- 2b. length coverage of the LANDINGS, heatmap ---------------
 p2b <- plot_coverage_heat(catch_data, y = "metier4", x = "Country",
                           facet = "Season", what = "length",
-                          catchCategory = "Dis", distributions = distribution_data,
-                          min_cov = 50, min_fish = 25, min_trip = 2)
+                          catchCategory = "Lan", distributions = distribution_data,
+                          min_cov = 50, min_fish = NULL, min_trip = NULL)
 print(p2b)
-png("12b_length_heatmap_base.png", width = 1400, height = 900, res = 110)
-plot_coverage_heat(catch_data, y = "metier4", x = "Country", facet = "Season",
-                   what = "length", catchCategory = "Dis",
-                   distributions = distribution_data, min_cov = 50,
-                   min_fish = 0,
-                   engine = "base")
-invisible(dev.off())
 
-## ---- 2c. length coverage, bubbles (landings) -------------------
+## ---- 2c. length coverage of the LANDINGS, bubbles ---------------
 p2c <- plot_coverage_bubble(catch_data, y = "metier4", x = "Country",
-                            what = "length", distributions = distribution_data,
+                            what = "length", catchCategory = "Lan",
+                            distributions = distribution_data,
                             min_cov = 50, min_fish = 25, min_trip = 2)
 print(p2c)
-png("12c_length_bubbles_base.png", width = 1300, height = 800, res = 110)
-plot_coverage_bubble(catch_data, y = "metier4", x = "Country",
-                     what = "length", distributions = distribution_data,
-                     min_cov = 50, min_fish = 25, min_trip = 2, engine = "base")
-invisible(dev.off())
-
-## ---- 2d-2h. AGE coverage, all four views + the map --------------
-p2d <- plot_coverage_bar(catch_data, y = "metier4", fill = "Country",
-                         what = "age", distributions = distribution_data)
-print(p2d)
-png("12d_age_bars_base.png", width = 1300, height = 800, res = 110)
-plot_coverage_bar(catch_data, y = "metier4", fill = "Country", what = "age",
-                  distributions = distribution_data,
-                  engine = "base")
-invisible(dev.off())
-
-p2e <- plot_coverage_heat(catch_data, y = "metier4", x = "Country",
-                          facet = "Season", what = "age",
-                          distributions = distribution_data, min_cov = 50,
-                          min_fish = 15, min_trip = 2)
-print(p2e)
-png("12e_age_heatmap_base.png", width = 1400, height = 900, res = 110)
-plot_coverage_heat(catch_data, y = "metier4", x = "Country", facet = "Season",
-                   what = "age", distributions = distribution_data, min_cov = 50,
-                   min_fish = 15, min_trip = 2,
-                   engine = "base")
-invisible(dev.off())
-
-p2f <- plot_coverage_bubble(catch_data, y = "metier4", x = "Country",
-                            what = "age", distributions = distribution_data,
-                            min_cov = 50, min_fish = 15, min_trip = 2)
-print(p2f)
-png("12f_age_bubbles_base.png", width = 1300, height = 800, res = 110)
-plot_coverage_bubble(catch_data, y = "metier4", x = "Country", what = "age",
-                     distributions = distribution_data, min_cov = 50, min_fish = 15,
-                     min_trip = 2, engine = "base")
-invisible(dev.off())
-
-if (requireNamespace("maps", quietly = TRUE)) {
-  p2h <- plot_coverage_map(catch_data, what = "age", distributions = distribution_data,
-                           group = "Season",
-                           engine = "ggplot")
-  print(p2h)
-  png("12h_age_map_season_base.png", width = 1050, height = 1000, res = 110)
-  plot_coverage_map(catch_data, what = "age", distributions = distribution_data,
-                    group = "Season", engine = "base")
-  invisible(dev.off())
-}
 
 
 ## =====================================================================
@@ -264,103 +188,59 @@ if (requireNamespace("maps", quietly = TRUE)) {
 p3a <- plot_discard_rate(catch_data, x = "metier4", colour = "Country",
                          facet = "Season", jitter = TRUE)
 print(p3a)
-png("13a_discard_rate_raw_base.png", width = 1400, height = 900, res = 110)
-plot_discard_rate(catch_data, x = "metier4", colour = "Country",
-                  engine = "base")
-invisible(dev.off())
 
 
 ## =====================================================================
-##  4. LENGTH & AGE DISTRIBUTION - plot_numbers / plot_meanweight
+##  4. LENGTH DISTRIBUTION - plot_numbers / plot_meanweight
 ## =====================================================================
 ## plot_numbers_at_length_age(): a histogram, variableType is always
-## Number. plot_meanweight_at_length_age(): a line, always.
-## Both take a prepared table OR raw catch + `distributions` (then the
-## link + summary run inside, `catchCategory` choosing the part).
-## Numbers in thousands (N3), length in cm, age in years. Same
-## catch_data / distribution_data throughout - LENGTH vs AGE is just
-## `distributionType`.
-##   4a-4c LENGTH   4d-4f AGE
+## Number. plot_meanweight_at_length_age(): a line, always. Both take a
+## prepared table OR raw catch + `distributions` (then the link + summary
+## run inside, `catchCategory` choosing the part). Numbers in thousands
+## (N3), length in cm. Same catch_data / distribution_data throughout -
+## LengthTotal only, no age data for this stock (see the header).
 
 ## ---- 4a. numbers at length, stacked histogram by country -------
 p4a <- plot_numbers_at_length_age(catch_data, distribution_data,
          distributionType = "LengthTotal",
          fill = "Country", stacked = TRUE)
 print(p4a)
-png("14a_length_hist_base.png", width = 1300, height = 800, res = 110)
-plot_numbers_at_length_age(catch_data, distribution_data,
-  distributionType = "LengthTotal", fill = "Country",
-  engine = "base", palette = "colorblind")
-invisible(dev.off())
 
 ## ---- 4b. numbers at length, dodged instead of stacked ---------
 p4b <- plot_numbers_at_length_age(catch_data, distribution_data,
          fill = "Country", stacked = FALSE)
 print(p4b)
-png("14b_length_hist_dodge_base.png", width = 1200, height = 900, res = 110)
-plot_numbers_at_length_age(catch_data, distribution_data,
-  fill = "Country", stacked = FALSE, engine = "base")
-invisible(dev.off())
 
-## ---- 4c. mean weight at length, one line per country (discards) --
+## ---- 4c. mean weight at length, one line per country (landings) --
 p4c <- plot_meanweight_at_length_age(catch_data, distribution_data,
-         catchCategory = "Dis", colour = "Country")
+         catchCategory = "Lan", colour = "Country")
 print(p4c)
-png("14c_length_meanweight_base.png", width = 1200, height = 800, res = 110)
-plot_meanweight_at_length_age(catch_data, distribution_data, colour = "Country", engine = "base")
-invisible(dev.off())
 
-## ---- 4d-4f. AGE distribution --------------------------------
-p4d <- plot_numbers_at_length_age(catch_data, distribution_data,
-         distributionType = "Age", fill = "Country",
-         stacked = TRUE)
-print(p4d)
-png("14d_age_hist_base.png", width = 1300, height = 800, res = 110)
-plot_numbers_at_length_age(catch_data, distribution_data, distributionType = "Age",
-  fill = "Country", engine = "base",
-  palette = "colorblind")
-invisible(dev.off())
-
-p4e <- plot_numbers_at_length_age(catch_data, distribution_data,
-         distributionType = "Age", fill = "Country", stacked = FALSE)
-print(p4e)
-png("14e_age_hist_dodge_base.png", width = 1200, height = 900, res = 110)
-plot_numbers_at_length_age(catch_data, distribution_data, distributionType = "Age",
-  fill = "Country", stacked = FALSE, engine = "base")
-invisible(dev.off())
-
-p4f <- plot_meanweight_at_length_age(catch_data, distribution_data,
-         distributionType = "Age", colour = "Country")
-print(p4f)
-png("14f_age_meanweight_base.png", width = 1200, height = 800, res = 110)
-plot_meanweight_at_length_age(catch_data, distribution_data, distributionType = "Age",
-  colour = "Country", engine = "base")
-invisible(dev.off())
-
-## ---- 4g-4j. catchCategory sweep - default "All" ("catch"), then the
-## landings and the discards, for numbers AND mean weight, length AND age.
-## The catch part appears in the plot title.
-for (dt in c("LengthTotal", "Age")) {
-  for (cc in c("All", "Lan", "Dis")) {
-    print(plot_numbers_at_length_age(catch_data, distribution_data,
-            distributionType = dt, catchCategory = cc, fill = "Country"))
-    print(plot_meanweight_at_length_age(catch_data, distribution_data,
-            distributionType = dt, catchCategory = cc, colour = "Country"))
-  }
+## ---- 4d. catchCategory sweep - default "All" ("catch"), then the
+## landings and the discards, for numbers AND mean weight. The catch
+## part appears in the plot title. (Unlike 4a-4c above, this is a
+## side-by-side comparison of the argument itself, so "Dis" belongs
+## here too - it is clearly labelled as the un-raised discard sample,
+## not presented as the finished picture.)
+for (cc in c("All", "Lan", "Dis")) {
+  print(plot_numbers_at_length_age(catch_data, distribution_data,
+          distributionType = "LengthTotal", catchCategory = cc, fill = "Country"))
+  print(plot_meanweight_at_length_age(catch_data, distribution_data,
+          distributionType = "LengthTotal", catchCategory = cc, colour = "Country"))
 }
 ## and the default really is "All" - no catchCategory passed
 stopifnot(grepl("\\(catch\\)",
   plot_numbers_at_length_age(catch_data, distribution_data,
-    distributionType = "Age", fill = "Country")$labels$title))
-cat("4g-4j: catchCategory default is \"All\" (title says \"catch\")\n")
+    distributionType = "LengthTotal", fill = "Country")$labels$title))
+cat("4d: catchCategory default is \"All\" (title says \"catch\")\n")
 
 
 ## =====================================================================
 ##  5. ARGUMENT REACTIONS - wrong / partial calls
 ## =====================================================================
 ## The split functions error or warn when an argument does not fit.
-## Each call is wrapped so the walkthrough
-## runs to the end; watch the "  error:" / "  warning:" lines.
+## Each call is wrapped so the walkthrough runs to the end; watch the
+## "  error:" / "  warning:" lines.
 
 say <- function(l) cat("\n---- 5", l, "----\n")
 try_show <- function(expr) tryCatch(
@@ -368,8 +248,6 @@ try_show <- function(expr) tryCatch(
     warning = function(w) { message("  warning: ", conditionMessage(w))
       invokeRestart("muffleWarning") }),
   error = function(e) message("  error: ", conditionMessage(e)))
-
-grDevices::pdf(tempfile())
 
 say("a. bar chart given min_cov -> ERROR (arg not accepted)")
 try_show(plot_coverage_bar(catch_data, y = "metier4", min_cov = 80))
@@ -406,7 +284,7 @@ try_show(plot_numbers_at_length_age(n5, distributionType = "Age",
 say("j. GOOD CALLS - no error / warning expected")
 try_show(plot_coverage_bar(catch_data, y = "metier4", fill = "Country"))
 try_show(plot_coverage_heat(catch_data, y = "metier4", x = "Country",
-  what = "length", catchCategory = "Dis", distributions = distribution_data))
+  what = "length", catchCategory = "Lan", distributions = distribution_data))
 try_show(plot_discard_rate(catch_data, x = "metier4", colour = "Country"))
 try_show(plot_meanweight_at_length_age(catch_data, distribution_data,
   colour = "Country"))
@@ -414,13 +292,11 @@ cat("  (no error: / warning: lines in section j = correct)\n")
 
 ## palette that reaches the ggplot engine
 say("k. ggplot heat; bar, colorblind palette - drawn")
-p5k <- plot_coverage_heat(catch_data, y = "metier4", x = "Country",
-  engine = "ggplot")
+p5k <- plot_coverage_heat(catch_data, y = "metier4", x = "Country")
 print(p5k)
 p5l <- plot_coverage_bar(catch_data, y = "metier4", fill = "Country",
-  engine = "ggplot", palette = "colorblind")
+  palette = "colorblind")
 print(p5l)
-invisible(grDevices::dev.off())
 
 
 ## =====================================================================
@@ -454,14 +330,14 @@ stopifnot(nrow(lk_d1) == 6L, nrow(lk_d2) == 8L,
          "warn_cov_trip" %in% lk_d2$cat_key,
          !"warn_cov_trip" %in% lk_d1$cat_key)
 
-grDevices::pdf(tempfile())
 p6a1 <- plot_coverage_heat(catch_data, y = "metier4", x = "Country",
                            min_trip = NULL)
+print(p6a1)
 p6a2 <- plot_coverage_heat(catch_data, y = "metier4", x = "Country")
-invisible(dev.off())
+print(p6a2)
 cat("  both heatmaps drew:", !is.null(p6a1) && !is.null(p6a2), "\n")
 
-## ---- 6b. length/age: 1, 2 (either extra) or 3 active parameters -----
+## ---- 6b. length: 1, 2 (either extra) or 3 active parameters -----
 say("b. length coverage - trips and measurements toggle independently")
 lk_l1 <- cat_lookup(50, "length", min_trips = NULL, min_meas = NULL)
 lk_l2t <- cat_lookup(50, "length", min_meas = NULL)            # + trips only
@@ -479,14 +355,16 @@ stopifnot(nrow(lk_l1) == 5L, nrow(lk_l2t) == 7L, nrow(lk_l2m) == 7L,
          !"warn_cov_trip_meas" %in% lk_l2t$cat_key,
          "warn_cov_trip_meas" %in% lk_l3$cat_key)
 
-grDevices::pdf(tempfile())
 p6b1 <- plot_coverage_heat(catch_data, y = "metier4", x = "Country",
-                           what = "length", distributions = distribution_data,
+                           what = "length", catchCategory = "Lan",
+                           distributions = distribution_data,
                            min_trip = NULL)                     # coverage only
+print(p6b1)
 p6b2 <- plot_coverage_heat(catch_data, y = "metier4", x = "Country",
-                           what = "length", distributions = distribution_data,
+                           what = "length", catchCategory = "Lan",
+                           distributions = distribution_data,
                            min_fish = 25)                       # + measurements
-invisible(dev.off())
+print(p6b2)
 cat("  both length heatmaps drew:", !is.null(p6b1) && !is.null(p6b2), "\n")
 
 ## ---- 6c. red stays reserved for "no estimate/distribution at all" ---
@@ -505,9 +383,7 @@ stopifnot(n_no_dist < sum(tb))   # not everything fell through to red
 cat("  no_dist only where has_disc_data is FALSE:",
    all(!sc_extreme$has_disc_data[sc_extreme$cat_key == "no_dist"]), "\n")
 
-cat("\nDone - ggplot figures in Rplots.pdf; base-R figures are the PNGs",
-   "written alongside this script:\n",
-   "  11* discard coverage | 12* length + age coverage | 13* discard rate\n",
-   "  14* length + age distribution\n")
+cat("\nDone - every figure above was print()'d to the active graphics\n",
+   "device as it was drawn; nothing was saved to a file.\n")
 
 }  # end: if (!is.null(catch_data))
