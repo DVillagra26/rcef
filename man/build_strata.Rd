@@ -7,35 +7,63 @@
 build_strata(catch_data, dims, dist = NULL)
 }
 \arguments{
-\item{catch_data}{A long CEF catch table. Must contain `catchCategory`,
-`total`, `domainCatchDis` and every column named in `dims`; a
-`variableUnit` column is used for unit conversion when present.}
+\item{catch_data}{A long CEF catch table. Must contain \code{catchCategory},
+\code{total}, \code{domainCatchDis} and every column named in \code{dims}; a
+\code{variableUnit} column is used for unit conversion when present.}
 
-\item{dims}{Character vector of the columns that define a stratum
-(e.g. `c("metier4", "Country", "Season")`).}
+\item{dims}{Character vector of the columns that define a stratum (for
+example \code{c("metier4", "Country", "Season")}).}
+
+\item{dist}{Optional CEF distributions table, used only to fill
+\code{n_measurements}.}
 }
 \value{
-A data frame, one row per stratum, with `landings`,
-  `landings_with_discards`, `discards`, `coverage`, `discard_rate`,
-  `discard_rate_covered`, `has_disc_data`, `stratum_id` and the `dims`.
+A data frame, one row per stratum, with the columns above.
 }
 \description{
-Aggregates a long CEF catch table to one row per stratum, in tonnes. For
-each stratum it records the total landings, the landings that carry a
-discard estimate (`landings_with_discards`, the numerator of coverage),
-the discards, the resulting coverage percent, and two discard-rate
-definitions. Landings and discards are summed separately by catch
-category, so a stratum with landings but no observed discards reads as
-0 percent covered rather than going missing.
+Aggregates a long CEF catch table to one row per stratum, in tonnes: the
+landings, the landings that carry a discard estimate, the discards, the
+resulting coverage, and the discard rate. This is the raising-side stratum
+table - what \code{\link[=classify_strata]{classify_strata()}}, the grouping functions and
+\code{\link[=recommend_raising]{recommend_raising()}} work on.
+
+To look at discard rates and sampling coverage - as a table or in a
+figure - use \code{\link[=build_coverage_strata]{build_coverage_strata()}} instead: the same numbers under the
+CAR / CAS column names, with \code{rate} = discards / covered landings, and no
+raising vocabulary.
 }
 \details{
-`discard_rate` uses the stratum's own total landings
-  (`discards / (landings + discards)`); `discard_rate_covered` uses only
-  the covered landings (`discards / (landings_with_discards + discards)`),
-  which is the definition a donor pool is raised with. At full resolution
-  the two coincide whenever a stratum is either fully covered or not
-  covered at all.
+Landings and discards are summed separately by catch category, so a
+stratum with landings but no observed discards reads as 0 percent covered
+rather than going missing. Every catch category other than landings is
+counted as discards.
+
+\code{discard_rate} uses the stratum's own total landings
+(\code{discards / (landings + discards)}); \code{discard_rate_covered} uses only the
+covered landings (\code{discards / (landings_with_discards + discards)}), the
+definition a donor pool is raised with. At full resolution the two
+coincide whenever a stratum is either fully covered or not covered at all.\tabular{ll}{
+   Column \tab Meaning \cr
+   the \code{dims} columns \tab The stratum. \cr
+   \code{landings} \tab All landings, in tonnes. \cr
+   \code{landings_with_discards} \tab The landings whose \code{domainCatchDis} is filled: the numerator of coverage. \cr
+   \code{discards} \tab All non-landing catch, in tonnes. \cr
+   \code{has_disc_data} \tab Whether the stratum has any discard record at all. \cr
+   \code{coverage} \tab \code{landings_with_discards / landings}, in percent. \cr
+   \code{discard_rate} \tab \code{discards / (landings + discards)}. \cr
+   \code{discard_rate_covered} \tab \code{discards / (landings_with_discards + discards)}. \cr
+   \code{stratum_id} \tab The \code{dims} values pasted with `" \cr
+   \code{n_measurements} \tab Distribution records linked to the stratum through \code{domainBiology}; 0 when \code{dist} is not given. \cr
+   \code{numTrips} \tab The largest trip count among the stratum's rows (\code{NA} when not reported). \cr
+}
+}
+\examples{
+data(anchoveta_catch)
+st <- build_strata(anchoveta_catch, c("metier4", "Country"))
+head(st[, c("metier4", "Country", "landings", "discards", "coverage",
+            "discard_rate")])
 }
 \seealso{
-[classify_strata()]
+\code{\link[=build_coverage_strata]{build_coverage_strata()}} for exploring discard rates and
+coverage; \code{\link[=classify_strata]{classify_strata()}} for the sampling verdict.
 }

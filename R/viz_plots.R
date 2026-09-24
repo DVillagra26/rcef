@@ -63,35 +63,52 @@ NULL
 #  Coverage map (ICES-area pies)
 # ----------------------------------------------------------
 
-#' Coverage map: one pie per ICES area (optionally per group level)
+#' Coverage map: one pie per ICES area
 #'
-#' A map of the fishing area with one small pie per ICES division: pie
-#' radius is the area's landed/caught weight, and the pie is split into
-#' the sampled and the not-sampled share of that weight. With `group`
-#' (e.g. `"Season"`, `"Country"`, `"metier4"`) each area gets a labelled
-#' box holding a tidy grid of pies, one per group level; overlapping
-#' boxes are nudged apart and a thin leader keeps each box tied to its
-#' area's true centroid.
+#' @description
+#' A map of the fishing area with one small pie per ICES area: the pie's
+#' radius is the area's landed (or caught) weight, and the pie is split into
+#' the sampled and the not-sampled share of that weight. With `group` (for
+#' example `"Season"`, `"Country"` or `"metier4"`) each area gets a labelled
+#' box holding a tidy grid of pies, one per group level; overlapping boxes
+#' are nudged apart and a thin leader keeps each box tied to its area's true
+#' position.
 #'
-#' Takes raw catch data (and `distributions` + `catchCategory` for a
-#' biology `what`) or a [build_coverage_strata()] table, exactly like
-#' [coverage-plots]. Needs the suggested `maps` package.
+#' @details
+#' "Sampled" means what it means in the other coverage plots (see
+#' [coverage-plots]): the weight carries a discard estimate (`what =
+#' "discard"`) or a linked length / age distribution. Like them, the map takes
+#' raw catch (plus `distributions` for length and age) or a
+#' [build_coverage_strata()] table that has the `area` column (and the
+#' `group` column) among its `dims`.
+#'
+#' Areas are placed at approximate centroids ([ices_area_centroid()]); an area
+#' with no known centroid is warned about by name and left off the map. The
+#' map needs the suggested `maps` package.
 #'
 #' @param catch Raw CEF catch data, or a [build_coverage_strata()] table
 #'   (its own `what` is then used).
+#' @param distributions A CEF distributions table - needed for
+#'   `what = "length"` / `"age"` with raw catch, ignored otherwise.
 #' @param area Column holding the ICES area code. Default `"areaValue"`.
-#' @param group Optional column - one boxed grid of pies per area, one
-#'   pie per level.
-#' @param what,catchCategory,distributions
-#'   As in [coverage-plots]. The weight word in the title is derived
-#'   from `what` and `catchCategory`.
-#' @param scale Multiplies every pie radius (and, when grouped, the box
-#'   grid cell size).
-#' @return A ggplot object, or `NULL` (with a message) when nothing can
-#'   be mapped.
-#' @seealso [coverage-plots], [build_coverage_strata()],
-#'   [ices_area_centroid()]
+#' @param group Optional column: one boxed grid of pies per area, one pie per
+#'   level. A `group` with a single level warns and draws one pie per area.
+#' @param what,catchCategory As in [coverage-plots]. The weight word in the
+#'   title comes from `what` and `catchCategory`.
+#' @param scale Multiplies every pie radius (and, when grouped, the size of
+#'   the box's grid cell).
+#' @return A ggplot object, or `NULL` (with a message) when nothing can be
+#'   mapped.
+#' @seealso [coverage-plots] for the heatmap, bubbles and bars;
+#'   [build_coverage_strata()] for the table behind the pies.
 #' @family coverage plots
+#' @md
+#' @examples
+#' if (requireNamespace("maps", quietly = TRUE)) {
+#'   data(anchoveta_catch)
+#'   plot_coverage_map(anchoveta_catch)
+#'   plot_coverage_map(anchoveta_catch, group = "Season")
+#' }
 #' @export
 plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
                               group = NULL, what = "discard",
@@ -250,95 +267,132 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 
 #' Coverage: which strata are sampled well enough
 #'
-#' Three views of how well a set of strata is sampled - a heatmap
-#' ([plot_coverage_heat()]), a weighted bubble grid
-#' ([plot_coverage_bubble()]) and a sampled-vs-unsampled weight bar chart
-#' ([plot_coverage_bar()]) - plus a map ([plot_coverage_map()]). All four
-#' take raw CEF catch data (plus `distributions` for length / age) or the
-#' table [build_coverage_strata()] returns from it. Given raw catch they
-#' build that table at exactly the plotted columns; given the table they
-#' pool it to them - so the numbers behind a figure can always be read as
-#' a table, at the same aggregation, with `build_coverage_strata()`.
+#' @description
+#' Four views of how well a set of strata is sampled: a heatmap
+#' (`plot_coverage_heat()`), a weighted bubble grid (`plot_coverage_bubble()`)
+#' and a sampled-versus-unsampled weight bar chart (`plot_coverage_bar()`),
+#' all documented here, plus a map ([plot_coverage_map()]) on its own page.
 #'
-#' `what` selects what "sampled" means: `"discard"` (a discard estimate
-#' exists), `"length"` or `"age"` (a length / age distribution exists).
-#' For `"length"` / `"age"`, pass `distributions` and, with
-#' `catchCategory`, choose whether to look at the sampling of the landings
-#' (`"Lan"`), the discards (`"Dis"`), BMS (`"BMS"`) or the catch as a
-#' whole (`"All"`, the default). A coverage table brings its own `what`
-#' and catch parts, so with one neither needs to be given.
+#' All take raw CEF catch (and `distributions` for length and age) or the
+#' table [build_coverage_strata()] returns from it. Given raw catch they build
+#' that table at exactly the plotted columns; given the table they pool it to
+#' them. So the numbers behind a figure can always be read as a table, at the
+#' same aggregation.
 #'
-#' The sampling-status colours adapt to which thresholds are active.
-#' Coverage (`min_cov`) is always on; `min_trip` (discard, length, age)
-#' and `min_fish` (length, age) both default to `NULL` and are each
-#' independently optional - `NULL` drops that question from the
-#' classification and the legend entirely, a number turns it on. The
-#' warning shade is a straight count of how many of the ACTIVE
-#' thresholds a stratum missed (yellow = 1, orange = 2, dark orange = 3
-#' - only reachable with trips AND measurements both on); red is
-#' reserved for a stratum with no discard estimate / no linked
-#' distribution at all, never for a threshold miss. The status is worked
-#' out here, at plot time - it is not a column of the coverage table.
+#' @details
+#' ## What "sampled" means
 #'
-#' `min_trip = 0` is NOT the same as leaving trips out - it is still an
-#' ACTIVE (if lenient) threshold, and a stratum with no reported trip
-#' count fails an active trips test no matter how low it is set (unknown
-#' is not treated as adequate - see [classify_strata()]). A 100%-covered
-#' stratum with no trip count reported reads "safe"/"full" once
-#' `min_trip = NULL`, but stays a warning at `min_trip = 0`.
+#' `what` chooses the question:
 #'
-#' The arguments run in the order you usually think about them: what data
-#' (`catch`, `distributions`, `what`, `catchCategory`), then which columns
-#' are the strata (`y`, `x` / `fill`, `facet`), then the pass / fail
-#' thresholds (`min_cov`, `min_trip`, `min_fish`), and finally `palette`.
+#' * `"discard"` (default): does the stratum have a discard estimate? Its
+#'   landings carry a `domainCatchDis`.
+#' * `"length"` / `"age"`: is a length / age distribution linked to the
+#'   stratum's catch? Needs `distributions`. `catchCategory` chooses the catch
+#'   part - `"Lan"`, `"Dis"`, `"BMS"`, or `"All"` (the default: landings and
+#'   discards together, titled "catch").
 #'
-#' @param catch Raw CEF catch data, or a [build_coverage_strata()] table.
+#' The plural and mixed case are accepted (`"discards"`, `"Length"`). A
+#' coverage table brings its own `what` and catch parts, so with one neither
+#' needs to be given; a `what` that contradicts the table is an error.
+#'
+#' ## The status scale (heatmap and bubbles)
+#'
+#' The colour of a cell is its sampling status against the thresholds:
+#'
+#' | Colour | Status |
+#' |:-------|:-------|
+#' | dark green | 100% covered (and, when trips are active, more than `min_trip` trips) |
+#' | green | covered at least `min_cov`, and passing every active threshold |
+#' | yellow | one active threshold missed |
+#' | orange | two active thresholds missed |
+#' | dark orange | three missed: only for length / age, with both `min_trip` and `min_fish` active |
+#' | red | no discard estimate / no linked distribution at all - never a threshold miss |
+#' | blue | discards only, no landings (discard coverage) |
+#'
+#' A cell with no weight at all draws nothing. The legend always lists every
+#' reachable status, including those no cell falls in, so the same figure
+#' drawn on two subsets has the same key.
+#'
+#' Coverage (`min_cov`) is always on. `min_trip` (discard, length, age) and
+#' `min_fish` (length, age) both default to `NULL` and are each optional:
+#' `NULL` drops that question from the classification and the legend, a
+#' number turns it on. The label says which threshold(s) a cell missed, so
+#' `"< 50% covered"` and `">= 50% covered, < 2 trips"` are both yellow but
+#' read differently.
+#'
+#' `min_trip = 0` is not the same as `NULL`: it is an active (if lenient)
+#' threshold, and a stratum with no reported trip count fails an active trips
+#' test however low it is set - unknown is not treated as adequate. A fully
+#' covered stratum with no trip count reads "safe" at `min_trip = NULL` but
+#' stays a warning at `min_trip = 0` (see [classify_strata()]).
+#'
+#' ## Bars and palettes
+#'
+#' The bar chart shows sampled versus unsampled weight, which no threshold
+#' changes, so it takes none: passing `min_cov` or `min_trip` is an error.
+#' `palette` recolours the bars; the status colours are a fixed scale, so
+#' `palette = "colorblind"` on the heatmap or bubbles warns.
+#'
+#' ## Argument order
+#'
+#' What data (`catch`, `distributions`, `what`, `catchCategory`), then which
+#' columns are the strata (`y`, `x` or `fill`, `facet`), then the thresholds
+#' (`min_cov`, `min_trip`, `min_fish`), then `palette`.
+#'
+#' @param catch Raw CEF catch data, or a table from
+#'   [build_coverage_strata()].
 #' @param distributions A CEF distributions table - needed for
-#'   `what = "length"`/`"age"` with raw catch, ignored otherwise.
-#' @param what `"discard"` (default), `"length"` or `"age"`. Plural and
-#'   mixed case are accepted (`"discards"`, `"Length"`, ...). Taken from
-#'   the table when `catch` is a coverage table.
-#' @param catchCategory For `what = "length"`/`"age"`: `"All"` (default -
-#'   landings and discards together, titled "catch"), `"Lan"`, `"Dis"` or
-#'   `"BMS"`. Sets which catch part the distribution is linked to and the
-#'   weight word in the plot title. Not valid for `what = "discard"`
-#'   (an error).
-#' @param y Row category. Required.
-#' @param x Column category - the second axis of the heatmap / bubble
-#'   grid. `NULL` collapses to a single column.
+#'   `what = "length"` / `"age"` with raw catch, ignored otherwise.
+#' @param what `"discard"` (default), `"length"` or `"age"`. Taken from the
+#'   table when `catch` is a coverage table.
+#' @param catchCategory For `what = "length"` / `"age"`: `"All"` (default),
+#'   `"Lan"`, `"Dis"` or `"BMS"`. Sets which catch part the distribution is
+#'   linked to and the weight word in the plot title. With a coverage table
+#'   it selects among the parts the table has. Not valid for
+#'   `what = "discard"` (an error).
+#' @param y Row category: a column of the catch (or of the table). Required.
+#' @param x Column category, the second axis of the heatmap / bubble grid.
+#'   `NULL` collapses to a single column.
 #' @param fill Bar fill category (bars only). `NULL` uses `y`.
 #' @param facet Optional facet column.
-#' @param min_cov Minimum coverage, percent (heat / bubble only). Always
-#'   active - coverage is never dropped from the classification.
-#' @param min_trip Minimum sampling trips (heat / bubble only), or
-#'   `NULL` (the default) to leave trips out of the classification
-#'   altogether - categories and legend both drop to a coverage-only
-#'   scheme. `0` is not the same as `NULL`: it still actively checks
-#'   trips, and a stratum with no reported trip count still fails that
-#'   check (see [classify_strata()]).
-#' @param min_fish Minimum measurements for `what = "length"`/`"age"`,
-#'   or `NULL` (the default) to leave measurements out of the
-#'   classification.
-#' @param palette `"default"` or `"colorblind"` - recolours the bar fill.
-#'   The heatmap / bubble status colours are a fixed semantic scale;
-#'   asking for `"colorblind"` there warns.
-#' @return A ggplot object, or `NULL` when there is nothing to draw.
-#' @seealso [build_coverage_strata()], [classify_strata()],
-#'   [plot_discard_rate()], [plot_numbers_at_length_age()]
+#' @param min_cov Minimum coverage, in percent (heatmap and bubbles).
+#'   Always active: coverage is never dropped from the classification.
+#' @param min_trip Minimum sampling trips (heatmap and bubbles), or `NULL`
+#'   (the default) to leave trips out of the classification altogether.
+#'   `0` is not the same as `NULL`: it still checks trips, and a stratum with
+#'   no reported trip count still fails that check.
+#' @param min_fish Minimum measurements for `what = "length"` / `"age"`, or
+#'   `NULL` (the default) to leave measurements out of the classification.
+#' @param palette `"default"` or `"colorblind"`. Recolours the bar fill; on
+#'   the heatmap and bubbles the status colours are fixed, and asking for
+#'   `"colorblind"` warns.
+#' @return A ggplot object, or `NULL` when there is nothing to draw. The
+#'   heatmap and bubbles also carry a `"status_legend"` attribute: the
+#'   specification [status_legend_plot()] rebuilds a complete legend from.
+#' @seealso [build_coverage_strata()] for the table, [plot_coverage_map()],
+#'   [plot_discard_rate()]; [classify_strata()] and [cat_lookup()] for the
+#'   classification behind the colours.
 #' @name coverage-plots
 #' @family coverage plots
+#' @md
 #' @examples
-#' \dontrun{
-#' plot_coverage_heat(catch, y = "metier4", x = "Season")
-#' plot_coverage_bar(catch, y = "metier4", fill = "Season")
-#' plot_coverage_heat(catch, dist, y = "fleetValue", what = "length",
-#'                    catchCategory = "Dis", min_cov = 50, min_fish = 100)
+#' data(anchoveta_catch)
+#' data(anchoveta_dist)
 #'
-#' # the table behind a figure, and the figure from the table
-#' cov <- build_coverage_strata(catch, c("metier4", "Season"))
-#' cov
-#' plot_coverage_heat(cov, y = "metier4", x = "Season", min_cov = 50)
-#' }
+#' # discard coverage: which metier x country strata carry a discard estimate?
+#' plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country")
+#' plot_coverage_bubble(anchoveta_catch, y = "metier4", x = "Country",
+#'                      min_cov = 50, min_trip = 2)
+#' plot_coverage_bar(anchoveta_catch, y = "metier4", fill = "Country")
+#'
+#' # length coverage of the landings, with a floor on the measurements
+#' plot_coverage_heat(anchoveta_catch, anchoveta_dist, y = "metier4",
+#'                    x = "Country", what = "length", catchCategory = "Lan",
+#'                    min_cov = 50, min_fish = 100)
+#'
+#' # the same figure from the table behind it
+#' cov <- build_coverage_strata(anchoveta_catch, c("metier4", "Country"))
+#' plot_coverage_heat(cov, y = "metier4", x = "Country", min_cov = 50)
 NULL
 
 
@@ -678,49 +732,64 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 
 #' Discard rate per stratum
 #'
-#' One point per stratum, its discard rate on the y axis. A stratum is
-#' one row of the discard coverage table ([build_coverage_strata()]); its
-#' `rate` is the stratum's own discards over the landings that carry a
-#' discard estimate (`total / weightingTotal` - the rate as the CAS output
-#' reports it, discards per tonne of covered landings), not the mean of
-#' any finer strata. Point size is the stratum's landings.
+#' @description
+#' One point per stratum, its discard rate on the y axis and its landings as
+#' the point size. Change `x`, `colour`, `shape` or `facet` and the strata -
+#' and the points - are rebuilt at that resolution: a point is never an
+#' average of finer strata.
 #'
-#' Takes raw CEF catch - the table is then built at exactly the plotted
-#' columns (`x` + `colour` + `shape` + `facet`), so changing any of them
-#' rebuilds the strata, and the points, at that resolution - or a discard
-#' coverage table, whose rows are drawn as they are (build it finer than
-#' the plotted columns and each cell shows one point per finer stratum).
-#' Strata with no discard estimate have no rate and are not drawn - a
-#' rate is a property of sampled strata only.
+#' @details
+#' ## What a point is
 #'
-#' The y axis is pseudo-log: linear near zero and logarithmic above about
-#' 5 percent. A rate is a ratio, so it can exceed 100 percent, and a few
-#' tiny strata (a few kilograms of covered landings) give ratios of many
-#' hundreds of percent that would flatten everything else on a plain axis.
-#' Add `+ ggplot2::scale_y_continuous()` to the returned plot to replace
-#' it with a plain one.
+#' A stratum is one row of the discard coverage table
+#' ([build_coverage_strata()]). Given raw catch, the table is built at
+#' exactly the plotted columns (`x` + `colour` + `shape` + `facet`); given a
+#' discard coverage table, its rows are drawn as they are, so a table built
+#' finer than the plotted columns shows one point per finer stratum. Strata
+#' with no discard estimate have no rate and are not drawn: a rate is a
+#' property of sampled strata only.
+#'
+#' ## The rate
+#'
+#' `rate` is `total / weightingTotal`: the stratum's discards over the
+#' landings that carry a discard estimate, in percent - the same number the
+#' CAS output reports. It is a ratio, so it can exceed 100%. It is not the
+#' `discard_rate` of [build_strata()] (discards / (landings + discards)).
+#'
+#' ## The y axis
+#'
+#' The axis is pseudo-log: linear near zero (zero stays zero) and
+#' logarithmic above about 5%. A few tiny strata (a few kilograms of covered
+#' landings) give ratios of many hundreds of percent that would flatten
+#' everything else on a plain axis. Add `+ ggplot2::scale_y_continuous()` to
+#' the returned plot to replace it with an ordinary one.
 #'
 #' @param catch Raw CEF catch data, or a discard coverage table from
 #'   [build_coverage_strata()].
-#' @param x Column on the x axis. One point per level (times `colour` /
-#'   `shape` / `facet`).
-#' @param colour Column mapped to point fill.
-#' @param shape Column mapped to point shape.
+#' @param x Column on the x axis: one point per level (times `colour`,
+#'   `shape` and `facet`). Required.
+#' @param colour Column mapped to the point fill.
+#' @param shape Column mapped to the point shape.
 #' @param facet Optional facet column.
-#' @param jitter Jitter the points horizontally (cosmetic only - one
-#'   point is still one stratum).
-#' @param palette `"default"` or `"colorblind"` (point colours, via
+#' @param jitter Jitter the points horizontally. Cosmetic only - one point is
+#'   still one stratum.
+#' @param palette `"default"` or `"colorblind"`: the point colours (see
 #'   [var_palette()]).
 #' @return A ggplot object, or `NULL` when no stratum has a discard rate.
-#' @seealso [build_coverage_strata()], [plot_coverage_heat()]
+#' @seealso [build_coverage_strata()] for the table behind the points;
+#'   [coverage-plots] for how well those strata are sampled.
 #' @family discard-rate plots
+#' @md
 #' @examples
-#' \dontrun{
-#' plot_discard_rate(catch_data, x = "Season", colour = "metier4")
+#' data(anchoveta_catch)
 #'
-#' # the table behind the figure
-#' build_coverage_strata(catch_data, c("Season", "metier4"))
-#' }
+#' plot_discard_rate(anchoveta_catch, x = "metier4", colour = "Country")
+#' plot_discard_rate(anchoveta_catch, x = "Country", colour = "metier4",
+#'                   facet = "Season")
+#'
+#' # the table behind the points
+#' cov <- build_coverage_strata(anchoveta_catch, c("metier4", "Country"))
+#' head(cov[!is.na(cov$rate), c("metier4", "Country", "total", "rate")])
 #' @export
 plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
                               facet = NULL, jitter = TRUE,
@@ -822,36 +891,52 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
 
 #' Numbers at length or age
 #'
-#' The catch numbers spread over the length (or age) classes, as a
-#' stacked (or dodged) histogram.
+#' @description
+#' The catch numbers spread over the length (or age) classes, as a stacked or
+#' dodged histogram. Numbers are in thousands, length in cm and age in years.
 #'
-#' `data` is a [length_numbers()] table, or raw CEF catch with
-#' `distributions` (then the link + summary run internally, with
-#' `catchCategory` choosing the landings / discards / BMS part, or
-#' `"All"` for the landings and discards together).
-#' Numbers come out in thousands (N3), length in cm, age in years.
+#' @details
+#' `data` is either raw CEF catch together with `distributions` - linked
+#' through `domainBiology` and summed inside, with `catchCategory` choosing
+#' the landings, the discards, BMS or the catch as a whole - or a table
+#' already summarised by `length_numbers()`. When `distributions` is given the
+#' catch part goes in the plot title.
 #'
-#' @param data A [length_numbers()] table, or raw CEF catch data.
-#' @param distributions A CEF distributions table - needed only with raw
-#'   catch.
+#' `fill` colours (and stacks) the bars by a column of the catch. `facet`
+#' takes one column (a wrapped set of panels) or two (`c("row", "col")`, a
+#' grid).
+#'
+#' @param data Raw CEF catch data, or a `length_numbers()` table.
+#' @param distributions A CEF distributions table. Needed with raw catch;
+#'   leave it out when `data` is already a `length_numbers()` table.
 #' @param distributionType `"LengthTotal"` (default) or `"Age"`.
-#' @param catchCategory `"All"` (default - landings + discards, titled
-#'   "catch"), `"Lan"`, `"Dis"` or `"BMS"`. When `distributions` is
-#'   given, the resolved word goes in the plot title.
-#' @param fill Column mapped to bar fill.
-#' @param facet Up to two facet columns (`"col"` or `c("row", "col")`).
-#' @param stacked Stack the bars on `fill` rather than dodge.
-#' @param scales Facet scales: `"fixed"`, `"free_x"`, `"free_y"` or
+#' @param catchCategory `"All"` (default: landings and discards together,
+#'   titled "catch"), `"Lan"`, `"Dis"` or `"BMS"`. Only used with
+#'   `distributions`.
+#' @param fill Column mapped to the bar fill.
+#' @param facet Up to two facet columns: `"col"` or `c("row", "col")`.
+#' @param stacked Stack the bars on `fill` (default) rather than dodge them.
+#' @param scales Facet scales: `"fixed"` (default), `"free_x"`, `"free_y"` or
 #'   `"free"`.
 #' @param palette `"default"` or `"colorblind"`.
 #' @return A ggplot object, or `NULL` when there is nothing to draw.
-#' @seealso [plot_meanweight_at_length_age()], [length_numbers()]
+#' @seealso [plot_meanweight_at_length_age()] for the mean weight in the same
+#'   classes; [coverage-plots] for whether the strata have a distribution at
+#'   all.
 #' @family distribution plots
+#' @md
 #' @examples
-#' \dontrun{
-#' plot_numbers_at_length_age(catch, distributions, distributionType = "Age",
-#'                            catchCategory = "Dis", fill = "Country")
-#' }
+#' data(anchoveta_catch)
+#' data(anchoveta_dist)
+#'
+#' # numbers at length of the landings, stacked by country
+#' plot_numbers_at_length_age(anchoveta_catch, anchoveta_dist,
+#'                            catchCategory = "Lan", fill = "Country")
+#'
+#' # numbers at age, one panel per quarter, dodged
+#' plot_numbers_at_length_age(anchoveta_catch, anchoveta_dist,
+#'                            distributionType = "Age", fill = "Country",
+#'                            facet = "Season", stacked = FALSE)
 #' @export
 plot_numbers_at_length_age <- function(data, distributions = NULL,
                                        distributionType = c("LengthTotal", "Age"),
@@ -921,39 +1006,63 @@ plot_numbers_at_length_age <- function(data, distributions = NULL,
 
 #' Mean weight at length or age
 #'
-#' The number-weighted mean weight in each length (or age) class, as a
-#' line with points. When the strata are averaged (no `shape`) and a
-#' spread is available, a +/- 1 sd band is drawn too. Live weight and a
-#' line are the only options, so there is no `variableType` or `type`
-#' argument.
+#' @description
+#' The number-weighted mean weight in each length (or age) class, as a line
+#' with points. Weight is in grams, length in cm and age in years. When the
+#' strata are averaged (no `shape`) and a spread is available, a +/- 1 sd
+#' band is drawn as well.
 #'
-#' `data` is a [length_meanweight()] table, or raw CEF catch with
-#' `distributions` (then the link + summary run internally,
-#' `catchCategory` choosing the part - `"All"` combines landings and
-#' discards). Weight in grams, length in cm,
-#' age in years.
+#' @details
+#' `data` is either raw CEF catch together with `distributions` - linked
+#' through `domainBiology` and summarised inside, with `catchCategory`
+#' choosing the landings, the discards, BMS or the catch as a whole - or a
+#' table already summarised by `length_meanweight()`. When `distributions` is
+#' given the catch part goes in the plot title.
 #'
-#' @param data A [length_meanweight()] table, or raw CEF catch data.
-#' @param distributions A CEF distributions table - needed only with raw
-#'   catch.
+#' A mean weight is not additive, so strata that are pooled are averaged
+#' weighted by the numbers measured at that class: a stratum that measured
+#' five fish cannot outweigh one that measured five hundred. The band is the
+#' number-weighted standard deviation across the strata pooled into each
+#' point; a point built from a single stratum has none.
+#'
+#' `colour` groups the lines. `shape` opens the averaged group back up - one
+#' series per level, each drawn separately - and drops the band. `facet`
+#' takes one column (a wrapped set of panels) or two (`c("row", "col")`, a
+#' grid). Live weight and a line are the only options, so there is no
+#' `variableType` or `type` argument.
+#'
+#' @param data Raw CEF catch data, or a `length_meanweight()` table.
+#' @param distributions A CEF distributions table. Needed with raw catch;
+#'   leave it out when `data` is already a `length_meanweight()` table.
 #' @param distributionType `"LengthTotal"` (default) or `"Age"`.
-#' @param catchCategory `"All"` (default - landings + discards, titled
-#'   "catch"), `"Lan"`, `"Dis"` or `"BMS"`. When `distributions` is
-#'   given, the resolved word goes in the plot title.
-#' @param colour Column mapped to line colour.
-#' @param facet Up to two facet columns (`"col"` or `c("row", "col")`).
-#' @param shape Column drawn as separate point shapes; opens the averaged
-#'   group back up and drops the band.
-#' @param scales Facet scales.
+#' @param catchCategory `"All"` (default: landings and discards together,
+#'   titled "catch"), `"Lan"`, `"Dis"` or `"BMS"`. Only used with
+#'   `distributions`.
+#' @param colour Column mapped to the line colour.
+#' @param facet Up to two facet columns: `"col"` or `c("row", "col")`.
+#' @param shape Column drawn as separate series with their own point shapes;
+#'   opens the averaged group back up and drops the band.
+#' @param scales Facet scales: `"fixed"` (default), `"free_x"`, `"free_y"` or
+#'   `"free"`.
 #' @param palette `"default"` or `"colorblind"`.
 #' @return A ggplot object, or `NULL` when there is nothing to draw.
-#' @seealso [plot_numbers_at_length_age()], [length_meanweight()]
+#' @seealso [plot_numbers_at_length_age()] for the numbers in the same
+#'   classes; [coverage-plots] for whether the strata have a distribution at
+#'   all.
 #' @family distribution plots
+#' @md
 #' @examples
-#' \dontrun{
-#' plot_meanweight_at_length_age(catch, distributions, distributionType = "Age",
-#'                               colour = "metier4")
-#' }
+#' data(anchoveta_catch)
+#' data(anchoveta_dist)
+#'
+#' # mean weight at length of the landings, one line per country
+#' plot_meanweight_at_length_age(anchoveta_catch, anchoveta_dist,
+#'                               catchCategory = "Lan", colour = "Country")
+#'
+#' # at age, one panel per quarter
+#' plot_meanweight_at_length_age(anchoveta_catch, anchoveta_dist,
+#'                               distributionType = "Age",
+#'                               colour = "Country", facet = "Season")
 #' @export
 plot_meanweight_at_length_age <- function(data, distributions = NULL,
                                           distributionType = c("LengthTotal", "Age"),

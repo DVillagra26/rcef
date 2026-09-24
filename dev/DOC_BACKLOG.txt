@@ -10,7 +10,6 @@ R/RDBESStockCoord_utils.R::unit2ratio
 R/rcef_alloc.R::agg_meanweight
 R/rcef_alloc.R::agg_numbers
 R/rcef_alloc.R::alloc_compare_numbers
-R/rcef_alloc.R::alloc_overview
 R/rcef_alloc.R::alloc_pivot_long
 R/rcef_alloc.R::alloc_src_col
 R/rcef_alloc.R::alloc_src_label
@@ -30,12 +29,10 @@ R/rcef_intercatch.R::ic_detect_year
 R/rcef_intercatch.R::ic_stage_mapping
 R/rcef_intercatch.R::ic_stage_uploads
 R/rcef_length.R::add_sufficiency
-R/rcef_length.R::alloc_cascade_table
 R/rcef_length.R::alloc_cond_string
 R/rcef_length.R::alloc_group_summary
 R/rcef_length.R::alloc_group_table
 R/rcef_length.R::alloc_quo
-R/rcef_length.R::alloc_step_scope
 R/rcef_length.R::alloc_steps
 R/rcef_length.R::assign_alloc_cascade
 R/rcef_length.R::assign_alloc_groups

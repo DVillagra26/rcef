@@ -8,22 +8,65 @@ them.
 ## Install and run
 
 ```r
-remotes::install_github("DVillagra26/rcef")
+# Restart R first (Session > Restart R) if rcef is already loaded: a loaded
+# package cannot be replaced and the install stops with "cannot remove
+# earlier installation".
+install.packages("remotes")                                    # once
+remotes::install_github("DVillagra26/rcef", dependencies = TRUE)
+
 rcef::run_app()
 ```
+
+`dependencies = TRUE` also installs what is only suggested: `shiny` and `DT`
+for the app, `icesVocab` and `icesSD` for InterCatch input. The plots need
+ggplot2 >= 3.5.0 and scales >= 1.3.0; the installer updates them if yours
+are older.
+
+## Look at the data first
+
+Discard rates and sampling coverage are one table, and the plots draw that
+table, so every number in a figure can be read off it:
+
+```r
+library(rcef)
+data(anchoveta_catch); data(anchoveta_dist)     # the bundled example stock
+
+# discard rate and coverage per stratum, at the aggregation you choose
+tab <- build_coverage_strata(anchoveta_catch, c("metier4", "Country"))
+tab
+
+# the same numbers as figures (raw catch or the table both work)
+plot_coverage_heat(tab, y = "metier4", x = "Country", min_cov = 50)
+plot_discard_rate(tab, x = "metier4")
+
+# length and age: add the distributions
+build_coverage_strata(anchoveta_catch, c("metier4", "Country"),
+                      distributions = anchoveta_dist, what = "length")
+```
+
+`?build_coverage_strata` lists every column, `?"coverage-plots"` every plot
+argument, and `vignette("coverage-plots", package = "rcef")` draws them all.
+
+## Raise without the app
 
 Headless — the whole point of the split:
 
 ```r
 library(rcef)
-cef  <- derive_fields(read.csv("catches_CEF_v17.1.csv"))
-st   <- classify_strata(build_strata(cef, c("metier4", "ICESDivision")))
-grp  <- define_raising_groups_auto(st)
-out  <- catchRaising(cef, grp$strataCond, grp$matchedDataCond)
+cef <- derive_fields(read.csv("catches_CEF_v17.1.csv"))
+cef <- subset(cef, stock == "sol.27.4" & year == 2023)   # one stock and year at a time
+
+dims   <- c("metier4", "ICESDivision", "Season")          # what a stratum is
+st     <- classify_strata(build_strata(cef, dims), threshold = 50)  # covered enough?
+groups <- define_raising_groups_auto(cef, hierarchy = dims,         # who borrows from whom
+                                     thresholds = c(50, 40, 30))
+raised <- run_native_raising(cef, dims, groups, type = "discards")
 ```
 
-No shiny is loaded. `shiny` and `DT` are **Suggests**, pulled in only by
-`run_app()`.
+No shiny is loaded. Raising uses the discard estimates whose `originType`
+matches the `originType` argument (`"WGEstimate"` by default). The bundled
+example data is labelled `"Estimate"`, so it is for exploring and plotting,
+not for a raising run.
 
 ## Layout
 
@@ -76,13 +119,19 @@ R CMD build .                # catches DESCRIPTION errors in 2s — run before e
 ```
 
 `NAMESPACE` and `man/` are **generated** and committed. Every top-level
-object carries `@export` — all 223 functions **and all 30 constants**;
-the constants are the ones easily forgotten, and a missing one fails at
+object carries `@export` — the functions **and the constants**; the
+constants are the ones easily forgotten, and a missing one fails at
 runtime with `object 'X' not found`, not at build time. `document()` is
-safe to run. 134 objects also carry `@noRd`, meaning they export
-correctly but have no man page yet. That backlog is `dev/DOC_BACKLOG.txt` — replacing a `@noRd` with a
-real roxygen block is the unit of work. `dev/check_exports.R` fails if a
-new function is ever added without a tag.
+safe to run. Objects that also carry `@noRd` export correctly but have no
+man page yet; the functions still to document are listed in
+`dev/DOC_BACKLOG.txt`, and replacing a `@noRd` with a real roxygen block
+is the unit of work. `dev/check_exports.R` prints the current counts and
+fails if a new function is ever added without a tag.
+
+Documentation blocks use `@md` (the package keeps roxygen's Markdown off
+globally, so each block opts in), which gives backticks, `[fn()]` links and
+pipe tables. Link only to functions that have a man page; write the others
+in code font.
 
 ## Deploying to shinyapps.io
 

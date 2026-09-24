@@ -9,12 +9,19 @@ default_weight_label(what, catchCategory = NULL)
 \arguments{
 \item{what}{`"discard"`, `"length"` or `"age"`.}
 
-\item{catchCategory}{`"Lan"`, `"Dis"`, `"BMS"` or `NULL`.}
+\item{catchCategory}{`"Lan"`, `"Dis"`, `"BMS"`, `"All"` or `NULL`
+(treated as `"Lan"`). Ignored for `what = "discard"`.}
 }
 \value{
-`"landings"`, `"discards"` or `"BMS catch"`.
+`"landings"` (always, for discards), `"discards"`, `"BMS catch"`
+  or `"catch"` (landings and discards together).
 }
 \description{
-Default weight label for a coverage / distribution plot
+The word a plot title uses for the weight it describes.
+}
+\examples{
+default_weight_label("discard")
+default_weight_label("length", "Dis")
+default_weight_label("age", "All")
 }
 \keyword{internal}

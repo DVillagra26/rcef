@@ -105,32 +105,49 @@ normalize_what <- function(what) {
 
 #' Standalone legend for the sampling statuses
 #'
-#' A minimal plot whose only purpose is its legend. It is built from
-#' [cat_lookup()] rather than from the data, so it carries a filled key for
-#' EVERY possible status, including those absent from the plot being shown.
-#' Drawing the legend from this plot (rather than from the coverage plot) is
-#' what makes the full set of categories visible with their colours: a
-#' discrete scale can list an unused level, but it has no data row from which
-#' to draw that level's swatch.
+#' @description
+#' A minimal plot whose only purpose is its legend: every status a coverage
+#' plot can show, with its colour and compact label, whether or not the
+#' figure in front of you happens to contain it.
 #'
-#' The coverage builders attach the arguments needed to rebuild this legend as
-#' a `"status_legend"` attribute, so a caller that shows the legend in its own
-#' panel can construct it on demand without carrying a second plot around.
+#' @details
+#' The legend is built from [cat_lookup()] rather than from data, so it
+#' carries a filled key for every possible status, including those absent
+#' from the plot being shown. Drawing the legend from this plot (rather than
+#' from the coverage plot) is what makes the full scale visible: a discrete
+#' scale can list an unused level, but there is no data row to draw that
+#' level's swatch from.
+#'
+#' [plot_coverage_heat()] and [plot_coverage_bubble()] attach the arguments
+#' needed to rebuild their legend as a `"status_legend"` attribute, so a
+#' caller that shows the legend in its own panel (the app does) can build it
+#' on demand with `do.call(status_legend_plot, attr(p, "status_legend"))`.
 #'
 #' @inheritParams cat_lookup
 #' @param key Glyph the status keys are drawn with: `"tile"` for the heatmap,
 #'   `"point"` for the bubble plot. The legend should look like the thing it
 #'   describes, so a heatmap gets square swatches and a bubble plot circles.
-#' @param size Optional spec for a second, independent SIZE key, as attached
-#'   by [plot_coverage_bubble()]: a list with `breaks`, `labels`, `limits`, `range`
-#'   and `name`. Built with the SAME limits and range as the plot it came
-#'   from, so a key circle is drawn at exactly the diameter that value has in
-#'   the plot and can be read off it.
+#' @param size Optional specification of a second, independent SIZE key, as
+#'   attached by [plot_coverage_bubble()]: a list with `breaks`, `labels`,
+#'   `limits`, `range` and `name`. It is built with the same limits and range
+#'   as the plot it came from, so a key circle is drawn at exactly the
+#'   diameter that value has in the plot and can be read off it.
+#' @param drop_none Drop the "none" (no weight at all) category, which the
+#'   coverage plots never draw. Default `TRUE`.
 #' @return A ggplot object; only its legend is meant to be used.
-#' @seealso [coverage-plots], [cat_lookup()]
-#' @param drop_none Drop the "none" (no weight at all) category, which
-#'   the coverage plots never draw. Default `TRUE`.
+#' @seealso [coverage-plots], which draw the statuses; [cat_lookup()], which
+#'   defines them.
 #' @family coverage plots
+#' @md
+#' @examples
+#' # every status for a 50% coverage bar with no trip or measurement floor
+#' status_legend_plot(50, "discard", min_trips = NULL)
+#'
+#' # the legend of a figure that is on screen
+#' data(anchoveta_catch)
+#' p <- plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
+#'                         min_cov = 50, min_trip = 2)
+#' do.call(status_legend_plot, attr(p, "status_legend"))
 #' @export
 status_legend_plot <- function(threshold, what = "discard", min_meas = 0,
                                key = c("point", "tile"), size = NULL,
@@ -208,16 +225,12 @@ status_key_layer <- function(d, all_status, key = c("tile", "point")) {
                         show.legend = TRUE)
 }
 
-#' Approximate centroids of the common NE Atlantic ICES areas
-#'
-#' `lon` / `lat` for the ICES divisions and subdivisions that a stock
-#' assessment in this region normally uses - enough to place one bubble
-#' per area on a map. Codes are stored WITHOUT the leading `"27."`;
-#' [ices_area_centroid()] accepts either form.
-#'
-#' @format A data frame with columns `area`, `lon`, `lat`.
-#' @seealso [ices_area_centroid()], [plot_coverage_map()]
+#' @rdname ices_area_centroid
+#' @format `ICES_AREA_CENTROID` is a data frame with one row per area and the
+#'   columns `area` (the code, without the leading `"27."`), `lon` and `lat`
+#'   (decimal degrees).
 #' @keywords internal
+#' @md
 #' @export
 ICES_AREA_CENTROID <- data.frame(
   area = c("1", "2.a", "2.b",
@@ -266,14 +279,30 @@ ICES_AREA_CENTROID <- data.frame(
           -22.0, -30.0, -37.0, -43.0),
   stringsAsFactors = FALSE)
 
-#' Look up ICES-area centroids
+#' Approximate centroids of ICES areas
+#'
+#' @description
+#' `ICES_AREA_CENTROID` is a table of approximate `lon` / `lat` centroids for
+#' the ICES divisions and subdivisions a stock assessment in the NE Atlantic
+#' normally uses - enough to place one pie or bubble per area on a map - plus
+#' the FAO Area 87 (Pacific, Southeast) divisions, so the bundled anchoveta
+#' example data can be mapped too. Codes are stored without the leading
+#' `"27."`.
+#'
+#' `ices_area_centroid()` looks codes up in that table, with or without the
+#' prefix.
 #'
 #' @param codes ICES area codes, with or without the `"27."` prefix.
-#'   Anything past a recognised division/subdivision is ignored.
-#' @return A data frame `area`, `lon`, `lat` aligned to `codes`; `lon` /
-#'   `lat` are `NA` for a code with no centroid (a warning names them).
-#' @seealso [ICES_AREA_CENTROID], [plot_coverage_map()]
+#'   Anything past a recognised division or subdivision is ignored.
+#' @return `ices_area_centroid()` returns a data frame with `area` (the codes
+#'   as given), `lon` and `lat`, aligned to `codes`. `lon` and `lat` are `NA`
+#'   for a code with no centroid, and a warning names those codes.
+#' @seealso [plot_coverage_map()], which uses it.
 #' @keywords internal
+#' @md
+#' @examples
+#' ices_area_centroid(c("27.4.b", "7.d", "27.3.a.20"))
+#' head(ICES_AREA_CENTROID)
 #' @export
 ices_area_centroid <- function(codes) {
   key <- sub("^27\\.", "", trimws(as.character(codes)))
@@ -288,10 +317,18 @@ ices_area_centroid <- function(codes) {
 
 #' Default weight label for a coverage / distribution plot
 #'
+#' The word a plot title uses for the weight it describes.
+#'
 #' @param what `"discard"`, `"length"` or `"age"`.
-#' @param catchCategory `"Lan"`, `"Dis"`, `"BMS"` or `NULL`.
-#' @return `"landings"`, `"discards"` or `"BMS catch"`.
+#' @param catchCategory `"Lan"`, `"Dis"`, `"BMS"`, `"All"` or `NULL`
+#'   (treated as `"Lan"`). Ignored for `what = "discard"`.
+#' @return `"landings"` (always, for discards), `"discards"`, `"BMS catch"`
+#'   or `"catch"` (landings and discards together).
 #' @keywords internal
+#' @examples
+#' default_weight_label("discard")
+#' default_weight_label("length", "Dis")
+#' default_weight_label("age", "All")
 #' @export
 default_weight_label <- function(what, catchCategory = NULL) {
   if (identical(what, "discard")) return("landings")

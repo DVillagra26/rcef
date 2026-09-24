@@ -7,107 +7,130 @@
 
 #' Sampling coverage and discard rate per stratum
 #'
-#' The table behind the coverage and discard-rate plots, usable on its
-#' own: one row per stratum, at whatever aggregation `dims` names, with
-#' the weights, the discard rate and how well the stratum is sampled. The
-#' plots ([plot_coverage_heat()], [plot_coverage_bubble()],
-#' [plot_coverage_bar()], [plot_coverage_map()], [plot_discard_rate()])
-#' build exactly this table internally when given raw catch, and take it
-#' directly when given the table - so the same numbers can be read as a
-#' table and looked at as a figure.
+#' @description
+#' One row per stratum: what was landed and discarded, the discard rate, and
+#' how well the stratum is sampled - a table you can read, sort and filter,
+#' at whatever aggregation you choose. Give it the catch and the columns
+#' that define a stratum; for length and age, also the distributions.
 #'
-#' Nothing in the table judges the sampling: there is no status, decision
-#' or category. Thresholds (`min_cov`, `min_trip`, `min_fish`) are a
-#' plotting choice, applied by the coverage plots; the table only reports
-#' the numbers they are applied to.
+#' This is the table behind [plot_coverage_heat()], [plot_coverage_bubble()],
+#' [plot_coverage_bar()], [plot_coverage_map()] and [plot_discard_rate()].
+#' They build it themselves from raw catch and take it directly when you
+#' pass it, so every number in a figure can be found in this table, and a
+#' table can always be looked at as a figure.
 #'
-#' The columns follow the final CAR / CAS output tables wherever those
-#' have a counterpart, so a stratum here reads the same as its row there.
-#' All weights are in tonnes.
+#' @details
+#' ## What the table leaves out
 #'
-#' For `what = "discard"` the table has one row per stratum, the discard
-#' estimate on the `Dis` side and the landings that weight it on the
-#' `Lan` side:
-#' \describe{
-#'   \item{`dims`}{the stratum columns, as given.}
-#'   \item{`catchCategory`, `variableUnit`}{`"Dis"` and `"t"` - what
-#'     `total` is.}
-#'   \item{`total`}{discards. `NA` when the stratum has no discard
-#'     estimate at all (nobody looked), which is not the same as 0
-#'     (looked and found none).}
-#'   \item{`weightingCategory`}{`"Lan"`.}
-#'   \item{`weightingTotal`}{the landings that carry a discard estimate
-#'     (their `domainCatchDis` is filled) - the weight the rate is
-#'     weighted by.}
-#'   \item{`rate`}{`total / weightingTotal`, the discard rate as CAS
-#'     reports it: discards per tonne of covered landings, so it can
-#'     exceed 1. `NA` when either part is missing or zero.}
-#'   \item{`landings`}{all landings in the stratum, covered or not.}
-#'   \item{`coverage`}{`weightingTotal / landings`, in percent.}
-#'   \item{`numTrips`}{the trips behind the stratum, `NA` when the data
-#'     does not report them. The largest value among the rows of a
-#'     stratum (the same trip count repeats across rows of one sample);
-#'     summed when strata are pooled into a plot cell.}
-#' }
+#' It reports numbers and does not judge them: there is no status, category
+#' or decision column. The thresholds (`min_cov`, `min_trip`, `min_fish`)
+#' are a plotting choice; the coverage plots apply them to these numbers as
+#' they draw.
 #'
-#' For `what = "length"` / `"age"` it has one row per stratum and catch
-#' part (`catchCategory`), so `catchCategory = "All"` gives a `Lan` and a
-#' `Dis` row for every stratum:
-#' \describe{
-#'   \item{`dims`, `catchCategory`}{the stratum and the catch part.}
-#'   \item{`distributionType`}{`"LengthTotal"` or `"Age"`.}
-#'   \item{`variableUnit`, `total`}{`"t"` and the weight of that catch
-#'     part.}
-#'   \item{`coverage`}{the share of `total`, in percent, whose
-#'     `domainBiology` matches a distribution of that type.}
-#'   \item{`numMeasurements`}{the measurements behind those
-#'     distributions.}
-#'   \item{`numTrips`}{as above.}
-#' }
+#' ## Column names and units
+#'
+#' Columns follow the final CAR / CAS output tables wherever those have a
+#' counterpart (`total`, `weightingTotal`, `rate`, `numTrips`,
+#' `catchCategory`, `variableUnit`), so a stratum here reads like its row
+#' there. Weights are in tonnes; the CAR / CAS tables themselves keep the
+#' CEF's kilograms.
+#'
+#' ## Discard tables (`what = "discard"`)
+#'
+#' One row per stratum, with the discard estimate on the `Dis` side and the
+#' landings that weight it on the `Lan` side. Only landings and discards are
+#' counted: BMS is a third catch part with its own raising, not a discard.
+#'
+#' | Column | Meaning |
+#' |:-------|:--------|
+#' | the `dims` columns | The stratum, as you named it. |
+#' | `catchCategory`, `variableUnit` | `"Dis"` and `"t"`: what `total` is. |
+#' | `total` | Discards. `NA` when the stratum has no discard estimate at all (nobody looked); `0` means it was looked at and none were found. |
+#' | `weightingCategory` | `"Lan"`. |
+#' | `weightingTotal` | The landings that carry a discard estimate (their `domainCatchDis` is filled): the weight `rate` is weighted by. |
+#' | `rate` | `total / weightingTotal`: discards per tonne of covered landings, as the CAS output reports it. A ratio, so it can exceed 1 - unlike `discard_rate` in [build_strata()], which is discards / (landings + discards). `NA` when `total` is missing or `weightingTotal` is 0. |
+#' | `landings` | All landings in the stratum, covered or not. |
+#' | `coverage` | `weightingTotal / landings`, in percent; `NA` when there are no landings. |
+#' | `numTrips` | The trips behind the stratum; `NA` when the data does not report them. The largest count among the stratum's rows (one trip repeats across the rows of a sample), and summed when the plots pool strata into one cell. |
+#'
+#' ## Length and age tables (`what = "length"`, `what = "age"`)
+#'
+#' One row per stratum **and catch part**, so `catchCategory = "All"` (the
+#' default) gives a `Lan` and a `Dis` row for every stratum.
+#'
+#' | Column | Meaning |
+#' |:-------|:--------|
+#' | the `dims` columns | The stratum, as you named it. |
+#' | `catchCategory` | The catch part the row describes: `"Lan"`, `"Dis"` or `"BMS"`. |
+#' | `distributionType` | `"LengthTotal"` or `"Age"`. |
+#' | `variableUnit` | `"t"`. |
+#' | `total` | The weight of that catch part. |
+#' | `coverage` | The share of `total`, in percent, whose `domainBiology` matches a distribution of that type and catch part; `NA` when `total` is 0. |
+#' | `numMeasurements` | The measurements behind those distributions (0 when there are none). |
+#' | `numTrips` | As above. |
+#'
+#' ## Choosing the aggregation
+#'
+#' `dims` is the aggregation: name fewer columns for a coarser table (each
+#' row pools everything else), more for a finer one. Weights add up, so a
+#' table built finer can be pooled to coarser plotted columns later without
+#' loss - coverage and rate are re-derived from the summed weights, never
+#' averaged.
+#'
+#' ## Build once, draw many
+#'
+#' For length and age the expensive step is linking the catch to the
+#' distributions. Build the table once and pass it to as many plots as you
+#' like, rather than passing raw catch to each.
 #'
 #' @param catch CEF catch data (long format) carrying `catchCategory`,
-#'   `total`, `domainCatchDis` and every column named in `dims`
-#'   ([derive_fields()] adds `Country`, `Season`, `metier4`, `mesh` and
-#'   the ICES area levels).
-#' @param dims Character vector of the columns that define a stratum. The
-#'   aggregation level is whatever you name: `c("metier4", "Country")`
-#'   pools everything else, `c("fleetValue", "areaValue", "Season")` is
-#'   finer. For length / age, `catchCategory` is never a stratum column
-#'   (it is a column of the result, one row per catch part) and is
-#'   ignored if named.
-#' @param distributions A CEF distributions table - required for
-#'   `what = "length"` / `"age"`, ignored for discards.
-#' @param what `"discard"` (default), `"length"` or `"age"`. Plural and
+#'   `total` and, for discards, `domainCatchDis`, plus every column named in
+#'   `dims`. [derive_fields()] adds `Country`, `Season`, `metier4`, `mesh`
+#'   and the ICES area levels.
+#' @param dims Character vector of the columns that define a stratum, for
+#'   example `c("metier4", "Country")`, or the finer
+#'   `c("fleetValue", "areaValue", "Season")`. For length and age
+#'   `catchCategory` is never a stratum column (it is a column of the
+#'   result, one row per catch part) and is ignored if named.
+#' @param distributions A CEF distributions table. Required for
+#'   `what = "length"` and `what = "age"`, ignored for discards.
+#' @param what `"discard"` (default), `"length"` or `"age"`. The plural and
 #'   mixed case are accepted (`"discards"`, `"Length"`).
 #' @param catchCategory For `what = "length"` / `"age"`: `"All"` (default -
-#'   landings and discards, one row each), `"Lan"`, `"Dis"` or `"BMS"`.
-#'   Not valid for `what = "discard"` (an error).
-#' @return A data frame with the columns above, or `NULL` when there is
-#'   nothing to describe (no landings / discards, or no catch rows for
-#'   that `catchCategory`). Distributions that link to nothing are not
+#'   landings and discards, one row each), `"Lan"`, `"Dis"` or `"BMS"`. Not
+#'   valid for `what = "discard"` (an error).
+#' @return A data frame with the columns described above, or `NULL` when
+#'   there is nothing to describe (no landings or discards, or no catch rows
+#'   for that `catchCategory`). Distributions that link to nothing are not
 #'   "nothing": every stratum is then reported with coverage 0.
-#' @seealso [plot_coverage_heat()] and the other [coverage-plots],
-#'   [plot_discard_rate()], [build_strata()] (the raising-side stratum
-#'   table)
+#' @seealso [coverage-plots] and [plot_discard_rate()], which draw this
+#'   table; [build_strata()], the raising-side stratum table;
+#'   [classify_strata()], which judges strata against thresholds.
 #' @family coverage plots
+#' @md
 #' @examples
-#' \dontrun{
+#' data(anchoveta_catch)
+#' data(anchoveta_dist)
+#'
 #' # discard rate and coverage per metier x country
-#' cov <- build_coverage_strata(catch_data, c("metier4", "Country"))
-#' cov[order(-cov$rate), ]
+#' cov <- build_coverage_strata(anchoveta_catch, c("metier4", "Country"))
+#' head(cov[order(-cov$landings), ])
 #'
-#' # the same table, finer or coarser
-#' build_coverage_strata(catch_data, c("fleetValue", "areaValue", "Season"))
-#' build_coverage_strata(catch_data, "Season")
+#' # the same table, coarser or finer
+#' build_coverage_strata(anchoveta_catch, "Season")
+#' nrow(build_coverage_strata(anchoveta_catch,
+#'                            c("fleetValue", "areaValue", "Season")))
 #'
-#' # length coverage of the landings
-#' build_coverage_strata(catch_data, c("metier4", "Country"), distributions,
-#'                       what = "length", catchCategory = "Lan")
+#' # length coverage of the landings: weight, share with a distribution,
+#' # and the measurements behind it
+#' len <- build_coverage_strata(anchoveta_catch, c("metier4", "Country"),
+#'                              anchoveta_dist, what = "length",
+#'                              catchCategory = "Lan")
+#' head(len[order(-len$total), ])
 #'
-#' # and the plots take either the raw catch or the table
+#' # the plots draw the same table, from the raw catch or from the table
 #' plot_coverage_heat(cov, y = "metier4", x = "Country", min_cov = 50)
 #' plot_discard_rate(cov, x = "metier4", colour = "Country")
-#' }
 #' @export
 build_coverage_strata <- function(catch, dims, distributions = NULL,
                                   what = "discard", catchCategory = NULL) {

@@ -9,7 +9,8 @@ Authors@R: c(
            comment = "RDBESStockCoord functions, vendored (see R/RDBESStockCoord_*.R)"),
     person("RDBESStockCoord contributors", role = "ctb", comment = "ICES WG"))
 Description: Implements the ICES discard-raising and length/age catch
-    allocation workflows over CEF (RDBES) long-format data: strata
+    allocation workflows over CEF (RDBES) long-format data: discard-rate
+    and sampling-coverage tables with the plots that draw them, strata
     construction, sampling-status classification, automatic and manual
     definition of raising/allocation groups, and the emission of a
     reproducible script or ICES TAF script set. Wraps the RDBESStockCoord

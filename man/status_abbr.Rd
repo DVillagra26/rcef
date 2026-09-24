@@ -10,25 +10,29 @@ status_abbr(threshold, what = "discard", min_meas = 0, min_trips = 2)
 \item{threshold}{Coverage threshold in percent that separates "enough"
 from "too little". Always active.}
 
-\item{what}{"discard" (default), "length" or "age".}
+\item{what}{\code{"discard"} (default), \code{"length"} or \code{"age"}.}
 
-\item{min_meas}{Minimum number of measurements for a length/age stratum to
-count as well measured, or `NULL` to leave measurements out of the
+\item{min_meas}{Minimum number of measurements for a length / age stratum
+to count as well measured, or \code{NULL} to leave measurements out of the
 classification entirely. Ignored for discards.}
 
 \item{min_trips}{Minimum number of trips for a stratum to count as
-adequately covered in EFFORT terms, separately from coverage in
-WEIGHT terms, or `NULL` to leave trips out of the classification
-entirely. Defaults to 2, matching ICES practice.}
+adequately covered in effort terms (as opposed to weight terms), or
+\code{NULL} to leave trips out of the classification entirely. Defaults to 2,
+matching ICES practice.}
 }
 \value{
 A character vector of short codes named by full status label.
 }
 \description{
-The `status -> abbr` map from [cat_lookup()], for
-`ggplot2::scale_fill_manual(labels = )` or a base-R legend that needs
-the compact codes rather than the full sentences.
+The \code{status -> abbr} map from \code{\link[=cat_lookup]{cat_lookup()}}: the compact codes (for
+example \code{"<50\% cov, >=2t"}) rather than the full sentences, for
+\code{ggplot2::scale_fill_manual(labels = )} or any legend that has to stay
+narrow.
+}
+\examples{
+status_abbr(50, "discard")
 }
 \seealso{
-[status_palette()], [cat_lookup()]
+\code{\link[=status_palette]{status_palette()}}, \code{\link[=cat_lookup]{cat_lookup()}}
 }

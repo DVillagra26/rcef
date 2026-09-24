@@ -7,40 +7,61 @@
 classify_strata(s, threshold, what = "discard", min_meas = 0, min_trips = 2)
 }
 \arguments{
-\item{s}{A stratum table from [build_strata()] (discards) or
-[biology_link()] (length/age), carrying at least `coverage`;
-length/age classification also reads `n_measurements`. Both carry
-`numTrips` when the loaded CEF file reported it; a stratum with no
-trip count is treated as failing the trips test, not passing it -
-unknown is not the same as adequate. `numTrips` / `n_measurements`
-are only read when `min_trips` / `min_meas` are active.}
+\item{s}{A stratum table from \code{\link[=build_strata]{build_strata()}} (discards) or from the
+biology link (length / age), carrying at least \code{coverage}. Length / age
+classification also reads \code{n_measurements}. \code{numTrips} and
+\code{n_measurements} are only read when \code{min_trips} / \code{min_meas} are active.}
 
-\item{threshold}{Coverage threshold in percent.}
+\item{threshold}{Coverage threshold, in percent.}
 
-\item{what}{"discard" (default), "length" or "age".}
+\item{what}{\code{"discard"} (default), \code{"length"} or \code{"age"}.}
 
-\item{min_meas}{Minimum number of measurements for length/age well
-measured, or `NULL` to leave measurements out of the classification.
-Ignored for discards.}
+\item{min_meas}{Minimum number of measurements for a length / age stratum
+to count as well measured, or \code{NULL} to leave measurements out of the
+classification. Ignored for discards.}
 
-\item{min_trips}{Minimum number of trips, or `NULL` to leave trips out
-of the classification. Defaults to 2.}
+\item{min_trips}{Minimum number of trips, or \code{NULL} to leave trips out of
+the classification. Defaults to 2.}
 }
 \value{
-`s` with `cat_key`, `Status` and `Raising_Decision` added.
+\code{s} with \code{cat_key}, \code{Status} and \code{Raising_Decision} added.
 }
 \description{
-Adds the sampling verdict to a stratum table: `cat_key` (a stable key),
-`Status` (a factor with every level from [cat_lookup()], so legends stay
-complete) and `Raising_Decision` (what to do about it). Coverage is
-always part of the verdict; `min_trips` (discards, length/age) and
-`min_meas` (length/age only) are each independently optional - pass
-`NULL` to drop that sampling-effort question from the classification
+Adds the sampling verdict to a stratum table: \code{cat_key} (a stable key),
+\code{Status} (a factor with every level from \code{\link[=cat_lookup]{cat_lookup()}}, so legends stay
+complete) and \code{Raising_Decision} (what to do about the stratum). This is
+the raising side's verdict, used to decide which strata raise on their own
+data and which must borrow. The coverage plots judge cells the same way, at
+plot time, from the table \code{\link[=build_coverage_strata]{build_coverage_strata()}} returns.
+}
+\details{
+Coverage is always part of the verdict; \code{min_trips} (discards, length /
+age) and \code{min_meas} (length / age only) are each independently optional -
+pass \code{NULL} to drop that sampling-effort question from the classification
 entirely rather than merely giving it an always-passing threshold. The
-warning shade counts how many of the ACTIVE targets a stratum missed
-(yellow = 1, orange = 2, dark orange = 3 - reachable only with both
-trips and measurements active).
+warning shade counts how many of the active targets a stratum missed
+(yellow = 1, orange = 2, dark orange = 3 - reachable only with both trips
+and measurements active). \code{\link[=cat_lookup]{cat_lookup()}} lists every category.
+
+A stratum with no reported trip count fails an active trips test however
+low \code{min_trips} is set - unknown is not the same as adequate - and the
+function warns when that leaves the trips question unable to discriminate
+at all (every stratum's \code{numTrips} is \code{NA}). It likewise warns when, for
+length / age, a positive \code{min_meas} can never be met because every
+stratum's \code{n_measurements} is 0.
+}
+\examples{
+data(anchoveta_catch)
+st <- classify_strata(build_strata(anchoveta_catch,
+                                   c("metier4", "Country")),
+                      threshold = 50)
+table(st$cat_key)
+head(st[, c("metier4", "Country", "coverage", "cat_key")])
+
+# coverage only: trips dropped from the verdict
+table(classify_strata(build_strata(anchoveta_catch, "metier4"), 50,
+                      min_trips = NULL)$cat_key)
 }
 \seealso{
-[build_strata()], [cat_lookup()]
+\code{\link[=build_strata]{build_strata()}}, \code{\link[=cat_lookup]{cat_lookup()}}, \code{\link[=build_coverage_strata]{build_coverage_strata()}}
 }

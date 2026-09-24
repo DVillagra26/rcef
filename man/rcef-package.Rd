@@ -6,44 +6,80 @@
 \alias{rcef}
 \title{rcef: discard raising and length/age catch allocation over CEF data}
 \description{
-The package holds two clearly separated bodies of code, distinguished
-by file name so the split is visible in git:
+Implements the ICES discard-raising and length / age catch-allocation
+workflows over CEF (RDBES) long-format data: exploring how well the data
+is sampled, defining the groups that raise or allocate, running the
+RDBESStockCoord engines, and writing the result out as a reproducible
+script or an ICES TAF script set. A shiny application, started with
+\code{\link[=run_app]{run_app()}}, drives the same functions.
 }
 \details{
-\describe{
-  \item{\code{R/RDBESStockCoord_*.R}}{Vendored from the ICES
-    RDBESStockCoord working-group code. Algorithms, argument lists and
-    return shapes are upstream's. Local edits are packaging-only and
-    are marked \code{## [pkg]}. Do not refactor these; fix upstream and
-    re-vendor.}
-  \item{\code{R/rcef_*.R}}{Written here. Strata, classification,
-    grouping, scenarios, script emission. Free to refactor.}
-  \item{\code{R/viz_*.R}}{Written here. Theme and plots. Pure ggplot2,
-    no shiny; separated so they can be dropped or split into their own
-    package later without touching the analysis code.}
+\subsection{Where to start}{\tabular{ll}{
+   To ... \tab Use \cr
+   read InterCatch files into CEF \tab \code{\link[=funICoutCEF]{funICoutCEF()}} \cr
+   add the strata-ready columns (\code{Country}, \code{Season}, \code{metier4}, ...) \tab \code{\link[=derive_fields]{derive_fields()}} \cr
+   see discard rates and sampling coverage per stratum, as a table \tab \code{\link[=build_coverage_strata]{build_coverage_strata()}} \cr
+   look at them \tab \link{coverage-plots} (heatmap, bubbles, bars), \code{\link[=plot_coverage_map]{plot_coverage_map()}}, \code{\link[=plot_discard_rate]{plot_discard_rate()}} \cr
+   look at numbers and mean weight at length or age \tab \code{\link[=plot_numbers_at_length_age]{plot_numbers_at_length_age()}}, \code{\link[=plot_meanweight_at_length_age]{plot_meanweight_at_length_age()}} \cr
+   build the raising-side stratum table and judge it \tab \code{\link[=build_strata]{build_strata()}}, \code{\link[=classify_strata]{classify_strata()}} \cr
+   define raising groups automatically (a cascade that coarsens until coverage clears a bar) \tab \code{\link[=recommend_raising]{recommend_raising()}}, \code{\link[=conds_from_auto]{conds_from_auto()}} \cr
+   define them by hand \tab \code{\link[=new_rule]{new_rule()}}, \code{\link[=conds_from_rules]{conds_from_rules()}} \cr
+   check a group definition before raising \tab \code{\link[=check_group_conditions]{check_group_conditions()}} \cr
+   compare grouping schemes side by side \tab \code{\link[=scenario_auto]{scenario_auto()}}, \code{\link[=run_scenario]{run_scenario()}}, \code{\link[=compare_scenarios]{compare_scenarios()}} \cr
+   write the session out as an ICES TAF script set \tab \code{\link[=taf_bundle]{taf_bundle()}} \cr
+   use all of this through the application \tab \code{\link[=run_app]{run_app()}} \cr
 }
 
-The chain:
-\preformatted{
-derive_fields() -> build_strata() -> classify_strata()
-  -> define_raising_groups_auto() | define_raising_groups_manual()
-  -> catchRaising()         (discards)
-  -> catchAllocationAoL()   (lengths and ages)
+
+\code{vignette("rcef-workflow", package = "rcef")} walks one stock from input
+files to numbers and mean weights at length and age, and
+\code{vignette("coverage-plots", package = "rcef")} shows every exploratory plot.
 }
 
-Both grouping methods return the same \code{strataCond} /
-\code{matchedDataCond} shape, which is what the two RDBESStockCoord
-engines consume, so one group definition drives either.
+\subsection{The chain}{
 
 Exploring the data first is its own short chain:
-\preformatted{
-derive_fields() -> build_coverage_strata()
+
+\if{html}{\out{<div class="sourceCode">}}\preformatted{derive_fields() -> build_coverage_strata()
   -> plot_coverage_heat() / _bubble() / _bar() / _map() | plot_discard_rate()
+}\if{html}{\out{</div>}}
+
+\code{\link[=build_coverage_strata]{build_coverage_strata()}} is the discard-rate / sampling-coverage table
+(CAR / CAS-style columns, no status) the plots draw; they take raw catch
+or that table, so the same numbers can be read as a table and looked at
+as a figure. Raising and allocation then run:
+
+\if{html}{\out{<div class="sourceCode">}}\preformatted{derive_fields() -> build_strata() -> classify_strata()
+  -> define_raising_groups_auto() | define_raising_groups_manual()
+  -> run_native_raising()   (discards; wraps catchRaising())
+  -> catchAllocationAoL()   (lengths and ages)
+}\if{html}{\out{</div>}}
+
+Both grouping methods return the same \code{strataCond} / \code{matchedDataCond}
+shape, which is what the two RDBESStockCoord engines consume, so one group
+definition drives either. The group conditions are written against stratum
+columns (\code{stratum_id}, \code{coverage}, \code{discard_rate}, ...) that raw catch rows
+do not carry; \code{run_native_raising()} adds them before it calls
+\code{catchRaising()}, so call the engine directly only on a table that already
+has them.
 }
-\code{build_coverage_strata()} is the discard-rate / sampling-coverage
-table (CAR / CAS-style columns, no status) the plots draw; they take
-raw catch or that table, so the same numbers can be read as a table and
-looked at as a figure.
+
+\subsection{How the code is laid out}{
+
+The package holds three bodies of code, distinguished by file name so the
+split is visible in git:
+\itemize{
+\item \code{R/RDBESStockCoord_*.R}: vendored from the ICES RDBESStockCoord working
+group code. Algorithms, argument lists and return shapes are upstream's.
+Local edits are packaging-only and are marked \verb{## [pkg]}. Do not
+refactor these; fix upstream and re-vendor.
+\item \code{R/rcef_*.R}: written here - strata, classification, coverage, grouping,
+scenarios, script emission. Free to refactor.
+\item \code{R/viz_*.R}: written here - the theme and the plots. Pure ggplot2, no
+shiny; separated so they can be dropped or split into their own package
+later without touching the analysis code.
+}
+}
 }
 \seealso{
 Useful links:

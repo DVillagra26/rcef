@@ -16,59 +16,74 @@ plot_discard_rate(
 }
 \arguments{
 \item{catch}{Raw CEF catch data, or a discard coverage table from
-[build_coverage_strata()].}
+\code{\link[=build_coverage_strata]{build_coverage_strata()}}.}
 
-\item{x}{Column on the x axis. One point per level (times `colour` /
-`shape` / `facet`).}
+\item{x}{Column on the x axis: one point per level (times \code{colour},
+\code{shape} and \code{facet}). Required.}
 
-\item{colour}{Column mapped to point fill.}
+\item{colour}{Column mapped to the point fill.}
 
-\item{shape}{Column mapped to point shape.}
+\item{shape}{Column mapped to the point shape.}
 
 \item{facet}{Optional facet column.}
 
-\item{jitter}{Jitter the points horizontally (cosmetic only - one
-point is still one stratum).}
+\item{jitter}{Jitter the points horizontally. Cosmetic only - one point is
+still one stratum.}
 
-\item{palette}{`"default"` or `"colorblind"` (point colours, via
-[var_palette()]).}
+\item{palette}{\code{"default"} or \code{"colorblind"}: the point colours (see
+\code{\link[=var_palette]{var_palette()}}).}
 }
 \value{
-A ggplot object, or `NULL` when no stratum has a discard rate.
+A ggplot object, or \code{NULL} when no stratum has a discard rate.
 }
 \description{
-One point per stratum, its discard rate on the y axis. A stratum is
-one row of the discard coverage table ([build_coverage_strata()]); its
-`rate` is the stratum's own discards over the landings that carry a
-discard estimate (`total / weightingTotal` - the rate as the CAS output
-reports it, discards per tonne of covered landings), not the mean of
-any finer strata. Point size is the stratum's landings.
+One point per stratum, its discard rate on the y axis and its landings as
+the point size. Change \code{x}, \code{colour}, \code{shape} or \code{facet} and the strata -
+and the points - are rebuilt at that resolution: a point is never an
+average of finer strata.
 }
 \details{
-Takes raw CEF catch - the table is then built at exactly the plotted
-columns (`x` + `colour` + `shape` + `facet`), so changing any of them
-rebuilds the strata, and the points, at that resolution - or a discard
-coverage table, whose rows are drawn as they are (build it finer than
-the plotted columns and each cell shows one point per finer stratum).
-Strata with no discard estimate have no rate and are not drawn - a
-rate is a property of sampled strata only.
+\subsection{What a point is}{
 
-The y axis is pseudo-log: linear near zero and logarithmic above about
-5 percent. A rate is a ratio, so it can exceed 100 percent, and a few
-tiny strata (a few kilograms of covered landings) give ratios of many
-hundreds of percent that would flatten everything else on a plain axis.
-Add `+ ggplot2::scale_y_continuous()` to the returned plot to replace
-it with a plain one.
+A stratum is one row of the discard coverage table
+(\code{\link[=build_coverage_strata]{build_coverage_strata()}}). Given raw catch, the table is built at
+exactly the plotted columns (\code{x} + \code{colour} + \code{shape} + \code{facet}); given a
+discard coverage table, its rows are drawn as they are, so a table built
+finer than the plotted columns shows one point per finer stratum. Strata
+with no discard estimate have no rate and are not drawn: a rate is a
+property of sampled strata only.
+}
+
+\subsection{The rate}{
+
+\code{rate} is \code{total / weightingTotal}: the stratum's discards over the
+landings that carry a discard estimate, in percent - the same number the
+CAS output reports. It is a ratio, so it can exceed 100\%. It is not the
+\code{discard_rate} of \code{\link[=build_strata]{build_strata()}} (discards / (landings + discards)).
+}
+
+\subsection{The y axis}{
+
+The axis is pseudo-log: linear near zero (zero stays zero) and
+logarithmic above about 5\%. A few tiny strata (a few kilograms of covered
+landings) give ratios of many hundreds of percent that would flatten
+everything else on a plain axis. Add \code{+ ggplot2::scale_y_continuous()} to
+the returned plot to replace it with an ordinary one.
+}
 }
 \examples{
-\dontrun{
-plot_discard_rate(catch_data, x = "Season", colour = "metier4")
+data(anchoveta_catch)
 
-# the table behind the figure
-build_coverage_strata(catch_data, c("Season", "metier4"))
-}
+plot_discard_rate(anchoveta_catch, x = "metier4", colour = "Country")
+plot_discard_rate(anchoveta_catch, x = "Country", colour = "metier4",
+                  facet = "Season")
+
+# the table behind the points
+cov <- build_coverage_strata(anchoveta_catch, c("metier4", "Country"))
+head(cov[!is.na(cov$rate), c("metier4", "Country", "total", "rate")])
 }
 \seealso{
-[build_coverage_strata()], [plot_coverage_heat()]
+\code{\link[=build_coverage_strata]{build_coverage_strata()}} for the table behind the points;
+\link{coverage-plots} for how well those strata are sampled.
 }
 \concept{discard-rate plots}

@@ -91,49 +91,73 @@ combo_key <- function(...) {
 
 #' Sampling-status categories, decisions and colours
 #'
-#' The single source of truth for how a stratum's sampling is described.
+#' @description
+#' The single source of truth for how a stratum's sampling is described: the
+#' category keys, their wording, the raising decision each implies and the
+#' colour drawn for it. [classify_strata()] assigns them to strata and the
+#' coverage plots ([coverage-plots]) draw them, so the classification is
+#' defined once and never drifts between a table, a figure and the raising
+#' algorithm.
+#'
+#' @details
 #' Coverage alone says how much of the landings weight carries a discard
-#' estimate; it says nothing about how many TRIPS that estimate rests
-#' on, and a stratum 100% covered by one unusually large trip is a
-#' thinner basis than the same coverage spread across a dozen. Coverage
-#' is always part of the scheme; `min_trips` (discards, length/age) and
-#' `min_meas` (length/age only) are each independently optional - pass
-#' `NULL` to drop that question entirely rather than merely giving it an
-#' always-passing threshold. The categories and labels adapt to however
-#' many of {coverage, trips, measurements} are actually active.
+#' estimate; it says nothing about how many trips that estimate rests on, and
+#' a stratum 100% covered by one unusually large trip is a thinner basis than
+#' the same coverage spread across a dozen. Coverage is always part of the
+#' scheme; `min_trips` (discards, length / age) and `min_meas` (length / age
+#' only) are each independently optional - pass `NULL` to drop that question
+#' entirely rather than merely giving it an always-passing threshold. The
+#' categories and labels adapt to however many of coverage, trips and
+#' measurements are active.
 #'
-#' Colours run one direction only: dark green (nothing to fix) -> green
-#' -> yellow -> orange -> dark orange as more of the ACTIVE sampling
-#' targets are missed, with a single reserved red for the one
-#' qualitatively different case - a stratum that carries NO discard
-#' estimate (or, for length/age, NO linked distribution) at all, so
-#' there is nothing to judge against a threshold. A near-white marks a
-#' stratum with no catch to classify. The colour is a straight count of
-#' how many ACTIVE targets a stratum missed (yellow = 1, orange = 2,
-#' dark orange = 3 - only possible when trips AND measurements are both
-#' active); every SPECIFIC combination that reaches a given count still
-#' gets its own row and its own label - "<50% covered, >= 2 trips" reads
-#' differently from ">= 50% covered, < 2 trips" even though both are one
-#' target missed and both are yellow.
+#' | `cat_key` | Colour | Meaning |
+#' |:----------|:-------|:--------|
+#' | `full` | dark green | 100% covered, with more than `min_trips` trips and (length / age) at least `min_meas` measurements, for the thresholds that are active |
+#' | `safe` | green | every active threshold met |
+#' | `warn_cov`, `warn_trip`, `warn_meas`, `warn_cov_trip`, ... | yellow (one missed), orange (two), dark orange (three) | one row per specific combination of missed thresholds; only the combinations of the active thresholds exist |
+#' | `no_dist` | red | no discard estimate (or, for length / age, no linked distribution) at all - nothing to judge against a threshold |
+#' | `disc_only` | blue | discards only, no landings (discards only) |
+#' | `none` | near-white | no catch to classify |
 #'
-#' `min_trips` and the trips comparison are unknown-averse: a stratum
-#' with no trip count reported is treated as failing the trips test
-#' rather than passing it by default.
+#' The colour is a straight count of how many active targets a stratum
+#' missed; every specific combination that reaches a given count still gets
+#' its own row and label, so `"< 50% covered, >= 2 trips"` reads differently
+#' from `">= 50% covered, < 2 trips"` even though both are yellow. Red is
+#' never a threshold miss.
+#'
+#' The `decision` column says what each category implies for raising: no
+#' raising needed (fully sampled, or all catch discarded), raise directly on
+#' the stratum's own data, or pool with adjacent strata / borrow from another
+#' group.
+#'
+#' Trips are unknown-averse: a stratum with no reported trip count is treated
+#' as failing the trips test, not passing it - unknown is not the same as
+#' adequate.
 #'
 #' @param threshold Coverage threshold in percent that separates "enough"
 #'   from "too little". Always active.
-#' @param what "discard" (default), "length" or "age".
-#' @param min_meas Minimum number of measurements for a length/age stratum to
-#'   count as well measured, or `NULL` to leave measurements out of the
+#' @param what `"discard"` (default), `"length"` or `"age"`.
+#' @param min_meas Minimum number of measurements for a length / age stratum
+#'   to count as well measured, or `NULL` to leave measurements out of the
 #'   classification entirely. Ignored for discards.
 #' @param min_trips Minimum number of trips for a stratum to count as
-#'   adequately covered in EFFORT terms, separately from coverage in
-#'   WEIGHT terms, or `NULL` to leave trips out of the classification
-#'   entirely. Defaults to 2, matching ICES practice.
-#' @return A data frame with columns `cat_key`, `status`, `decision`,
-#'   `abbr` and `colour`, one row per REACHABLE category (fewer rows
-#'   when `min_trips` / `min_meas` are off), ordered best to worst.
-#' @seealso [classify_strata()], [status_palette()]
+#'   adequately covered in effort terms (as opposed to weight terms), or
+#'   `NULL` to leave trips out of the classification entirely. Defaults to 2,
+#'   matching ICES practice.
+#' @return A data frame with columns `cat_key`, `status`, `decision`, `abbr`
+#'   and `colour`, one row per reachable category (fewer rows when
+#'   `min_trips` / `min_meas` are off), ordered best to worst.
+#' @seealso [classify_strata()], [status_palette()], [status_abbr()],
+#'   [status_legend_plot()]
+#' @md
+#' @examples
+#' # coverage only, then with a trips floor, then with measurements too
+#' cat_lookup(50, "discard", min_trips = NULL)$cat_key
+#' cat_lookup(50, "discard")$cat_key
+#' cat_lookup(50, "length", min_meas = 100)$cat_key
+#'
+#' # the wording and colour behind each category
+#' cat_lookup(50, "discard")[, c("cat_key", "status", "colour")]
 #' @export
 cat_lookup <- function(threshold, what = "discard", min_meas = 0,
                        min_trips = 2) {
@@ -246,13 +270,16 @@ cat_lookup <- function(threshold, what = "discard", min_meas = 0,
 #' Named colour vector for the sampling statuses
 #'
 #' The `status -> colour` map from [cat_lookup()], ready to drop into
-#' `ggplot2::scale_fill_manual()`. Passing the full vector (with
+#' [ggplot2::scale_fill_manual()]. Passing the full vector (with
 #' `limits = names(...)`) makes a plot's legend show every possible status,
 #' not only those present in the data.
 #'
 #' @inheritParams cat_lookup
 #' @return A character vector of hex colours named by status label.
-#' @seealso [cat_lookup()], [classify_strata()]
+#' @seealso [cat_lookup()], [classify_strata()], [status_abbr()]
+#' @md
+#' @examples
+#' status_palette(50, "discard", min_trips = NULL)
 #' @export
 status_palette <- function(threshold, what = "discard", min_meas = 0,
                            min_trips = 2) {
@@ -263,13 +290,17 @@ status_palette <- function(threshold, what = "discard", min_meas = 0,
 
 #' Named short-label vector for the sampling statuses
 #'
-#' The `status -> abbr` map from [cat_lookup()], for
-#' `ggplot2::scale_fill_manual(labels = )` or a base-R legend that needs
-#' the compact codes rather than the full sentences.
+#' The `status -> abbr` map from [cat_lookup()]: the compact codes (for
+#' example `"<50% cov, >=2t"`) rather than the full sentences, for
+#' `ggplot2::scale_fill_manual(labels = )` or any legend that has to stay
+#' narrow.
 #'
 #' @inheritParams cat_lookup
 #' @return A character vector of short codes named by full status label.
 #' @seealso [status_palette()], [cat_lookup()]
+#' @md
+#' @examples
+#' status_abbr(50, "discard")
 #' @export
 status_abbr <- function(threshold, what = "discard", min_meas = 0,
                         min_trips = 2) {
@@ -279,29 +310,60 @@ status_abbr <- function(threshold, what = "discard", min_meas = 0,
 
 #' Build the stratum table from CEF catch data
 #'
-#' Aggregates a long CEF catch table to one row per stratum, in tonnes. For
-#' each stratum it records the total landings, the landings that carry a
-#' discard estimate (`landings_with_discards`, the numerator of coverage),
-#' the discards, the resulting coverage percent, and two discard-rate
-#' definitions. Landings and discards are summed separately by catch
-#' category, so a stratum with landings but no observed discards reads as
-#' 0 percent covered rather than going missing.
+#' @description
+#' Aggregates a long CEF catch table to one row per stratum, in tonnes: the
+#' landings, the landings that carry a discard estimate, the discards, the
+#' resulting coverage, and the discard rate. This is the raising-side stratum
+#' table - what [classify_strata()], the grouping functions and
+#' [recommend_raising()] work on.
+#'
+#' To look at discard rates and sampling coverage - as a table or in a
+#' figure - use [build_coverage_strata()] instead: the same numbers under the
+#' CAR / CAS column names, with `rate` = discards / covered landings, and no
+#' raising vocabulary.
+#'
+#' @details
+#' Landings and discards are summed separately by catch category, so a
+#' stratum with landings but no observed discards reads as 0 percent covered
+#' rather than going missing. Every catch category other than landings is
+#' counted as discards.
+#'
+#' `discard_rate` uses the stratum's own total landings
+#' (`discards / (landings + discards)`); `discard_rate_covered` uses only the
+#' covered landings (`discards / (landings_with_discards + discards)`), the
+#' definition a donor pool is raised with. At full resolution the two
+#' coincide whenever a stratum is either fully covered or not covered at all.
+#'
+#' | Column | Meaning |
+#' |:-------|:--------|
+#' | the `dims` columns | The stratum. |
+#' | `landings` | All landings, in tonnes. |
+#' | `landings_with_discards` | The landings whose `domainCatchDis` is filled: the numerator of coverage. |
+#' | `discards` | All non-landing catch, in tonnes. |
+#' | `has_disc_data` | Whether the stratum has any discard record at all. |
+#' | `coverage` | `landings_with_discards / landings`, in percent. |
+#' | `discard_rate` | `discards / (landings + discards)`. |
+#' | `discard_rate_covered` | `discards / (landings_with_discards + discards)`. |
+#' | `stratum_id` | The `dims` values pasted with `" | "`, in `dims` order: the key the raising conditions are written against. |
+#' | `n_measurements` | Distribution records linked to the stratum through `domainBiology`; 0 when `dist` is not given. |
+#' | `numTrips` | The largest trip count among the stratum's rows (`NA` when not reported). |
 #'
 #' @param catch_data A long CEF catch table. Must contain `catchCategory`,
 #'   `total`, `domainCatchDis` and every column named in `dims`; a
 #'   `variableUnit` column is used for unit conversion when present.
-#' @param dims Character vector of the columns that define a stratum
-#'   (e.g. `c("metier4", "Country", "Season")`).
-#' @return A data frame, one row per stratum, with `landings`,
-#'   `landings_with_discards`, `discards`, `coverage`, `discard_rate`,
-#'   `discard_rate_covered`, `has_disc_data`, `stratum_id` and the `dims`.
-#' @details `discard_rate` uses the stratum's own total landings
-#'   (`discards / (landings + discards)`); `discard_rate_covered` uses only
-#'   the covered landings (`discards / (landings_with_discards + discards)`),
-#'   which is the definition a donor pool is raised with. At full resolution
-#'   the two coincide whenever a stratum is either fully covered or not
-#'   covered at all.
-#' @seealso [classify_strata()]
+#' @param dims Character vector of the columns that define a stratum (for
+#'   example `c("metier4", "Country", "Season")`).
+#' @param dist Optional CEF distributions table, used only to fill
+#'   `n_measurements`.
+#' @return A data frame, one row per stratum, with the columns above.
+#' @seealso [build_coverage_strata()] for exploring discard rates and
+#'   coverage; [classify_strata()] for the sampling verdict.
+#' @md
+#' @examples
+#' data(anchoveta_catch)
+#' st <- build_strata(anchoveta_catch, c("metier4", "Country"))
+#' head(st[, c("metier4", "Country", "landings", "discards", "coverage",
+#'             "discard_rate")])
 #' @export
 build_strata <- function(catch_data, dims, dist = NULL) {
   stopifnot(length(dims) >= 1, all(dims %in% names(catch_data)))
@@ -418,33 +480,55 @@ count_measurements_by_stratum <- function(catch_data, dist, dims) {
 
 #' Classify strata against a coverage (and measurement) threshold
 #'
+#' @description
 #' Adds the sampling verdict to a stratum table: `cat_key` (a stable key),
 #' `Status` (a factor with every level from [cat_lookup()], so legends stay
-#' complete) and `Raising_Decision` (what to do about it). Coverage is
-#' always part of the verdict; `min_trips` (discards, length/age) and
-#' `min_meas` (length/age only) are each independently optional - pass
-#' `NULL` to drop that sampling-effort question from the classification
-#' entirely rather than merely giving it an always-passing threshold. The
-#' warning shade counts how many of the ACTIVE targets a stratum missed
-#' (yellow = 1, orange = 2, dark orange = 3 - reachable only with both
-#' trips and measurements active).
+#' complete) and `Raising_Decision` (what to do about the stratum). This is
+#' the raising side's verdict, used to decide which strata raise on their own
+#' data and which must borrow. The coverage plots judge cells the same way, at
+#' plot time, from the table [build_coverage_strata()] returns.
 #'
-#' @param s A stratum table from [build_strata()] (discards) or
-#'   [biology_link()] (length/age), carrying at least `coverage`;
-#'   length/age classification also reads `n_measurements`. Both carry
-#'   `numTrips` when the loaded CEF file reported it; a stratum with no
-#'   trip count is treated as failing the trips test, not passing it -
-#'   unknown is not the same as adequate. `numTrips` / `n_measurements`
-#'   are only read when `min_trips` / `min_meas` are active.
-#' @param threshold Coverage threshold in percent.
-#' @param what "discard" (default), "length" or "age".
-#' @param min_meas Minimum number of measurements for length/age well
-#'   measured, or `NULL` to leave measurements out of the classification.
-#'   Ignored for discards.
-#' @param min_trips Minimum number of trips, or `NULL` to leave trips out
-#'   of the classification. Defaults to 2.
+#' @details
+#' Coverage is always part of the verdict; `min_trips` (discards, length /
+#' age) and `min_meas` (length / age only) are each independently optional -
+#' pass `NULL` to drop that sampling-effort question from the classification
+#' entirely rather than merely giving it an always-passing threshold. The
+#' warning shade counts how many of the active targets a stratum missed
+#' (yellow = 1, orange = 2, dark orange = 3 - reachable only with both trips
+#' and measurements active). [cat_lookup()] lists every category.
+#'
+#' A stratum with no reported trip count fails an active trips test however
+#' low `min_trips` is set - unknown is not the same as adequate - and the
+#' function warns when that leaves the trips question unable to discriminate
+#' at all (every stratum's `numTrips` is `NA`). It likewise warns when, for
+#' length / age, a positive `min_meas` can never be met because every
+#' stratum's `n_measurements` is 0.
+#'
+#' @param s A stratum table from [build_strata()] (discards) or from the
+#'   biology link (length / age), carrying at least `coverage`. Length / age
+#'   classification also reads `n_measurements`. `numTrips` and
+#'   `n_measurements` are only read when `min_trips` / `min_meas` are active.
+#' @param threshold Coverage threshold, in percent.
+#' @param what `"discard"` (default), `"length"` or `"age"`.
+#' @param min_meas Minimum number of measurements for a length / age stratum
+#'   to count as well measured, or `NULL` to leave measurements out of the
+#'   classification. Ignored for discards.
+#' @param min_trips Minimum number of trips, or `NULL` to leave trips out of
+#'   the classification. Defaults to 2.
 #' @return `s` with `cat_key`, `Status` and `Raising_Decision` added.
-#' @seealso [build_strata()], [cat_lookup()]
+#' @seealso [build_strata()], [cat_lookup()], [build_coverage_strata()]
+#' @md
+#' @examples
+#' data(anchoveta_catch)
+#' st <- classify_strata(build_strata(anchoveta_catch,
+#'                                    c("metier4", "Country")),
+#'                       threshold = 50)
+#' table(st$cat_key)
+#' head(st[, c("metier4", "Country", "coverage", "cat_key")])
+#'
+#' # coverage only: trips dropped from the verdict
+#' table(classify_strata(build_strata(anchoveta_catch, "metier4"), 50,
+#'                       min_trips = NULL)$cat_key)
 #' @export
 classify_strata <- function(s, threshold, what = "discard", min_meas = 0,
                             min_trips = 2) {

@@ -413,32 +413,33 @@ yourself.
 ## 5. Raising discards
 
 ```{r}
-catch_raised <- catchRaising(
-  catch_data,
-  condition_raising_st_list  = groups$strataCond,
-  condition_matched_data_list = groups$matchedDataCond,
-  type         = "discards",
-  originType   = "WGEstimate",
-  variableType = "WeightLive")
+catch_raised <- run_native_raising(catch_data, dims, groups,
+                                   type         = "discards",
+                                   originType   = "WGEstimate",
+                                   variableType = "WeightLive",
+                                   log_file     = "raising_log.txt")
+```
+
+`run_native_raising()` wraps the vendored `catchRaising()`. The conditions in
+`groups` are written against stratum columns -- `stratum_id`, `coverage`,
+`discard_rate` -- that raw CEF rows do not carry, so it adds them first, from
+`dims`. It also checks that the table has every column the engine needs and
+returns a readable error instead of a stack trace when it does not.
+`catchRaising()` called directly on raw `catch_data` stops with
+`object 'stratum_id' not found`.
+
+```{r}
+cef_check(catch_data)$missing     # what run_native_raising() would complain about
 ```
 
 | argument | what to put in it |
 |---|---|
+| `dims` | the stratum dimensions the groups were defined on -- the same `dims` as in section 2. |
+| `groups` | what `define_raising_groups_auto()` or `define_raising_groups_manual()` returned. |
 | `type` | `"discards"` for the normal case. |
-| `originType` | the origin label written onto the raised rows. `"WGEstimate"` is the convention for a working-group estimate. |
+| `originType` | which estimates to raise from: only rows whose `originType` equals this are used. `"WGEstimate"` (the default) or `"Official"`. |
 | `variableType` | the weight variable being raised. `"WeightLive"` unless you know otherwise. |
 | `log_file` | path for the run log. Worth setting; it records what raised what. |
-
-`run_native_raising()` is a thin wrapper that checks the CEF table has the
-columns `catchRaising()` needs before calling it, and returns a readable
-error instead of a stack trace when it does not:
-
-```{r}
-cef_check(catch_data)$missing
-catch_raised <- run_native_raising(catch_data, dims, groups,
-                                   type = "discards",
-                                   log_file = "raising_log.txt")
-```
 
 ## 6. Length and age
 
@@ -736,7 +737,7 @@ stratum the cascade left unallocated -- its weight never reached the
 distribution. `alloc_cascade_table()` shows that as its own row, and the
 last rung exists precisely so it stays empty.
 
-## 7. Getting the script back out
+## 8. Getting the script back out
 
 The app writes this sequence for the session you ran, as a single script
 or as an ICES TAF script set. Two things about what it writes are worth

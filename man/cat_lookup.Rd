@@ -10,53 +10,75 @@ cat_lookup(threshold, what = "discard", min_meas = 0, min_trips = 2)
 \item{threshold}{Coverage threshold in percent that separates "enough"
 from "too little". Always active.}
 
-\item{what}{"discard" (default), "length" or "age".}
+\item{what}{\code{"discard"} (default), \code{"length"} or \code{"age"}.}
 
-\item{min_meas}{Minimum number of measurements for a length/age stratum to
-count as well measured, or `NULL` to leave measurements out of the
+\item{min_meas}{Minimum number of measurements for a length / age stratum
+to count as well measured, or \code{NULL} to leave measurements out of the
 classification entirely. Ignored for discards.}
 
 \item{min_trips}{Minimum number of trips for a stratum to count as
-adequately covered in EFFORT terms, separately from coverage in
-WEIGHT terms, or `NULL` to leave trips out of the classification
-entirely. Defaults to 2, matching ICES practice.}
+adequately covered in effort terms (as opposed to weight terms), or
+\code{NULL} to leave trips out of the classification entirely. Defaults to 2,
+matching ICES practice.}
 }
 \value{
-A data frame with columns `cat_key`, `status`, `decision`,
-  `abbr` and `colour`, one row per REACHABLE category (fewer rows
-  when `min_trips` / `min_meas` are off), ordered best to worst.
+A data frame with columns \code{cat_key}, \code{status}, \code{decision}, \code{abbr}
+and \code{colour}, one row per reachable category (fewer rows when
+\code{min_trips} / \code{min_meas} are off), ordered best to worst.
 }
 \description{
-The single source of truth for how a stratum's sampling is described.
-Coverage alone says how much of the landings weight carries a discard
-estimate; it says nothing about how many TRIPS that estimate rests
-on, and a stratum 100% covered by one unusually large trip is a
-thinner basis than the same coverage spread across a dozen. Coverage
-is always part of the scheme; `min_trips` (discards, length/age) and
-`min_meas` (length/age only) are each independently optional - pass
-`NULL` to drop that question entirely rather than merely giving it an
-always-passing threshold. The categories and labels adapt to however
-many of {coverage, trips, measurements} are actually active.
+The single source of truth for how a stratum's sampling is described: the
+category keys, their wording, the raising decision each implies and the
+colour drawn for it. \code{\link[=classify_strata]{classify_strata()}} assigns them to strata and the
+coverage plots (\link{coverage-plots}) draw them, so the classification is
+defined once and never drifts between a table, a figure and the raising
+algorithm.
 }
 \details{
-Colours run one direction only: dark green (nothing to fix) -> green
--> yellow -> orange -> dark orange as more of the ACTIVE sampling
-targets are missed, with a single reserved red for the one
-qualitatively different case - a stratum that carries NO discard
-estimate (or, for length/age, NO linked distribution) at all, so
-there is nothing to judge against a threshold. A near-white marks a
-stratum with no catch to classify. The colour is a straight count of
-how many ACTIVE targets a stratum missed (yellow = 1, orange = 2,
-dark orange = 3 - only possible when trips AND measurements are both
-active); every SPECIFIC combination that reaches a given count still
-gets its own row and its own label - "<50% covered, >= 2 trips" reads
-differently from ">= 50% covered, < 2 trips" even though both are one
-target missed and both are yellow.
+Coverage alone says how much of the landings weight carries a discard
+estimate; it says nothing about how many trips that estimate rests on, and
+a stratum 100\% covered by one unusually large trip is a thinner basis than
+the same coverage spread across a dozen. Coverage is always part of the
+scheme; \code{min_trips} (discards, length / age) and \code{min_meas} (length / age
+only) are each independently optional - pass \code{NULL} to drop that question
+entirely rather than merely giving it an always-passing threshold. The
+categories and labels adapt to however many of coverage, trips and
+measurements are active.\tabular{lll}{
+   \code{cat_key} \tab Colour \tab Meaning \cr
+   \code{full} \tab dark green \tab 100\% covered, with more than \code{min_trips} trips and (length / age) at least \code{min_meas} measurements, for the thresholds that are active \cr
+   \code{safe} \tab green \tab every active threshold met \cr
+   \code{warn_cov}, \code{warn_trip}, \code{warn_meas}, \code{warn_cov_trip}, ... \tab yellow (one missed), orange (two), dark orange (three) \tab one row per specific combination of missed thresholds; only the combinations of the active thresholds exist \cr
+   \code{no_dist} \tab red \tab no discard estimate (or, for length / age, no linked distribution) at all - nothing to judge against a threshold \cr
+   \code{disc_only} \tab blue \tab discards only, no landings (discards only) \cr
+   \code{none} \tab near-white \tab no catch to classify \cr
+}
 
-`min_trips` and the trips comparison are unknown-averse: a stratum
-with no trip count reported is treated as failing the trips test
-rather than passing it by default.
+
+The colour is a straight count of how many active targets a stratum
+missed; every specific combination that reaches a given count still gets
+its own row and label, so \code{"< 50\% covered, >= 2 trips"} reads differently
+from \code{">= 50\% covered, < 2 trips"} even though both are yellow. Red is
+never a threshold miss.
+
+The \code{decision} column says what each category implies for raising: no
+raising needed (fully sampled, or all catch discarded), raise directly on
+the stratum's own data, or pool with adjacent strata / borrow from another
+group.
+
+Trips are unknown-averse: a stratum with no reported trip count is treated
+as failing the trips test, not passing it - unknown is not the same as
+adequate.
+}
+\examples{
+# coverage only, then with a trips floor, then with measurements too
+cat_lookup(50, "discard", min_trips = NULL)$cat_key
+cat_lookup(50, "discard")$cat_key
+cat_lookup(50, "length", min_meas = 100)$cat_key
+
+# the wording and colour behind each category
+cat_lookup(50, "discard")[, c("cat_key", "status", "colour")]
 }
 \seealso{
-[classify_strata()], [status_palette()]
+\code{\link[=classify_strata]{classify_strata()}}, \code{\link[=status_palette]{status_palette()}}, \code{\link[=status_abbr]{status_abbr()}},
+\code{\link[=status_legend_plot]{status_legend_plot()}}
 }

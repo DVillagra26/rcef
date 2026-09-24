@@ -17,53 +17,74 @@ plot_meanweight_at_length_age(
 )
 }
 \arguments{
-\item{data}{A [length_meanweight()] table, or raw CEF catch data.}
+\item{data}{Raw CEF catch data, or a \code{length_meanweight()} table.}
 
-\item{distributions}{A CEF distributions table - needed only with raw
-catch.}
+\item{distributions}{A CEF distributions table. Needed with raw catch;
+leave it out when \code{data} is already a \code{length_meanweight()} table.}
 
-\item{distributionType}{`"LengthTotal"` (default) or `"Age"`.}
+\item{distributionType}{\code{"LengthTotal"} (default) or \code{"Age"}.}
 
-\item{catchCategory}{`"All"` (default - landings + discards, titled
-"catch"), `"Lan"`, `"Dis"` or `"BMS"`. When `distributions` is
-given, the resolved word goes in the plot title.}
+\item{catchCategory}{\code{"All"} (default: landings and discards together,
+titled "catch"), \code{"Lan"}, \code{"Dis"} or \code{"BMS"}. Only used with
+\code{distributions}.}
 
-\item{colour}{Column mapped to line colour.}
+\item{colour}{Column mapped to the line colour.}
 
-\item{facet}{Up to two facet columns (`"col"` or `c("row", "col")`).}
+\item{facet}{Up to two facet columns: \code{"col"} or \code{c("row", "col")}.}
 
-\item{shape}{Column drawn as separate point shapes; opens the averaged
-group back up and drops the band.}
+\item{shape}{Column drawn as separate series with their own point shapes;
+opens the averaged group back up and drops the band.}
 
-\item{scales}{Facet scales.}
+\item{scales}{Facet scales: \code{"fixed"} (default), \code{"free_x"}, \code{"free_y"} or
+\code{"free"}.}
 
-\item{palette}{`"default"` or `"colorblind"`.}
+\item{palette}{\code{"default"} or \code{"colorblind"}.}
 }
 \value{
-A ggplot object, or `NULL` when there is nothing to draw.
+A ggplot object, or \code{NULL} when there is nothing to draw.
 }
 \description{
-The number-weighted mean weight in each length (or age) class, as a
-line with points. When the strata are averaged (no `shape`) and a
-spread is available, a +/- 1 sd band is drawn too. Live weight and a
-line are the only options, so there is no `variableType` or `type`
-argument.
+The number-weighted mean weight in each length (or age) class, as a line
+with points. Weight is in grams, length in cm and age in years. When the
+strata are averaged (no \code{shape}) and a spread is available, a +/- 1 sd
+band is drawn as well.
 }
 \details{
-`data` is a [length_meanweight()] table, or raw CEF catch with
-`distributions` (then the link + summary run internally,
-`catchCategory` choosing the part - `"All"` combines landings and
-discards). Weight in grams, length in cm,
-age in years.
+\code{data} is either raw CEF catch together with \code{distributions} - linked
+through \code{domainBiology} and summarised inside, with \code{catchCategory}
+choosing the landings, the discards, BMS or the catch as a whole - or a
+table already summarised by \code{length_meanweight()}. When \code{distributions} is
+given the catch part goes in the plot title.
+
+A mean weight is not additive, so strata that are pooled are averaged
+weighted by the numbers measured at that class: a stratum that measured
+five fish cannot outweigh one that measured five hundred. The band is the
+number-weighted standard deviation across the strata pooled into each
+point; a point built from a single stratum has none.
+
+\code{colour} groups the lines. \code{shape} opens the averaged group back up - one
+series per level, each drawn separately - and drops the band. \code{facet}
+takes one column (a wrapped set of panels) or two (\code{c("row", "col")}, a
+grid). Live weight and a line are the only options, so there is no
+\code{variableType} or \code{type} argument.
 }
 \examples{
-\dontrun{
-plot_meanweight_at_length_age(catch, distributions, distributionType = "Age",
-                              colour = "metier4")
-}
+data(anchoveta_catch)
+data(anchoveta_dist)
+
+# mean weight at length of the landings, one line per country
+plot_meanweight_at_length_age(anchoveta_catch, anchoveta_dist,
+                              catchCategory = "Lan", colour = "Country")
+
+# at age, one panel per quarter
+plot_meanweight_at_length_age(anchoveta_catch, anchoveta_dist,
+                              distributionType = "Age",
+                              colour = "Country", facet = "Season")
 }
 \seealso{
-[plot_numbers_at_length_age()], [length_meanweight()]
+\code{\link[=plot_numbers_at_length_age]{plot_numbers_at_length_age()}} for the numbers in the same
+classes; \link{coverage-plots} for whether the strata have a distribution at
+all.
 
 Other distribution plots: 
 \code{\link{plot_numbers_at_length_age}()}

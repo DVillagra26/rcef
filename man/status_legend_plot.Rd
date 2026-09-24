@@ -18,49 +18,64 @@ status_legend_plot(
 \item{threshold}{Coverage threshold in percent that separates "enough"
 from "too little". Always active.}
 
-\item{what}{"discard" (default), "length" or "age".}
+\item{what}{\code{"discard"} (default), \code{"length"} or \code{"age"}.}
 
-\item{min_meas}{Minimum number of measurements for a length/age stratum to
-count as well measured, or `NULL` to leave measurements out of the
+\item{min_meas}{Minimum number of measurements for a length / age stratum
+to count as well measured, or \code{NULL} to leave measurements out of the
 classification entirely. Ignored for discards.}
 
-\item{key}{Glyph the status keys are drawn with: `"tile"` for the heatmap,
-`"point"` for the bubble plot. The legend should look like the thing it
+\item{key}{Glyph the status keys are drawn with: \code{"tile"} for the heatmap,
+\code{"point"} for the bubble plot. The legend should look like the thing it
 describes, so a heatmap gets square swatches and a bubble plot circles.}
 
-\item{size}{Optional spec for a second, independent SIZE key, as attached
-by [plot_coverage_bubble()]: a list with `breaks`, `labels`, `limits`, `range`
-and `name`. Built with the SAME limits and range as the plot it came
-from, so a key circle is drawn at exactly the diameter that value has in
-the plot and can be read off it.}
+\item{size}{Optional specification of a second, independent SIZE key, as
+attached by \code{\link[=plot_coverage_bubble]{plot_coverage_bubble()}}: a list with \code{breaks}, \code{labels},
+\code{limits}, \code{range} and \code{name}. It is built with the same limits and range
+as the plot it came from, so a key circle is drawn at exactly the
+diameter that value has in the plot and can be read off it.}
 
 \item{min_trips}{Minimum number of trips for a stratum to count as
-adequately covered in EFFORT terms, separately from coverage in
-WEIGHT terms, or `NULL` to leave trips out of the classification
-entirely. Defaults to 2, matching ICES practice.}
+adequately covered in effort terms (as opposed to weight terms), or
+\code{NULL} to leave trips out of the classification entirely. Defaults to 2,
+matching ICES practice.}
 
-\item{drop_none}{Drop the "none" (no weight at all) category, which
-the coverage plots never draw. Default `TRUE`.}
+\item{drop_none}{Drop the "none" (no weight at all) category, which the
+coverage plots never draw. Default \code{TRUE}.}
 }
 \value{
 A ggplot object; only its legend is meant to be used.
 }
 \description{
-A minimal plot whose only purpose is its legend. It is built from
-[cat_lookup()] rather than from the data, so it carries a filled key for
-EVERY possible status, including those absent from the plot being shown.
-Drawing the legend from this plot (rather than from the coverage plot) is
-what makes the full set of categories visible with their colours: a
-discrete scale can list an unused level, but it has no data row from which
-to draw that level's swatch.
+A minimal plot whose only purpose is its legend: every status a coverage
+plot can show, with its colour and compact label, whether or not the
+figure in front of you happens to contain it.
 }
 \details{
-The coverage builders attach the arguments needed to rebuild this legend as
-a `"status_legend"` attribute, so a caller that shows the legend in its own
-panel can construct it on demand without carrying a second plot around.
+The legend is built from \code{\link[=cat_lookup]{cat_lookup()}} rather than from data, so it
+carries a filled key for every possible status, including those absent
+from the plot being shown. Drawing the legend from this plot (rather than
+from the coverage plot) is what makes the full scale visible: a discrete
+scale can list an unused level, but there is no data row to draw that
+level's swatch from.
+
+\code{\link[=plot_coverage_heat]{plot_coverage_heat()}} and \code{\link[=plot_coverage_bubble]{plot_coverage_bubble()}} attach the arguments
+needed to rebuild their legend as a \code{"status_legend"} attribute, so a
+caller that shows the legend in its own panel (the app does) can build it
+on demand with \code{do.call(status_legend_plot, attr(p, "status_legend"))}.
+}
+\examples{
+# every status for a 50\% coverage bar with no trip or measurement floor
+status_legend_plot(50, "discard", min_trips = NULL)
+
+# the legend of a figure that is on screen
+data(anchoveta_catch)
+p <- plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
+                        min_cov = 50, min_trip = 2)
+do.call(status_legend_plot, attr(p, "status_legend"))
 }
 \seealso{
-[coverage-plots], [cat_lookup()]
+\link{coverage-plots}, which draw the statuses; \code{\link[=cat_lookup]{cat_lookup()}}, which
+defines them.
 
 Other coverage plots: 
 \code{\link{build_coverage_strata}()},

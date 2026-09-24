@@ -10,26 +10,29 @@ status_palette(threshold, what = "discard", min_meas = 0, min_trips = 2)
 \item{threshold}{Coverage threshold in percent that separates "enough"
 from "too little". Always active.}
 
-\item{what}{"discard" (default), "length" or "age".}
+\item{what}{\code{"discard"} (default), \code{"length"} or \code{"age"}.}
 
-\item{min_meas}{Minimum number of measurements for a length/age stratum to
-count as well measured, or `NULL` to leave measurements out of the
+\item{min_meas}{Minimum number of measurements for a length / age stratum
+to count as well measured, or \code{NULL} to leave measurements out of the
 classification entirely. Ignored for discards.}
 
 \item{min_trips}{Minimum number of trips for a stratum to count as
-adequately covered in EFFORT terms, separately from coverage in
-WEIGHT terms, or `NULL` to leave trips out of the classification
-entirely. Defaults to 2, matching ICES practice.}
+adequately covered in effort terms (as opposed to weight terms), or
+\code{NULL} to leave trips out of the classification entirely. Defaults to 2,
+matching ICES practice.}
 }
 \value{
 A character vector of hex colours named by status label.
 }
 \description{
-The `status -> colour` map from [cat_lookup()], ready to drop into
-`ggplot2::scale_fill_manual()`. Passing the full vector (with
-`limits = names(...)`) makes a plot's legend show every possible status,
+The \code{status -> colour} map from \code{\link[=cat_lookup]{cat_lookup()}}, ready to drop into
+\code{\link[ggplot2:scale_manual]{ggplot2::scale_fill_manual()}}. Passing the full vector (with
+\code{limits = names(...)}) makes a plot's legend show every possible status,
 not only those present in the data.
 }
+\examples{
+status_palette(50, "discard", min_trips = NULL)
+}
 \seealso{
-[cat_lookup()], [classify_strata()]
+\code{\link[=cat_lookup]{cat_lookup()}}, \code{\link[=classify_strata]{classify_strata()}}, \code{\link[=status_abbr]{status_abbr()}}
 }

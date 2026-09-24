@@ -17,50 +17,63 @@ plot_numbers_at_length_age(
 )
 }
 \arguments{
-\item{data}{A [length_numbers()] table, or raw CEF catch data.}
+\item{data}{Raw CEF catch data, or a \code{length_numbers()} table.}
 
-\item{distributions}{A CEF distributions table - needed only with raw
-catch.}
+\item{distributions}{A CEF distributions table. Needed with raw catch;
+leave it out when \code{data} is already a \code{length_numbers()} table.}
 
-\item{distributionType}{`"LengthTotal"` (default) or `"Age"`.}
+\item{distributionType}{\code{"LengthTotal"} (default) or \code{"Age"}.}
 
-\item{catchCategory}{`"All"` (default - landings + discards, titled
-"catch"), `"Lan"`, `"Dis"` or `"BMS"`. When `distributions` is
-given, the resolved word goes in the plot title.}
+\item{catchCategory}{\code{"All"} (default: landings and discards together,
+titled "catch"), \code{"Lan"}, \code{"Dis"} or \code{"BMS"}. Only used with
+\code{distributions}.}
 
-\item{fill}{Column mapped to bar fill.}
+\item{fill}{Column mapped to the bar fill.}
 
-\item{facet}{Up to two facet columns (`"col"` or `c("row", "col")`).}
+\item{facet}{Up to two facet columns: \code{"col"} or \code{c("row", "col")}.}
 
-\item{stacked}{Stack the bars on `fill` rather than dodge.}
+\item{stacked}{Stack the bars on \code{fill} (default) rather than dodge them.}
 
-\item{scales}{Facet scales: `"fixed"`, `"free_x"`, `"free_y"` or
-`"free"`.}
+\item{scales}{Facet scales: \code{"fixed"} (default), \code{"free_x"}, \code{"free_y"} or
+\code{"free"}.}
 
-\item{palette}{`"default"` or `"colorblind"`.}
+\item{palette}{\code{"default"} or \code{"colorblind"}.}
 }
 \value{
-A ggplot object, or `NULL` when there is nothing to draw.
+A ggplot object, or \code{NULL} when there is nothing to draw.
 }
 \description{
-The catch numbers spread over the length (or age) classes, as a
-stacked (or dodged) histogram.
+The catch numbers spread over the length (or age) classes, as a stacked or
+dodged histogram. Numbers are in thousands, length in cm and age in years.
 }
 \details{
-`data` is a [length_numbers()] table, or raw CEF catch with
-`distributions` (then the link + summary run internally, with
-`catchCategory` choosing the landings / discards / BMS part, or
-`"All"` for the landings and discards together).
-Numbers come out in thousands (N3), length in cm, age in years.
+\code{data} is either raw CEF catch together with \code{distributions} - linked
+through \code{domainBiology} and summed inside, with \code{catchCategory} choosing
+the landings, the discards, BMS or the catch as a whole - or a table
+already summarised by \code{length_numbers()}. When \code{distributions} is given the
+catch part goes in the plot title.
+
+\code{fill} colours (and stacks) the bars by a column of the catch. \code{facet}
+takes one column (a wrapped set of panels) or two (\code{c("row", "col")}, a
+grid).
 }
 \examples{
-\dontrun{
-plot_numbers_at_length_age(catch, distributions, distributionType = "Age",
-                           catchCategory = "Dis", fill = "Country")
-}
+data(anchoveta_catch)
+data(anchoveta_dist)
+
+# numbers at length of the landings, stacked by country
+plot_numbers_at_length_age(anchoveta_catch, anchoveta_dist,
+                           catchCategory = "Lan", fill = "Country")
+
+# numbers at age, one panel per quarter, dodged
+plot_numbers_at_length_age(anchoveta_catch, anchoveta_dist,
+                           distributionType = "Age", fill = "Country",
+                           facet = "Season", stacked = FALSE)
 }
 \seealso{
-[plot_meanweight_at_length_age()], [length_numbers()]
+\code{\link[=plot_meanweight_at_length_age]{plot_meanweight_at_length_age()}} for the mean weight in the same
+classes; \link{coverage-plots} for whether the strata have a distribution at
+all.
 
 Other distribution plots: 
 \code{\link{plot_meanweight_at_length_age}()}

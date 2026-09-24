@@ -2,7 +2,7 @@
 % Please edit documentation in R/viz_plots.R
 \name{plot_coverage_map}
 \alias{plot_coverage_map}
-\title{Coverage map: one pie per ICES area (optionally per group level)}
+\title{Coverage map: one pie per ICES area}
 \usage{
 plot_coverage_map(
   catch,
@@ -15,41 +15,57 @@ plot_coverage_map(
 )
 }
 \arguments{
-\item{catch}{Raw CEF catch data, or a [build_coverage_strata()] table
-(its own `what` is then used).}
+\item{catch}{Raw CEF catch data, or a \code{\link[=build_coverage_strata]{build_coverage_strata()}} table
+(its own \code{what} is then used).}
 
-\item{area}{Column holding the ICES area code. Default `"areaValue"`.}
+\item{distributions}{A CEF distributions table - needed for
+\code{what = "length"} / \code{"age"} with raw catch, ignored otherwise.}
 
-\item{group}{Optional column - one boxed grid of pies per area, one
-pie per level.}
+\item{area}{Column holding the ICES area code. Default \code{"areaValue"}.}
 
-\item{what, catchCategory, distributions}{As in [coverage-plots]. The weight word in the title is derived
-from `what` and `catchCategory`.}
+\item{group}{Optional column: one boxed grid of pies per area, one pie per
+level. A \code{group} with a single level warns and draws one pie per area.}
 
-\item{scale}{Multiplies every pie radius (and, when grouped, the box
-grid cell size).}
+\item{what, catchCategory}{As in \link{coverage-plots}. The weight word in the
+title comes from \code{what} and \code{catchCategory}.}
+
+\item{scale}{Multiplies every pie radius (and, when grouped, the size of
+the box's grid cell).}
 }
 \value{
-A ggplot object, or `NULL` (with a message) when nothing can
-  be mapped.
+A ggplot object, or \code{NULL} (with a message) when nothing can be
+mapped.
 }
 \description{
-A map of the fishing area with one small pie per ICES division: pie
-radius is the area's landed/caught weight, and the pie is split into
-the sampled and the not-sampled share of that weight. With `group`
-(e.g. `"Season"`, `"Country"`, `"metier4"`) each area gets a labelled
-box holding a tidy grid of pies, one per group level; overlapping
-boxes are nudged apart and a thin leader keeps each box tied to its
-area's true centroid.
+A map of the fishing area with one small pie per ICES area: the pie's
+radius is the area's landed (or caught) weight, and the pie is split into
+the sampled and the not-sampled share of that weight. With \code{group} (for
+example \code{"Season"}, \code{"Country"} or \code{"metier4"}) each area gets a labelled
+box holding a tidy grid of pies, one per group level; overlapping boxes
+are nudged apart and a thin leader keeps each box tied to its area's true
+position.
 }
 \details{
-Takes raw catch data (and `distributions` + `catchCategory` for a
-biology `what`) or a [build_coverage_strata()] table, exactly like
-[coverage-plots]. Needs the suggested `maps` package.
+"Sampled" means what it means in the other coverage plots (see
+\link{coverage-plots}): the weight carries a discard estimate (\code{what = "discard"}) or a linked length / age distribution. Like them, the map takes
+raw catch (plus \code{distributions} for length and age) or a
+\code{\link[=build_coverage_strata]{build_coverage_strata()}} table that has the \code{area} column (and the
+\code{group} column) among its \code{dims}.
+
+Areas are placed at approximate centroids (\code{\link[=ices_area_centroid]{ices_area_centroid()}}); an area
+with no known centroid is warned about by name and left off the map. The
+map needs the suggested \code{maps} package.
+}
+\examples{
+if (requireNamespace("maps", quietly = TRUE)) {
+  data(anchoveta_catch)
+  plot_coverage_map(anchoveta_catch)
+  plot_coverage_map(anchoveta_catch, group = "Season")
+}
 }
 \seealso{
-[coverage-plots], [build_coverage_strata()],
-  [ices_area_centroid()]
+\link{coverage-plots} for the heatmap, bubbles and bars;
+\code{\link[=build_coverage_strata]{build_coverage_strata()}} for the table behind the pies.
 
 Other coverage plots: 
 \code{\link{build_coverage_strata}()},
