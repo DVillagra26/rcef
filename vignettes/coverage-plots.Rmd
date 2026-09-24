@@ -24,20 +24,27 @@ have_maps <- requireNamespace("maps", quietly = TRUE)
 # The plots
 
 `rcef` has three families of exploratory plot, all taking **raw CEF
-catch** (and a **distributions** table where length / age is involved)
-and doing the strata building internally:
+catch** (and a **distributions** table where length / age is involved):
 
 * **coverage** - `plot_coverage_heat()` / `_bubble()` / `_bar()` /
   `_map()`: which strata are sampled well enough.
-* **discard rate** - `plot_discard_rate()`: the raw per-stratum discard
+* **discard rate** - `plot_discard_rate()`: the per-stratum discard
   rate.
 * **length / age distribution** - `plot_numbers_at_length_age()` and
   `plot_meanweight_at_length_age()`: numbers and mean weight at length
   or age.
 
-Every one is a single function that draws with either engine
-(`engine = "ggplot"`, the default, or `"base"`), and every one ends its
-signature with `palette` then `engine`.
+Every one is a single function that returns a **ggplot** object (or
+`NULL` when there is nothing to draw), and every one ends its signature
+with `palette`.
+
+The coverage and discard-rate figures are drawn from a table you can
+also get **on its own**: `build_coverage_strata()` returns the discard
+rate and the sampling coverage of every stratum, at whatever aggregation
+you name. The plots build exactly that table when given raw catch, and
+take it directly when given the table - so the numbers behind a figure
+can always be read as a table, and a table can always be looked at as a
+figure. That is the next section.
 
 # What the coverage plots answer
 
@@ -53,9 +60,11 @@ means different things depending on what you are about to estimate, so
 * `what = "age"` - the same, for an age distribution.
 
 Every function here takes **raw CEF catch** (and, for `"length"` /
-`"age"`, a **distributions** table) and builds and classifies the strata
+`"age"`, a **distributions** table), builds the strata and judges them
 internally. There is nothing to pre-compute: no `build_strata()`, no
-`classify_strata()` call of your own.
+`classify_strata()` call of your own. (You *can* pre-compute the table -
+`build_coverage_strata()`, next section - to read the numbers or to draw
+several figures from one build.)
 
 ```{r data}
 data(anchoveta_catch)   # ~3,500 rows of dummy Southeast-Pacific anchoveta CEF catch
@@ -74,6 +83,66 @@ through `derive_fields()`, so the grouping columns the plots use
 (`Country`, `Season`, `metier4`, ...) are present. Coverage is
 deliberately uneven: Peru and Chile land the most and sample best, the
 distant-water fleets least.
+
+## The table behind the figures
+
+`build_coverage_strata(catch, dims)` gives one row per stratum, at the
+aggregation `dims` names. Its columns follow the CAR / CAS output tables
+wherever those have a counterpart, and all weights are in tonnes:
+
+```{r tab-disc}
+cov <- build_coverage_strata(anchoveta_catch, c("metier4", "Country"))
+head(cov[order(-cov$landings), ], 8)
+```
+
+* `total` - the discards; `NA` when the stratum has no discard estimate
+  at all (nobody looked - not the same as 0, looked and found none).
+* `weightingTotal` - the landings that carry a discard estimate: the
+  weight the rate is weighted by.
+* `rate` - `total / weightingTotal`, the discard rate as the CAS output
+  reports it: discards per tonne of covered landings, so it can exceed 1.
+* `landings` and `coverage` - all the landings, and the share of them
+  that is covered, in percent. `numTrips` - the trips behind the
+  stratum.
+
+Nothing in the table judges the sampling: there is no status, no
+category and no decision. The thresholds (`min_cov`, `min_trip`,
+`min_fish`) are a plotting choice, applied by the coverage plots below.
+
+The aggregation is yours - name fewer columns for a coarser table, more
+for a finer one:
+
+```{r tab-levels}
+build_coverage_strata(anchoveta_catch, "Season")
+nrow(build_coverage_strata(anchoveta_catch, c("fleetValue", "areaValue", "Season")))
+```
+
+For length or age, give the distributions and `what`. The table has one
+row per stratum **and catch part** (`catchCategory = "All"`, the default,
+gives a `Lan` and a `Dis` row; `"Lan"` / `"Dis"` / `"BMS"` pick one):
+
+```{r tab-len}
+len <- build_coverage_strata(anchoveta_catch, c("metier4", "Country"),
+                             anchoveta_dist, what = "length",
+                             catchCategory = "Lan")
+head(len[order(-len$total), ], 6)
+```
+
+Here `total` is the weight of that catch part, `coverage` the share of it
+whose `domainBiology` matches a distribution, and `numMeasurements` the
+measurements behind those distributions.
+
+Every coverage and discard-rate plot takes this table as readily as the
+raw catch, and draws the same figure from either:
+
+```{r tab-plot, fig.height = 4, fig.alt = "Coverage heatmap drawn from a coverage table"}
+plot_coverage_heat(cov, y = "metier4", x = "Country", min_cov = 50)
+```
+
+A table built **finer** than the plotted columns is pooled to them
+(weights add up; coverage and rate are re-derived from the summed
+weights, never averaged), so one fine table can feed figures at several
+levels.
 
 ## The four views
 
@@ -209,11 +278,11 @@ plot_coverage_bar(anchoveta_catch, y = "metier4", fill = "Country",
 ## Map: where the gaps are
 
 ```{r disc-map, eval = have_maps, fig.height = 5, fig.alt = "Coverage map, one sampled/not-sampled pie per FAO Area 87 division"}
-plot_coverage_map(anchoveta_catch, engine = "ggplot")
+plot_coverage_map(anchoveta_catch)
 ```
 
 ```{r disc-map-grouped, eval = have_maps, fig.height = 5.5, fig.alt = "Coverage map with one boxed grid of pies per area, split by quarter"}
-plot_coverage_map(anchoveta_catch, group = "Season", engine = "ggplot")
+plot_coverage_map(anchoveta_catch, group = "Season")
 ```
 
 (The map needs the suggested `maps` package. It resolves the FAO Area 87
@@ -304,14 +373,22 @@ reads as "nothing here", not "not a category".
 
 # Discard rate
 
-`plot_discard_rate()` draws one point per stratum: its discard rate,
-`discards / (landings + discards)`. A stratum here is one
-`x` + `colour` + `shape` + `facet` cell - each point is that cell's own
-discards over its own landings plus discards, straight from
-`build_strata()`. It is **not** an average of anything finer: change
-`x` (or `colour` / `shape` / `facet`) and the strata, and the points,
-are rebuilt at that resolution. `x` is required; everything else is
-optional.
+`plot_discard_rate()` draws one point per stratum: its `rate`, the
+discards over the landings that carry a discard estimate - the same
+column `build_coverage_strata()` returns and the CAS output reports
+(discards per tonne of covered landings, so it can exceed 100%). A
+stratum here is one `x` + `colour` + `shape` + `facet` cell - each point
+is that cell's own discards over its own covered landings. It is **not**
+an average of anything finer: change `x` (or `colour` / `shape` /
+`facet`) and the strata, and the points, are rebuilt at that resolution.
+Point size is the stratum's landings. `x` is required; everything else
+is optional. A stratum with no discard estimate has no rate and is not
+drawn.
+
+The y axis is pseudo-log - linear near zero, logarithmic above about
+5% - because a few tiny strata give ratios of many hundred percent that
+would flatten everything else on a plain axis. Add
+`+ ggplot2::scale_y_continuous()` to a returned plot to get a plain one.
 
 ```{r dr-basic, fig.alt = "Discard rate per stratum, by metier"}
 plot_discard_rate(anchoveta_catch, x = "metier4")
@@ -332,11 +409,13 @@ plot_discard_rate(anchoveta_catch, x = "Country", colour = "metier4",
                   facet = "Season", jitter = FALSE)
 ```
 
-The base engine draws the same figure without ggplot2 on the call path:
+The table behind the points is `build_coverage_strata()` at the same
+columns, so the exact values can be read (and sorted) directly:
 
-```{r dr-base, fig.alt = "Discard rate per stratum, base-graphics engine"}
-plot_discard_rate(anchoveta_catch, x = "metier4", colour = "Country",
-                  engine = "base")
+```{r dr-table}
+dr <- build_coverage_strata(anchoveta_catch, c("metier4", "Country"))
+head(dr[!is.na(dr$rate), c("metier4", "Country", "total", "weightingTotal",
+                            "rate", "coverage")], 6)
 ```
 
 # Numbers at length and age
@@ -399,10 +478,10 @@ plot_numbers_at_length_age(anchoveta_catch, anchoveta_dist,
                            fill = "Country")
 ```
 
-```{r num-age-base, fig.height = 4.4, fig.alt = "Numbers at age histogram, base engine, one panel per quarter"}
+```{r num-age-facet, fig.height = 4.4, fig.alt = "Numbers at age histogram, one panel per quarter"}
 plot_numbers_at_length_age(anchoveta_catch, anchoveta_dist,
                            distributionType = "Age", fill = "Country",
-                           facet = "Season", engine = "base", n_per_screen = 2)
+                           facet = "Season")
 ```
 
 # Mean weight at length and age
@@ -430,18 +509,16 @@ plot_meanweight_at_length_age(anchoveta_catch, anchoveta_dist,
 ```
 
 `shape` opens the averaged group back up (one series per level) and
-drops the band; `facet` splits into panels; the base engine draws the
-same figure:
+drops the band; `facet` splits into panels:
 
 ```{r mw-len-shape, fig.height = 4.4, fig.alt = "Mean weight at length, separate series per quarter"}
 plot_meanweight_at_length_age(anchoveta_catch, anchoveta_dist,
                               shape = "Season")
 ```
 
-```{r mw-len-facet-base, fig.height = 5.5, fig.alt = "Mean weight at length faceted by quarter, base engine"}
+```{r mw-len-facet, fig.height = 5.5, fig.alt = "Mean weight at length faceted by quarter"}
 plot_meanweight_at_length_age(anchoveta_catch, anchoveta_dist,
-                              colour = "Country", facet = "Season",
-                              engine = "base")
+                              colour = "Country", facet = "Season")
 ```
 
 ## Mean weight at age
@@ -463,47 +540,39 @@ plot_meanweight_at_length_age(anchoveta_catch, anchoveta_dist,
                               colour = "Country")
 ```
 
-# Base R vs ggplot2 on a heavier table
+# Build the table once, draw many figures
 
-Every function draws with either engine from the one call:
-`engine = "ggplot"` (default) returns a ggplot object; `engine = "base"`
-draws straight to the current device with base graphics and returns
-`NULL`. The base engine has no ggplot2 or grid on the call path, which
-can matter when a figure is redrawn on every input change in an app.
+Building a `"length"` / `"age"` table is the expensive part of one of
+these figures (the link between the catch and the distributions); the
+drawing is cheap. Build the table once at the finest columns you need
+and hand it to as many figures as you like - each pools it to its own
+plotted columns:
 
-```{r timing, echo = TRUE}
+```{r once, echo = TRUE}
 bench <- function(expr) {
   expr <- substitute(expr)
-  grDevices::pdf(NULL); on.exit(grDevices::dev.off())
-  min(replicate(5, system.time(eval(expr, parent.frame()))[["elapsed"]]))
+  min(replicate(3, system.time(eval(expr, parent.frame()))[["elapsed"]]))
 }
 
-gg   <- bench(plot_coverage_heat(anchoveta_catch, y = "metier4",
-                                 x = "Country", facet = "Season"))
-base <- bench(plot_coverage_heat(anchoveta_catch, y = "metier4",
-                                 x = "Country", facet = "Season",
-                                 engine = "base"))
-data.frame(engine = c("ggplot", "base"),
-           seconds = round(c(gg, base), 3),
-           row.names = NULL)
-```
+# from the raw catch every time: the table is rebuilt for each figure
+from_raw <- bench({
+  plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
+                     what = "length", distributions = anchoveta_dist)
+  plot_coverage_bar(anchoveta_catch, y = "metier4", fill = "Country",
+                    what = "length", distributions = anchoveta_dist)
+})
 
-```{r timing-len, echo = TRUE}
-gg_l   <- bench(plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
-                                   what = "length", distributions = anchoveta_dist,
-                                   min_fish = 25))
-base_l <- bench(plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
-                                   what = "length", distributions = anchoveta_dist,
-                                   min_fish = 25, engine = "base"))
-data.frame(engine = c("ggplot", "base"),
-           seconds = round(c(gg_l, base_l), 3),
-           row.names = NULL)
+# from one table: built once, drawn twice
+len_all <- build_coverage_strata(anchoveta_catch, c("metier4", "Country"),
+                                 anchoveta_dist, what = "length")
+from_tab <- bench({
+  plot_coverage_heat(len_all, y = "metier4", x = "Country")
+  plot_coverage_bar(len_all, y = "metier4", fill = "Country")
+})
+data.frame(source = c("raw catch (table rebuilt per figure)",
+                      "one table (built once)"),
+           seconds = round(c(from_raw, from_tab), 3), row.names = NULL)
 ```
-
-For a static figure the difference is usually small - most of the time
-for a `"length"` / `"age"` figure is the link-and-classify step, which
-both engines share. The base engine's advantage shows up under repeated
-redraws, not in a single call.
 
 # Argument reference
 
@@ -511,12 +580,11 @@ Shared across `plot_coverage_heat()` / `_bubble()` / `_bar()` /
 `_map()`:
 
 The arguments are ordered the way you build a call: **what data**, then
-**which columns**, then **thresholds**, then **rendering**, and
-`palette` then `engine` last.
+**which columns**, then **thresholds**, and `palette` last.
 
 | Group | Argument | Meaning |
 |-------|----------|---------|
-| data      | `catch`          | raw CEF catch (already `derive_fields()`-ed) |
+| data      | `catch`          | raw CEF catch (already `derive_fields()`-ed), or the table `build_coverage_strata()` returns from it |
 | data      | `distributions`  | CEF distributions table; required for `what = "length"` / `"age"` |
 | data      | `what`           | `"discard"` (default), `"length"`, `"age"` |
 | data      | `catchCategory`  | `"All"` (default - landings + discards, titled "catch") / `"Lan"` / `"Dis"` / `"BMS"` for `"length"` / `"age"`; invalid for `"discard"` |
@@ -526,14 +594,22 @@ The arguments are ordered the way you build a call: **what data**, then
 | threshold | `min_cov`        | minimum coverage, percent (heat / bubble); always active |
 | threshold | `min_trip`       | minimum sampling trips (heat / bubble); `NULL` (the default) leaves trips out of the scheme, a number activates it - `0` is a real, lenient threshold, not "off" |
 | threshold | `min_fish`       | minimum measured fish (`"length"` / `"age"`); `NULL` (the default) leaves measurements out, a number activates it |
-| render    | `n_per_screen`   | base engine: split a faceted figure across devices |
 | last      | `palette`        | `"default"` or `"colorblind"` (bar fill only) |
-| last      | `engine`         | `"ggplot"` (default) or `"base"` |
 
-There is deliberately **no** `dims`, `weight_label`, `angle` or
-`show_fill_in_labels` argument: the strata come from
-`y` / `x` / `fill` / `facet`, the weight word from `what` /
-`catchCategory`, and the x-label rotation is fixed.
+There is deliberately **no** `dims`, `weight_label`, `angle`, `engine`
+or `n_per_screen` argument: the strata come from `y` / `x` / `fill` /
+`facet`, the weight word from `what` / `catchCategory`, the x-label
+rotation is fixed, and every plot is a ggplot.
+
+`build_coverage_strata()` takes:
+
+| Argument | Meaning |
+|----------|---------|
+| `catch`         | raw CEF catch |
+| `dims`          | the columns that define a stratum - the aggregation level of the table |
+| `distributions` | CEF distributions table; required for `what = "length"` / `"age"` |
+| `what`          | `"discard"` (default), `"length"`, `"age"` |
+| `catchCategory` | `"All"` (default) / `"Lan"` / `"Dis"` / `"BMS"` for `"length"` / `"age"`; invalid for `"discard"` |
 
 `plot_discard_rate()` adds:
 

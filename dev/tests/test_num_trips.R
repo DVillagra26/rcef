@@ -241,12 +241,15 @@ if (nzchar(app)) {
 ## invocation does not guarantee, and a test that only passes under one
 ## attachment order is a worse regression guard than one that does not
 ## need it.
+## the plots take a build_coverage_strata() table (CAR / CAS-style columns):
+## discards `total`, the covered landings `weightingTotal`, their `rate`,
+## all `landings`, `coverage` and `numTrips`
 strata <- data.frame(
   metier4 = c("OTB", "SDN", "SSC"),
-  landings = c(100, 100, 100), landings_with_discards = c(80, 70, 60),
-  discards = c(8, 7, 6), coverage = c(80, 70, 60),
-  discard_rate = c(0.08, 0.07, 0.06), n_measurements = c(0, 0, 0),
-  numTrips = c(1, 1, 1), cat_key = "safe", stringsAsFactors = FALSE)
+  catchCategory = "Dis", variableUnit = "t", total = c(8, 7, 6),
+  weightingCategory = "Lan", weightingTotal = c(80, 70, 60),
+  rate = c(0.1, 0.1, 0.1), landings = c(100, 100, 100),
+  coverage = c(80, 70, 60), numTrips = c(1, 1, 1), stringsAsFactors = FALSE)
 
 p_lo <- plot_coverage_heat(strata, y = "metier4", min_cov = 50, min_trip = 1)
 p_hi <- plot_coverage_heat(strata, y = "metier4", min_cov = 50, min_trip = 5)

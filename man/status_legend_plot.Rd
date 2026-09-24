@@ -63,6 +63,7 @@ panel can construct it on demand without carrying a second plot around.
 [coverage-plots], [cat_lookup()]
 
 Other coverage plots: 
+\code{\link{build_coverage_strata}()},
 \code{\link{coverage-plots}},
 \code{\link{plot_coverage_map}()}
 }

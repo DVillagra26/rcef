@@ -11,31 +11,27 @@ plot_coverage_map(
   group = NULL,
   what = "discard",
   catchCategory = NULL,
-  min_cov = 50,
-  min_trip = NULL,
-  min_fish = NULL,
-  scale = 1,
-  engine = c("base", "ggplot")
+  scale = 1
 )
 }
 \arguments{
-\item{catch}{Raw CEF catch data.}
+\item{catch}{Raw CEF catch data, or a [build_coverage_strata()] table
+(its own `what` is then used).}
 
 \item{area}{Column holding the ICES area code. Default `"areaValue"`.}
 
 \item{group}{Optional column - one boxed grid of pies per area, one
 pie per level.}
 
-\item{what, catchCategory, min_cov, min_trip, min_fish, distributions}{As in [coverage-plots]. The weight word in the title is derived
+\item{what, catchCategory, distributions}{As in [coverage-plots]. The weight word in the title is derived
 from `what` and `catchCategory`.}
 
 \item{scale}{Multiplies every pie radius (and, when grouped, the box
 grid cell size).}
-
-\item{engine}{`"base"` (default) or `"ggplot"`.}
 }
 \value{
-`NULL` invisibly (`engine = "base"`) or a ggplot object.
+A ggplot object, or `NULL` (with a message) when nothing can
+  be mapped.
 }
 \description{
 A map of the fishing area with one small pie per ICES division: pie
@@ -47,14 +43,16 @@ boxes are nudged apart and a thin leader keeps each box tied to its
 area's true centroid.
 }
 \details{
-Auto-builds from raw catch data (and `distributions` + `catchCategory`
-for a biology `what`) exactly like [coverage-plots]. Needs the
-suggested `maps` package.
+Takes raw catch data (and `distributions` + `catchCategory` for a
+biology `what`) or a [build_coverage_strata()] table, exactly like
+[coverage-plots]. Needs the suggested `maps` package.
 }
 \seealso{
-[coverage-plots], [ices_area_centroid()]
+[coverage-plots], [build_coverage_strata()],
+  [ices_area_centroid()]
 
 Other coverage plots: 
+\code{\link{build_coverage_strata}()},
 \code{\link{coverage-plots}},
 \code{\link{status_legend_plot}()}
 }

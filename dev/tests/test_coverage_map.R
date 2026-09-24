@@ -1,7 +1,8 @@
 ## plot_coverage_map(): one sampled/not-sampled pie per ICES area, or -
-## with group_var - a labelled box per area holding a grid of pies (one
-## per group level), overlapping boxes nudged apart. Both engines;
-## auto-build from raw catch; biology via distributions.
+## with `group` - a labelled box per area holding a grid of pies (one
+## per group level), overlapping boxes nudged apart. ggplot only;
+## auto-build from raw catch or take a coverage table; biology via
+## distributions.
 
 if (!requireNamespace("maps", quietly = TRUE)) {
   cat("maps package not installed - skipping\nDONE  0 failure(s)\n")
@@ -25,10 +26,9 @@ raw <- data.frame(
   metier4   = rep(c("OTB", "TBB", "GNS"), 6),
   stringsAsFactors = FALSE)
 
-draws <- function(expr) tryCatch({
-  grDevices::pdf(NULL); on.exit(grDevices::dev.off(), add = TRUE)
+is_gg <- function(expr) tryCatch({
   x <- suppressWarnings(force(expr))
-  if (inherits(x, "ggplot")) "gg" else "base"
+  inherits(x, "ggplot")
 }, error = function(e) conditionMessage(e))
 
 ## ---- 1. centroid lookup ------------------------------------------
@@ -42,33 +42,29 @@ ok(grepl("99.9.z", tryCatch(ices_area_centroid("99.9.z"),
                             warning = function(w) conditionMessage(w))),
    "an unknown area is warned about by name")
 
-## ---- 2. both engines, from raw catch ---------------------------
-ok(identical(draws(plot_coverage_map(raw)), "base"),
-   "base engine draws from raw catch data")
-ok(identical(draws(plot_coverage_map(raw, engine = "ggplot")), "gg"),
-   "ggplot engine returns a ggplot")
+## ---- 2. from raw catch --------------------------------------------
+ok(isTRUE(is_gg(plot_coverage_map(raw))), "returns a ggplot from raw catch data")
+ok(!"engine" %in% names(formals(plot_coverage_map)),
+   "there is no engine to choose")
 
-## ---- 3. group_var = several pies per area --------------------
-ok(identical(draws(plot_coverage_map(raw, group = "Season")), "base"),
-   "group_var = Season (base)")
-ok(identical(draws(plot_coverage_map(raw, group = "Country",
-                                     engine = "ggplot")), "gg"),
-   "group_var = Country (ggplot)")
-ok(identical(draws(plot_coverage_map(raw, group = "metier4")), "base"),
-   "group_var = metier4 (base)")
+## ---- 3. group = several pies per area -----------------------------
+ok(isTRUE(is_gg(plot_coverage_map(raw, group = "Season"))), "group = Season")
+ok(isTRUE(is_gg(plot_coverage_map(raw, group = "Country"))), "group = Country")
+ok(isTRUE(is_gg(plot_coverage_map(raw, group = "metier4"))), "group = metier4")
 
-## ---- 4. already-classified table + explicit weight columns ---
-sc <- classify_strata(build_strata(raw, c("areaValue", "Season")), 50, min_trips = 2)
-ok(identical(draws(plot_coverage_map(sc, group = "Season")), "base"),
-   "an already-classified table is used as-is")
+## ---- 4. from a coverage table ------------------------------------
+sc <- build_coverage_strata(raw, c("areaValue", "Season"))
+ok(isTRUE(is_gg(plot_coverage_map(sc, group = "Season"))),
+   "a build_coverage_strata() table is used as it stands")
+ok(isTRUE(all.equal(
+     ggplot2::ggplot_build(suppressWarnings(plot_coverage_map(raw, group = "Season")))$data,
+     ggplot2::ggplot_build(suppressWarnings(plot_coverage_map(sc, group = "Season")))$data)),
+   "and draws the same map as the raw catch it came from")
 
 ## ---- 5. bogus-only areas -> nothing to map ------------------
 bogus <- raw; bogus$areaValue <- "99.9.z"
-ok(is.null(suppressMessages(draws2 <- tryCatch({
-  grDevices::pdf(NULL); on.exit(grDevices::dev.off())
-  suppressWarnings(plot_coverage_map(bogus))
-}, error = function(e) e))) || TRUE,
-   "no mappable area -> a message, not an error")
+r <- suppressMessages(suppressWarnings(plot_coverage_map(bogus)))
+ok(is.null(r), "no mappable area -> NULL with a message, not an error")
 
 ## ---- 6. source guards --------------------------------------
 body_ns <- gsub("[[:space:]]", "",
@@ -83,4 +79,5 @@ ok(grepl("ox<-(hwl[i]+hwl[j]+gap)-abs(ac$bx[i]-ac$bx[j])", body_ns, fixed = TRUE
    "overlapping boxes are separated")
 
 cat("\nDONE ", FAIL, "failure(s)", "\n")
+if (FAIL) quit(status = 1L)
 }

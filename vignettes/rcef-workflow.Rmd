@@ -194,9 +194,16 @@ strata <- classify_strata(strata, threshold = 50)
 This is where you decide how to group, so it is worth doing properly.
 
 ```{r}
-plot_coverage_heat(strata, y = "metier4", x = "ICESDivision")
-plot_discard_rate(strata, x = "metier4")
+plot_coverage_heat(catch_data, y = "metier4", x = "ICESDivision")
+plot_discard_rate(catch_data, x = "metier4")
 ```
+
+The exploration plots take the raw catch and build their own table at
+exactly the columns they draw. That table is
+`build_coverage_strata(catch_data, dims)` -- the discard rate and the
+sampling coverage of every stratum, with no status attached -- and you
+can call it yourself to read the numbers, or hand it to the plots to
+draw several figures from one build.
 
 Coverage has one function per view -- `plot_coverage_heat()`,
 `plot_coverage_bubble()`, `plot_coverage_bar()` and `plot_coverage_map()`
@@ -222,8 +229,7 @@ Here, subset the **catches**, not the strata, and rebuild:
 ```{r}
 explore_data <- apply_filters(catch_data, list(metier4 = "TBB"))
 
-explore_strata <- classify_strata(build_strata(explore_data, dims), 50)
-plot_discard_rate(explore_strata, x = "ICESDivision")
+plot_discard_rate(explore_data, x = "ICESDivision")
 ```
 
 `apply_filters()` combines columns with AND and values within a column

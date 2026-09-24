@@ -13,9 +13,7 @@ plot_meanweight_at_length_age(
   facet = NULL,
   shape = NULL,
   scales = "fixed",
-  n_per_screen = NULL,
-  palette = c("default", "colorblind"),
-  engine = c("ggplot", "base")
+  palette = c("default", "colorblind")
 )
 }
 \arguments{
@@ -37,23 +35,19 @@ given, the resolved word goes in the plot title.}
 \item{shape}{Column drawn as separate point shapes; opens the averaged
 group back up and drops the band.}
 
-\item{scales}{Facet scales (ggplot).}
-
-\item{n_per_screen}{Base engine: split a faceted figure across devices.}
+\item{scales}{Facet scales.}
 
 \item{palette}{`"default"` or `"colorblind"`.}
-
-\item{engine}{`"ggplot"` (default) or `"base"`.}
 }
 \value{
-A ggplot object, or `NULL` invisibly (base engine).
+A ggplot object, or `NULL` when there is nothing to draw.
 }
 \description{
 The number-weighted mean weight in each length (or age) class, as a
 line with points. When the strata are averaged (no `shape`) and a
 spread is available, a +/- 1 sd band is drawn too. Live weight and a
 line are the only options, so there is no `variableType` or `type`
-argument. One function, two engines.
+argument.
 }
 \details{
 `data` is a [length_meanweight()] table, or raw CEF catch with

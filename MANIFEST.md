@@ -51,6 +51,7 @@ every return shape, every algorithm.
 | `aaa-package.R` | *(new)* | package doc, `@import`, `globalVariables()` |
 | `rcef_utils.R` | `R_development/0_Functions_utils.R` | vocabulary, `derive_fields()`, units, labellers |
 | `rcef_classify.R` | `R_development/0_Functions_classify.R` | `build_strata()`, `classify_strata()`, `cat_lookup()`, `status_palette()` |
+| `rcef_coverage.R` | *(new)* | `build_coverage_strata()`: the discard-rate / sampling-coverage table (CAR / CAS-style columns, no status) the coverage and discard-rate plots draw, usable on its own |
 | `rcef_groups.R` | `R_development/0_Functions_groups.R` | auto cascade + manual rules → `strata_groups` → raising conditions |
 | `rcef_raising.R` | `R_development/0_Functions_raising.R` | `apply_raising()`, scenarios, comparison |
 | `rcef_raise_native.R` | `R_development/mod_native_raising.R` | CEF prepare/check + `run_native_raising()` |
@@ -62,7 +63,8 @@ every return shape, every algorithm.
 | `rcef_emit.R` | `R_development/0_Functions_emit.R` | reproducible single-script emitter |
 | `rcef_taf.R` | `R_development/0_Functions_taf.R` | the same session as an ICES TAF script set |
 | `viz_theme.R` | `R_development/0_Functions_theme.R` | `app_theme()`, stable colour per level |
-| `viz_plots.R` | `R_development/0_Functions_plots.R` | the four public plot dispatchers + internals |
+| `viz_plots.R` | `R_development/0_Functions_plots.R` | the public plot functions (ggplot only) |
+| `viz_helpers.R` | *(split from the plots)* | facet layers, status legend, catch-part wording, ICES-area centroids |
 
 ---
 

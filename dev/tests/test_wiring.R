@@ -224,7 +224,8 @@ ok("no server input reference with no UI control", length(unknown) == 0, unknown
 
 cat("\n=== 6. the package exports everything app.R relies on ===\n")
 suppressMessages(library(rcef))
-need <- c("build_strata","classify_strata","recommend_raising","raising_steps",
+need <- c("build_strata","build_coverage_strata","classify_strata",
+          "recommend_raising","raising_steps",
           "decision_tree","raising_groups",
           "plot_coverage_heat","plot_coverage_bubble","plot_coverage_bar",
           "plot_coverage_map","plot_discard_rate",

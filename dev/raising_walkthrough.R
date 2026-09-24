@@ -188,7 +188,7 @@ raised_overview_table(raised_manual)
 print(plot_raised_composition(raised_manual, x_var = "metier4"))
 ## by country, faceted by season - a finer aggregation than the group
 ## definitions themselves ever used
-print(plot_raised_composition(raised_manual, x_var = "Country", facet_var = "Season"))
+print(plot_raised_composition(raised_manual, x_var = "metier4", facet_var = "Country"))
 
 
 ## =====================================================================
@@ -201,39 +201,38 @@ print(plot_raised_composition(raised_manual, x_var = "Country", facet_var = "Sea
 ## that fed its rate - a group with points scattered from 2% to 40% is
 ## not a group, it is a guess, no matter how well it covers the stock.
 ##
-## matchedDataCond_manual filtered straight against catch_data, at the
-## domainCatchDis granularity catchRaising() itself estimates a ratio
-## from - the same check the source example runs before raising
-## ("Per-stratum spread behind each group average"), fed into
-## plot_discard_rate() instead of a hand-rolled table. A stratum table at
-## metier4+Country+Season cannot stand in here: catchCategory and
-## fleetValue (both load-bearing above, G4's exclusions especially) do
-## not survive that aggregation. discard_rate is discards / (landings +
-## discards) - rcef's own convention (what build_strata() computes, and
-## what plot_discard_rate()'s percent axis expects), not the source
-## example's unbounded discards/landings dis_ratio (that convention shows
-## up again in section 5's `rate` column, where it is the one that
-## matters).
-donor_detail_manual <- bind_rows(lapply(names(matchedDataCond_manual), function(g)
-  catch_data %>%
+## matchedDataCond_manual filtered straight against catch_data, and each
+## group's rows turned into one donor stratum per domainCatchDis + gear by
+## build_coverage_strata() - the same granularity catchRaising() itself
+## estimates a ratio from, and the same check the source example runs
+## before raising ("Per-stratum spread behind each group average"). A
+## stratum table at metier4+Country+Season cannot stand in here:
+## catchCategory and fleetValue (both load-bearing above, G4's exclusions
+## especially) do not survive that aggregation.
+##
+## The table's `rate` is discards / covered landings - the very number
+## section 5's CAS output reports as `rate` (there per CEF row, here per
+## donor stratum), so what is plotted here is what ends up in the CAS.
+donor_detail_manual <- bind_rows(lapply(names(matchedDataCond_manual), function(g) {
+  donors <- catch_data %>%
     filter(!!matchedDataCond_manual[[g]],
            !is.na(domainCatchDis),
            originType == "WGEstimate",
            variableType == "WeightLive") %>%
-    group_by(donor_group = g, domainCatchDis, gear) %>%
-    summarise(landings = sum(total[catchCategory == "Lan"], na.rm = TRUE),
-             discards = sum(total[catchCategory == "Dis"], na.rm = TRUE),
-             discard_rate = discards / (landings + discards),
-             .groups = "drop")))
+    build_coverage_strata(c("domainCatchDis", "gear"))
+  # NULL for a group with no landings / discards among its donors at all
+  # (G6 is BMS only; G5 has no WGEstimate discard record - see section 5)
+  if (!is.null(donors)) mutate(donors, donor_group = g, .before = 1)
+}))
 
 print(plot_discard_rate(donor_detail_manual, x = "donor_group", colour = "gear",
                         jitter = TRUE))
 donor_detail_manual %>% group_by(donor_group) %>%
   summarise(n = n(),
-           mean_DR = round(weighted.mean(discard_rate, w = landings, na.rm = TRUE), 3),
-           sd_DR = round(sd(discard_rate, na.rm = TRUE), 3),
-           min_DR = round(min(discard_rate, na.rm = TRUE), 3),
-           max_DR = round(max(discard_rate, na.rm = TRUE), 3),
+           mean_rate = round(weighted.mean(rate, w = weightingTotal, na.rm = TRUE), 3),
+           sd_rate = round(sd(rate, na.rm = TRUE), 3),
+           min_rate = round(min(rate, na.rm = TRUE), 3),
+           max_rate = round(max(rate, na.rm = TRUE), 3),
            .groups = "drop") %>% print()
 
 
@@ -349,9 +348,10 @@ print(head(car_out %>% arrange(desc(imported == "N"), catchAllocationGroupName),
 ## weightingTotal is that domain's own landed weight (kg, same unit as
 ## `total` - unlike section 4's CC table, CAR/CAS stay in the CEF's
 ## native kg throughout), and rate is this row's discards over that
-## landed weight (discards / landings, NOT rcef's own discard_rate =
-## discards / (landings + discards) - matching the source
-## RDBESStockCoord convention's unbounded dis_ratio, confirmed against
+## landed weight (discards / landings, NOT the raising side's
+## discard_rate = discards / (landings + discards) - matching the source
+## RDBESStockCoord convention's unbounded dis_ratio, and the same `rate`
+## build_coverage_strata() and plot_discard_rate() use, confirmed against
 ## the reference CAR-CAS_detailed.csv: its rate column is exactly
 ## total / weightingTotal, occasionally above 1).
 landings_by_domain <- catch_data %>%

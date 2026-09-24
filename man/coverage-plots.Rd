@@ -18,9 +18,7 @@ plot_coverage_heat(
   min_cov = 50,
   min_trip = NULL,
   min_fish = NULL,
-  n_per_screen = NULL,
-  palette = c("default", "colorblind"),
-  engine = c("ggplot", "base")
+  palette = c("default", "colorblind")
 )
 
 plot_coverage_bubble(
@@ -34,9 +32,7 @@ plot_coverage_bubble(
   min_cov = 50,
   min_trip = NULL,
   min_fish = NULL,
-  n_per_screen = NULL,
-  palette = c("default", "colorblind"),
-  engine = c("ggplot", "base")
+  palette = c("default", "colorblind")
 )
 
 plot_coverage_bar(
@@ -47,16 +43,14 @@ plot_coverage_bar(
   facet = NULL,
   what = "discard",
   catchCategory = NULL,
-  n_per_screen = NULL,
-  palette = c("default", "colorblind"),
-  engine = c("ggplot", "base")
+  palette = c("default", "colorblind")
 )
 }
 \arguments{
-\item{catch}{Raw CEF catch data.}
+\item{catch}{Raw CEF catch data, or a [build_coverage_strata()] table.}
 
 \item{distributions}{A CEF distributions table - needed for
-`what = "length"`/`"age"`, ignored otherwise.}
+`what = "length"`/`"age"` with raw catch, ignored otherwise.}
 
 \item{y}{Row category. Required.}
 
@@ -66,7 +60,8 @@ grid. `NULL` collapses to a single column.}
 \item{facet}{Optional facet column.}
 
 \item{what}{`"discard"` (default), `"length"` or `"age"`. Plural and
-mixed case are accepted (`"discards"`, `"Length"`, ...).}
+mixed case are accepted (`"discards"`, `"Length"`, ...). Taken from
+the table when `catch` is a coverage table.}
 
 \item{catchCategory}{For `what = "length"`/`"age"`: `"All"` (default -
 landings and discards together, titled "catch"), `"Lan"`, `"Dis"` or
@@ -88,35 +83,34 @@ check (see [classify_strata()]).}
 or `NULL` (the default) to leave measurements out of the
 classification.}
 
-\item{n_per_screen}{Base engine: split a faceted figure across this
-many devices.}
-
 \item{palette}{`"default"` or `"colorblind"` - recolours the bar fill.
 The heatmap / bubble status colours are a fixed semantic scale;
 asking for `"colorblind"` there warns.}
 
-\item{engine}{`"ggplot"` (default) or `"base"`.}
-
 \item{fill}{Bar fill category (bars only). `NULL` uses `y`.}
 }
 \value{
-A ggplot object (`engine = "ggplot"`) or `NULL` invisibly
-  (`engine = "base"`).
+A ggplot object, or `NULL` when there is nothing to draw.
 }
 \description{
 Three views of how well a set of strata is sampled - a heatmap
 ([plot_coverage_heat()]), a weighted bubble grid
 ([plot_coverage_bubble()]) and a sampled-vs-unsampled weight bar chart
 ([plot_coverage_bar()]) - plus a map ([plot_coverage_map()]). All four
-take raw CEF catch data (plus `distributions` for length / age) and
-build + classify the strata internally.
+take raw CEF catch data (plus `distributions` for length / age) or the
+table [build_coverage_strata()] returns from it. Given raw catch they
+build that table at exactly the plotted columns; given the table they
+pool it to them - so the numbers behind a figure can always be read as
+a table, at the same aggregation, with `build_coverage_strata()`.
 }
 \details{
 `what` selects what "sampled" means: `"discard"` (a discard estimate
 exists), `"length"` or `"age"` (a length / age distribution exists).
 For `"length"` / `"age"`, pass `distributions` and, with
 `catchCategory`, choose whether to look at the sampling of the landings
-(`"Lan"`, the default), the discards (`"Dis"`) or BMS (`"BMS"`).
+(`"Lan"`), the discards (`"Dis"`), BMS (`"BMS"`) or the catch as a
+whole (`"All"`, the default). A coverage table brings its own `what`
+and catch parts, so with one neither needs to be given.
 
 The sampling-status colours adapt to which thresholds are active.
 Coverage (`min_cov`) is always on; `min_trip` (discard, length, age)
@@ -127,7 +121,8 @@ warning shade is a straight count of how many of the ACTIVE
 thresholds a stratum missed (yellow = 1, orange = 2, dark orange = 3
 - only reachable with trips AND measurements both on); red is
 reserved for a stratum with no discard estimate / no linked
-distribution at all, never for a threshold miss.
+distribution at all, never for a threshold miss. The status is worked
+out here, at plot time - it is not a column of the coverage table.
 
 `min_trip = 0` is NOT the same as leaving trips out - it is still an
 ACTIVE (if lenient) threshold, and a stratum with no reported trip
@@ -139,8 +134,7 @@ stratum with no trip count reported reads "safe"/"full" once
 The arguments run in the order you usually think about them: what data
 (`catch`, `distributions`, `what`, `catchCategory`), then which columns
 are the strata (`y`, `x` / `fill`, `facet`), then the pass / fail
-thresholds (`min_cov`, `min_trip`, `min_fish`), then `n_per_screen`,
-and finally `palette` and `engine` last.
+thresholds (`min_cov`, `min_trip`, `min_fish`), and finally `palette`.
 }
 \examples{
 \dontrun{
@@ -148,13 +142,19 @@ plot_coverage_heat(catch, y = "metier4", x = "Season")
 plot_coverage_bar(catch, y = "metier4", fill = "Season")
 plot_coverage_heat(catch, dist, y = "fleetValue", what = "length",
                    catchCategory = "Dis", min_cov = 50, min_fish = 100)
+
+# the table behind a figure, and the figure from the table
+cov <- build_coverage_strata(catch, c("metier4", "Season"))
+cov
+plot_coverage_heat(cov, y = "metier4", x = "Season", min_cov = 50)
 }
 }
 \seealso{
-[classify_strata()], [plot_discard_rate()],
-  [plot_numbers_at_length_age()]
+[build_coverage_strata()], [classify_strata()],
+  [plot_discard_rate()], [plot_numbers_at_length_age()]
 
 Other coverage plots: 
+\code{\link{build_coverage_strata}()},
 \code{\link{plot_coverage_map}()},
 \code{\link{status_legend_plot}()}
 }

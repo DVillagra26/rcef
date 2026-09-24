@@ -13,9 +13,7 @@ plot_numbers_at_length_age(
   facet = NULL,
   stacked = TRUE,
   scales = "fixed",
-  n_per_screen = NULL,
-  palette = c("default", "colorblind"),
-  engine = c("ggplot", "base")
+  palette = c("default", "colorblind")
 )
 }
 \arguments{
@@ -36,22 +34,17 @@ given, the resolved word goes in the plot title.}
 
 \item{stacked}{Stack the bars on `fill` rather than dodge.}
 
-\item{scales}{Facet scales (ggplot): `"fixed"`, `"free_x"`,
-`"free_y"` or `"free"`.}
-
-\item{n_per_screen}{Base engine: split a faceted figure across devices.}
+\item{scales}{Facet scales: `"fixed"`, `"free_x"`, `"free_y"` or
+`"free"`.}
 
 \item{palette}{`"default"` or `"colorblind"`.}
-
-\item{engine}{`"ggplot"` (default) or `"base"`.}
 }
 \value{
-A ggplot object, or `NULL` invisibly (base engine).
+A ggplot object, or `NULL` when there is nothing to draw.
 }
 \description{
 The catch numbers spread over the length (or age) classes, as a
-stacked (or dodged) histogram. One function, two engines
-(`engine = "ggplot"` / `"base"`).
+stacked (or dodged) histogram.
 }
 \details{
 `data` is a [length_numbers()] table, or raw CEF catch with

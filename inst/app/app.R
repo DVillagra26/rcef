@@ -3490,29 +3490,19 @@ server <- function(input, output, session) {
 
     # ---- view 1: sampling coverage ------------------------------
     cov_obj <- gated(cov_gate, {
-      bl <- blink_for("cov")
-      validate(need(!is.null(bl) && nrow(bl), "No catch rows."))
-      # Re-shape the biology link into the same columns the discard
-      # coverage plots expect, then run it through classify_strata so it
-      # gets its Status / cat_key exactly like a discard stratum. Here
-      # "covered" means a length distribution exists, not a discard one.
-      # a stratum is only a usable donor if it clears BOTH thresholds, so
-      # the measurement count is joined on and a stratum that is covered
-      # but thinly measured is demoted rather than shown as fine
-      m <- tryCatch(stratum_measurements(tryCatch(dat(), error = function(e) NULL),
-                                         dist_tbl(), dims_of(), cc_of("cov"), type),
-                    error = function(e) NULL)
-      bl <- add_sufficiency(bl, m, thr_cov(), thr_meas())
-      # keep the real coverage and measurement count; a thinly measured
-      # stratum is flagged by classify_strata (via min_meas), not demoted
-      # to "unsampled" as the old filter did
-      sc <- bl %>%
-        mutate(landings = weight,
-               landings_with_discards = weight_measured,
-               discards = 0, discard_rate = NA_real_)
-      sc <- classify_strata(sc, thr_cov(), what_word, thr_meas(), thr_trips())
+      d <- tryCatch(explore_dat(paste0(p, "_cov")), error = function(e) NULL)
+      req(!is.null(d), !is.null(dist_tbl()))
       y <- rc("cov", "y"); f <- rc("cov", "fill"); fc <- rc("cov", "facet")
       validate(need(!is.null(y), "Pick a Y axis."))
+      # The same table a script gets from build_coverage_strata(): the
+      # coverage of the chosen catch part at exactly the plotted columns,
+      # "covered" meaning a length / age distribution is linked (not a
+      # discard estimate). The thresholds are not part of it - the plot
+      # applies them (a covered but thinly measured stratum is flagged by
+      # min_fish there, not demoted to "unsampled").
+      sc <- build_coverage_strata(d, c(y, f, fc), dist_tbl(),
+                                  what = what_word, catchCategory = cc_of("cov"))
+      validate(need(!is.null(sc) && nrow(sc), "No catch rows."))
       th <- thr_cov()
       coverage_call(sc, input[[paste0(p, "_cov_type")]] %||% "heatmap",
         y = y, second = f, facet = fc, what = what_word,
@@ -3545,20 +3535,12 @@ server <- function(input, output, session) {
     # model stage. The dims are written out literally so the block stands
     # on its own.
     bio_obj <- function() if (identical(type, "Age")) "bio_age" else "bio_length"
+    # the coverage table itself - the same one the figure draws; the
+    # thresholds are arguments of the plot call below, not of the table
     bio_prep <- function(view, out = "bio_sc") c(
-      sprintf("dims_biology <- %s", fmt_vals(dims_of())),
-      sprintf('bl <- biology_link(catch_for_biology, distributions, dims_biology, %s, "%s")',
-              taf_q(cc_of(view)), type),
-      sprintf('ms <- stratum_measurements(catch_for_biology, distributions, dims_biology, %s, "%s")',
-              taf_q(cc_of(view)), type),
-      sprintf("bl <- add_sufficiency(bl, ms, %s, %s)", thr_cov(), thr_meas()),
-      "## reshaped into the columns classify_strata() expects, so a biology",
-      "## stratum is classified by exactly the same code as a discard one",
-      sprintf("%s <- bl %%>%% mutate(landings = weight,", out),
-      "        landings_with_discards = weight_measured,",
-      "        discards = 0, discard_rate = NA_real_)",
-      sprintf('%s <- classify_strata(%s, %s, "%s", %s, %s)',
-              out, out, thr_cov(), what_word, thr_meas(), thr_trips()))
+      sprintf('%s <- build_coverage_strata(catch_for_biology, %s, distributions, what = "%s", catchCategory = %s)',
+              out, fmt_vals(unique(c(rc(view, "y"), rc(view, "fill"), rc(view, "facet")))),
+              what_word, taf_q(cc_of(view))))
 
     keep_plot(paste0(p, "_cov_plot"), cov_obj, gate = cov_gate,
       section = "model_explore_length_age",
@@ -5268,13 +5250,13 @@ server <- function(input, output, session) {
   # one above.
   strata_x <- function(p) build_strata(explore_dat(p), panel_dims(p))
 
-  # strata aggregated to EXACTLY the columns used by the plot. Without this
-  # the table still holds every dimension, so a heatmap cell or a bubble
-  # gets several rows stacked on the same spot.
+  # the coverage table (build_coverage_strata()) at EXACTLY the columns
+  # used by the plot - the same table a script gets, the sampling status
+  # is worked out by the plot from the thresholds, not stored in it.
   strata_roles <- function(p, sels) {
     cols <- unique(unlist(lapply(sels, function(x) col_of(p, x))))
     validate(need(length(cols) >= 1, "Pick at least one variable."))
-    build_strata(explore_dat(p), cols)
+    build_coverage_strata(explore_dat(p), cols)
   }
 
   # --- data tab summary ------------------------------------
@@ -5318,9 +5300,13 @@ server <- function(input, output, session) {
   # --- 2. discard rates ------------------------------------
 
 
+  # the table behind the discard-rate figure: build_coverage_strata() at the
+  # panel's columns - one row per stratum, the same rows the points are
   output$dr_tbl <- renderDT(datatable(
-    strata_x("dr") %>% filter(!is.na(discard_rate)) %>%
-      mutate(discard_rate = round(discard_rate, 3), coverage = round(coverage, 1)),
+    build_coverage_strata(explore_dat("dr"), panel_dims("dr")) %>%
+      filter(!is.na(rate)) %>%
+      mutate(across(c(total, weightingTotal, landings), ~ round(.x, 3)),
+             rate = round(rate, 3), coverage = round(coverage, 1)),
     options = list(scrollX = TRUE, pageLength = 10), rownames = FALSE))
 
   # --- 3/4/5: aggregate to the plotted roles only ----------
@@ -6355,9 +6341,7 @@ server <- function(input, output, session) {
   # =========================================================
   cov_sc <- reactive({
     req(isTruthy(input$cov_y))
-    classify_strata(strata_roles("cov", c(input$cov_y, input$cov_fill,
-                                          input$cov_facet)), input$threshold,
-                    min_trips = input$cov_trips %||% 2) })
+    strata_roles("cov", c(input$cov_y, input$cov_fill, input$cov_facet)) })
 
   # A heatmap or a bubble grid needs two axes. With X / Fill on (none)
   # there is nothing to put on the x axis, so those two icons are greyed
@@ -6428,9 +6412,8 @@ server <- function(input, output, session) {
     # at that stage's level of detail; re-deriving it here keeps the plot
     # honest when the coverage tab was looking at a different resolution
     prep = function() c(
-      sprintf("strata_cov <- classify_strata(build_strata(catch_data, %s), %s, min_trips = %s)",
-              fmt_vals(panel_dims("cov")), input$threshold %||% 50,
-              input$cov_trips %||% 2)),
+      sprintf("strata_cov <- build_coverage_strata(catch_data, %s)",
+              fmt_vals(panel_dims("cov")))),
     call = function() coverage_call("strata_cov", cov_type_eff(),
       y = col_of("cov", input$cov_y), second = col_of("cov", input$cov_fill),
       facet = col_of("cov", input$cov_facet),
@@ -6445,7 +6428,8 @@ server <- function(input, output, session) {
   dr_g <- gate_of("dr", dr_sig)
 
   dr_plot_obj <- gated(dr_g, {
-    plot_discard_rate(strata_x("dr"),
+    validate(need(!is.null(role("dr", "x")), "Pick an X axis."))
+    plot_discard_rate(explore_dat("dr"),
                 x = role("dr","x"), colour = role("dr","fill"),
                 shape = role("dr","shape"), facet = role("dr","facet"),
                 jitter = input$dr_jitter) })
@@ -6470,7 +6454,7 @@ server <- function(input, output, session) {
     note = function() sprintf("fleet = %s, area = %s",
       paste(panel_dims("dr"), collapse = ", "), ""),
     prep = function()
-      sprintf("strata_dr <- build_strata(catch_data, %s)",
+      sprintf("strata_dr <- build_coverage_strata(catch_data, %s)",
               fmt_vals(panel_dims("dr"))),
     call = function() taf_call("plot_discard_rate", list(
         "strata_dr", x = taf_q(role("dr", "x")),

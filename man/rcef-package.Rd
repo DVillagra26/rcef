@@ -34,6 +34,16 @@ derive_fields() -> build_strata() -> classify_strata()
 Both grouping methods return the same \code{strataCond} /
 \code{matchedDataCond} shape, which is what the two RDBESStockCoord
 engines consume, so one group definition drives either.
+
+Exploring the data first is its own short chain:
+\preformatted{
+derive_fields() -> build_coverage_strata()
+  -> plot_coverage_heat() / _bubble() / _bar() / _map() | plot_discard_rate()
+}
+\code{build_coverage_strata()} is the discard-rate / sampling-coverage
+table (CAR / CAS-style columns, no status) the plots draw; they take
+raw catch or that table, so the same numbers can be read as a table and
+looked at as a figure.
 }
 \seealso{
 Useful links:

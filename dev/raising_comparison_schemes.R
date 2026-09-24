@@ -419,44 +419,49 @@ print(plot_raised_composition(raised_hier, x_var = "Country", facet_var = "Seaso
 ## ---- 4a. manual: matchedDataCond_manual filtered straight against
 ## catch_data, at the domainCatchDis granularity catchRaising() itself
 ## estimates a ratio from - the same check the source example runs
-## before raising ("Per-stratum spread behind each group average"), fed
-## into plot_discard_rate() instead of a hand-rolled table. A stratum
-## table at metier4+Country+Season cannot stand in here: catchCategory
-## and fleetValue (both load-bearing above, G4's exclusions especially)
-## do not survive that aggregation. discard_rate is discards / (landings
-## + discards) - rcef's own convention (what build_strata() computes,
-## and what plot_discard_rate()'s percent axis expects), not the source
-## example's unbounded discards/landings dis_ratio.
-donor_detail_manual <- bind_rows(lapply(names(matchedDataCond_manual), function(g)
-  catch_data %>%
+## before raising ("Per-stratum spread behind each group average"), each
+## group's rows turned into donor strata by build_coverage_strata() and
+## fed to plot_discard_rate(). A stratum table at metier4+Country+Season
+## cannot stand in here: catchCategory and fleetValue (both load-bearing
+## above, G4's exclusions especially) do not survive that aggregation.
+## The table's `rate` is discards / covered landings - the source
+## example's dis_ratio and the CAS output's `rate`.
+donor_detail_manual <- bind_rows(lapply(names(matchedDataCond_manual), function(g) {
+  donors <- catch_data %>%
     filter(!!matchedDataCond_manual[[g]],
            !is.na(domainCatchDis),
            originType == "WGEstimate",
            variableType == "WeightLive") %>%
-    group_by(donor_group = g, domainCatchDis, gear) %>%
-    summarise(landings = sum(total[catchCategory == "Lan"], na.rm = TRUE),
-             discards = sum(total[catchCategory == "Dis"], na.rm = TRUE),
-             discard_rate = discards / (landings + discards),
-             .groups = "drop")))
+    build_coverage_strata(c("domainCatchDis", "gear"))
+  if (!is.null(donors)) mutate(donors, donor_group = g, .before = 1)
+}))
 
 print(plot_discard_rate(donor_detail_manual, x = "donor_group", colour = "gear",
                         jitter = TRUE))
 donor_detail_manual %>% group_by(donor_group) %>%
   summarise(n = n(),
-           mean_DR = round(weighted.mean(discard_rate, w = landings, na.rm = TRUE), 3),
-           sd_DR = round(sd(discard_rate, na.rm = TRUE), 3),
-           min_DR = round(min(discard_rate, na.rm = TRUE), 3),
-           max_DR = round(max(discard_rate, na.rm = TRUE), 3),
+           mean_rate = round(weighted.mean(rate, w = weightingTotal, na.rm = TRUE), 3),
+           sd_rate = round(sd(rate, na.rm = TRUE), 3),
+           min_rate = round(min(rate, na.rm = TRUE), 3),
+           max_rate = round(max(rate, na.rm = TRUE), 3),
            .groups = "drop") %>% print()
 
 ## ---- 4b. hierarchical: the cascade is a strict partition (one group per
-## stratum), so the group IS the donor pool - no filtering needed
-print(plot_discard_rate(rec, x = "group_id", colour = "metier4", jitter = TRUE))
-rec %>% group_by(group_id) %>%
-  summarise(n = n(), mean_DR = round(mean(discard_rate, na.rm = TRUE), 3),
-           sd_DR = round(sd(discard_rate, na.rm = TRUE), 3),
-           min_DR = round(min(discard_rate, na.rm = TRUE), 3),
-           max_DR = round(max(discard_rate, na.rm = TRUE), 3),
+## stratum), so the group IS the donor pool - no filtering needed. rec is
+## the raising-side stratum table (build_strata() columns); the two lines
+## below only put its numbers under the coverage table's names, so the
+## same plot function and the same `rate` apply to it.
+rec_dr <- rec %>%
+  mutate(total = discards, weightingTotal = landings_with_discards,
+         rate = ifelse(has_disc_data & landings_with_discards > 0,
+                       discards / landings_with_discards, NA_real_))
+print(plot_discard_rate(rec_dr, x = "group_id", colour = "metier4", jitter = TRUE))
+rec_dr %>% group_by(group_id) %>%
+  summarise(n = n(),
+           mean_rate = round(weighted.mean(rate, w = weightingTotal, na.rm = TRUE), 3),
+           sd_rate = round(sd(rate, na.rm = TRUE), 3),
+           min_rate = round(min(rate, na.rm = TRUE), 3),
+           max_rate = round(max(rate, na.rm = TRUE), 3),
            .groups = "drop") %>% print()
 
 

@@ -11,15 +11,12 @@ plot_discard_rate(
   shape = NULL,
   facet = NULL,
   jitter = TRUE,
-  n_per_screen = NULL,
-  palette = c("default", "colorblind"),
-  engine = c("ggplot", "base")
+  palette = c("default", "colorblind")
 )
 }
 \arguments{
-\item{catch}{Raw CEF catch data, or a stratum table with `discard_rate`.
-When raw, the strata are built on `x` + `colour` + `shape` + `facet`,
-and each point is one such stratum - not an average over finer ones.}
+\item{catch}{Raw CEF catch data, or a discard coverage table from
+[build_coverage_strata()].}
 
 \item{x}{Column on the x axis. One point per level (times `colour` /
 `shape` / `facet`).}
@@ -33,43 +30,45 @@ and each point is one such stratum - not an average over finer ones.}
 \item{jitter}{Jitter the points horizontally (cosmetic only - one
 point is still one stratum).}
 
-\item{n_per_screen}{Base engine: split a faceted figure across this
-many devices.}
-
 \item{palette}{`"default"` or `"colorblind"` (point colours, via
 [var_palette()]).}
-
-\item{engine}{`"ggplot"` (default) or `"base"`.}
 }
 \value{
-A ggplot object (`engine = "ggplot"`), or `NULL` invisibly
-  after drawing to the current device (`engine = "base"`).
+A ggplot object, or `NULL` when no stratum has a discard rate.
 }
 \description{
-One point per stratum, its discard rate on the y axis - raw, with no
-aggregation or averaging. A stratum here is one `x` + `colour` +
-`shape` + `facet` cell: each point is that cell's own discards over
-its own landings plus discards (`discards / (landings + discards)`,
-from [build_strata()]), not the mean of any finer strata. Change `x`
-(or `colour` / `shape` / `facet`) and the strata - and the points -
-are rebuilt at that resolution.
+One point per stratum, its discard rate on the y axis. A stratum is
+one row of the discard coverage table ([build_coverage_strata()]); its
+`rate` is the stratum's own discards over the landings that carry a
+discard estimate (`total / weightingTotal` - the rate as the CAS output
+reports it, discards per tonne of covered landings), not the mean of
+any finer strata. Point size is the stratum's landings.
 }
 \details{
-Takes raw CEF catch (it builds the strata with [build_strata()]) or an
-already-built stratum table. Strata with no discard estimate are
-dropped - a rate is a property of sampled strata only (see
-[sampled_for_discards()]).
+Takes raw CEF catch - the table is then built at exactly the plotted
+columns (`x` + `colour` + `shape` + `facet`), so changing any of them
+rebuilds the strata, and the points, at that resolution - or a discard
+coverage table, whose rows are drawn as they are (build it finer than
+the plotted columns and each cell shows one point per finer stratum).
+Strata with no discard estimate have no rate and are not drawn - a
+rate is a property of sampled strata only.
 
-One function, two engines: `engine = "ggplot"` (default) draws it with
-ggplot2; `engine = "base"` draws the same figure with base graphics.
+The y axis is pseudo-log: linear near zero and logarithmic above about
+5 percent. A rate is a ratio, so it can exceed 100 percent, and a few
+tiny strata (a few kilograms of covered landings) give ratios of many
+hundreds of percent that would flatten everything else on a plain axis.
+Add `+ ggplot2::scale_y_continuous()` to the returned plot to replace
+it with a plain one.
 }
 \examples{
 \dontrun{
 plot_discard_rate(catch_data, x = "Season", colour = "metier4")
-plot_discard_rate(catch_data, x = "metier4", engine = "base")
+
+# the table behind the figure
+build_coverage_strata(catch_data, c("Season", "metier4"))
 }
 }
 \seealso{
-[sampled_for_discards()], [build_strata()]
+[build_coverage_strata()], [plot_coverage_heat()]
 }
 \concept{discard-rate plots}
