@@ -5,60 +5,101 @@
 \alias{anchoveta_catch}
 \title{Synthetic Peruvian-anchoveta CEF catch table}
 \format{
-A data frame of catch records, one row per
-  stock / catch category / year / quarter / area / fleet cell. Key
-  columns:
+A data frame of catch records, one row per stock / catch category
+/ year / quarter / area / fleet cell. Key columns:
 \describe{
-  \item{catchCategory}{`"Lan"`, `"Dis"` or `"BMS"`.}
-  \item{vesselFlagCountry, Country}{Flag state: `"Peru"`, `"Chile"`,
-    `"Ecuador"`, `"China"`, `"South Korea"`, `"Russia"`, `"Vanuatu"`.}
-  \item{seasonValue, Season}{Quarter, `"1"`--`"4"`.}
-  \item{areaValue, ICESDivision, ...}{FAO Area 87 (Pacific, Southeast)
-    division code and its parsed parts.}
-  \item{fleetValue, metier4, ...}{The metier6 string
-    (`derive_fields()` parses `metier4` - `"PS"` / `"MPT"` / `"LHP"` -
-    and the gear / target / mesh parts out of it).}
-  \item{total}{Weight (kg) for the row's `variableType`; `0` for a
-    reported-nothing stratum.}
-  \item{numTrips, domainBiology}{Sampling-trip count and the key that
-    links a catch stratum to its length / age distribution.}
+\item{catchCategory}{\code{"Lan"}, \code{"Dis"} or \code{"BMS"}.}
+\item{year}{2020--2023. The raising engine takes one at a time.}
+\item{vesselFlagCountry, Country}{Flag state: \code{"Peru"}, \code{"Chile"},
+\code{"Ecuador"}, \code{"China"}, \code{"South Korea"}, \code{"Russia"}, \code{"Vanuatu"}.}
+\item{seasonValue, Season}{Quarter, \code{"1"}--\code{"4"}.}
+\item{areaValue, ICESDivision, ...}{FAO Area 87 (Pacific, Southeast)
+division code and its parsed parts.}
+\item{fleetValue, metier4, ...}{The metier6 string (\code{derive_fields()}
+parses \code{metier4} - \code{"PS"} / \code{"MPT"} / \code{"LHP"} - and the gear /
+target / mesh parts out of it).}
+\item{originType}{\code{"WGEstimate"} on every row.}
+\item{total}{Weight (kg) for the row's \code{variableType}; \code{0} for a
+reported-nothing stratum.}
+\item{domainCatchDis, domainCatchBMS}{The key that links a landing to
+its discard (or BMS) estimate; blank when there is none.}
+\item{numTrips, domainBiology}{Sampling-trip count and the key that
+links a catch stratum to its length / age distribution.}
 }
 }
 \usage{
 anchoveta_catch
 }
 \description{
-A fully made-up CEF (RDBES long-format) catch table for a fictional
-Southeast-Pacific anchoveta (\emph{Engraulis ringens}) fishery, for
-trying the plotting functions and for timing the base-R vs ggplot2
-engines on a heavier table without needing real data. About 3,500
-rows - several times the turbot walkthrough table - over four years
-(2020--2023) and four quarters.
+A made-up CEF (RDBES long-format) catch table for a fictional
+Southeast-Pacific anchoveta (\emph{Engraulis ringens}) fishery: about 2,700
+rows over four years (2020--2023) and four quarters, seven flag states
+and three metiers. It runs the whole package without any real data:
+the coverage tables and plots, discard raising, and length and age
+allocation. The tests and the README examples use it.
 }
 \details{
-Already through [derive_fields()], so it drops straight into any plot:
-the derived columns (`Country`, `Season`, `metier4`, the parsed area
-parts, ...) are present and consistent. Pair it with [anchoveta_dist]
-for the `what = "length"` / `what = "age"` coverage views and for
-[plot_numbers_at_length_age()] / [plot_meanweight_at_length_age()].
+Already through \code{\link[=derive_fields]{derive_fields()}}, so it drops straight into any table or
+plot: the derived columns (\code{Country}, \code{Season}, \code{metier4}, the parsed area
+parts, ...) are present and consistent. Pair it with \link{anchoveta_dist} for
+the \code{what = "length"} / \code{what = "age"} coverage views and for
+\code{\link[=plot_numbers_at_length_age]{plot_numbers_at_length_age()}} and \code{\link[=plot_meanweight_at_length_age]{plot_meanweight_at_length_age()}}.
+\subsection{Raising the discards}{
+
+The rows are shaped the way the raising engine reads them:
+\itemize{
+\item every row has \code{originType = "WGEstimate"}, the value the engines and the
+application select on (\code{catchRaising()} takes \code{"WGEstimate"} or
+\code{"Official"});
+\item a \code{Dis} row shares its \code{domainCatchDis} with the \code{Lan} rows it was
+observed on, and a landing with no discard estimate has a blank domain.
+About a quarter of the landings rows - roughly half of the landed
+weight - carry an estimate; those are the donors, and the rest are what
+a raising fills in;
+\item it holds four years and the engine works on \strong{one stock and year at a
+time}, so pick a year first: \code{subset(anchoveta_catch, year == 2023)}.
+}
+}
+
+\subsection{What is invented}{
 
 Nothing here comes from another data set: the fleets, areas, metiers,
-weights and sampling coverage are all drawn from invented
-distributions. The three kinds of coverage are driven by SEPARATE
-per-country / per-metier / per-quarter patterns, so the discard,
-length and age coverage plots look genuinely different: Peru has the
-best discard programme, Chile the best length sampling, Russia the
-best age reading, and Russia / Vanuatu run almost no discard observers
-(their cells read "no discard sampled").
+weights and sampling coverage are all drawn from invented distributions.
+The three kinds of coverage are driven by SEPARATE per-country /
+per-metier / per-quarter patterns, so the discard, length and age
+coverage plots look genuinely different: Peru has the best discard
+programme, Chile the best length sampling, Russia the best age reading,
+and Russia and Vanuatu run almost no discard observers (their cells read
+"no discard sampled").
 
 Not every fleet works every metier: several (country, metier)
-combinations have no rows at all - so a coverage grid grouped by
-`metier4` x `Country` has genuine holes - and a few strata carry a
-zero-weight `Lan` row (the fleet was there but landed nothing), which
-classifies as "no landings / no discards".
+combinations have no rows at all - so a coverage grid grouped by \code{metier4}
+x \code{Country} has genuine holes - and a few strata carry a zero-weight \code{Lan}
+row (the fleet was there but landed nothing), which classifies as "no
+landings / no discards".
+}
+}
+\examples{
+data(anchoveta_catch)
+
+# discard rate and sampling coverage per stratum ...
+head(build_coverage_strata(anchoveta_catch, c("metier4", "Country")))
+
+# ... and as a figure
+plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country")
+
+# raise the discards of one year: define the groups, then raise
+cef    <- subset(anchoveta_catch, year == 2023)
+dims   <- c("metier4", "ICESDivision", "Season")
+groups <- define_raising_groups_auto(cef, hierarchy = dims,
+                                     thresholds = c(50, 40, 30))
+raised <- run_native_raising(cef, dims, groups, type = "discards",
+                             log_file = tempfile(fileext = ".txt"))
+table(raised$catchCategory, raised$importedOrRaised)
 }
 \seealso{
-[anchoveta_dist], [coverage-plots], [plot_discard_rate()]
+\link{anchoveta_dist}, \link{coverage-plots}, \code{\link[=build_coverage_strata]{build_coverage_strata()}},
+\code{\link[=plot_discard_rate]{plot_discard_rate()}}
 
 Other example data: 
 \code{\link{anchoveta_dist}}

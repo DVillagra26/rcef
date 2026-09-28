@@ -125,11 +125,32 @@ distribution_units <- function(dist, type = "LengthTotal") {
 # ------------------------------------------------------------
 #  Linking catches to biology
 # ------------------------------------------------------------
+# A distribution belongs to the country that submitted it. A domainBiology
+# carries no country (the same "IC_1_27.4_TBB_DEF_70-99_0_0_all" names a
+# stratum in Germany and in the Netherlands), so catch and distributions
+# are matched on the domain, the catch category AND the country - as the
+# RDBESStockCoord engines do. This is the columns to match on: the country
+# only when both tables carry it.
+#' @noRd
+#' @export
+biology_match_keys <- function(catches, dist)
+  c("domainBiology", "catchCategory",
+    if ("vesselFlagCountry" %in% names(catches) &&
+        "vesselFlagCountry" %in% names(dist)) "vesselFlagCountry")
+
+# One string per row for those columns, to test membership with.
+#' @noRd
+#' @export
+biology_key <- function(x, keys) {
+  if (!length(keys)) return(rep("", nrow(x)))
+  do.call(paste, c(lapply(keys, function(k) as.character(x[[k]])), sep = "\r"))
+}
+
 # A catch stratum counts as measured only when its domainBiology is
 # filled AND that key actually appears in the distributions table for
-# the same catch category. A filled key that matches nothing is a
-# dangling reference, and is reported separately - it is a data problem,
-# not evidence of sampling.
+# the same catch category and country. A filled key that matches nothing
+# is a dangling reference, and is reported separately - it is a data
+# problem, not evidence of sampling.
 #' @noRd
 #' @export
 biology_link <- function(catches, dist, dims, catch_category = NULL,
@@ -148,10 +169,9 @@ biology_link <- function(catches, dist, dims, catch_category = NULL,
   d$.has_key <- !is.na(db) & nzchar(db)
 
   pd <- prep_distributions(dist, type)
-  keys <- if (is.null(pd)) character(0)
-          else unique(paste(pd$domainBiology, pd$catchCategory))
-  d$.measured <- d$.has_key &
-    paste(db, d$catchCategory) %in% keys
+  by <- biology_match_keys(d, pd)
+  keys <- if (is.null(pd)) character(0) else unique(biology_key(pd, by))
+  d$.measured <- d$.has_key & biology_key(d, by) %in% keys
   d$.dangling <- d$.has_key & !d$.measured
 
   d %>%
@@ -195,22 +215,24 @@ dist_without_catch <- function(catches, dist, catch_category = NULL,
     pd <- pd[pd$catchCategory %in% catch_category, , drop = FALSE]
   if (!nrow(pd)) return(NULL)
   d <- derive_fields(as.data.frame(catches))
-  db <- if ("domainBiology" %in% names(d)) as.character(d$domainBiology)
-        else character(0)
+  if (!"domainBiology" %in% names(d)) d$domainBiology <- NA_character_
+  by <- biology_match_keys(d, pd)
+  db <- as.character(d$domainBiology)
   keep <- nzchar(db) & !is.na(db)
-  catch_keys <- unique(paste(db[keep], d$catchCategory[keep]))
-  pd$.key <- paste(pd$domainBiology, pd$catchCategory)
+  catch_keys <- unique(biology_key(d[keep, , drop = FALSE], by))
+  pd$.key <- biology_key(pd, by)
   orphan <- pd[!pd$.key %in% catch_keys, , drop = FALSE]
   if (!nrow(orphan)) return(NULL)
   orphan %>%
-    group_by(domainBiology, catchCategory) %>%
+    group_by(across(all_of(by))) %>%
     summarise(n_rows = dplyr::n(), .groups = "drop") %>%
     as.data.frame()
 }
 
 # The stratum keys carried by the catch table, attached to every
-# distribution row through domainBiology. This is what lets a length
-# distribution be plotted by fleet, country, area or season.
+# distribution row through domainBiology (and the country - see
+# biology_match_keys()). This is what lets a length distribution be
+# plotted by fleet, country, area or season.
 #' @noRd
 #' @export
 link_dist_to_strata <- function(catches, dist, dims, catch_category = NULL,
@@ -226,18 +248,37 @@ link_dist_to_strata <- function(catches, dist, dims, catch_category = NULL,
   }
   if (!nrow(d) || !nrow(pd)) return(NULL)
 
-  # one row per domain x category, carrying the stratum keys. A domain
-  # can be shared by more than one country, so the keys are taken from
-  # the catch rows and de-duplicated rather than assumed unique.
+  # A record repeated exactly is not a second sample: summed, it doubles the
+  # numbers, over-weights the mean weight and doubles the fish counted. The
+  # repeats are dropped, and said so, because the file is what needs fixing.
+  dup <- duplicated(pd)
+  if (any(dup)) {
+    warning(sprintf(paste("link_dist_to_strata(): %s distribution row(s) repeat",
+                          "another row exactly and were dropped, so that nothing",
+                          "is counted twice - check the distributions file"),
+                    format(sum(dup), big.mark = ",")), call. = FALSE)
+    pd <- pd[!dup, , drop = FALSE]
+  }
+
+  # one row per domain x category x country, carrying the stratum keys. A
+  # domain can be used by several strata of one country (a distribution
+  # covers every catch row that names it), so the keys are taken from the
+  # catch rows and de-duplicated rather than assumed unique. Without the
+  # country in the match, a domain that two countries both use would hand
+  # each country the other's distributions too.
+  by <- biology_match_keys(d, pd)
+  if ("vesselFlagCountry" %in% by) {
+    d$vesselFlagCountry  <- as.character(d$vesselFlagCountry)
+    pd$vesselFlagCountry <- as.character(pd$vesselFlagCountry)
+  }
   keymap <- d %>%
     filter(!is.na(domainBiology), nzchar(as.character(domainBiology))) %>%
-    select(domainBiology, catchCategory, all_of(dims)) %>%
+    select(all_of(by), all_of(dims)) %>%
     distinct()
   if (!nrow(keymap)) return(NULL)
 
   pd %>%
-    inner_join(keymap, by = c("domainBiology", "catchCategory"),
-               relationship = "many-to-many")
+    inner_join(keymap, by = by, relationship = "many-to-many")
 }
 
 # ------------------------------------------------------------
@@ -269,6 +310,14 @@ length_numbers <- function(linked, group_vars = character(0)) {
 # deviation of the strata that went into each point, and n_strata says
 # how many there were. A point built from one stratum has no spread, and
 # gets NA rather than a misleading zero.
+#
+# n_fish is how many fish stand behind each point. numMeasurements is one
+# count for a whole distribution (it repeats on every class row), so it is
+# shared out over the classes in proportion to the numbers at each: exact
+# for a distribution raised from a length sample by a single factor, an
+# estimate for ages read off an age-length key. A distribution counts once
+# however many stratum keys it is linked to; one that reports no count
+# contributes none.
 #' @noRd
 #' @export
 length_meanweight <- function(linked, group_vars = character(0)) {
@@ -279,18 +328,31 @@ length_meanweight <- function(linked, group_vars = character(0)) {
 
   join_keys <- intersect(c("domainBiology", "catchCategory", ".class",
                            "vesselFlagCountry"), names(mw))
+  inst <- setdiff(join_keys, ".class")
   if (nrow(nb)) {
     nb2 <- nb %>% select(all_of(join_keys), .w_num = .value_std) %>%
       group_by(across(all_of(join_keys))) %>%
-      summarise(.w_num = sum(.w_num, na.rm = TRUE), .groups = "drop")
+      summarise(.w_num = sum(.w_num, na.rm = TRUE), .groups = "drop") %>%
+      # the share of a distribution's numbers that sits at each class
+      group_by(across(all_of(inst))) %>%
+      mutate(.share = if (sum(.w_num) > 0) .w_num / sum(.w_num) else NA_real_) %>%
+      ungroup()
     mw <- mw %>% left_join(nb2, by = join_keys)
-  } else mw$.w_num <- NA_real_
+  } else {
+    mw$.w_num <- NA_real_
+    mw$.share <- NA_real_
+  }
 
   mw$.w <- ifelse(!is.na(mw$.w_num) & mw$.w_num > 0, mw$.w_num,
                   ifelse(!is.na(mw$.n_meas) & mw$.n_meas > 0, mw$.n_meas, 1))
+  mw$.n_fish <- mw$.n_meas * mw$.share
+  mw$.inst   <- biology_key(mw, inst)
 
   keys <- unique(c(".class", group_vars))
-  mw %>% group_by(across(all_of(keys))) %>%
+  # a link that pool_plus_group() pooled marks the class, and the summary
+  # keeps the mark (a `plus` column) so a plot of it can label the class
+  has_plus <- ".plus" %in% names(mw)
+  out <- mw %>% group_by(across(all_of(keys))) %>%
     summarise(mean_weight = sum(.value_std * .w, na.rm = TRUE) /
                             sum(.w, na.rm = TRUE),
               # number-weighted sd across the strata collapsed into this point
@@ -302,8 +364,64 @@ length_meanweight <- function(linked, group_vars = character(0)) {
               },
               n_strata = dplyr::n(),
               n_meas = sum(.n_meas, na.rm = TRUE),
-              weight_basis = sum(.w, na.rm = TRUE), .groups = "drop") %>%
+              n_fish = if (all(is.na(.n_fish))) NA_real_
+                       else sum(.n_fish[!duplicated(.inst)], na.rm = TRUE),
+              weight_basis = sum(.w, na.rm = TRUE),
+              plus = if (has_plus) any(.plus %in% TRUE) else NA,
+              .groups = "drop") %>%
     filter(is.finite(mean_weight)) %>% as.data.frame()
+  if (!has_plus) out$plus <- NULL
+  out
+}
+
+# Ages from `from` upward pooled into one plus class, distribution by
+# distribution (each domain of each country, in each stratum key it is
+# linked to): the numbers of those ages are added up, and their mean
+# weights are averaged weighted by those numbers - the rule
+# length_meanweight() uses to pool strata, applied first inside each
+# distribution, so the spread across strata that plot later is still a
+# spread across strata and not across ages. The pooled class is labelled
+# `from`. Works on a linked table (link_dist_to_strata()); `dims` are the
+# stratum columns that link carried.
+#' @noRd
+#' @export
+pool_plus_group <- function(linked, from, dims = character(0)) {
+  if (is.null(linked) || !nrow(linked)) return(linked)
+  hi <- is.finite(linked$.class) & linked$.class >= from
+  if (!any(hi)) return(linked)
+  id <- c(intersect(c("domainBiology", "catchCategory", "vesselFlagCountry"),
+                    names(linked)), intersect(dims, names(linked)))
+  gid <- function(x) biology_key(x, id)
+  n <- linked[hi & linked$.var_kind == "numbers", , drop = FALSE]
+  w <- linked[hi & linked$.var_kind == "meanweight", , drop = FALSE]
+
+  # numbers add up
+  gn <- gid(n)
+  pn <- n[!duplicated(gn), , drop = FALSE]
+  pn$.value_std <- unname(tapply(n$.value_std, gn, sum, na.rm = TRUE)[gid(pn)])
+
+  # a mean weight is weighted by the numbers at its own age; a distribution
+  # with no numbers to weigh by is averaged plainly
+  gw <- gid(w)
+  wt <- n$.value_std[match(paste(gw, w$.class), paste(gn, n$.class))]
+  wt[!is.finite(wt) | wt < 0 | !is.finite(w$.value_std)] <- 0
+  none <- unname(tapply(wt, gw, sum)[gw]) <= 0
+  wt[none & is.finite(w$.value_std)] <- 1
+  pw <- w[!duplicated(gw), , drop = FALSE]
+  pw$.value_std <- unname((tapply(wt * ifelse(wt > 0, w$.value_std, 0), gw, sum) /
+                             tapply(wt, gw, sum))[gid(pw)])
+
+  pooled <- rbind(pn, pw)
+  pooled$.class <- from
+  if ("distributionClass" %in% names(pooled))
+    pooled$distributionClass <- if (is.character(linked$distributionClass))
+      as.character(from) else from
+  # the pooled rows are marked, so a summary built from this link (and the
+  # plot drawn from it) knows the class is a plus group without being told
+  lo <- linked[!hi, , drop = FALSE]
+  if (is.null(lo$.plus)) lo$.plus <- FALSE
+  pooled$.plus <- TRUE
+  rbind(lo, pooled)
 }
 
 #' The values behind each mean-weight point, un-collapsed
@@ -1500,10 +1618,13 @@ stratum_measurements <- function(catches, dist, dims,
   lk <- link_dist_to_strata(catches, dist, dims, catch_category, type)
   if (is.null(lk) || !nrow(lk)) return(NULL)
   # numMeasurements repeats across the classes of a domain, so it is
-  # taken once per domain rather than summed over every length class
+  # taken once per domain (of each country: two countries can use the same
+  # domain name, each with its own distribution) rather than summed over
+  # every length class
   per_domain <- lk %>%
     filter(.var_kind == "numbers") %>%
-    group_by(across(all_of(c(dims, "domainBiology")))) %>%
+    group_by(across(all_of(c(dims, "domainBiology",
+                             intersect("vesselFlagCountry", names(lk)))))) %>%
     summarise(n_meas = suppressWarnings(max(.n_meas, na.rm = TRUE)),
               .groups = "drop") %>%
     mutate(n_meas = ifelse(is.finite(n_meas), n_meas, 0))

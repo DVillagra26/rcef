@@ -45,10 +45,15 @@ ok(is.na(s$total) && is.na(s$rate) && near(s$coverage, 0),
    "SSC: no discard estimate -> total and rate are NA (not 0), coverage 0")
 ok(near(s$landings, 0.5) && near(s$weightingTotal, 0),
    "SSC: its landings are still counted")
+## the same discards said the other way: D / (L + D), not D / L
+ok(near(o$discardRate, 0.2 / 1.2) && near(b$discardRate, 0.1 / 4.1) &&
+     is.na(s$discardRate),
+   "discardRate = discards / (covered landings + discards); NA where there is no estimate")
 
 ## the columns follow CAR / CAS, and carry no judgement of the sampling
 want <- c("catchCategory", "variableUnit", "total", "weightingCategory",
-          "weightingTotal", "rate", "landings", "coverage", "numTrips")
+          "weightingTotal", "rate", "discardRate", "landings", "coverage",
+          "numTrips")
 ok(all(want %in% names(t1)), "the CAR / CAS-style value columns are all there")
 ok(identical(names(t1), c("metier4", "Country", want)),
    "the stratum columns first, then the value columns in a fixed order")
@@ -64,6 +69,8 @@ t2 <- build_coverage_strata(cd, "Country")
 ok(nrow(t2) == 1 && near(t2$total, 0.3) && near(t2$weightingTotal, 5) &&
      near(t2$landings, 8.5) && near(t2$rate, 0.06),
    "dims = 'Country' pools the three strata: 0.3 t / 5 t = 0.06")
+ok(near(t2$discardRate, 0.3 / 5.3),
+   "and D/(L+D) is re-derived from the summed weights too: 0.3 / 5.3")
 ok(near(t2$coverage, 5 / 8.5 * 100) && t2$numTrips == 5,
    "pooled coverage is re-derived from the summed weights; trips = the largest")
 t3 <- build_coverage_strata(cd, c("metier4", "Country", "domainCatchDis"))
@@ -72,6 +79,32 @@ ok(nrow(t3) > nrow(t1), "a finer dims gives more, smaller strata")
 ## ---- 3. arguments -----------------------------------------------------
 err <- function(expr) tryCatch({ force(expr); "no error" },
                                error = function(e) conditionMessage(e))
+
+## ---- 3a. dims left out: nothing pooled, the finest the data has -------
+## `cd` only carries "Country" of the four default columns (fleetValue,
+## areaValue, Country, Season) - metier4 is not one of them, so leaving dims
+## out must NOT default to metier4 x Country; it collapses to Country alone,
+## exactly like naming it (t2, above).
+ok(identical(build_coverage_strata(cd), t2),
+   "no dims given: defaults to whichever of fleetValue/areaValue/Country/Season the catch has (just Country here)")
+cd_nocty <- cd; cd_nocty$Country <- NULL
+ok(grepl("none of the default stratum", err(build_coverage_strata(cd_nocty))),
+   "no dims, and none of the four default columns present -> a clear error")
+## on real, derive_fields()-ed catch all four are present, so the default is
+## genuinely the finest: as many rows as naming them all explicitly
+ac0 <- { data("anchoveta_catch", package = "rcef", envir = environment())
+  anchoveta_catch }
+finest <- c("fleetValue", "areaValue", "Country", "Season")
+ok(identical(build_coverage_strata(ac0), build_coverage_strata(ac0, finest)),
+   "on real catch (all four default columns present), no dims matches naming them all")
+ok(nrow(build_coverage_strata(ac0)) >= nrow(build_coverage_strata(ac0, c("metier4", "Country"))),
+   "... which is at least as fine as a named, coarser table")
+ad0 <- { data("anchoveta_dist", package = "rcef", envir = environment())
+  anchoveta_dist }
+ok(identical(build_coverage_strata(ac0, distributions = ad0, what = "length"),
+             build_coverage_strata(ac0, finest, ad0, what = "length")),
+   "the default applies to length / age too")
+
 ok(grepl("catchCategory does not apply", err(
      build_coverage_strata(cd, "metier4", catchCategory = "Lan"))),
    "catchCategory on a discard table is an error")

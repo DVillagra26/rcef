@@ -33,7 +33,9 @@
 #' counterpart (`total`, `weightingTotal`, `rate`, `numTrips`,
 #' `catchCategory`, `variableUnit`), so a stratum here reads like its row
 #' there. Weights are in tonnes; the CAR / CAS tables themselves keep the
-#' CEF's kilograms.
+#' CEF's kilograms. Both ways of expressing the discard rate are in the
+#' table - `rate` (D/L) and `discardRate` (D/(L+D)) - so either can be read,
+#' sorted or plotted.
 #'
 #' ## Discard tables (`what = "discard"`)
 #'
@@ -48,7 +50,8 @@
 #' | `total` | Discards. `NA` when the stratum has no discard estimate at all (nobody looked); `0` means it was looked at and none were found. |
 #' | `weightingCategory` | `"Lan"`. |
 #' | `weightingTotal` | The landings that carry a discard estimate (their `domainCatchDis` is filled): the weight `rate` is weighted by. |
-#' | `rate` | `total / weightingTotal`: discards per tonne of covered landings, as the CAS output reports it. A ratio, so it can exceed 1 - unlike `discard_rate` in [build_strata()], which is discards / (landings + discards). `NA` when `total` is missing or `weightingTotal` is 0. |
+#' | `rate` | `total / weightingTotal` (D/L): discards per tonne of covered landings, as the CAS output reports it. A ratio, so it can exceed 1. `NA` when `total` is missing or `weightingTotal` is 0. |
+#' | `discardRate` | `total / (weightingTotal + total)` (D/(L+D)): the discards as a share of the covered landings plus the discards - the `discard_rate` of [build_strata()]. Between 0 and 1. `NA` when `total` is missing or the denominator is 0. |
 #' | `landings` | All landings in the stratum, covered or not. |
 #' | `coverage` | `weightingTotal / landings`, in percent; `NA` when there are no landings. |
 #' | `numTrips` | The trips behind the stratum; `NA` when the data does not report them. The largest count among the stratum's rows (one trip repeats across the rows of a sample), and summed when the plots pool strata into one cell. |
@@ -75,7 +78,11 @@
 #' row pools everything else), more for a finer one. Weights add up, so a
 #' table built finer can be pooled to coarser plotted columns later without
 #' loss - coverage and rate are re-derived from the summed weights, never
-#' averaged.
+#' averaged. Leave `dims` out and nothing is pooled at all: the table is
+#' built at the finest a stratum naturally gets - `fleetValue`, `areaValue`,
+#' `Country`, `Season`, whichever of those [derive_fields()] added are
+#' actually present in `catch` - so a stratum here is as fine as the data
+#' itself, and only naming `dims` yourself asks for anything coarser.
 #'
 #' ## Build once, draw many
 #'
@@ -89,9 +96,12 @@
 #'   and the ICES area levels.
 #' @param dims Character vector of the columns that define a stratum, for
 #'   example `c("metier4", "Country")`, or the finer
-#'   `c("fleetValue", "areaValue", "Season")`. For length and age
-#'   `catchCategory` is never a stratum column (it is a column of the
-#'   result, one row per catch part) and is ignored if named.
+#'   `c("fleetValue", "areaValue", "Season")`. Default `NULL`: nothing is
+#'   pooled, and the table is built at the finest a stratum naturally gets
+#'   (`fleetValue`, `areaValue`, `Country`, `Season` - whichever of those
+#'   are present in `catch`). For length and age `catchCategory` is never a
+#'   stratum column (it is a column of the result, one row per catch part)
+#'   and is ignored if named.
 #' @param distributions A CEF distributions table. Required for
 #'   `what = "length"` and `what = "age"`, ignored for discards.
 #' @param what `"discard"` (default), `"length"` or `"age"`. The plural and
@@ -121,6 +131,10 @@
 #' nrow(build_coverage_strata(anchoveta_catch,
 #'                            c("fleetValue", "areaValue", "Season")))
 #'
+#' # dims left out: nothing pooled - one row per fleetValue x areaValue x
+#' # Country x Season combination the catch actually has
+#' nrow(build_coverage_strata(anchoveta_catch))
+#'
 #' # length coverage of the landings: weight, share with a distribution,
 #' # and the measurements behind it
 #' len <- build_coverage_strata(anchoveta_catch, c("metier4", "Country"),
@@ -132,15 +146,29 @@
 #' plot_coverage_heat(cov, y = "metier4", x = "Country", min_cov = 50)
 #' plot_discard_rate(cov, x = "metier4", colour = "Country")
 #' @export
-build_coverage_strata <- function(catch, dims, distributions = NULL,
+build_coverage_strata <- function(catch, dims = NULL, distributions = NULL,
                                   what = "discard", catchCategory = NULL) {
   fn   <- "build_coverage_strata"
   what <- normalize_what(what)
   catch <- as.data.frame(catch)
-  dims <- unique(as.character(dims))
-  dims <- dims[!is.na(dims) & nzchar(dims)]
-  if (!length(dims))
-    stop(fn, "(): `dims` names no column", call. = FALSE)
+  if (is.null(dims)) {
+    # Nothing pooled unless asked for: the finest a stratum naturally gets,
+    # not some column the caller never named. Only the ones the data
+    # actually carries - a table filtered before derive_fields() may lack
+    # one of them.
+    dims <- intersect(c("fleetValue", "areaValue", "Country", "Season"),
+                      names(catch))
+    if (!length(dims))
+      stop(fn, "(): `dims` was not given and none of the default stratum ",
+           "columns (fleetValue, areaValue, Country, Season) are in ",
+           "`catch` - name `dims` yourself, or run derive_fields() first",
+           call. = FALSE)
+  } else {
+    dims <- unique(as.character(dims))
+    dims <- dims[!is.na(dims) & nzchar(dims)]
+    if (!length(dims))
+      stop(fn, "(): `dims` names no column", call. = FALSE)
+  }
   miss <- setdiff(dims, names(catch))
   if (length(miss))
     stop(fn, "(): column(s) not in `catch`: ", paste(miss, collapse = ", "),
@@ -180,6 +208,11 @@ build_coverage_strata <- function(catch, dims, distributions = NULL,
     out$rate              <- ifelse(st$has_disc_data &
                                       st$landings_with_discards > 0,
                                     st$discards / st$landings_with_discards,
+                                    NA_real_)
+    out$discardRate       <- ifelse(st$has_disc_data &
+                                      st$landings_with_discards + st$discards > 0,
+                                    st$discards / (st$landings_with_discards +
+                                                     st$discards),
                                     NA_real_)
     out$landings          <- st$landings
     out$coverage          <- st$coverage
@@ -306,8 +339,9 @@ coverage_cells <- function(catch, distributions, keys, what, what_given,
          paste(setdiff(names(tbl), c("catchCategory", "variableUnit",
                                      "weightingCategory", "distributionType",
                                      "total", "weightingTotal", "rate",
-                                     "landings", "coverage", "numTrips",
-                                     "numMeasurements")), collapse = ", "),
+                                     "discardRate", "landings", "coverage",
+                                     "numTrips", "numMeasurements")),
+               collapse = ", "),
          ")", call. = FALSE)
 
   cells <- if (identical(what, "discard")) {
@@ -322,6 +356,8 @@ coverage_cells <- function(catch, distributions, keys, what, what_given,
                 n_strata = dplyr::n(), .groups = "drop") %>%
       mutate(rate = ifelse(!is.na(total) & weightingTotal > 0,
                            total / weightingTotal, NA_real_),
+             discardRate = ifelse(!is.na(total) & weightingTotal + total > 0,
+                                  total / (weightingTotal + total), NA_real_),
              coverage = ifelse(landings > 0,
                                weightingTotal / landings * 100, NA_real_))
   } else {

@@ -278,6 +278,21 @@ coverage_ui <- function() tagList(
 
 drates_ui <- function() tagList(
   control_deck("dr", label = "Discard rate controls",
+    # Which rate is the y axis, and a reference to read the strata against.
+    # The reference is typed in percent (the axis is in percent) and handed
+    # to plot_discard_rate() as a fraction.
+    options = tagList(
+      h4("Discard rate"),
+      radioButtons("dr_rate", NULL,
+                   c("D / L" = "D/L", "D / (L + D)" = "D/(L+D)"), "D/L"),
+      span(class = "note",
+           "D / L: discards over the landings that carry a discard ",
+           "estimate (the CAS rate, can pass 100%). D / (L + D): discards as ",
+           "a share of landings plus discards, within 0-100%."),
+      numericInput("dr_ref", "Reference line (%)", NA, 0, NA, 5),
+      span(class = "note",
+           "A dashed line at this rate, and the strata above it named on ",
+           "the figure. Empty for none.")),
     settings = tagList(
       role_chips("dr", c(x = "X axis", fill = "Colour", shape = "Shape",
                          facet = "Facet"),
@@ -454,7 +469,15 @@ len_meanw_ui <- function(p, type = "LengthTotal") {
   tagList(
     control_deck(paste0(p, "_w"), label = "Mean weight controls",
       options = tagList(
-        len_cc_filter(ns)),
+        len_cc_filter(ns),
+        # how far to trust the curve: the fish behind each point, and (ages
+        # only) what pooling the oldest ages into a plus group does to it
+        checkboxInput(ns("samples"), "Bars: fish measured", FALSE),
+        if (identical(type, "Age"))
+          tagList(
+            checkboxInput(ns("plus"), "Plus group", FALSE),
+            conditionalPanel(sprintf("input.%s", ns("plus")),
+              numericInput(ns("plus_from"), "Pool from age", 7, 0, 40, 1)))),
       settings = tagList(
         role_chips(ns("r"), c(fill = "Colour", facet = "Facet",
                               shape = "Facet 2"),
@@ -474,7 +497,14 @@ len_meanw_ui <- function(p, type = "LengthTotal") {
           "strata that were combined - so the spread hidden by the ",
           "grouping stays visible. Give Shape a variable and those ",
           "strata are drawn separately instead, and the band disappears ",
-          "because nothing is being averaged."),
+          "because nothing is being averaged.",
+          tags$br(),
+          "Bars put the fish measured at each class behind the lines, on ",
+          "the axis on the right: a point on a short bar rests on few fish. ",
+          if (identical(type, "Age"))
+            paste("Plus group pools every age from the one you give upward",
+                  "into one class, labelled with a +, to see what it does to",
+                  "the curve.")),
       div(class = "legend-strip", plotOutput(ns("legend"), height = "120px")),
       filter_banner(ns("")),
       plot_slot(ns("plot"), capture = TRUE)))
@@ -2380,7 +2410,7 @@ ui <- navbarPage(
         tags$hr(),
         conditionalPanel("input.sec5x == 'stgexpl'", len_coverage_ui("age")),
         conditionalPanel("input.sec5x == 'agevar'", len_numbers_ui("age")),
-        conditionalPanel("input.sec5x == 'ageweightvar'", len_meanw_ui("age"))),
+        conditionalPanel("input.sec5x == 'ageweightvar'", len_meanw_ui("age", "Age"))),
       conditionalPanel("input.sec5 == 'stggrp'", len_alloc_ui("age")),
       conditionalPanel("input.sec5 == 'stgraise'",
                        len_raise_ui("age", "Age")))),
@@ -3413,6 +3443,7 @@ server <- function(input, output, session) {
     w_sig <- reactive(c(list(i_("w_cc"), i_("w_r_fill"), i_("w_r_facet"),
                              i_("w_r_shape"), i_("w_pt"), i_("w_points"),
                              i_("w_freex"), i_("w_freey"),
+                             i_("w_samples"), i_("w_plus"), i_("w_plus_from"),
                              flt_sig("w")),
                         lv_sig()))
     dist_ref <- reactive(rv$dist)
@@ -3606,9 +3637,31 @@ server <- function(input, output, session) {
         stacked = if (isTRUE(input[[paste0(p, "_n_stack")]])) "TRUE" else "FALSE")))
 
     # ---- view 3: mean weight at length --------------------------
+    # The plus group asked for on this tab: the age it starts at, or NULL.
+    # Ages only, and only when it is ticked and a start is given.
+    plus_from_w <- function() {
+      if (!identical(type, "Age") || !isTRUE(input[[paste0(p, "_w_plus")]]))
+        return(NULL)
+      v <- input[[paste0(p, "_w_plus_from")]]
+      if (is.numeric(v) && length(v) == 1 && is.finite(v) && v >= 0) v else NULL
+    }
+    samples_w <- function() isTRUE(input[[paste0(p, "_w_samples")]])
+
     mw_data <- reactive({
       lk <- linked_for("w")
       validate(need(!is.null(lk) && nrow(lk), "No length distributions."))
+      # A plus group is pooled in the link, before anything is averaged. The
+      # summary keeps the mark (a `plus` column) and the plot labels the
+      # class from it, so the picture matches plot_meanweight_at_length_age()
+      # given the raw catch and plus_group = TRUE.
+      if (identical(type, "Age") && isTRUE(input[[paste0(p, "_w_plus")]])) {
+        from <- plus_from_w()
+        validate(need(!is.null(from), "Give the age the plus group starts at."))
+        validate(need(any(lk$.class >= from, na.rm = TRUE),
+                      sprintf("No age reaches %s, so there is no plus group to draw.",
+                              format(from))))
+        lk <- pool_plus_group(lk, from, dims_of())
+      }
       pt <- len_dim_col(p, input[[paste0(p, "_w_pt")]])
       gv <- unique(na.omit(c(rc("w","fill"), rc("w","facet"), rc("w","shape"), pt)))
       length_meanweight(lk, gv) })
@@ -3616,9 +3669,14 @@ server <- function(input, output, session) {
     mw_obj <- gated(w_gate, {
       d <- mw_data()
       validate(need(!is.null(d) && nrow(d), "No mean-weight rows."))
+      if (samples_w() && !any(is.finite(d$n_fish) & d$n_fish > 0))
+        showNotification(paste("No fish counts to draw: these distributions carry no",
+                               "numMeasurements (or report 0), so there are no bars."),
+                         type = "warning", duration = 6)
       plot_meanweight_at_length_age(d,
         colour = rc("w","fill"), facet = rc_facet("w"),
         shape = len_dim_col(p, input[[paste0(p, "_w_pt")]]),
+        show_samples = samples_w(),
         scales = facet_scales(isTRUE(input[[paste0(p, "_w_freex")]]),
                               isTRUE(input[[paste0(p, "_w_freey")]]))) })
     output[[paste0(p, "_w_plot_ui")]] <- renderUI({
@@ -3636,13 +3694,19 @@ server <- function(input, output, session) {
     keep_plot(paste0(p, "_w_plot"), mw_obj, gate = w_gate,
       section = "model_explore_length_age",
       title = function() sprintf("Mean weight at %s", what_word),
-      note = function() sprintf(
+      note = function() paste0(sprintf(
         "%s; whatever is not given a role is averaged over, weighted by the numbers measured",
         cc_word("w")),
+        if (!is.null(plus_from_w()))
+          sprintf("; ages %s and older pooled into a plus group",
+                  format(plus_from_w()))),
       prep = function() c(
         sprintf("dims_biology <- %s", fmt_vals(dims_of())),
         sprintf('linked <- link_dist_to_strata(catch_for_biology, distributions, dims_biology, %s, "%s")',
                 taf_q(cc_of("w")), type),
+        if (!is.null(plus_from_w()))
+          sprintf("linked <- pool_plus_group(linked, %s, dims_biology)",
+                  format(plus_from_w())),
         sprintf("d_mw <- length_meanweight(linked, %s)",
                 fmt_vals(unique(na.omit(c(rc("w","fill"), rc("w","facet"),
                           rc("w","shape"),
@@ -3650,7 +3714,8 @@ server <- function(input, output, session) {
       call = function() taf_call("plot_meanweight_at_length_age", list(
         "d_mw",
         colour = taf_q(rc("w","fill")), facet = taf_facet("w"),
-        shape = taf_q(len_dim_col(p, input[[paste0(p, "_w_pt")]])))))
+        shape = taf_q(len_dim_col(p, input[[paste0(p, "_w_pt")]])),
+        show_samples = if (samples_w()) "TRUE")))
   }
 
   length_server("len", "LengthTotal")
@@ -5306,7 +5371,8 @@ server <- function(input, output, session) {
     build_coverage_strata(explore_dat("dr"), panel_dims("dr")) %>%
       filter(!is.na(rate)) %>%
       mutate(across(c(total, weightingTotal, landings), ~ round(.x, 3)),
-             rate = round(rate, 3), coverage = round(coverage, 1)),
+             rate = round(rate, 3), discardRate = round(discardRate, 3),
+             coverage = round(coverage, 1)),
     options = list(scrollX = TRUE, pageLength = 10), rownames = FALSE))
 
   # --- 3/4/5: aggregate to the plotted roles only ----------
@@ -6325,9 +6391,13 @@ server <- function(input, output, session) {
   active_plots <- reactive({
     r <- function(v) if (is.null(v) || !nzchar(v)) "NULL" else sprintf('"%s"', v)
     list(
-      sprintf('plot_discard_rate(strata, x = %s, colour = %s, shape = %s, facet = %s)',
+      sprintf('plot_discard_rate(strata, x = %s, colour = %s, shape = %s, facet = %s%s%s)',
               r(role("dr","x")), r(role("dr","fill")),
-              r(role("dr","shape")), r(role("dr","facet"))),
+              r(role("dr","shape")), r(role("dr","facet")),
+              if (!identical(dr_rate_arg(), "D/L"))
+                sprintf(', rate = "%s"', dr_rate_arg()) else "",
+              if (!is.null(dr_ref_arg()))
+                sprintf(", reference = %s", format(dr_ref_arg())) else ""),
       sprintf('plot_coverage_heat(catch_data, y = %s, x = %s, facet = %s, min_cov = %s)',
               r(col_of("cov", input$cov_y)),
               r(col_of("cov", input$cov_fill)), r(col_of("cov", input$cov_facet)),
@@ -6421,17 +6491,33 @@ server <- function(input, output, session) {
       min_trip = input$cov_trips %||% 2, emit = TRUE))
 
   # discard-rate plot (one view: raw per-stratum points)
+  # The two options as plot_discard_rate() takes them: which rate is plotted,
+  # and the reference as a fraction - the box is in percent, empty for none.
+  dr_rate_arg <- function() input$dr_rate %||% "D/L"
+  dr_ref_arg <- function() {
+    v <- input$dr_ref
+    if (is.numeric(v) && length(v) == 1 && is.finite(v)) v / 100 else NULL
+  }
+
   dr_sig <- reactive(list(input$dr_x, input$dr_fill,
                           input$dr_shape, input$dr_facet, input$dr_jitter,
+                          input$dr_rate, input$dr_ref,
                           input$dr_fleet, input$dr_area,
                           flt_inputs("dr")))
   dr_g <- gate_of("dr", dr_sig)
 
   dr_plot_obj <- gated(dr_g, {
     validate(need(!is.null(role("dr", "x")), "Pick an X axis."))
+    rf <- dr_ref_arg()
+    validate(
+      need(is.null(rf) || rf >= 0,
+           "The reference line is a percentage of zero or more."),
+      need(is.null(rf) || !identical(dr_rate_arg(), "D/(L+D)") || rf <= 1,
+           "With D / (L + D) the reference line is a percentage between 0 and 100."))
     plot_discard_rate(explore_dat("dr"),
                 x = role("dr","x"), colour = role("dr","fill"),
                 shape = role("dr","shape"), facet = role("dr","facet"),
+                rate = dr_rate_arg(), reference = rf,
                 jitter = input$dr_jitter) })
 
   output$dr_plot_ui <- renderUI({
@@ -6460,6 +6546,8 @@ server <- function(input, output, session) {
         "strata_dr", x = taf_q(role("dr", "x")),
         colour = taf_q(role("dr", "fill")), shape = taf_q(role("dr", "shape")),
         facet = taf_q(role("dr", "facet")),
+        rate = if (!identical(dr_rate_arg(), "D/L")) taf_q(dr_rate_arg()),
+        reference = if (!is.null(dr_ref_arg())) format(dr_ref_arg()),
         jitter = if (isTRUE(input$dr_jitter)) "TRUE" else "FALSE")))
 
   # =========================================================

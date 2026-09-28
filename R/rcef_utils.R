@@ -390,7 +390,6 @@ derive_fields <- function(x) {
       metier4 = tok_join(1),                 # GNS
       metier5 = tok_join(2),                 # GNS_DEF
       metier6 = tok_join(3),                 # GNS_DEF_120-219
-      gear    = metier4,
       target  = tok_at(2),
       mesh    = tok_at(3),
       ICESSubArea     = ices_area_levels(areaValue)$ICESSubArea,
@@ -405,11 +404,6 @@ derive_fields <- function(x) {
       # bolted onto the engine.
       Stratum = paste(vesselFlagCountry, fleetValue, areaValue,
                       seasonValue, sep = " | "),
-      FleetType = case_when(
-        (metier5 %in% c("OTB_DEF", "OTT_DEF") |
-           metier4 %in% c("SDN", "SSC", "PTB")) &
-          mesh %in% c(">=120", ">=220", "100-119", "120-219") ~ "TR1",
-        TRUE ~ "Other")
     )
 }
 

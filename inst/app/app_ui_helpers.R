@@ -382,8 +382,10 @@ dir_picker_recent <- local({
 #' @keywords internal
 #' @noRd
 plot_height <- function(df, facet_var = NULL, n_y = 10, ncol = 2,
-                        base = 300, per_row = 190, per_y = 17,
+                        base = 360, per_row = 190, per_y = 17,
                         y_var = NULL) {
+  # base = 360: the plots carry a subtitle of two to five lines that says how
+  # the figure is worked out, and it comes out of the panel, not on top of it
   rows <- 1
   if (!is.null(facet_var) && nzchar(facet_var) && !is.null(df) &&
       facet_var %in% names(df))
@@ -425,7 +427,7 @@ plot_height <- function(df, facet_var = NULL, n_y = 10, ncol = 2,
 #' @keywords internal
 #' @noRd
 length_plot_height <- function(d, facet1 = NULL, facet2 = NULL, ncol = 2,
-                               base = 300, per_row = 190, n_y = 10,
+                               base = 360, per_row = 190, n_y = 10,
                                per_y = 17) {
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
   n1 <- if (has(facet1) && !is.null(d) && facet1 %in% names(d))

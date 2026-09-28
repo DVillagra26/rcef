@@ -4,6 +4,12 @@
 #  ORIGIN: this project. Package-level documentation and imports.
 #  Named aaa- so it sorts first; nothing here depends on load order,
 #  but it is the first file a reader should open.
+#
+#  tidyr::replace_na is imported for R/RDBESStockCoord_allocation.R,
+#  which calls it inside across(~ replace_na(.x, 0)). A call inside a
+#  formula is invisible to codetools, and the shiny app attaches tidyr
+#  so it hid the gap: headless, catchAtAoLAggregation() failed with
+#  'could not find function "replace_na"'.
 # =====================================================================
 
 #' rcef: discard raising and length/age catch allocation over CEF data
@@ -34,9 +40,12 @@
 #' | write the session out as an ICES TAF script set | [taf_bundle()] |
 #' | use all of this through the application | [run_app()] |
 #'
-#' `vignette("rcef-workflow", package = "rcef")` walks one stock from input
-#' files to numbers and mean weights at length and age, and
-#' `vignette("coverage-plots", package = "rcef")` shows every exploratory plot.
+#' Four vignettes walk it through on real data, in this order:
+#' `"part1-explore-sampling-coverage"` (every exploratory plot),
+#' `"part2a-discard-raising-manual-groups"` and
+#' `"part2b-discard-raising-hierarchical-groups"` (group allocation and
+#' discard raising, and the CC, CAR and CAS tables) and
+#' `"part3-compare-allocation-schemes"`.
 #'
 #' ## The chain
 #'
@@ -88,7 +97,7 @@
 #' @import ggplot2
 #' @import rlang
 #' @importFrom data.table setDT rbindlist dcast melt %like%
-#' @importFrom tidyr pivot_longer pivot_wider
+#' @importFrom tidyr pivot_longer pivot_wider replace_na
 #' @importFrom stringr str_extract
 #' @keywords internal
 #' @md

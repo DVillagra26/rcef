@@ -78,6 +78,160 @@ cov_title_what <- function(what)
 samp_word <- function(what)
   switch(what, length = "length", age = "age", "discard")
 
+#' The weight a plot is about, in words
+#'
+#' @param weight_label `"landings"`, `"discards"`, `"catch"` or `"BMS catch"`
+#'   (what [default_weight_label()] returns).
+#' @return A list: `adj` (`"landed"`, `"discarded"`, `"catch"`, `"BMS
+#'   catch"`) and `noun` (`"landed weight"`, ...).
+#' @keywords internal
+#' @noRd
+#' @export
+weight_words <- function(weight_label) {
+  adj <- switch(weight_label, landings = "landed", discards = "discarded",
+                weight_label)
+  list(adj = adj, noun = paste(adj, "weight"))
+}
+
+#' Title of a coverage plot: what is sampled, and of which weight
+#'
+#' "Discard sampling of landed weight", "Length sampling of catch strata",
+#' "Age sampling of discarded weight by areaValue": the thing being sampled
+#' first, then the weight it is looked at over.
+#'
+#' @param what `"discard"`, `"length"` or `"age"`.
+#' @param weight_label As for [weight_words()].
+#' @param view `"weight"` (bars, map) or `"strata"` (heatmap, bubbles).
+#' @param by Optional columns the figure is split by, named at the end.
+#' @keywords internal
+#' @noRd
+#' @export
+cov_title <- function(what, weight_label, view = c("weight", "strata"),
+                      by = NULL) {
+  view <- match.arg(view)
+  sprintf("%s sampling of %s %s%s", cov_title_what(what),
+          weight_words(weight_label)$adj,
+          if (view == "weight") "weight" else "strata",
+          if (length(by)) paste0(" by ", paste(by, collapse = " and ")) else "")
+}
+
+#' What "% covered" means for a coverage plot
+#'
+#' @param what `"discard"`, `"length"` or `"age"`.
+#' @param weight_label As for [weight_words()].
+#' @return e.g. `"% covered = landed weight that carries a discard estimate /
+#'   landed weight"`.
+#' @keywords internal
+#' @noRd
+#' @export
+covered_phrase <- function(what, weight_label) {
+  noun <- weight_words(weight_label)$noun
+  sprintf("%% covered = %s that %s / %s", noun,
+          switch(what, length = "is linked to a length distribution",
+                 age = "is linked to an age distribution",
+                 "carries a discard estimate"),
+          noun)
+}
+
+#' The subtitle sentence naming the strata and what they pool over
+#'
+#' A stratum is fleet x area x country x season. A figure that shows only some
+#' of those - metier4 by Country, say - pools everything else into each mark:
+#' every area and season, and every fleet finer than metier4. This names what
+#' is shown and what is pooled, so a subtitle can say it.
+#'
+#' The variables are grouped into the four families the cascade keys use:
+#' fleet (`fleetValue` > `metier6` > `metier5` > `metier4`, and `gear`,
+#' `target`, `mesh`, `FleetType`), area (`areaValue` > `ICESSubdivision` >
+#' `ICESDivision` > `ICESSubArea`), country and season. A family with no
+#' variable shown is pooled entirely; one shown at a coarse level is pooled
+#' over the finer levels the data has. `Stratum`, and the domain columns
+#' `domainCatchDis` / `domainBiology`, stand for all four at their finest (a
+#' domain names its fleet, area, country and season), so nothing is pooled.
+#'
+#' @param vars The columns the figure shows or splits by.
+#' @param data The data the figure is made from. Raw catch says which stratum
+#'   columns exist, so only variables it really has are named; a coverage
+#'   table no longer has them and `NULL` has nothing to say, so both assume
+#'   the finest of each family.
+#' @param noun What to call the unit: `"Stratum"`, `"Area"`, `"Bar"`, ...
+#' @return e.g. `"Stratum = metier4 x Country x Season, pooled over area
+#'   (areaValue) and finer fleet levels (fleetValue)."`; `""` when `vars` names
+#'   no column.
+#' @keywords internal
+#' @noRd
+#' @export
+strata_sentence <- function(vars, data = NULL, noun = "Stratum") {
+  vars <- unique(as.character(vars[!is.na(vars) & nzchar(vars)]))
+  if (!length(vars)) return("")
+  have <- if (is.data.frame(data) && is.na(coverage_table_what(data))) names(data)
+  fam <- list(
+    fleet   = c(fleetValue = 1, metier6 = 2, metier5 = 3, metier4 = 4,
+                gear = 4, target = 4, mesh = 4, FleetType = 5),
+    area    = c(areaValue = 1, ICESSubdivision = 2, ICESDivision = 3,
+                ICESSubArea = 4),
+    country = c(Country = 1, vesselFlagCountry = 1),
+    season  = c(Season = 1, seasonValue = 1))
+  canonical <- c(fleet = "fleetValue", area = "areaValue", country = "Country",
+                 season = "Season")
+  pooled <- character(0)
+  if (!any(c("Stratum", "domainCatchDis", "domainBiology") %in% vars)) {
+    for (f in names(fam)) {
+      m <- fam[[f]]
+      present <- if (is.null(have)) canonical[[f]] else intersect(names(m), have)
+      if (!length(present)) next
+      finest <- present[which.min(m[present])]
+      shown <- intersect(vars, names(m))
+      if (!length(shown)) {
+        pooled <- c(pooled, sprintf("%s (%s)", f, finest))
+      } else if (m[[finest]] < min(m[shown])) {
+        pooled <- c(pooled, sprintf("finer %s levels (%s)", f, finest))
+      }
+    }
+  }
+  tail <- if (!length(pooled)) " (nothing pooled)"
+          else paste0(", pooled over ",
+                      if (length(pooled) == 1) pooled
+                      else paste0(paste(pooled[-length(pooled)], collapse = ", "),
+                                  " and ", pooled[length(pooled)]))
+  paste0(noun, " = ", paste(vars, collapse = " x "), tail, ".")
+}
+
+#' Wrap subtitle text to a plot's width
+#'
+#' Each argument is wrapped on its own and they are joined by newlines, so a
+#' subtitle can be a few short paragraphs. ggplot2 does not wrap for you.
+#'
+#' @param ... Character strings; empty ones are dropped.
+#' @param width Characters per line.
+#' @keywords internal
+#' @noRd
+#' @export
+sub_wrap <- function(..., width = 96) {
+  parts <- Filter(function(s) length(s) == 1 && !is.na(s) && nzchar(s),
+                  list(...))
+  paste(vapply(parts, function(s) paste(strwrap(s, width = width),
+                                        collapse = "\n"), ""),
+        collapse = "\n")
+}
+
+#' Caption naming the thresholds a status figure was judged against
+#'
+#' @param threshold Minimum coverage, in percent.
+#' @param min_trips,min_meas Minimum trips / measured fish, or `NULL` when
+#'   that question is not part of the classification.
+#' @keywords internal
+#' @noRd
+#' @export
+thr_caption <- function(threshold, min_trips = NULL, min_meas = NULL) {
+  bits <- sprintf("coverage >= %s%%", threshold)
+  if (thr_active(min_trips)) bits <- c(bits, sprintf("trips >= %s", min_trips))
+  if (thr_active(min_meas))
+    bits <- c(bits, sprintf("measured fish >= %s",
+                            format(min_meas, big.mark = ",", trim = TRUE)))
+  paste0("Thresholds: ", paste(bits, collapse = ", "))
+}
+
 #' Canonicalise a `what` argument
 #'
 #' The coverage plots take `what = "discard"` / `"length"` / `"age"`.
@@ -389,11 +543,14 @@ biology_axis_labels <- function(distributionType = "LengthTotal",
 #' @param quantity `"numbers"` or `"meanweight"`.
 #' @param grp Grouping columns for the summary.
 #' @param dims Stratum dimensions for the link; a default is used when `NULL`.
+#' @param plus_from Optional: the class (an age) from which everything is
+#'   pooled into one plus class (`pool_plus_group()`).
 #' @return `list(data, class_label, value_label)`.
 #' @keywords internal
 #' @export
 biology_dist_prep <- function(data, distributions, distributionType,
-                              catchCategory, quantity, grp, dims) {
+                              catchCategory, quantity, grp, dims,
+                              plus_from = NULL) {
   lab <- biology_axis_labels(distributionType, quantity)
   if (!is.null(distributions)) {
     if (is.null(dims))
@@ -401,6 +558,7 @@ biology_dist_prep <- function(data, distributions, distributionType,
     dims <- intersect(dims, names(as.data.frame(data)))
     linked <- link_dist_to_strata(data, distributions, dims, catchCategory,
                                   type = distributionType)
+    if (!is.null(plus_from)) linked <- pool_plus_group(linked, plus_from, dims)
     data <- if (identical(quantity, "numbers"))
       length_numbers(linked, grp) else length_meanweight(linked, grp)
     if (!is.null(data) && nrow(data) && identical(quantity, "numbers"))

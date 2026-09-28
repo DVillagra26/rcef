@@ -12,6 +12,9 @@ plot_meanweight_at_length_age(
   colour = NULL,
   facet = NULL,
   shape = NULL,
+  plus_group = FALSE,
+  plus_group_start = NULL,
+  show_samples = FALSE,
   scales = "fixed",
   palette = c("default", "colorblind")
 )
@@ -35,6 +38,16 @@ titled "catch"), \code{"Lan"}, \code{"Dis"} or \code{"BMS"}. Only used with
 \item{shape}{Column drawn as separate series with their own point shapes;
 opens the averaged group back up and drops the band.}
 
+\item{plus_group}{\code{TRUE} pools the ages from \code{plus_group_start} upward into
+one plus group. Ages only. Default \code{FALSE}. See \emph{The plus group}.}
+
+\item{plus_group_start}{The first age of the plus group: \code{7} pools ages 7
+and older, shown as \verb{7+}. Needed with \code{plus_group = TRUE}.}
+
+\item{show_samples}{\code{TRUE} draws bars of the fish measured at each class
+behind the lines, on a second axis. Default \code{FALSE}. See \emph{The fish behind
+each point}.}
+
 \item{scales}{Facet scales: \code{"fixed"} (default), \code{"free_x"}, \code{"free_y"} or
 \code{"free"}.}
 
@@ -47,14 +60,19 @@ A ggplot object, or \code{NULL} when there is nothing to draw.
 The number-weighted mean weight in each length (or age) class, as a line
 with points. Weight is in grams, length in cm and age in years. When the
 strata are averaged (no \code{shape}) and a spread is available, a +/- 1 sd
-band is drawn as well.
+band is drawn as well. Two options help to judge how far to trust the
+curve: a plus group pools the oldest ages into one class, and
+semi-transparent bars behind the lines show how many fish stand behind
+each point.
 }
 \details{
 \code{data} is either raw CEF catch together with \code{distributions} - linked
-through \code{domainBiology} and summarised inside, with \code{catchCategory}
-choosing the landings, the discards, BMS or the catch as a whole - or a
-table already summarised by \code{length_meanweight()}. When \code{distributions} is
-given the catch part goes in the plot title.
+through \code{domainBiology} and the country and summarised inside, with
+\code{catchCategory} choosing the landings, the discards, BMS or the catch as a
+whole - or a table already summarised by \code{length_meanweight()}. When
+\code{distributions} is given the catch part goes in the plot title. A
+distributions row that repeats another exactly is dropped, with a warning:
+a repeat is not a second sample.
 
 A mean weight is not additive, so strata that are pooled are averaged
 weighted by the numbers measured at that class: a stratum that measured
@@ -66,7 +84,45 @@ point; a point built from a single stratum has none.
 series per level, each drawn separately - and drops the band. \code{facet}
 takes one column (a wrapped set of panels) or two (\code{c("row", "col")}, a
 grid). Live weight and a line are the only options, so there is no
-\code{variableType} or \code{type} argument.
+\code{variableType} or \code{type} argument. The legend sits inside the panel like
+the other plots', except with \code{show_samples} or \code{plus_group}, where it moves
+outside so it cannot cover the right-hand end of the curve.
+\subsection{The plus group}{
+
+\verb{plus_group = TRUE, plus_group_start = 7} pools every age from 7 upward
+into one class, labelled \verb{7+} on the axis and in the subtitle. Inside each
+distribution the numbers of those ages are added and their mean weights
+averaged, weighted by those numbers; the pooled classes are then averaged
+over strata like any other point, so the band is still a spread across
+strata, not across ages. It shows what a plus group does to the curve: the
+ragged tail of old ages, each on a handful of fish, becomes one point
+with many. It applies to ages only, and needs raw catch with
+\code{distributions} - a table that is already summarised cannot be pooled
+again. A table built from a link that \code{pool_plus_group()} pooled carries a
+\code{plus} column instead, and the plot labels the class from it: that is how
+the app draws a plus group.
+}
+
+\subsection{The fish behind each point}{
+
+\code{show_samples = TRUE} draws, behind the lines, semi-transparent bars of the
+number of fish measured at each class, read on a second axis on the right.
+A mean weight that rests on a few fish is uncertain however smooth the
+line looks; a short bar under a point says so. The bars are stacked by
+\code{colour}, one stack per class in each panel, and follow the plus group when
+there is one.
+
+The distributions record \code{numMeasurements} once for a whole distribution,
+not per class, so the count at a class is that number shared out over the
+distribution's classes in proportion to its numbers there. This is exact
+for a length distribution raised from a length sample by one factor, and an
+estimate for ages read off an age-length key. A distribution counts once
+however many strata it is linked to, and one that reports no count
+(\code{numMeasurements} 0) adds none - a point with no bar is a point whose
+sample size is unknown, not zero, and the subtitle says so. Needs raw catch
+with \code{distributions}, or a \code{length_meanweight()} table (which carries the
+count as \code{n_fish}).
+}
 }
 \examples{
 data(anchoveta_catch)
@@ -80,6 +136,16 @@ plot_meanweight_at_length_age(anchoveta_catch, anchoveta_dist,
 plot_meanweight_at_length_age(anchoveta_catch, anchoveta_dist,
                               distributionType = "Age",
                               colour = "Country", facet = "Season")
+
+# what a plus group does: every age from 3 upward pooled into "3+"
+plot_meanweight_at_length_age(anchoveta_catch, anchoveta_dist,
+                              distributionType = "Age", colour = "Country",
+                              plus_group = TRUE, plus_group_start = 3)
+
+# the fish measured at each age, as bars behind the lines
+plot_meanweight_at_length_age(anchoveta_catch, anchoveta_dist,
+                              distributionType = "Age", colour = "Country",
+                              show_samples = TRUE)
 }
 \seealso{
 \code{\link[=plot_numbers_at_length_age]{plot_numbers_at_length_age()}} for the numbers in the same

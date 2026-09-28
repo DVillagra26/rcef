@@ -31,9 +31,12 @@ script or an ICES TAF script set. A shiny application, started with
 }
 
 
-\code{vignette("rcef-workflow", package = "rcef")} walks one stock from input
-files to numbers and mean weights at length and age, and
-\code{vignette("coverage-plots", package = "rcef")} shows every exploratory plot.
+Four vignettes walk it through on real data, in this order:
+\code{"part1-explore-sampling-coverage"} (every exploratory plot),
+\code{"part2a-discard-raising-manual-groups"} and
+\code{"part2b-discard-raising-hierarchical-groups"} (group allocation and
+discard raising, and the CC, CAR and CAS tables) and
+\code{"part3-compare-allocation-schemes"}.
 }
 
 \subsection{The chain}{

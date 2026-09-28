@@ -153,6 +153,25 @@ covered stratum with no trip count reads "safe" at \code{min_trip = NULL} but
 stays a warning at \code{min_trip = 0} (see \code{\link[=classify_strata]{classify_strata()}}).
 }
 
+\subsection{What the title and subtitle say}{
+
+The title names what is sampled, then the weight it is judged against:
+"Discard sampling of landed weight", "Length sampling of landed strata",
+"Age sampling of discarded weight". The weight word comes from
+\code{catchCategory} (landed, discarded, BMS, or the catch as a whole; discard
+coverage is always over the landings); "weight" is the bar chart and the
+map, "strata" the heatmap and bubbles.
+
+The subtitle spells out how the numbers on the figure are worked out - the
+value in a tile, the "\% covered" (the weight that carries a discard
+estimate, or is linked to a length / age distribution, over the weight),
+the staircase of the bar chart (the cumulative percentage of the weight) -
+and says what a stratum is here: the plotted columns. Every other stratum
+column is pooled into it ("Stratum = metier4 x Country x Season, pooled
+over finer fleet levels (fleetValue) and area (areaValue)"), so the same
+figure drawn at other columns has other strata behind it.
+}
+
 \subsection{Bars and palettes}{
 
 The bar chart shows sampled versus unsampled weight, which no threshold

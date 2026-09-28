@@ -1,0 +1,633 @@
+---
+title: "1. Exploring the data: sampling coverage, discard rates, and lengths, ages and weights of the sampled strata"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+vignette: >
+  %\VignetteIndexEntry{1. Exploring the data: sampling coverage, discard rates, and lengths, ages and weights of the sampled strata}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE, comment = "#>",
+  fig.width = 7, fig.height = 4.4, dpi = 110,
+  warning = FALSE, message = FALSE
+)
+```
+
+Every plot family the package has, drawn on two real CEF data sets, to look
+at and to check that each draws sensibly: discard coverage, length coverage,
+discard rate, and length and age distributions - each with a few options to
+compare against each other. It is ggplot2 only: every plot function returns
+a ggplot object (or `NULL` when there is nothing to draw).
+
+This is the first of four vignettes. Once the data has been explored here,
+**2a** and **2b** define groups of strata and raise the discards - by hand
+and with the hierarchical cascade - and **3** compares group allocation
+schemes.
+
+This is a walkthrough, not a test: nothing here asserts pass or fail. It is
+also the script to run chunk by chunk in RStudio; every figure is simply
+printed.
+
+**Table first.** The coverage and discard-rate figures are drawn from the
+table `build_coverage_strata()` returns, and every one of them takes either
+the raw catch (the table is built for you, at exactly the plotted columns) or
+that table itself. Section 2 first shows the tables on their own - discard
+rates and coverage per stratum, at whatever aggregation you name - and then
+the same numbers as figures.
+
+**Length plots stay on the landings.** Nothing in this vignette ever raises
+or allocates: it only has raw catch. A length plot on `catchCategory = "Dis"`
+would show the discards' *own*, un-raised length sample as if it were the
+whole picture - a coverage plot would look fully sampled when it is not, and
+a distribution plot would show a shape that has not been weighted up to what
+was actually discarded. So length and age views use `"Lan"` throughout, apart
+from one side-by-side comparison of the `catchCategory` argument itself,
+where `"Dis"` is clearly labelled.
+
+**Nothing is filtered first.** The app lets you narrow a figure to a subset
+(a country, a year, an area); here every plot uses everything in the loaded
+table. To plot a subset, filter the catch or the distributions yourself
+before the call - every function takes a plain data frame.
+
+# Data
+
+Two stocks, read from the CEF csv files under `inst/extdata/data_CEF_format`
+(local to this machine; the files are not in the repository).
+
+* **brill**, `bll.27.3a47de`, 2025 - discards and lengths. It has no age
+  data, so an age plot on it would draw an empty or misleading panel rather
+  than erroring.
+* **saithe**, `pok.27.3a46`, 2022 - the one with ages.
+
+```{r load}
+library(dplyr)
+library(rcef)
+
+cef_dir <- file.path("..", "inst", "extdata", "data_CEF_format")
+
+# blank cells (no discard domain, no trip count ...) read as NA
+catch_data        <- read.csv(file.path(cef_dir, "bll", "bll_2025_catches_CEF_v17.1.csv"),
+                              na.strings = "")
+distribution_data <- read.csv(file.path(cef_dir, "bll", "bll_2025_distributions_CEF_v17.1.csv"),
+                              na.strings = "")
+
+age_catch <- read.csv(file.path(cef_dir, "pok", "pok_2022_catches_CEF_v17.1.csv"),
+                      na.strings = "")
+age_dist  <- read.csv(file.path(cef_dir, "pok", "pok_2022_distributions_CEF_v17.1.csv"),
+                      na.strings = "")
+```
+
+`derive_fields()` is what turns raw CEF into strata-ready data: it parses
+`metier4` / `metier5` / `metier6` and `target` / `mesh` out of
+`fleetValue`, and the ICES area levels (subarea, division, subdivision) out
+of `areaValue`, plus `Country`, `Season` and `Stratum` - the same columns
+every plot function below reads on `y` / `x` / `fill` / `facet`. The
+distributions need nothing of the kind.
+
+```{r derive}
+catch_data <- derive_fields(catch_data)
+age_catch  <- derive_fields(age_catch)
+
+c(brill_catch = nrow(catch_data), brill_lengths = nrow(distribution_data),
+  saithe_catch = nrow(age_catch), saithe_ages = nrow(age_dist))
+table(distribution_data$distributionType)   # lengths only
+table(age_dist$distributionType)            # ages only
+```
+
+Everything from the next section on reads `catch_data` and
+`distribution_data` (brill), except the age section at the end, which reads
+`age_catch` and `age_dist` (saithe).
+
+# The tables
+
+`build_coverage_strata()` gives one row per stratum, at whatever aggregation
+`dims` names, with no plotting involved. The columns follow the CAR / CAS
+output tables - `total` is the discards D, `weightingTotal` the landings L
+that carry a discard estimate, `rate` is `total / weightingTotal` (D/L),
+`numTrips` the trips - in tonnes. `discardRate` is the same discards said the
+other way, as a share of landings plus discards: `total / (weightingTotal +
+total)` (D/(L+D)). Nothing in it judges the sampling: no status, no decision;
+thresholds are a plotting choice.
+
+```{r tab-disc}
+cov_mc <- build_coverage_strata(catch_data, c("metier4", "Country"))
+head(cov_mc[order(-cov_mc$landings), ], 10)
+```
+
+The aggregation is yours - coarser:
+
+```{r tab-coarse}
+build_coverage_strata(catch_data, "Season")
+```
+
+or finer:
+
+```{r tab-fine}
+cov_fine <- build_coverage_strata(catch_data,
+                                  c("fleetValue", "areaValue", "Season", "Country"))
+nrow(cov_fine)   # strata at fleetValue x areaValue x Season x Country
+```
+
+`dims` left out entirely pools nothing at all: `fleetValue`, `areaValue`,
+`Country` and `Season`, whichever of those the catch actually carries - as
+fine as the one above, just in that column order. It is the default
+precisely so nothing is pooled away by accident - naming `dims` yourself is
+how you ask for anything coarser.
+
+```{r tab-finest}
+cov_finest <- build_coverage_strata(catch_data)
+nrow(cov_finest)
+identical(cov_finest, build_coverage_strata(catch_data,
+                                            c("fleetValue", "areaValue", "Country", "Season")))
+```
+
+Every figure below takes the table as readily as the raw catch:
+`plot_coverage_heat(cov_mc, y = "metier4", x = "Country")` draws the same
+figure as `plot_coverage_heat(catch_data, y = "metier4", x = "Country")`. A
+table built *finer* than the plotted columns is pooled to them - weights add
+up, coverage and rate are re-derived from the summed weights, never
+averaged.
+
+# Discard coverage
+
+`plot_coverage_heat()`, `_bubble()`, `_bar()` and `_map()`. Each takes raw
+catch (or the table above) and, given raw catch, builds the table itself. `y`
+is required. Heat and bubble put the second category on `x`; bars put it on
+`fill`. `min_cov` and `min_trip` colour the heat and bubble status - a bar
+chart ignores them (passing them is an error). The status is worked out here
+from the thresholds, not stored in the table. The status legend always lists
+every *reachable* category - a stratum with no landed or caught weight at all
+draws no cell (nothing to judge), so "no landings" is not one of them.
+
+**Read the title and the subtitle.** The title says what is sampled and over
+which weight - "Discard sampling of landed weight", "Length sampling of landed
+strata" - and the subtitle spells out how the numbers on the figure are worked
+out: the value in a tile or the size of a bubble, the "% covered" (the weight
+that carries a discard estimate, or is linked to a length or age
+distribution, over the weight), the staircase of the bars. It also says what a
+stratum is *here*: the columns you plot, with every other stratum column
+pooled into it - "Stratum = metier4 x Country x Season, pooled over finer
+fleet levels (fleetValue) and area (areaValue)". Put `Season` on `facet` and
+it is no longer pooled over; take `Country` off `x` and it is.
+
+## Bars: sampled against not-sampled weight
+
+```{r disc-bar, fig.alt = "Sampled versus unsampled landed weight per metier"}
+plot_coverage_bar(catch = catch_data, y = "metier4")
+```
+
+## Heatmap: status per metier, country and season
+
+```{r disc-heat-1, fig.width = 8, fig.height = 7, fig.alt = "Coverage heatmap, metier by country, one panel per season"}
+plot_coverage_heat(catch_data, y = "metier4", x = "Country",
+                   facet = "Season", min_cov = 50)
+```
+
+The same with a trip threshold switched on:
+
+```{r disc-heat-2, fig.width = 8, fig.height = 7, fig.alt = "The same heatmap with a minimum of two trips"}
+plot_coverage_heat(catch_data, y = "metier4", x = "Country",
+                   facet = "Season", min_cov = 50, min_trip = 2)
+```
+
+## Bubbles: the weighted status grid
+
+```{r disc-bubble, fig.height = 5, fig.alt = "Coverage bubble grid, bubble area proportional to landed weight"}
+plot_coverage_bubble(catch_data, y = "metier4", x = "Country",
+                     min_cov = 50, min_trip = 2)
+```
+
+Same grid as the heatmap, but a tiny un-sampled stratum now reads as a tiny
+bubble - you can tell "small problem" from "the bulk of the fishery is
+blind".
+
+## Map: one pie per FAO area
+
+One sampled / not-sampled pie per ICES area, radius = landings. `area` is the
+level the pies are drawn at (`areaValue`, `ICESDivision`, `ICESSubArea`); the
+subtitle says how the sampled slice is worked out and what each pie pools
+over. `group` puts a labelled box of pies per area, one pie per level.
+
+```{r disc-map, fig.height = 5, fig.alt = "Coverage map, one sampled / not-sampled pie per area"}
+plot_coverage_map(catch_data,area = "ICESDivision")
+```
+
+```{r disc-map-season, fig.height = 6, fig.alt = "Coverage map with one box of pies per area, split by season"}
+plot_coverage_map(catch_data, area = "ICESSubArea", group = "Season")
+```
+
+```{r disc-map-country, fig.height = 6, fig.alt = "Coverage map with one box of pies per area, split by country"}
+plot_coverage_map(catch_data, group = "Country")
+```
+
+# Length coverage
+
+Pass `distributions` and `what = "length"`; `catchCategory` is `"Lan"`
+throughout (see the top of the page for why). The table has one row per
+stratum **and catch part**: the weight of the part, the share of it with a
+distribution linked, and the measurements behind them.
+
+```{r len-tab}
+cov_len <- build_coverage_strata(catch_data, 
+                                 dims = c("metier4", "Country"),
+                                 distribution_data, 
+                                 what = "length",
+                                 catchCategory = "Lan")
+head(cov_len[order(-cov_len$total), ], 10)
+```
+
+## Bars
+
+Distributions attach to catch by `domainBiology`, so filtering the catch
+alone is enough to narrow a figure (`metier4` is a catch-table column, not
+one of the distributions).
+
+```{r len-bar, fig.height = 9, fig.alt = "Length-sampled versus unsampled landed weight per metier, filled by country"}
+plot_coverage_bar(catch_data, y = "metier4", fill = "Country",
+                  what = "length", catchCategory = "Lan",
+                  distributions = distribution_data)
+```
+
+## Heatmap
+
+At the finest fleet level - `fleetValue` - there are dozens of rows, so this
+one is drawn without a `facet`; every facet repeats them.
+
+```{r len-heat, fig.width = 8, fig.height = 10, fig.alt = "Length-sampling coverage of the landings by fleet and country"}
+plot_coverage_heat(catch_data, y = "fleetValue", x = "Country",
+                   what = "length", catchCategory = "Lan",
+                   distributions = distribution_data,
+                   min_cov = 70, min_fish = 100, min_trip = NULL)
+```
+
+## Bubbles
+
+```{r len-bubble, fig.height = 5, fig.alt = "Length-sampling coverage of the landings, bubble grid"}
+plot_coverage_bubble(catch_data, y = "metier4", x = "Country",
+                     what = "length", catchCategory = "Lan",
+                     distributions = distribution_data,
+                     min_cov = 50, min_fish = 100, min_trip = NULL)
+```
+
+## Map
+
+The same pies as for the discards - radius = landed weight, coloured slice =
+the share of it linked to a length distribution:
+
+```{r len-map, fig.height = 5, fig.alt = "Length-sampling coverage map, one sampled / not-sampled pie per ICES division"}
+plot_coverage_map(catch_data, distribution_data,
+                  what = "length", catchCategory = "Lan", area = "ICESDivision")
+```
+
+`group` puts a box of pies on each area, one pie per level - here one per
+season:
+
+```{r len-map-season, fig.height = 6.5, fig.alt = "Length-sampling coverage map with one box of pies per division, split by season"}
+plot_coverage_map(catch_data, distribution_data,
+                  what = "length", catchCategory = "Lan",
+                  area = "ICESDivision", group = "Season")
+```
+
+# Discard rate
+
+`plot_discard_rate()` auto-builds the table from raw catch (or takes it). A
+point is one stratum's discard rate, and the strata are the columns you plot -
+`x`, `colour`, `shape` and `facet`; every other stratum column is pooled into
+each point, and the subtitle says which. So `x = "metier4", colour =
+"Country"` draws `build_coverage_strata(catch_data, c("metier4", "Country"))`,
+one point per row, and adding `facet = "areaValue"` splits every point by
+area. A stratum with no discard estimate has no rate and gets no point; the
+point size is the landings.
+
+`rate` chooses the y variable, and both are columns of the table:
+
+* `"D/L"` (the default) is `rate`: the discards D over the landings L that
+  carry a discard estimate, exactly as the CAS output reports it. It is a
+  ratio, so it can pass 100%, and the y axis is pseudo-log: a few tiny strata
+  give ratios of many hundred percent that would flatten everything else on
+  a plain axis.
+* `"D/(L+D)"` is `discardRate`: the discards as a share of landings plus
+  discards. It stays within 0-100%, so its axis is an ordinary one.
+
+The line and diamond on each `x` level mark the mean rate of its strata,
+weighted by their landings - for D/L, the rate of that level on its own,
+`build_coverage_strata(catch_data, "metier4")`.
+
+```{r dr, fig.width = 8, fig.height = 6, fig.alt = "Discard rate per metier and country, one point per stratum, a line and diamond for the weighted mean of each metier"}
+plot_discard_rate(catch_data,
+                  x = "metier4",
+                  colour = "Country",
+                  jitter = TRUE)
+```
+
+Faceted by area, the strata are finer - metier x country x area - and the
+subtitle no longer says area is pooled over:
+
+```{r dr-facet, fig.width = 8, fig.height = 7, fig.alt = "Discard rate per stratum, by metier, coloured by country, one panel per area"}
+plot_discard_rate(catch_data,
+                  x = "metier4",
+                  colour = "Country",
+                  facet = "areaValue",
+                  jitter = TRUE)
+```
+
+`reference` draws a dashed line at a rate and names the strata above it, so
+the ones to look at are on the figure. It is a fraction on the scale of the
+`rate` you chose - `0.3` is 30% - and a label is the stratum's identity: the
+plotted columns, joined with `|`.
+
+```{r dr-ref, fig.width = 8, fig.height = 6, fig.alt = "Discard rate D/(L+D) per metier and country, a dashed reference line at 30%, the strata above it labelled"}
+plot_discard_rate(catch_data, x = "metier4", colour = "Country",
+                  rate = "D/(L+D)", reference = 0.3)
+```
+
+The labelled strata are the rows of the table above the line:
+
+```{r dr-ref-tab}
+above <- build_coverage_strata(catch_data, c("metier4", "Country"))
+above <- above[!is.na(above$discardRate) & above$discardRate > 0.3, ]
+above[order(-above$discardRate),
+      c("metier4", "Country", "total", "weightingTotal", "rate", "discardRate")]
+```
+
+# Length distribution
+
+`plot_numbers_at_length_age()` is a histogram (`variableType` is always
+`Number`); `plot_meanweight_at_length_age()` is a line, always. Both take a
+prepared table **or** raw catch plus `distributions` - then the link and the
+summary run inside, with `catchCategory` choosing the part. Numbers are in
+thousands (N3), length in cm. The subtitle says which strata a bar or a line
+pools: the sampled strata that share the plotted columns (`fill` or `colour`,
+and `facet`), everything else pooled into them - numbers are summed, and a
+mean weight is averaged weighted by the numbers measured, with a band for the
+spread across those strata. Distributions reach the catch through
+`domainBiology` **and the country**: two countries can use the same domain
+name, each with its own distributions, and a country's strata get only its own.
+
+## Numbers at length
+
+```{r num-len, fig.height = 5.5, fig.alt = "Numbers at length of the landings, stacked by country, one panel per metier"}
+plot_numbers_at_length_age(catch_data, distribution_data,
+                           distributionType = "LengthTotal",
+                           catchCategory = "Lan", facet = c( "Country"),
+                           fill = "metier4", stacked = TRUE)
+```
+
+## Mean weight at length
+
+```{r mw-len, fig.height = 5, fig.alt = "Mean weight at length of the landings, one line per country, one panel per season"}
+plot_meanweight_at_length_age(catch_data, distribution_data,
+                              distributionType = "LengthTotal",
+                              catchCategory = "Lan", colour = "Country",
+                              facet = "Season")
+```
+
+### The fish behind each point
+
+A mean weight that rests on a few fish is uncertain however smooth the line
+looks. `show_samples = TRUE` draws, behind the lines, semi-transparent bars of
+the fish measured at each length, read on the axis on the right. They are
+stacked by `colour`, so each country's fish at a length are its own segment,
+and they share one scale across the panels:
+
+```{r mw-len-n, fig.height = 5.5, fig.alt = "Mean weight at length of the landings with bars of the fish measured behind the lines, one panel per season"}
+plot_meanweight_at_length_age(catch_data, distribution_data,
+                              distributionType = "LengthTotal",
+                              catchCategory = "Lan", colour = "Country",
+                              facet = "Season", show_samples = TRUE)
+```
+
+The distributions record `numMeasurements` once for a whole distribution, not
+per length, so the fish at a length are that count shared out over the
+distribution's lengths in proportion to its numbers - exact for a length
+sample raised by one factor, an estimate otherwise. The subtitle says so, and
+says when a point has no bar because its distributions report no count (a
+sample size that is unknown, not zero).
+
+`n_fish` is a column of the summary the plot is built from, so the counts can
+be read as numbers too - the thin ends of the curve are where they are small:
+
+```{r mw-len-n-tab}
+linked <- link_dist_to_strata(catch_data, distribution_data,
+                              c("catchCategory", "Country"), "Lan", "LengthTotal")
+mw_len <- length_meanweight(linked, "Country")
+head(mw_len[order(mw_len$n_fish), c(".class", "Country", "mean_weight", "n_strata", "n_fish")], 8)
+```
+
+## The `catchCategory` sweep
+
+The default is `"All"` (titled "catch"), then the landings and the discards,
+for numbers *and* mean weight. The catch part appears in the plot title.
+Unlike the plots above, this is a side-by-side comparison of the argument
+itself, so `"Dis"` belongs here too - it is clearly labelled as the
+un-raised discard sample, not presented as the finished picture.
+
+```{r len-sweep, fig.height = 4}
+for (cc in c("All", "Lan", "Dis")) {
+  print(plot_numbers_at_length_age(catch_data, distribution_data,
+          distributionType = "LengthTotal", catchCategory = cc, fill = "metier4"))
+  print(plot_meanweight_at_length_age(catch_data, distribution_data,
+          distributionType = "LengthTotal", catchCategory = cc, colour = "metier4"))
+}
+```
+
+And the default really is `"All"` - with no `catchCategory` passed, the title
+says "catch":
+
+```{r len-default}
+plot_numbers_at_length_age(catch_data, distribution_data,
+                           distributionType = "LengthTotal",
+                           fill = "Country")$labels$title
+```
+
+# Thresholds
+
+`min_cov` is always part of the classification. `min_trip` (discard, length,
+age) and `min_fish` (length, age only) are each independently **optional**:
+`NULL` drops that question from the classification and the legend entirely,
+a number turns it on. On the plot functions both default to `NULL`, so a
+call with no `min_trip` at all is coverage-only already.
+
+`min_trip = 0` is *not* the same as `NULL`: it is still an active (if lenient)
+threshold, and a stratum with no reported trip count fails an active trips
+test no matter how low it is set - unknown is never treated as adequate.
+
+`cat_lookup()` shows exactly which categories are reachable for a given
+combination. It is a lower-level function than the plots and keeps its own
+default of `min_trips = 2` (active) when called directly:
+
+```{r thr-lookup}
+cat_lookup(50, "discard", min_trips = NULL)$cat_key   # coverage only
+cat_lookup(50, "discard")$cat_key                     # + trips (its own default)
+cat_lookup(50, "length", min_meas = 25)$cat_key       # + measurements too
+```
+
+The colour is a straight count of how many *active* targets a stratum missed
+- yellow for one, orange for two, dark orange for three (only reachable with
+trips **and** measurements both on) - but each specific combination is still
+its own category and its own label. **Red** stays reserved for "no discard
+estimate" / "no distribution linked at all" on a stratum that *has* weight:
+never a threshold miss, and never a stratum with no weight at all (that draws
+no cell to begin with).
+
+```{r thr-heat-cov, fig.height = 4.5, fig.alt = "Coverage heatmap, coverage alone"}
+plot_coverage_heat(catch_data, y = "metier4", x = "Country", min_trip = NULL)
+```
+
+```{r thr-heat-trip, fig.height = 4.5, fig.alt = "Coverage heatmap with trips added"}
+plot_coverage_heat(catch_data, y = "metier4", x = "Country")
+```
+
+```{r thr-heat-len, fig.height = 4.5, fig.alt = "Length coverage heatmap, coverage and measurements"}
+plot_coverage_heat(catch_data, y = "metier4", x = "Country",
+                   what = "length", catchCategory = "Lan",
+                   distributions = distribution_data,
+                   min_trip = NULL, min_fish = 25)
+```
+
+Setting the thresholds absurdly high must **not** turn every stratum red: it
+crowds them into the worst-active warning shade instead. Red only ever comes
+from "no estimate / no distribution", never from a threshold comparison:
+
+```{r thr-extreme}
+extreme <- classify_strata(build_strata(catch_data, c("metier4", "Country")),
+                           1500, min_trips = 1000)
+table(extreme$cat_key)
+# red ("no_dist") only where there really is no discard estimate
+all(!extreme$has_disc_data[extreme$cat_key == "no_dist"])
+```
+
+# Age (saithe)
+
+The brill file has no ages, so the age views use the saithe file. Same calls,
+`what = "age"` or `distributionType = "Age"`, on `age_catch` and `age_dist`.
+Landings again.
+
+## Age coverage
+
+```{r age-tab}
+cov_age <- build_coverage_strata(age_catch, c("metier4", "Country"),
+                                 age_dist, what = "age", catchCategory = "Lan")
+head(cov_age[order(-cov_age$total), ], 10)
+```
+
+```{r age-bar, fig.height = 5, fig.alt = "Age-sampled versus unsampled landed weight per metier"}
+plot_coverage_bar(age_catch, y = "metier4",
+                  what = "age", catchCategory = "Lan", distributions = age_dist)
+```
+
+```{r age-heat, fig.width = 8.5, fig.height = 6, fig.alt = "Age-sampling coverage of the landings, metier by country"}
+plot_coverage_heat(age_catch, y = "metier4", x = "Country",
+                   what = "age", catchCategory = "Lan", distributions = age_dist,
+                   min_cov = 50, min_fish = 100, min_trip = NULL)
+```
+
+```{r age-bubble, fig.width = 8.5, fig.height = 6, fig.alt = "Age-sampling coverage of the landings, bubble grid"}
+plot_coverage_bubble(age_catch, y = "metier4", x = "Country",
+                     what = "age", catchCategory = "Lan", distributions = age_dist,
+                     min_cov = 50, min_fish = 100, min_trip = NULL)
+```
+
+```{r age-map, fig.height = 5, fig.alt = "Age-sampling coverage map, one sampled / not-sampled pie per ICES division"}
+plot_coverage_map(age_catch, age_dist,
+                  what = "age", catchCategory = "Lan", area = "ICESDivision")
+```
+
+```{r age-map-country, fig.height = 7, fig.alt = "Age-sampling coverage map with one box of pies per division, split by country"}
+plot_coverage_map(age_catch, age_dist,
+                  what = "age", catchCategory = "Lan",
+                  area = "ICESDivision", group = "Country")
+```
+
+## Numbers and mean weight at age
+
+```{r age-num, fig.height = 5.5, fig.alt = "Numbers at age of the landings, stacked by country"}
+plot_numbers_at_length_age(age_catch, age_dist, distributionType = "Age",
+                           catchCategory = "Lan", fill = "Country",
+                           stacked = TRUE)
+```
+
+```{r age-num-facet, fig.width = 8, fig.height = 7, fig.alt = "Numbers at age of the landings, one panel per season"}
+plot_numbers_at_length_age(age_catch, age_dist, distributionType = "Age",
+                           catchCategory = "Lan", fill = "metier4",
+                           facet = "Season", stacked = TRUE)
+```
+
+```{r age-mw, fig.height = 5, fig.alt = "Mean weight at age of the landings, one line per country"}
+plot_meanweight_at_length_age(age_catch, age_dist, distributionType = "Age",
+                              catchCategory = "Lan", colour = "Country", facet = "Season")
+```
+
+### The plus group
+
+The oldest ages are a handful of fish each, so the right-hand end of a
+mean-weight curve is ragged. `plus_group = TRUE, plus_group_start = 7` pools
+every age from 7 upward into one class - labelled `7+` on the axis and in the
+subtitle - to show what a plus group does to the curve. Inside each
+distribution the numbers of those ages are added and their mean weights
+averaged, weighted by those numbers; the pooled class is then averaged over
+strata like any other point, so the band is still a spread across strata, not
+across ages. It is for ages only, and needs raw catch with `distributions`
+(a summary that has already been averaged cannot be pooled again).
+
+```{r age-mw-plus, fig.height = 5, fig.alt = "Mean weight at age of the landings with ages 7 and older pooled into 7+, one line per country"}
+plot_meanweight_at_length_age(age_catch, age_dist, distributionType = "Age",
+                              catchCategory = "Lan", colour = "Country",
+                              plus_group = TRUE, plus_group_start = 7)
+```
+
+The start is yours to move. One line for all countries, without and with the
+plus group from 5, 10 and 15:
+
+```{r age-mw-plus-sweep, fig.height = 4, fig.alt = "Mean weight at age of the landings without a plus group and with plus groups from 5, 10 and 15"}
+print(plot_meanweight_at_length_age(age_catch, age_dist, distributionType = "Age",
+                                    catchCategory = "Lan"))
+for (start in c(5, 10, 15)) {
+  print(plot_meanweight_at_length_age(age_catch, age_dist, distributionType = "Age",
+                                      catchCategory = "Lan",
+                                      plus_group = TRUE, plus_group_start = start))
+}
+```
+
+### The fish behind each point
+
+`show_samples = TRUE` puts the fish measured at each age behind the lines, on
+the axis on the right, so a mean weight that rests on a few fish shows. Each
+age's count is the distribution's `numMeasurements` shared out over its ages
+in proportion to its numbers - an estimate for ages, which are read off an
+age-length key - summed over the pooled strata and stacked by `colour`. Several
+countries in this saithe file report `numMeasurements` 0 for their age
+distributions: their points have mean weights and numbers but no bar - an
+unknown sample size, not zero - and the subtitle says so.
+
+```{r age-mw-n, fig.height = 5, fig.alt = "Mean weight at age of the landings with bars of the fish measured behind the lines, one line per country"}
+plot_meanweight_at_length_age(age_catch, age_dist, distributionType = "Age",
+                              catchCategory = "Lan", colour = "Country",
+                              show_samples = TRUE)
+```
+
+Together, for one line (no `colour`): the plus group turns the thin tail of
+old ages, each on a few fish, into one point with many.
+
+```{r age-mw-plus-n, fig.height = 5, fig.alt = "Mean weight at age of the landings with a plus group from 10 and bars of the fish measured"}
+plot_meanweight_at_length_age(age_catch, age_dist, distributionType = "Age",
+                              catchCategory = "Lan", show_samples = TRUE,
+                              plus_group = TRUE, plus_group_start = 10)
+```
+
+## The `catchCategory` sweep, for ages
+
+```{r age-sweep, fig.height = 4}
+for (cc in c("All", "Lan", "Dis")) {
+  print(plot_numbers_at_length_age(age_catch, age_dist,
+          distributionType = "Age", catchCategory = cc, fill = "Country"))
+  print(plot_meanweight_at_length_age(age_catch, age_dist,
+          distributionType = "Age", catchCategory = cc, colour = "Country"))
+}
+```

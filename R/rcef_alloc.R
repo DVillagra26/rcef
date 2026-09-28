@@ -50,7 +50,12 @@ prep_for_alloc <- function(dist, app_type = "LengthTotal") {
 # ------------------------------------------------------------
 #  Running the allocation
 # ------------------------------------------------------------
-# groups: named list, each with $alloc_expr and $matched_expr quosures.
+# groups: either the app's own group list (a named list, each group with
+# $alloc and $matched conditions written as text) or the strataCond /
+# matchedDataCond pair that define_raising_groups_auto() / _manual()
+# return - the same pair the discard raising consumes. That pair is
+# written against stratum_id, so alloc_dims must be the dims it was built
+# on (the ids are rebuilt from them here).
 # Returns the two tables catchAllocationAoL() produces, plus the
 # condition checks, or an object of class "alloc_error" carrying the
 # message - the app shows that rather than falling over.
@@ -78,9 +83,17 @@ run_allocation <- function(catch_raised, dist, groups,
   # complemented since it was written - this is the same helper - so the
   # script in the R tab was right while the run behind the button was
   # not, which is the worst way round for the two to disagree.
-  cnd <- alloc_conds_from_groups(groups)
-  alloc_l <- cnd$allocStrataCond
-  match_l <- cnd$bioMatchedCond
+  # The strataCond / matchedDataCond pair is already a genuine partition
+  # (conds_from_auto() / conds_from_rules() complement it), so it goes
+  # through as it is.
+  if (all(c("strataCond", "matchedDataCond") %in% names(groups))) {
+    alloc_l <- groups$strataCond
+    match_l <- groups$matchedDataCond
+  } else {
+    cnd <- alloc_conds_from_groups(groups)
+    alloc_l <- cnd$allocStrataCond
+    match_l <- cnd$bioMatchedCond
+  }
 
   # The conditions are written against the DERIVED stratum fields
   # (metier4, Country, Area1, Season), which a raw CEF catches table does

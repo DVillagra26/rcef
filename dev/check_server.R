@@ -263,5 +263,160 @@ if (length(fx)) {
   }
 }
 
+## ---------------------------------------------------------------
+##  The plot options reach the plot function AND the script.
+##
+##  Discard rate: which rate is the y axis, and a reference line typed in
+##  percent (handed over as a fraction). Mean weight: bars of the fish
+##  measured on both tabs and, on the age tab, a plus group. Each must move
+##  the gate's signature (so Apply has something to apply), draw, and be
+##  written into the kept script - and the script must reproduce the
+##  picture: a control that only changed what the screen shows would leave a
+##  script that cannot. The kept text is run here, against the data the panel
+##  used, rather than only read.
+## ---------------------------------------------------------------
+if (length(fx)) {
+  ob <- new.env(parent = emptyenv())
+  res5 <- tryCatch({
+    shiny::testServer(d, {
+      rv$cef_catches <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
+      rv$dist <- {data("anchoveta_dist", package = "rcef", envir = environment()); anchoveta_dist}
+      session$flushReact()
+      has_layer <- function(p, cls)
+        any(vapply(p$layers, function(l) inherits(l$geom, cls), logical(1)))
+      kept_text <- function() {
+        k <- rv$kept[[length(rv$kept)]]
+        paste(c(k$prep, k$call), collapse = "\n")
+      }
+      x_labels <- function(p)
+        ggplot_build(p)$layout$panel_params[[1]]$x$get_labels()
+
+      ## ---- discard rate ----
+      session$setInputs(dr_x = "metier4", dr_fill = "Country", dr_shape = "",
+                        dr_facet = "", dr_jitter = TRUE, dr_rate = "D/L",
+                        dr_ref = NA)
+      session$setInputs(dr_apply = 1); session$flushReact()
+      p0 <- dr_plot_obj(); s0 <- gate_reg[["dr"]]$sig()
+      session$setInputs(dr_rate = "D/(L+D)", dr_ref = 20); session$flushReact()
+      ob$dr_stale <- !identical(gate_reg[["dr"]]$sig(), s0) &&
+        isTRUE(gate_reg[["dr"]]$stale())
+      session$setInputs(dr_apply = 2); session$flushReact()
+      p1 <- dr_plot_obj()
+      ob$dr_before <- identical(p0$labels$y, "Discard rate (D/L)") &&
+        !has_layer(p0, "GeomHline")
+      hl <- Filter(function(l) inherits(l$geom, "GeomHline"), p1$layers)
+      ob$dr_after <- identical(p1$labels$y, "Discard rate (D/(L+D))") &&
+        length(hl) == 1 && isTRUE(all.equal(hl[[1]]$data$yintercept, 20)) &&
+        isTRUE(all.equal(p1$data$.y, p1$data$discardRate * 100))
+      ob$dr_live <- grepl('rate = "D/(L+D)"', active_plots()[[1]], fixed = TRUE) &&
+        grepl("reference = 0.2", active_plots()[[1]], fixed = TRUE)
+      session$setInputs(dr_plot_keep = 1); session$flushReact()
+      kt <- kept_text()
+      ob$dr_script <- grepl('rate = "D/(L+D)"', kt, fixed = TRUE) &&
+        grepl("reference = 0.2", kt, fixed = TRUE)
+      env <- list2env(list(catch_data = explore_dat("dr")), parent = environment())
+      pr <- tryCatch(eval(parse(text = kt), env), error = function(e) NULL)
+      ob$dr_repro <- inherits(pr, "ggplot") &&
+        identical(pr$labels$y, p1$labels$y) &&
+        isTRUE(all.equal(pr$data$.y, p1$data$.y))
+      ## a reference the rate cannot reach is said so, not drawn off the plot
+      session$setInputs(dr_ref = 150, dr_apply = 3); session$flushReact()
+      e150 <- tryCatch({ dr_plot_obj(); "no error" }, error = function(e) class(e))
+      ob$dr_bad <- "shiny.silent.error" %in% e150
+      ## and without a reference, and the default rate, nothing extra is written
+      session$setInputs(dr_rate = "D/L", dr_ref = NA, dr_apply = 4)
+      session$flushReact()
+      session$setInputs(dr_plot_keep = 2); session$flushReact()
+      kt0 <- kept_text()
+      ob$dr_plain <- !grepl("rate =", kt0, fixed = TRUE) &&
+        !grepl("reference", kt0, fixed = TRUE)
+
+      ## ---- mean weight: bars on both tabs, a plus group on the age tab ----
+      for (pf in c("len", "age")) {
+        ty <- if (identical(pf, "age")) "Age" else "LengthTotal"
+        base <- stats::setNames(
+          list("catlan", "Country", "", "", "", FALSE, FALSE, 3),
+          paste0(pf, "_w_", c("cc", "r_fill", "r_facet", "r_shape", "pt",
+                              "samples", "plus", "plus_from")))
+        do.call(session$setInputs, base)
+        do.call(session$setInputs,
+                stats::setNames(list(1), paste0(pf, "_w_apply")))
+        session$flushReact()
+        g <- gate_reg[[paste0(pf, "_w")]]; sg <- g$sig()
+        do.call(session$setInputs,
+                stats::setNames(list(TRUE), paste0(pf, "_w_samples")))
+        session$flushReact()
+        ob[[paste0(pf, "_stale")]] <- !identical(g$sig(), sg) && isTRUE(g$stale())
+        do.call(session$setInputs,
+                stats::setNames(list(2), paste0(pf, "_w_apply")))
+        session$flushReact()
+        v <- tryCatch({ force(output[[paste0(pf, "_w_plot")]]); "rendered" },
+                      error = function(e) paste("ERROR:", conditionMessage(e)))
+        ob[[paste0(pf, "_bars_render")]] <- identical(v, "rendered")
+        do.call(session$setInputs,
+                stats::setNames(list(1), paste0(pf, "_w_plot_keep")))
+        session$flushReact()
+        kt <- kept_text()
+        env <- list2env(list(catch_for_biology = explore_dat(paste0(pf, "_w")),
+                             distributions = rv$dist), parent = environment())
+        pr <- tryCatch(eval(parse(text = kt), env), error = function(e) NULL)
+        ob[[paste0(pf, "_bars_script")]] <- grepl("show_samples = TRUE", kt, fixed = TRUE) &&
+          inherits(pr, "ggplot") && inherits(pr$layers[[1]]$geom, "GeomCol")
+        ## a length tab has no plus group: even with the inputs set, none is written
+        if (identical(pf, "len"))
+          ob$len_no_plus <- !grepl("pool_plus_group", kt, fixed = TRUE)
+      }
+      ## the age tab: a plus group from age 3
+      do.call(session$setInputs, list(age_w_plus = TRUE, age_w_plus_from = 3))
+      session$flushReact()
+      session$setInputs(age_w_apply = 3); session$flushReact()
+      v <- tryCatch({ force(output[["age_w_plot"]]); "rendered" },
+                    error = function(e) paste("ERROR:", conditionMessage(e)))
+      ob$age_plus_render <- identical(v, "rendered")
+      session$setInputs(age_w_plot_keep = 2); session$flushReact()
+      kt <- kept_text()
+      env <- list2env(list(catch_for_biology = explore_dat("age_w"),
+                           distributions = rv$dist), parent = environment())
+      pr <- tryCatch(eval(parse(text = kt), env), error = function(e) NULL)
+      ob$age_plus_script <- grepl("pool_plus_group(linked, 3, dims_biology)", kt, fixed = TRUE) &&
+        inherits(pr, "ggplot") && max(pr$data$.class) == 3 &&
+        "3+" %in% x_labels(pr) && inherits(pr$layers[[1]]$geom, "GeomCol")
+      ## a plus group that no age reaches is said so
+      session$setInputs(age_w_plus_from = 50, age_w_apply = 4); session$flushReact()
+      e50 <- tryCatch({ force(output[["age_w_plot"]]); "no error" },
+                      error = function(e) conditionMessage(e))
+      ob$age_plus_none <- grepl("No age reaches 50", e50, fixed = TRUE)
+    })
+    TRUE
+  }, error = function(e) conditionMessage(e))
+  say(isTRUE(res5), "the new plot options run through the app", res5)
+  if (isTRUE(res5)) {
+    say(isTRUE(ob$dr_stale), "discard rate: changing rate / reference makes the panel stale")
+    say(isTRUE(ob$dr_before), "discard rate: the default is D/L with no reference line")
+    say(isTRUE(ob$dr_after),
+        "discard rate: D/(L+D) is plotted and 20% becomes a reference line at 20")
+    say(isTRUE(ob$dr_live), "discard rate: the live script shows both options")
+    say(isTRUE(ob$dr_script), "discard rate: the kept script carries both options")
+    say(isTRUE(ob$dr_repro), "discard rate: the kept script reproduces the plot")
+    say(isTRUE(ob$dr_bad), "discard rate: a reference D/(L+D) cannot reach is refused")
+    say(isTRUE(ob$dr_plain), "discard rate: the defaults write nothing extra")
+    for (pf in c("len", "age")) {
+      say(isTRUE(ob[[paste0(pf, "_stale")]]),
+          sprintf("%s mean weight: ticking the bars makes the panel stale", pf))
+      say(isTRUE(ob[[paste0(pf, "_bars_render")]]),
+          sprintf("%s mean weight: the plot with bars renders", pf))
+      say(isTRUE(ob[[paste0(pf, "_bars_script")]]),
+          sprintf("%s mean weight: the kept script draws the bars", pf))
+    }
+    say(isTRUE(ob$len_no_plus),
+        "length mean weight: no plus group is written, ages only")
+    say(isTRUE(ob$age_plus_render), "age mean weight: the plus group renders")
+    say(isTRUE(ob$age_plus_script),
+        "age mean weight: the kept script pools the ages and labels the class 3+")
+    say(isTRUE(ob$age_plus_none),
+        "age mean weight: a plus group no age reaches is said so, not drawn empty")
+  }
+}
+
 cat(sprintf("\nDONE  %d failure(s)\n", fail))
 if (fail) quit(status = 1L)

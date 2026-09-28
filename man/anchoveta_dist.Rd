@@ -5,58 +5,69 @@
 \alias{anchoveta_dist}
 \title{Synthetic Peruvian-anchoveta CEF distributions table}
 \format{
-A data frame of distribution records, two rows per
-  class / stratum (one `Number`, one `WeightLive`). Key columns:
+A data frame of distribution records, two rows per class /
+stratum (one \code{Number}, one \code{WeightLive}). Key columns:
 \describe{
-  \item{distributionType}{`"LengthTotal"` or `"Age"`.}
-  \item{distributionClass}{Length in mm (40--200), or age in whole
-    years (0--7).}
-  \item{distributionUnit}{`"mm"` or `"y"`.}
-  \item{catchCategory}{`"Lan"` or `"Dis"` - which catch part the
-    distribution describes.}
-  \item{variableType, valueType, value}{`"Number"` / `"Total"` gives
-    numbers at the class; `"WeightLive"` / `"Mean"` gives mean weight
-    at the class in grams.}
-  \item{numMeasurements, numTrips}{Sampling effort behind the row.}
-  \item{domainBiology}{Join key back to [anchoveta_catch].}
+\item{distributionType}{\code{"LengthTotal"} or \code{"Age"}.}
+\item{distributionClass}{Length in mm (40--200), or age in whole years
+(0--7).}
+\item{distributionUnit}{\code{"mm"} or \code{"y"}.}
+\item{catchCategory}{\code{"Lan"} or \code{"Dis"} - which catch part the
+distribution describes.}
+\item{variableType, valueType, value}{\code{"Number"} / \code{"Total"} gives
+numbers at the class; \code{"WeightLive"} / \code{"Mean"} gives mean weight at
+the class in grams.}
+\item{numMeasurements, numTrips}{Sampling effort behind the row.}
+\item{domainBiology}{Join key back to \link{anchoveta_catch}.}
 }
 }
 \usage{
 anchoveta_dist
 }
 \description{
-The length- and age-distribution companion to [anchoveta_catch]: a
-made-up CEF distributions table carrying, for both `LengthTotal` (mm,
-classes 40--200) and `Age` (years, 0--7), a `Number` row (numbers at
-class, `valueType = "Total"`) AND a `WeightLive` row (mean weight at
-class in grams, `valueType = "Mean"`) - so
-[plot_numbers_at_length_age()] and [plot_meanweight_at_length_age()]
-both have real data. Every row links back to a catch stratum through
-`domainBiology` + `catchCategory`. The distribution shape varies: the
-modal size and age shift by country and quarter, spreads and skew are
-drawn per stratum, and one quarter carries a recruitment pulse (a
-second mode of small, young fish).
+The length- and age-distribution companion to \link{anchoveta_catch}: a made-up
+CEF distributions table carrying, for both \code{LengthTotal} (mm, classes
+40--200) and \code{Age} (years, 0--7), a \code{Number} row (numbers at class,
+\code{valueType = "Total"}) AND a \code{WeightLive} row (mean weight at class in
+grams, \code{valueType = "Mean"}) - so \code{\link[=plot_numbers_at_length_age]{plot_numbers_at_length_age()}} and
+\code{\link[=plot_meanweight_at_length_age]{plot_meanweight_at_length_age()}} both have real data, and so does the
+length and age allocation.
 }
 \details{
-The **discards run smaller, younger and thinner** than the landings,
-as you would expect: within a stratum the discard length mode sits
-~3 cm below the landings mode, the age mode ~1 year younger, and the
-mean weight at a given length or age class is ~0.75x the landings
-value (a lower length-weight condition factor). Discard numbers are a
-small fraction of the landings.
+Every row links back to a catch stratum through \code{domainBiology} +
+\code{catchCategory}. The distribution shape varies: the modal size and age
+shift by country and quarter, spreads and skew are drawn per stratum, and
+one quarter carries a recruitment pulse (a second mode of small, young
+fish).
 
-Pass it as the `distributions` argument:
-\preformatted{
+The \strong{discards run smaller, younger and thinner} than the landings, as
+you would expect: within a stratum the discard length mode sits ~3 cm
+below the landings mode, the age mode ~1 year younger, and the mean weight
+at a given length or age class is ~0.75x the landings value (a lower
+length-weight condition factor). Discard numbers are a small fraction of
+the landings.
+
+Like the catch table it spans four years; subset both to the same year
+(\code{year == 2023}) before allocating, since the engines work on one stock
+and year at a time.
+}
+\examples{
+data(anchoveta_catch)
+data(anchoveta_dist)
+
+# how much of the catch has a length distribution linked
+head(build_coverage_strata(anchoveta_catch, c("metier4", "Country"),
+                           distributions = anchoveta_dist, what = "length"))
+
 plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
                    what = "length", distributions = anchoveta_dist,
                    min_fish = 50)
 plot_numbers_at_length_age(anchoveta_catch, anchoveta_dist,
                            distributionType = "Age", fill = "Country")
 }
-}
 \seealso{
-[anchoveta_catch], [coverage-plots],
-  [plot_numbers_at_length_age()], [plot_meanweight_at_length_age()]
+\link{anchoveta_catch}, \link{coverage-plots},
+\code{\link[=plot_numbers_at_length_age]{plot_numbers_at_length_age()}}, \code{\link[=plot_meanweight_at_length_age]{plot_meanweight_at_length_age()}}
 
 Other example data: 
 \code{\link{anchoveta_catch}}

@@ -1,0 +1,441 @@
+---
+title: "3. Comparing group allocation schemes"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+vignette: >
+  %\VignetteIndexEntry{3. Comparing group allocation schemes}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE, comment = "#>",
+  fig.width = 7, fig.height = 4.6, dpi = 110,
+  warning = FALSE
+)
+```
+
+What does changing the allocation scheme change? The manual grouping of
+vignette **2a** and the hierarchical cascade of **2b** raise the same discards
+from the same data, with different groups of strata and different donor pools.
+This vignette puts them side by side, and then varies the hierarchy itself.
+It is a walkthrough, not a test: nothing here asserts pass or fail, and it is
+the script to run chunk by chunk in RStudio.
+
+* **The two schemes, raised** - each is defined in the vignette named above and
+  repeated here so this one runs on its own, then raised with `catchRaising()`
+  directly.
+* **How much weight each raises**, and **whether each group's strata agree with
+  each other**, side by side.
+* **Scenarios** - a whole grouping configuration under a name, run cheaply at
+  stratum level, so several hierarchies (and a manual rule set) can be lined
+  up on the same strata.
+
+It is driven directly with the vendored RDBESStockCoord functions -
+`check_group_conditions()` and `catchRaising()` - the same pattern ICES's own
+discard-raising scripts use. rcef's own helpers (`recommend_raising()`, and in
+the scenarios `new_rule()`) do the one thing RDBESStockCoord has no opinion on
+- *how* to define a group from a hierarchy or a rule set - but the raising
+call they feed is the same `catchRaising()` either way.
+
+# Data
+
+Brill, `bll.27.3a47de`, 2025, from the CEF csv file under
+`inst/extdata/data_CEF_format` (local to this machine; the file is not in the
+repository). Only the catch table is needed for raising.
+
+```{r load, message = FALSE}
+library(dplyr)
+library(rcef)
+
+cef_dir <- file.path("..", "inst", "extdata", "data_CEF_format")
+
+# blank cells (no discard domain, no trip count ...) read as NA
+catch_data <- read.csv(file.path(cef_dir, "bll", "bll_2025_catches_CEF_v17.1.csv"),
+                       na.strings = "")
+```
+
+```{r derive}
+catch_data <- derive_fields(catch_data)
+```
+
+## The stratum resolution
+
+`dims` is the set of columns that defines a stratum for the hierarchical
+scheme and for the comparison below. Its columns are the same, in the same
+order, as the hierarchy - `stratum_id` is `paste(dims values, sep = " | ")`,
+which is order-sensitive, so two different orders would build two different
+ids for the same stratum and every `stratum_id %in% c(...)` condition would
+silently match nothing.
+
+`stratum_id`, `coverage`, `discard_rate`, `n_measurements` and `numTrips` are
+added onto `catch_data` itself, once, here - not a second table kept
+alongside it. Only the hierarchical scheme reads them, but they are harmless
+extra columns for the manual scheme's plain `metier4` / `catchCategory` /
+`fleetValue` conditions, so one `catch_data` serves both.
+
+```{r dims}
+dims <- c("Country", "Season", "mesh", "metier4")
+catch_data <- add_stratum_metrics(catch_data, dims)
+```
+
+# The two schemes, raised
+
+## Manual (2a)
+
+The same six groups as the RDBESStockCoord example this is based on: G1-G3
+split the main gears, G4 is a REST group for everything else, G5 pulls out
+the incidental-bycatch (IBC) `fleetValue` sentinel, G6 is BMS on its own -
+between them every row is claimed exactly once. G4 draws its rate on every
+gear, minus five strata whose own discard ratio the source example flagged as
+implausible. See vignette 2a for the reasoning per group.
+
+```{r manual}
+strataCond_manual <- list(
+  G1 = quo(metier4 == "TBB" & catchCategory != "BMS"),
+  G2 = quo(metier4 %in% c("GTR", "GNS") & catchCategory != "BMS"),
+  G3 = quo(metier4 %in% c("OTB", "SSC", "SDN") & catchCategory != "BMS"),
+  G4 = quo(!metier4 %in% c("TBB", "GTR", "GNS", "OTB", "SSC", "SDN") &
+             catchCategory != "BMS" & fleetValue != "MIS_MIS_0_0_0_IBC"),
+  G5 = quo(fleetValue == "MIS_MIS_0_0_0_IBC" & catchCategory != "BMS"),
+  G6 = quo(catchCategory == "BMS"))
+
+matchedDataCond_manual <- list(
+  G1 = strataCond_manual$G1,
+  G2 = strataCond_manual$G2,
+  G3 = strataCond_manual$G3,
+  G4 = quo(catchCategory != "BMS" &
+             fleetValue != "MIS_MIS_0_0_0_IBC" &
+             !((vesselFlagCountry == "Sweden" & areaValue == "27.3.a.21" &
+                  fleetValue == "GNS_DEF_all_0_0_all" & seasonValue %in% c(2, 3)) |
+                 (vesselFlagCountry == "Sweden" & areaValue == "27.3.a.21" &
+                    fleetValue == "GTR_DEF_all_0_0_all" & seasonValue %in% c(2, 4)) |
+                 (vesselFlagCountry == "France" & areaValue == "27.7.e" &
+                    fleetValue == "GTR_DEF_100-119_0_0_all" & seasonValue == 2) |
+                 (vesselFlagCountry == "Sweden" & areaValue == "27.3.a.21" &
+                    fleetValue == "OTB_CRU_90-119_0_0_all" & seasonValue == 3) |
+                 (vesselFlagCountry == "Sweden" & areaValue == "27.3.a.21" &
+                    fleetValue == "OTB_CRU_70-89_2_35_all" & seasonValue == 1))),
+  G5 = strataCond_manual$G5,
+  G6 = strataCond_manual$G6)
+```
+
+The condition diagnostics - every stratum claimed exactly once - and the
+raise itself. The engine prints a "Condition diagnostics" banner for each
+condition; it is hidden here.
+
+```{r manual-raise, results = "hide", message = FALSE}
+cond_st <- check_group_conditions(catch_data, strataCond_manual,
+                                  domain = "domainCatchDis",
+                                  originType = "WGEstimate",
+                                  variableType = "WeightLive",
+                                  logFile = NULL, append = TRUE)
+cond_md <- check_group_conditions(catch_data, matchedDataCond_manual,
+                                  conditionType = "matched_data",
+                                  domain = "domainCatchDis",
+                                  originType = "WGEstimate",
+                                  variableType = "WeightLive",
+                                  logFile = NULL, append = TRUE)
+
+raised_manual <- catchRaising(catch_data = catch_data,
+                              condition_raising_st_list = strataCond_manual,
+                              condition_matched_data_list = matchedDataCond_manual,
+                              type = "discards",
+                              originType = "WGEstimate",
+                              variableType = "WeightLive",
+                              logFile = file.path(tempdir(), "raising_log.txt"))
+```
+
+```{r manual-result}
+strata_matrix <- do.call(cbind, cond_st)
+cat(sprintf("manual: %d rows in no group, %d rows in more than one (both should be 0)\n",
+            sum(rowSums(strata_matrix) == 0), sum(rowSums(strata_matrix) > 1)))
+cat(sprintf("manual raising: %d rows (%d imported, %d raised)\n",
+            nrow(raised_manual),
+            sum(raised_manual$importedOrRaised == "imported"),
+            sum(raised_manual$importedOrRaised == "raised")))
+```
+
+## Hierarchical (2b)
+
+`recommend_raising()` cascades from the stratum's own data outward: own
+stratum, then join countries, then seasons, then mesh, then `metier4` alone,
+then everything - each level with its own coverage bar. `conds_from_auto()`
+turns the recommendation into the same `strataCond` / `matchedDataCond` shape
+as the manual scheme. See vignette 2b for the cascade step by step.
+
+```{r hier}
+hierarchy  <- c("Country", "Season", "mesh", "metier4")
+thresholds <- 50
+
+rec <- recommend_raising(catch_data, hierarchy, thresholds)
+auto_conds <- conds_from_auto(rec)
+nrow(auto_conds$groups)   # groups
+```
+
+```{r hier-raise, results = "hide", message = FALSE}
+cond_st_h <- check_group_conditions(catch_data, auto_conds$strataCond,
+                                    domain = "domainCatchDis",
+                                    originType = "WGEstimate",
+                                    variableType = "WeightLive",
+                                    logFile = NULL, append = TRUE)
+cond_md_h <- check_group_conditions(catch_data, auto_conds$matchedDataCond,
+                                    conditionType = "matched_data",
+                                    domain = "domainCatchDis",
+                                    originType = "WGEstimate",
+                                    variableType = "WeightLive",
+                                    logFile = NULL, append = TRUE)
+
+raised_hier <- catchRaising(catch_data = catch_data,
+                            condition_raising_st_list = auto_conds$strataCond,
+                            condition_matched_data_list = auto_conds$matchedDataCond,
+                            type = "discards",
+                            originType = "WGEstimate",
+                            variableType = "WeightLive",
+                            logFile = file.path(tempdir(), "raising_log.txt"))
+```
+
+```{r hier-result}
+strata_matrix_h <- do.call(cbind, cond_st_h)
+cat(sprintf("hierarchical: %d rows in no group, %d rows in more than one (both should be 0)\n",
+            sum(rowSums(strata_matrix_h) == 0), sum(rowSums(strata_matrix_h) > 1)))
+cat(sprintf("hierarchical raising: %d rows (%d imported, %d raised)\n",
+            nrow(raised_hier),
+            sum(raised_hier$importedOrRaised == "imported"),
+            sum(raised_hier$importedOrRaised == "raised")))
+```
+
+# How much weight each scheme raises
+
+Imported against raised, at any aggregation, shown for both schemes so the
+same weight can be compared scheme to scheme. `plot_raised_composition()`
+takes any catch-side column on `x` and an optional `facet`: landings /
+discards are always the fill, imported / raised is always the shading, and
+whatever you put on `x` or `facet` is the aggregation.
+
+```{r overview-table-manual}
+raised_overview_table(raised_manual)
+```
+
+```{r overview-table-hier}
+raised_overview_table(raised_hier)
+```
+
+The bottom line side by side: the total discards each scheme ends up with
+(imported + raised, tonnes), and how many raised rows came out as `NaN` -
+a group with no donor to draw a rate from raises to nothing, and those rows
+are left out of the sum (see the last section of 2a and 2b).
+
+```{r bottom-line}
+schemes <- list(manual = raised_manual, hierarchical = raised_hier)
+data.frame(
+  discards_t = vapply(schemes, function(r)
+    round(sum(r$total[r$catchCategory == "Dis"], na.rm = TRUE) / 1000, 2), 0),
+  raised_rows = vapply(schemes, function(r) sum(r$importedOrRaised == "raised"), 0L),
+  nan_rows = vapply(schemes, function(r) sum(is.nan(r$total)), 0L))
+```
+
+By metier, one scheme after the other:
+
+```{r overview-metier-manual, fig.height = 4, fig.alt = "Manual scheme: imported and raised weight by metier"}
+plot_raised_composition(raised_manual, x_var = "metier4")
+```
+
+```{r overview-metier-hier, fig.height = 4, fig.alt = "Hierarchical scheme: imported and raised weight by metier"}
+plot_raised_composition(raised_hier, x_var = "metier4")
+```
+
+By country, faceted by season - a finer aggregation than the group
+definitions themselves ever used:
+
+```{r overview-country-manual, fig.height = 6.5, fig.alt = "Manual scheme: imported and raised weight by country, one panel per season"}
+plot_raised_composition(raised_manual, x_var = "Country", facet_var = "Season")
+```
+
+```{r overview-country-hier, fig.height = 6.5, fig.alt = "Hierarchical scheme: imported and raised weight by country, one panel per season"}
+plot_raised_composition(raised_hier, x_var = "Country", facet_var = "Season")
+```
+
+# Do the groups agree with themselves?
+
+A different question from how much weight moved: whether the *strata a group
+draws its rate from* agree with each other. `plot_discard_rate()` draws one
+point per stratum from any table carrying a discard rate; put the raising
+**group** on `x` and every point under a group is one of the strata that fed
+its rate - a group with points scattered from 2% to 40% is not a group, it is
+a guess, no matter how well it covers the stock.
+
+## Manual
+
+`matchedDataCond_manual` filtered straight against `catch_data`, at the
+`domainCatchDis` granularity `catchRaising()` itself estimates a ratio from -
+the same check the source example runs before raising ("Per-stratum spread
+behind each group average"). Each group's rows are turned into donor strata by
+`build_coverage_strata()` and fed to `plot_discard_rate()`. A stratum table at
+`metier4` + `Country` + `Season` cannot stand in here: `catchCategory` and
+`fleetValue` (both load-bearing above, G4's exclusions especially) do not
+survive that aggregation. The table's `rate` is discards / covered landings -
+the source example's `dis_ratio` and the CAS output's `rate`.
+
+```{r donors-manual}
+donor_detail_manual <- bind_rows(lapply(names(matchedDataCond_manual), function(g) {
+  donors <- catch_data %>%
+    filter(!!matchedDataCond_manual[[g]],
+           !is.na(domainCatchDis),
+           originType == "WGEstimate",
+           variableType == "WeightLive") %>%
+    build_coverage_strata(c("domainCatchDis", "metier4"))
+  # NULL for a group with no landings / discards among its donors at all
+  if (!is.null(donors)) mutate(donors, donor_group = g, .before = 1)
+}))
+```
+
+```{r donors-manual-plot, fig.height = 5, fig.alt = "Discard rate of the donor strata behind each manual group, coloured by metier"}
+plot_discard_rate(donor_detail_manual, x = "donor_group", colour = "metier4",
+                  jitter = TRUE)
+```
+
+```{r donors-manual-summary}
+donor_detail_manual %>% group_by(donor_group) %>%
+  summarise(n = n(),
+            mean_rate = round(weighted.mean(rate, w = weightingTotal, na.rm = TRUE), 3),
+            sd_rate = round(sd(rate, na.rm = TRUE), 3),
+            min_rate = round(min(rate, na.rm = TRUE), 3),
+            max_rate = round(max(rate, na.rm = TRUE), 3),
+            .groups = "drop")
+```
+
+## Hierarchical
+
+Here too the donors of a group are *not* the strata it raises: a stratum
+raised from a wide pool often has no discard data of its own, and the pool a
+group draws on is every stratum sharing its key values. So the same check
+applies - each group's `matchedDataCond` filtered against `catch_data`, at the
+`domainCatchDis` granularity, turned into donor strata and plotted.
+
+```{r donors-hier}
+donor_detail_hier <- bind_rows(lapply(names(auto_conds$matchedDataCond), function(g) {
+  donors <- catch_data %>%
+    filter(!!auto_conds$matchedDataCond[[g]],
+           !is.na(domainCatchDis),
+           originType == "WGEstimate",
+           variableType == "WeightLive") %>%
+    build_coverage_strata(c("domainCatchDis", "metier4"))
+  if (!is.null(donors)) mutate(donors, donor_group = g, .before = 1)
+}))
+```
+
+```{r donors-hier-plot, fig.width = 9, fig.height = 5.5, fig.alt = "Discard rate of the donor strata behind each hierarchical group, coloured by metier"}
+plot_discard_rate(donor_detail_hier, x = "donor_group", colour = "metier4",
+                  jitter = TRUE)
+```
+
+The groups with the most donor strata behind their rate:
+
+```{r donors-hier-summary}
+donor_detail_hier %>% group_by(donor_group) %>%
+  summarise(n = n(),
+            mean_rate = round(weighted.mean(rate, w = weightingTotal, na.rm = TRUE), 3),
+            sd_rate = round(sd(rate, na.rm = TRUE), 3),
+            min_rate = round(min(rate, na.rm = TRUE), 3),
+            max_rate = round(max(rate, na.rm = TRUE), 3),
+            .groups = "drop") %>%
+  arrange(desc(n)) %>%
+  head(10)
+```
+
+# Scenarios: what the hierarchy's shape changes
+
+A **scenario** is a whole grouping configuration under a name.
+`scenario_auto()` and `scenario_manual()` describe one, `run_scenario()` runs
+it end to end - build the strata, define the groups, apply the raising - with
+the light *stratum-level* raising `apply_raising()` does, not the full
+CEF-row `catchRaising()` run above, which is what makes running several of
+them cheap enough to compare. `compare_scenarios()` lines the runs up on the
+same stratum keys; `plot_comparison()` draws them.
+
+The threshold policy is held **fixed** (50% at every level, the own-stratum
+bar included) and only the hierarchy itself varies - which keys get pooled
+over, in what order. The first key listed is pooled over soonest and the last
+one kept longest: `c("Country", "metier4")` means "join countries first, then
+`metier4` alone"; `c("Country", "areaValue", "metier4")` means "join
+countries, then areas, then `metier4` alone". Every variant keeps `metier4` as
+the last, most-protected key except the first, which considers it alone from
+the start.
+
+`scenario_auto()`'s own `dims` can be *wider* than the shared comparison
+`dims` (the Country > area > `metier4` variant needs `areaValue` in its own
+strata) but never narrower: `compare_scenarios()` re-aggregates every run onto
+the fixed `dims` keys, so a run missing any one of them on its own output
+would fail right there.
+
+`scenario_manual()` takes rules in `new_rule()` shape - the one place these
+vignettes use `new_rule()`, only because that is the input this particular
+comparison function needs. It runs at `build_strata()`'s resolution, where
+`catchCategory` has already been summed away into landings and discards and
+`fleetValue` no longer exists - so the manual scheme's BMS / IBC groups and
+G4's hand-picked exclusion have no equivalent here. This is the closest
+structural analogue at that resolution: the same G1-G3 gear split, with a
+plain catch-all in place of G4-G6 (a `new_rule()` with no clause claims
+whatever is left).
+
+```{r scenarios}
+manual_rules <- list(
+  new_rule("G1", "TBB",
+           raise = list(list(var = "metier4", values = "TBB", negate = FALSE))),
+  new_rule("G2", "GTR / GNS",
+           raise = list(list(var = "metier4", values = c("GTR", "GNS"),
+                             negate = FALSE))),
+  new_rule("G3", "OTB / SSC / SDN",
+           raise = list(list(var = "metier4", values = c("OTB", "SSC", "SDN"),
+                             negate = FALSE))),
+  new_rule("G4", "Rest of the gears"))
+
+dims_area <- c(dims, "areaValue")    # only the Country > area > metier4 variant needs it
+
+scenarios <- list(
+  manual_used = scenario_manual("Manual (gear split)", dims, manual_rules, list()),
+  hier_used   = scenario_auto("Country > Season > mesh > metier4 (the 2b cascade)",
+                              dims, hierarchy, thresholds,
+                              self_threshold = thresholds[1]),
+  hier_metier_only            = scenario_auto("metier4 only", dims,
+                                              "metier4", 50, self_threshold = 50),
+  hier_country_metier         = scenario_auto("Country > metier4", dims,
+                                              c("Country", "metier4"), c(50, 50),
+                                              self_threshold = 50),
+  hier_country_season_metier  = scenario_auto("Country > Season > metier4", dims,
+                                              c("Country", "Season", "metier4"),
+                                              c(50, 50, 50), self_threshold = 50),
+  hier_country_area_metier    = scenario_auto("Country > area > metier4", dims_area,
+                                              c("Country", "areaValue", "metier4"),
+                                              c(50, 50, 50), self_threshold = 50))
+
+runs <- lapply(scenarios, run_scenario, catch_data = catch_data)
+cmp  <- compare_scenarios(runs, dims)
+```
+
+## One stratum, every scenario
+
+The wide table: one row per stratum, one column per scenario's estimated
+discards (plus what was imported), so a single stratum's answer can be read
+straight across - the biggest strata first.
+
+```{r comparison-table}
+ct <- comparison_table(cmp, dims)
+val_cols <- setdiff(names(ct), dims)
+head(ct[order(-rowSums(ct[val_cols], na.rm = TRUE)), ], 10)
+```
+
+## The scenarios drawn
+
+```{r comparison-metier, fig.alt = "Estimated discards by metier, one bar group per scenario"}
+plot_comparison(cmp, x_var = "metier4")
+```
+
+```{r comparison-country, fig.width = 8, fig.height = 8, fig.alt = "Estimated discards by country, one panel per metier, one bar group per scenario"}
+plot_comparison(cmp, x_var = "Country", facet_var = "metier4")
+```

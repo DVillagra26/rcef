@@ -64,7 +64,7 @@ every return shape, every algorithm.
 | `rcef_taf.R` | `R_development/0_Functions_taf.R` | the same session as an ICES TAF script set |
 | `viz_theme.R` | `R_development/0_Functions_theme.R` | `app_theme()`, stable colour per level |
 | `viz_plots.R` | `R_development/0_Functions_plots.R` | the public plot functions (ggplot only) |
-| `viz_helpers.R` | *(split from the plots)* | facet layers, status legend, catch-part wording, ICES-area centroids |
+| `viz_helpers.R` | *(split from the plots)* | facet layers, status legend, catch-part wording, plot title / subtitle / caption wording (what is sampled, over which weight, what a stratum pools over), ICES-area centroids |
 
 ---
 
@@ -92,8 +92,41 @@ ones; keeping them whole would have dragged shiny into `Imports`.
 Southeast-Pacific anchoveta CEF pair, lazy-loaded with the package
 (`data(anchoveta_catch)`). The only example data now shipped: the real
 bll / pok CEF files and the IC exchange / overview fixtures that used to
-live in `inst/extdata/` have been removed - tests, the walkthrough and
-the vignettes all run off `anchoveta_*`.
+live in `inst/extdata/` were removed from the repository - the tests and
+the app checks run off `anchoveta_*`.
+
+The example carries `originType = "WGEstimate"` on every row - the value
+`catchRaising()`, `catchAllocationAoL()` and the app's picker select on -
+so it runs the whole workflow (coverage tables and plots, discard raising,
+length and age allocation, aggregation), one year at a time.
+`dev/tests/test_anchoveta_example.R` guards that, headless.
+
+## inst/extdata/ (local only)
+
+`inst/extdata/` is git-ignored: it holds real fleet data on this machine
+only, and the four vignettes read it:
+
+| file | what |
+|---|---|
+| `data_CEF_format/bll/bll_2025_{catches,distributions}_CEF_v17.1.csv` | brill `bll.27.3a47de` 2025 - discards and lengths, no ages. From the git history (removed in `4c1028c`). |
+| `data_CEF_format/pok/pok_2022_{catches,distributions}_CEF_v17.1.csv` | saithe `pok.27.3a46` 2022 - with ages. Converted from `data_overviews_format/pok/2022` with `funICoutCEF(..., output_format = "to_file", file_prefix = "pok_2022_")`; the `pok_2022_*` csv files in the history were byte-copies of the bll ones. |
+| `data_overviews_format/{bll/2025,pok/2022}/` | the InterCatch overview files the CEF csv files came from. |
+
+The vignettes read the csv files directly, with no existence checks: they
+stop with an error where the files are missing, so `R CMD build` needs
+`--no-build-vignettes` there, and the CI workflow skips vignettes for the
+same reason.
+
+| vignette | reads |
+|---|---|
+| `part1-explore-sampling-coverage` | bll and pok, catches + distributions |
+| `part2a-discard-raising-manual-groups` | bll catches |
+| `part2b-discard-raising-hierarchical-groups` | bll catches |
+| `part3-compare-allocation-schemes` | bll catches |
+
+The file names start with `part`, not with the number: R drops a vignette
+whose file name does not start with a letter from the built package
+("excluding invalid files"). The numbers are in the titles.
 
 ---
 

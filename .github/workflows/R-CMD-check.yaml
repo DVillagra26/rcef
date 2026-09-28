@@ -20,9 +20,13 @@ jobs:
         with:
           extra-packages: any::rcmdcheck
           needs: check
+      # The four vignettes read real CEF csv files under inst/extdata, which is
+      # git-ignored and only exists on the developer's machine, so they cannot
+      # be built here.
       - uses: r-lib/actions/check-r-package@v2
         with:
-          args: 'c("--no-manual", "--as-cran")'
+          args: 'c("--no-manual", "--as-cran", "--ignore-vignettes")'
+          build_args: 'c("--no-build-vignettes")'
           error-on: '"error"'
 
       - name: Structural checks

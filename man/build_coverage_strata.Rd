@@ -6,7 +6,7 @@
 \usage{
 build_coverage_strata(
   catch,
-  dims,
+  dims = NULL,
   distributions = NULL,
   what = "discard",
   catchCategory = NULL
@@ -20,9 +20,12 @@ and the ICES area levels.}
 
 \item{dims}{Character vector of the columns that define a stratum, for
 example \code{c("metier4", "Country")}, or the finer
-\code{c("fleetValue", "areaValue", "Season")}. For length and age
-\code{catchCategory} is never a stratum column (it is a column of the
-result, one row per catch part) and is ignored if named.}
+\code{c("fleetValue", "areaValue", "Season")}. Default \code{NULL}: nothing is
+pooled, and the table is built at the finest a stratum naturally gets
+(\code{fleetValue}, \code{areaValue}, \code{Country}, \code{Season} - whichever of those
+are present in \code{catch}). For length and age \code{catchCategory} is never a
+stratum column (it is a column of the result, one row per catch part)
+and is ignored if named.}
 
 \item{distributions}{A CEF distributions table. Required for
 \code{what = "length"} and \code{what = "age"}, ignored for discards.}
@@ -67,7 +70,9 @@ Columns follow the final CAR / CAS output tables wherever those have a
 counterpart (\code{total}, \code{weightingTotal}, \code{rate}, \code{numTrips},
 \code{catchCategory}, \code{variableUnit}), so a stratum here reads like its row
 there. Weights are in tonnes; the CAR / CAS tables themselves keep the
-CEF's kilograms.
+CEF's kilograms. Both ways of expressing the discard rate are in the
+table - \code{rate} (D/L) and \code{discardRate} (D/(L+D)) - so either can be read,
+sorted or plotted.
 }
 
 \subsection{Discard tables (\code{what = "discard"})}{
@@ -81,7 +86,8 @@ counted: BMS is a third catch part with its own raising, not a discard.\tabular{
    \code{total} \tab Discards. \code{NA} when the stratum has no discard estimate at all (nobody looked); \code{0} means it was looked at and none were found. \cr
    \code{weightingCategory} \tab \code{"Lan"}. \cr
    \code{weightingTotal} \tab The landings that carry a discard estimate (their \code{domainCatchDis} is filled): the weight \code{rate} is weighted by. \cr
-   \code{rate} \tab \code{total / weightingTotal}: discards per tonne of covered landings, as the CAS output reports it. A ratio, so it can exceed 1 - unlike \code{discard_rate} in \code{\link[=build_strata]{build_strata()}}, which is discards / (landings + discards). \code{NA} when \code{total} is missing or \code{weightingTotal} is 0. \cr
+   \code{rate} \tab \code{total / weightingTotal} (D/L): discards per tonne of covered landings, as the CAS output reports it. A ratio, so it can exceed 1. \code{NA} when \code{total} is missing or \code{weightingTotal} is 0. \cr
+   \code{discardRate} \tab \code{total / (weightingTotal + total)} (D/(L+D)): the discards as a share of the covered landings plus the discards - the \code{discard_rate} of \code{\link[=build_strata]{build_strata()}}. Between 0 and 1. \code{NA} when \code{total} is missing or the denominator is 0. \cr
    \code{landings} \tab All landings in the stratum, covered or not. \cr
    \code{coverage} \tab \code{weightingTotal / landings}, in percent; \code{NA} when there are no landings. \cr
    \code{numTrips} \tab The trips behind the stratum; \code{NA} when the data does not report them. The largest count among the stratum's rows (one trip repeats across the rows of a sample), and summed when the plots pool strata into one cell. \cr
@@ -112,7 +118,11 @@ default) gives a \code{Lan} and a \code{Dis} row for every stratum.\tabular{ll}{
 row pools everything else), more for a finer one. Weights add up, so a
 table built finer can be pooled to coarser plotted columns later without
 loss - coverage and rate are re-derived from the summed weights, never
-averaged.
+averaged. Leave \code{dims} out and nothing is pooled at all: the table is
+built at the finest a stratum naturally gets - \code{fleetValue}, \code{areaValue},
+\code{Country}, \code{Season}, whichever of those \code{\link[=derive_fields]{derive_fields()}} added are
+actually present in \code{catch} - so a stratum here is as fine as the data
+itself, and only naming \code{dims} yourself asks for anything coarser.
 }
 
 \subsection{Build once, draw many}{
@@ -134,6 +144,10 @@ head(cov[order(-cov$landings), ])
 build_coverage_strata(anchoveta_catch, "Season")
 nrow(build_coverage_strata(anchoveta_catch,
                            c("fleetValue", "areaValue", "Season")))
+
+# dims left out: nothing pooled - one row per fleetValue x areaValue x
+# Country x Season combination the catch actually has
+nrow(build_coverage_strata(anchoveta_catch))
 
 # length coverage of the landings: weight, share with a distribution,
 # and the measurements behind it

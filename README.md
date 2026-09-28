@@ -37,36 +37,58 @@ tab
 
 # the same numbers as figures (raw catch or the table both work)
 plot_coverage_heat(tab, y = "metier4", x = "Country", min_cov = 50)
-plot_discard_rate(tab, x = "metier4")
+plot_discard_rate(tab, x = "metier4", colour = "Country")
+
+# discards as a share of landings + discards (D/(L+D)) instead of D/L, and a
+# dashed reference line that names the strata above 30%
+plot_discard_rate(tab, x = "metier4", colour = "Country",
+                  rate = "D/(L+D)", reference = 0.3)
 
 # length and age: add the distributions
 build_coverage_strata(anchoveta_catch, c("metier4", "Country"),
                       distributions = anchoveta_dist, what = "length")
+
+# mean weight at age, the ages from 3 upward pooled into a "3+" plus group, and
+# the fish measured at each age as bars behind the lines
+plot_meanweight_at_length_age(anchoveta_catch, anchoveta_dist,
+                              distributionType = "Age", colour = "Country",
+                              plus_group = TRUE, plus_group_start = 3,
+                              show_samples = TRUE)
 ```
 
+Every title says what is sampled and over which weight ("Discard sampling of
+landed weight"), and every subtitle says how the numbers on the figure are
+worked out and which columns each mark pools over.
+
 `?build_coverage_strata` lists every column, `?"coverage-plots"` every plot
-argument, and `vignette("coverage-plots", package = "rcef")` draws them all.
+argument, and `vignette("part1-explore-sampling-coverage", package = "rcef")`
+draws them all.
 
 ## Raise without the app
 
-Headless — the whole point of the split:
+Headless — the whole point of the split — on the bundled example:
 
 ```r
 library(rcef)
-cef <- derive_fields(read.csv("catches_CEF_v17.1.csv"))
-cef <- subset(cef, stock == "sol.27.4" & year == 2023)   # one stock and year at a time
+data(anchoveta_catch)
+cef <- subset(anchoveta_catch, year == 2023)     # one stock and year at a time
 
 dims   <- c("metier4", "ICESDivision", "Season")          # what a stratum is
 st     <- classify_strata(build_strata(cef, dims), threshold = 50)  # covered enough?
 groups <- define_raising_groups_auto(cef, hierarchy = dims,         # who borrows from whom
                                      thresholds = c(50, 40, 30))
 raised <- run_native_raising(cef, dims, groups, type = "discards")
+
+table(raised$catchCategory, raised$importedOrRaised)   # what was imported, what was raised
 ```
 
-No shiny is loaded. Raising uses the discard estimates whose `originType`
-matches the `originType` argument (`"WGEstimate"` by default). The bundled
-example data is labelled `"Estimate"`, so it is for exploring and plotting,
-not for a raising run.
+No shiny is loaded. On your own data, start from
+`cef <- derive_fields(read.csv("catches_CEF_v17.1.csv"))` and subset one
+stock and year the same way. Raising uses the discard estimates whose
+`originType` matches the `originType` argument (`"WGEstimate"` by default,
+or `"Official"`), so that is the value the rows you want raised must carry.
+The bundled example carries it on every row, so the block above runs as
+written.
 
 ## Layout
 
@@ -87,9 +109,20 @@ dev/                   tests, tooling, deploy (.Rbuildignore'd)
 **MANIFEST.md** maps every file to where it came from. **DROPPED.md**
 lists what was removed and why.
 
-`vignette("rcef-workflow", package = "rcef")` walks one stock from input
-files to numbers and mean weights at length and age, with a table of what
-to put in each argument.
+Four vignettes, all on real CEF data read from `inst/extdata/data_CEF_format`
+(git-ignored, so they only build on a machine that has the files - see
+*Developing*), in the order to read them (R requires a vignette's file name to
+start with a letter, so the number is in the title and after `part`):
+
+| vignette | what it does |
+|---|---|
+| `part1-explore-sampling-coverage` | 1. explores the data: sampling coverage, discard rates, and the lengths, ages and weights of the sampled strata - every plot family, on brill (discards, lengths) and saithe (ages) |
+| `part2a-discard-raising-manual-groups` | 2a. group allocation and discard raising with groups defined by hand, and the CC, CAR and CAS tables |
+| `part2b-discard-raising-hierarchical-groups` | 2b. the same with groups defined by the hierarchical cascade |
+| `part3-compare-allocation-schemes` | 3. compares allocation schemes: manual against hierarchical, and several hierarchies against each other |
+
+Open one with `vignette("part1-explore-sampling-coverage", package = "rcef")`,
+or run its chunks one by one in RStudio.
 
 ## The one rule
 
@@ -115,7 +148,9 @@ Rscript dev/check_exports.R  # must print NOT EXPORTED : 0
 Rscript dev/check_app.R      # sources the app + renders the UI (needs install)
 Rscript dev/check_server.R   # RUNS the server function (needs install)
 Rscript dev/check_sections.R # the two manual builders must present the same steps
-R CMD build .                # catches DESCRIPTION errors in 2s — run before every push
+R CMD build --no-build-vignettes .   # catches DESCRIPTION errors in 2s — run before every push
+R CMD build .                        # also runs the four vignettes (~1.5 min); they read the
+                                     # local CEF csv files and stop with an error without them
 ```
 
 `NAMESPACE` and `man/` are **generated** and committed. Every top-level

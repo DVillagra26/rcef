@@ -11,7 +11,8 @@ biology_dist_prep(
   catchCategory,
   quantity,
   grp,
-  dims
+  dims,
+  plus_from = NULL
 )
 }
 \arguments{
@@ -28,6 +29,9 @@ biology_dist_prep(
 \item{grp}{Grouping columns for the summary.}
 
 \item{dims}{Stratum dimensions for the link; a default is used when `NULL`.}
+
+\item{plus_from}{Optional: the class (an age) from which everything is
+pooled into one plus class (`pool_plus_group()`).}
 }
 \value{
 `list(data, class_label, value_label)`.

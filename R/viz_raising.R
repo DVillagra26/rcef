@@ -75,7 +75,10 @@ plot_river <- function(df, left_var, right_var = "raise_level",
     ggalluvial::geom_alluvium(aes(fill = .fill), width = 0.30, alpha = 0.75,
                               colour = "grey40", linewidth = 0.2) +
     ggalluvial::geom_stratum(width = 0.30, fill = "grey96", colour = "grey45") +
-    geom_text(stat = "stratum", aes(label = after_stat(stratum)),
+    # The stat object, not the string "stratum": ggplot2 resolves the string
+    # from the search path, so it only worked once ggalluvial was attached
+    # (the app does) and failed headless with "Can't find stat called stratum".
+    geom_text(stat = ggalluvial::StatStratum, aes(label = after_stat(stratum)),
               size = 2.7, lineheight = 0.82) +
     scale_x_discrete(limits = c(stratum_axis, "Raised from"),
                      expand = c(0.16, 0.05)) +

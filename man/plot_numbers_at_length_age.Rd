@@ -48,10 +48,12 @@ dodged histogram. Numbers are in thousands, length in cm and age in years.
 }
 \details{
 \code{data} is either raw CEF catch together with \code{distributions} - linked
-through \code{domainBiology} and summed inside, with \code{catchCategory} choosing
-the landings, the discards, BMS or the catch as a whole - or a table
-already summarised by \code{length_numbers()}. When \code{distributions} is given the
-catch part goes in the plot title.
+through \code{domainBiology} and the country and summed inside, with
+\code{catchCategory} choosing the landings, the discards, BMS or the catch as a
+whole - or a table already summarised by \code{length_numbers()}. When
+\code{distributions} is given the catch part goes in the plot title. A
+distributions row that repeats another exactly is dropped, with a warning:
+a repeat is not a second sample.
 
 \code{fill} colours (and stacks) the bars by a column of the catch. \code{facet}
 takes one column (a wrapped set of panels) or two (\code{c("row", "col")}, a
