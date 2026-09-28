@@ -217,11 +217,10 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
   ttl  <- cov_title(what, weight_label, "weight",
                     by = c(area_var, if (has(group_var)) group_var))
   ww   <- weight_words(weight_label)
-  subt <- sub_wrap(
-    sprintf("Pie radius = %s (t) of the area%s. Coloured slice: %s; grey slice: the rest.",
-            ww$noun, if (boxed) " and level" else "",
-            covered_phrase(what, weight_label)),
-    strata_sentence(keys, catch, noun = "Area"))
+  subt <- strata_sentence(keys, catch, noun = "Area")
+  cap  <- sprintf("radius = %s (t)%s; coloured slice: %s", ww$noun,
+                  if (boxed) " (+level)" else "",
+                  covered_phrase(what, weight_label))
 
   slice_xy <- function(cx, cy, r, a0, a1) {
     asp <- 1 / cos(cy * pi / 180)
@@ -255,7 +254,8 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
     scale_fill_manual(values = fills, name = NULL,
                       labels = c(sampled = "sampled", unsampled = "not sampled")) +
     coord_quickmap(xlim = xlim, ylim = ylim) +
-    labs(title = ttl, subtitle = subt, x = NULL, y = NULL) + app_theme()
+    labs(title = ttl, subtitle = subt, caption = cap, x = NULL, y = NULL) +
+    app_theme()
   if (boxed)
     p <- p +
       geom_text(data = boxes, aes(lx, ly, label = area), size = 2.3, hjust = 0,
@@ -467,12 +467,11 @@ plot_coverage_heat <- function(catch, distributions = NULL, y, x = NULL,
                       drop = FALSE, name = "Sampling status") +
     maybe_facet(facet_var) +
     labs(title = cov_title(what, weight_label, "strata"),
-         subtitle = sub_wrap(
-           sprintf("Tile value = %s (t) of the stratum. %s; the colour compares it with the threshold.",
-                   weight_words(weight_label)$noun,
+         subtitle = strata_sentence(c(y, x, facet), catch),
+         caption = paste(c(
+           sprintf("tile = %s (t); %s", weight_words(weight_label)$noun,
                    covered_phrase(what, weight_label)),
-           strata_sentence(c(y, x, facet), catch)),
-         caption = thr_caption(threshold, min_trips, min_meas),
+           thr_caption(threshold, min_trips, min_meas)), collapse = "\n"),
          x = if (x_var == ".x") NULL else x_var, y = y_var) +
     app_theme() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
   # lets a caller rebuild the complete-status legend (see status_legend_plot).
@@ -602,12 +601,10 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
     scale_x_discrete(expand = expansion(0.2)) +
     maybe_facet(facet_var) +
     labs(title = cov_title(what, weight_label, "strata"),
-         subtitle = sub_wrap(
-           sprintf("Bubble area = %s (t) of the stratum. %s; the colour compares it with the threshold, and the red label says what a warning stratum falls short of (its %% covered, trips or measured fish).",
-                   weight_words(weight_label)$noun,
-                   covered_phrase(what, weight_label)),
-           strata_sentence(c(y, x, facet), catch)),
-         caption = thr_caption(threshold, min_trips, min_meas),
+         subtitle = strata_sentence(c(y, x, facet), catch),
+         caption = paste(c(
+           sprintf("%s; red label = shortfall", covered_phrase(what, weight_label)),
+           thr_caption(threshold, min_trips, min_meas)), collapse = "\n"),
          x = if (x_var == ".x") NULL else x_var, y = y_var) +
     app_theme() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
   # key = "point": circles in the legend, like the bubbles in the panel.
@@ -686,7 +683,8 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 
   gmax   <- max(d$landings, na.rm = TRUE)
   x_edge <- gmax * 1.05
-  pct <- sum(d$landings[d$sampled == wi]) / sum(d$landings) * 100
+  # the sampled share is annotated on the plot itself (the bracket labels
+  # below, per facet), so it is not repeated in words here
   br <- d %>% group_by(.facet, sampled) %>%
     summarise(y_min = min(y_num) - 0.5, y_max = max(y_num) + 0.5,
               y_mid = (min(y_num) + max(y_num)) / 2,
@@ -741,10 +739,9 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
     (if (has(facet_var)) facet_wrap(vars(.facet), scales = "free_y", ncol = 2)
      else NULL) +
     labs(title = cov_title(what, weight_label, "weight"),
-         subtitle = sub_wrap(
-           sprintf("%s%% of %s weight sampled for %s; staircase = cumulative %% of %s weight.",
-                   round(pct, 0), weight_label, samp_word(what), weight_label),
-           strata_sentence(c(y, fill, facet), catch, noun = "Bar")),
+         subtitle = strata_sentence(c(y, fill, facet), catch, noun = "Bar"),
+         caption = sprintf("staircase = cumulative %% of %s weight (top axis)",
+                           weight_label),
          x = sprintf("%s (t)", tools::toTitleCase(weight_label)), y = NULL,
          fill = if (has(fill_var)) fill_var else y_var) +
     coord_cartesian(clip = "off") + app_theme() +
@@ -759,24 +756,24 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 #'
 #' @description
 #' One point per stratum, its discard rate on the y axis and its landings as
-#' the point size. Change `x`, `colour`, `shape` or `facet` and the strata -
-#' and the points - are rebuilt at that resolution: a point is never an
-#' average of finer strata. A horizontal line, with a diamond at its centre,
-#' marks the mean rate of each `x` level, weighted by landings, and an
-#' optional `reference` draws a dashed line and labels the strata above it.
+#' the point size - the finest a stratum gets, never an average of finer ones.
+#' A thin line behind the points marks the mean rate of each `x` level,
+#' weighted by landings, and an optional `reference` draws a dashed line and
+#' names the strata above it.
 #'
 #' @details
 #' ## What a point is
 #'
 #' A stratum is one row of the discard coverage table
-#' ([build_coverage_strata()]). Given raw catch, the table is built at
-#' exactly the plotted columns (`x` + `colour` + `shape` + `facet`), so a point
-#' is the rate of that combination with everything else - the other areas,
-#' seasons, countries and fleets - pooled into it; the subtitle names what is
-#' pooled. Given a discard coverage table, its rows are drawn as they are, so a
-#' table built finer than the plotted columns shows one point per finer
-#' stratum. Strata with no discard estimate have no rate and are not drawn: a
-#' rate is a property of sampled strata only.
+#' ([build_coverage_strata()]). Given a discard coverage table, its rows are
+#' drawn exactly as they are - one point per row. Given raw catch, the table
+#' is built at the finest resolution the catch carries (`fleetValue`,
+#' `areaValue`, `Country`, `Season`, whichever are present) *together with*
+#' `x` / `colour` / `shape` / `facet`, so a point is always an individual,
+#' un-pooled stratum: several points can share one `x` level. `strata_vars`
+#' (the columns behind a point's label, see below) is exactly this set.
+#' Strata with no discard estimate have no rate and are not drawn: a rate is
+#' a property of sampled strata only.
 #'
 #' ## The rate
 #'
@@ -792,19 +789,22 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 #'
 #' ## The weighted mean
 #'
-#' The line and diamond on each `x` level (in each panel, when faceted) mark
-#' the mean of the plotted rates of the strata at that level, weighted by the
-#' landings that carry a discard estimate (`weightingTotal`, the CAS weight):
-#' a big stratum counts for more than a small one. For `"D/L"` it equals the
-#' rate of the `x` level built directly, `build_coverage_strata(catch, x)`.
+#' The line on each `x` level (in each panel, when faceted) is the mean of
+#' the plotted rates of the strata at that level, weighted by the landings
+#' that carry a discard estimate (`weightingTotal`, the CAS weight): a big
+#' stratum counts for more than a small one. For `"D/L"` it equals the rate
+#' of the `x` level built directly, `build_coverage_strata(catch, x)`. It sits
+#' behind the points, thin and muted, so it reads as a reference, not the
+#' headline.
 #'
 #' ## The reference line
 #'
 #' `reference` is a rate on the same scale as the axis, as a fraction (`0.3` is
-#' 30%; with `"D/(L+D)"` it must lie between 0 and 1). A dashed line marks it
-#' and the strata above it are labelled with their identity - the plotted
-#' columns, joined with `" | "` - so the ones to look at are named on the
-#' figure.
+#' 30%; with `"D/(L+D)"` it must lie between 0 and 1). A dashed line marks it,
+#' and the strata above it are labelled with every `strata_vars` column named
+#' (`"metier4=MIS | Country=Denmark | areaValue=... | Season=..."`) - a point
+#' is an individual stratum, so its label identifies it fully, not just by
+#' the columns you happened to plot.
 #'
 #' ## The y axis
 #'
@@ -843,7 +843,7 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 #'                   facet = "Season")
 #'
 #' # discards as a share of landings + discards, with a reference line: the
-#' # strata above 20% are named
+#' # strata above 20% are named, in full
 #' plot_discard_rate(anchoveta_catch, x = "metier4", colour = "Country",
 #'                   rate = "D/(L+D)", reference = 0.2)
 #'
@@ -875,7 +875,14 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
 
   tw <- coverage_table_what(catch)
   if (is.na(tw)) {
-    d <- build_coverage_strata(catch, keys)
+    # Raw catch: build at the finest the catch carries, together with
+    # whatever is plotted - not pooled to just the plotted columns, or a
+    # point (and its label) could be many different areas and seasons
+    # wearing one name. A minimal catch with none of the four keeps the old
+    # pooled-to-plotted-columns behaviour (nothing finer to build at).
+    base_dims <- intersect(c("fleetValue", "areaValue", "Country", "Season"),
+                           names(as.data.frame(catch)))
+    d <- build_coverage_strata(catch, dims = unique(c(base_dims, keys)))
   } else if (identical(tw, "discard")) {
     d <- catch
   } else {
@@ -907,14 +914,14 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
   # is degenerate (every value 0 or NA).
   has_landings <- any(is.finite(d$landings) & d$landings > 0)
 
-  # What a point is: the plotted columns for raw catch, the table's own
-  # columns for a table (which is drawn as it is, possibly finer).
-  strata_vars <- if (is.na(tw)) keys
-                 else setdiff(names(d), c("catchCategory", "variableUnit",
-                                          "weightingCategory", "total",
-                                          "weightingTotal", "rate",
-                                          "discardRate", "landings", "coverage",
-                                          "numTrips", ".y"))
+  # What a point is: every stratum column the table carries - the table's
+  # own dims, drawn as they are. This is the finest available (see above),
+  # so it is also what a label needs to identify the point in full.
+  strata_vars <- setdiff(names(d), c("catchCategory", "variableUnit",
+                                     "weightingCategory", "total",
+                                     "weightingTotal", "rate",
+                                     "discardRate", "landings", "coverage",
+                                     "numTrips", ".y"))
   # The mean of each x level (per panel), weighted by the landings behind
   # each rate - for D/L exactly the rate of that level built directly.
   wkeys <- unique(c(x_var, if (has(facet_var)) facet_var))
@@ -922,14 +929,15 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
     group_by(across(all_of(wkeys))) %>%
     summarise(.y = stats::weighted.mean(.y, weightingTotal), .groups = "drop") %>%
     filter(is.finite(.y))
-  # Labels for the strata above the reference. Blank for every other point,
-  # so the label layer has exactly the rows of the point layer and the same
-  # jitter puts each label on its point.
+  # Labels for the strata above the reference, each variable named
+  # ("metier4=MIS | Country=Denmark | ...") so the point can be told apart
+  # from another that only shares some of its columns. Blank for every other
+  # point, so the label layer has exactly the rows of the point layer and
+  # the same jitter puts each label on its point.
   ref_y <- if (is.null(reference)) NULL else reference * 100
-  d$.lab <- if (is.null(ref_y)) ""
-            else ifelse(d$.y > ref_y,
-                        do.call(paste, c(unname(as.list(d[strata_vars])),
-                                         sep = " | ")), "")
+  lab_all <- do.call(paste, c(lapply(strata_vars, function(v)
+                                sprintf("%s=%s", v, d[[v]])), sep = " | "))
+  d$.lab <- if (is.null(ref_y)) "" else ifelse(d$.y > ref_y, lab_all, "")
 
   pos <- if (jitter) position_jitter(width = 0.18, height = 0, seed = 1) else "identity"
   ae <- aes(x = .data[[x_var]], y = .y)
@@ -953,16 +961,15 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
                size = 3, colour = "red3",
                label = sprintf("reference %s%%", format(round(reference * 100, 1),
                                                         trim = TRUE)))
-  p <- p + do.call(geom_point, pt_args) +
-    # the weighted mean: a horizontal line across the level, a diamond at
-    # its centre. geom_errorbar with ymin = ymax draws exactly a line - no
-    # whiskers, since the top and bottom cap coincide.
+  # the weighted mean sits behind the strata: a thin, muted line - no
+  # whiskers, since geom_errorbar's top and bottom cap coincide at
+  # ymin = ymax - and no marker at its centre, so it reads as a backdrop
+  # the points sit on, not a headline of its own.
+  p <- p +
     geom_errorbar(data = wm, aes(x = .data[[x_var]], ymin = .y, ymax = .y),
-                 inherit.aes = FALSE, width = 0.6, colour = "black",
-                 linewidth = 0.9) +
-    geom_point(data = wm, aes(x = .data[[x_var]], y = .y), inherit.aes = FALSE,
-               shape = 23, size = 4.5, stroke = 1, fill = "white",
-               colour = "black")
+                 inherit.aes = FALSE, width = 0.6, colour = "grey45",
+                 linewidth = 0.4) +
+    do.call(geom_point, pt_args)
   if (!is.null(ref_y))
     p <- p + ggrepel::geom_text_repel(
       data = d, aes(x = .data[[x_var]], y = .y, label = .lab),
@@ -970,8 +977,7 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
       colour = "red3", box.padding = 0.4, min.segment.length = 0,
       segment.size = 0.2, segment.colour = "grey40", max.overlaps = Inf)
   if (has(shape_var))
-    # no 23: the diamond is the mean of each x level
-    p <- p + scale_shape_manual(values = c(21, 22, 24, 25, 8, 3, 4, 10))
+    p <- p + scale_shape_manual(values = c(21, 22, 23, 24, 25, 8, 3, 4))
   # the fill legend keys inherit the default shape (19), which takes no
   # fill, so the swatches come out empty unless forced to a filled shape
   if (has(colour_var))
@@ -1006,17 +1012,14 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
                           labels = function(z) paste0(round(z), "%"))) +
     maybe_facet(facet_var, free_y = FALSE, ncol = 2) +
     labs(title = sprintf("Discard rate (%s) per stratum", rate_type),
-         subtitle = sub_wrap(
-           if (identical(rate_type, "D/L"))
-             "Each point is a stratum's D/L = discards D / landings L with a discard estimate."
-           else "Each point is a stratum's D/(L+D) = discards D / (landings L with a discard estimate + D).",
-           strata_sentence(strata_vars, catch),
-           paste0(if (has_landings) "Point size = landings (t); line and diamond"
-                  else "Line and diamond",
-                  sprintf(" = mean rate per %s, weighted by landings L.", x_var)),
+         subtitle = strata_sentence(strata_vars, catch),
+         caption = paste(c(
+           if (identical(rate_type, "D/L")) "D/L = discards / landings(w/ est.)"
+           else "D/(L+D) = discards / (landings(w/ est.) + discards)",
+           sprintf("line = landings-wtd mean per %s", x_var),
            if (!is.null(ref_y))
-             sprintf("Dashed line = reference; strata above it are labelled (%s).",
-                     paste(strata_vars, collapse = " | "))),
+             "dashed = reference; labels name the strata above it"),
+           collapse = "\n"),
          y = sprintf("Discard rate (%s)", rate_type), x = x_var,
          fill = if (has(colour_var)) colour_var else NULL,
          shape = if (has(shape_var)) shape_var else NULL) +
@@ -1138,21 +1141,18 @@ plot_numbers_at_length_age <- function(data, distributions = NULL,
 
       # what a bar is: the numbers of every sampled stratum that shares the
       # plotted columns, summed - everything else is pooled into it
-      subt <- if (is.null(distributions))
-        (if (has(fill_var)) paste0("Stacked by ", fill_var) else NULL)
-      else sub_wrap(
-        sprintf("Numbers per class, summed over %s%s.",
-                if (length(grp)) sprintf("the sampled strata that share each %s",
-                                         paste(grp, collapse = " x "))
-                else "every sampled stratum",
-                if (has(fill_var)) sprintf("; stacked by %s", fill_var) else ""),
-        strata_sentence(grp, catch0))
+      subt <- if (is.null(distributions)) NULL else strata_sentence(grp, catch0)
+      cap  <- paste(c("bars = numbers summed over strata",
+                      if (has(fill_var))
+                        sprintf("%s by %s", if (stacked) "stacked" else "dodged",
+                                fill_var)),
+                    collapse = "\n")
       p +
         scale_y_continuous(labels = scales::comma) +
         facet_two(facet1, facet2, ncol = 2, scales = scales) +
         labs(title = paste0(sprintf("Numbers at %s",
                                     tolower(sub(" .*", "", class_label))), cc_suffix),
-             subtitle = subt,
+             subtitle = subt, caption = cap,
              x = class_label, y = value_label, fill = fill_var) +
         app_theme()
   }
@@ -1376,7 +1376,8 @@ plot_meanweight_at_length_age <- function(data, distributions = NULL,
       else ggplot(d, aes(x = .class, y = mean_weight, group = 1))
 
       # Bars first, so they sit behind everything. They live on the weight
-      # axis, scaled so the tallest stack reaches 40% of the tallest line,
+      # axis, scaled so the tallest stack reaches 75% of the tallest line -
+      # tall enough that a small sample still shows, not just the big ones -
       # and a second axis on the right reads them back as fish.
       kbar <- NULL
       if (bars) {
@@ -1386,14 +1387,16 @@ plot_meanweight_at_length_age <- function(data, distributions = NULL,
         tot <- d %>%
           group_by(across(all_of(c(".class", facet1, facet2)))) %>%
           summarise(n = sum(n_fish, na.rm = TRUE), .groups = "drop")
-        kbar <- 0.4 * top / max(tot$n)
+        kbar <- 0.75 * top / max(tot$n)
         bw <- { u <- sort(unique(d$.class)); if (length(u) > 1) min(diff(u)) else 1 }
         bd <- d[is.finite(d$n_fish), , drop = FALSE]
         p <- p + if (has(colour_var))
           geom_col(data = bd, aes(y = n_fish * kbar, fill = factor(!!grp)),
-                   width = bw * 0.9, alpha = 0.25, colour = NA)
+                   width = bw * 0.9, alpha = 0.25, colour = OUTLINE,
+                   linewidth = OUTLINE_LW)
         else geom_col(data = bd, aes(y = n_fish * kbar), width = bw * 0.9,
-                      alpha = 0.25, fill = PAL_BASE[1], colour = NA)
+                      alpha = 0.25, fill = PAL_BASE[1], colour = OUTLINE,
+                      linewidth = OUTLINE_LW)
       }
 
       if (band) {
@@ -1432,42 +1435,23 @@ plot_meanweight_at_length_age <- function(data, distributions = NULL,
 
       # what a point is: the mean weight of every sampled stratum that
       # shares the plotted columns, weighted by numbers - everything else is
-      # pooled into it, and the band is the spread across exactly those strata
+      # pooled into it, and the band is the spread across exactly those strata.
+      # Kept to a short, formula-like line each - the subtitle already says
+      # what is shown and pooled, so this is only how the marks are built.
       plus_txt <- if (plus_on)
-        sprintf(paste("Ages %s and older are pooled into a plus group (%s+):",
-                      "its mean weight is the number-weighted mean of those",
-                      "ages, pooled within each stratum first."),
+        sprintf("%s+ = ages %s+ pooled (per-distribution mean)",
                 format(plus_from), format(plus_from))
       # a point with no bar is not "no fish": its distributions report no count
       no_count <- bars && any(is.na(d$n_fish) | d$n_fish == 0)
       bars_txt <- if (bars)
-        (if (is.null(distributions))
-           sprintf("Bars (right axis) = fish measured at each %s.", cls)
-         else sprintf(paste("Bars (right axis) = fish measured at each %s:",
-                            "each stratum's numMeasurements shared out over its",
-                            "%ss in proportion to its numbers, summed over the",
-                            "pooled strata.%s"), cls, cls,
-                      if (no_count) paste(" A point with no bar rests on",
-                                          "distributions that report no",
-                                          "numMeasurements.") else ""))
-      subt <- if (is.null(distributions)) {
-        sub_wrap(if (has(shape_var))
-                   paste0("Each stratum shown separately by ", shape_var)
-                 else if (band)
-                   "Line = number-weighted mean, band = +/- 1 sd across the grouped strata",
-                 plus_txt, bars_txt)
-      } else sub_wrap(
-        sprintf("Line = number-weighted mean weight per class of %s%s.",
-                if (length(grp_vars))
-                  sprintf("the sampled strata that share each %s",
-                          paste(grp_vars, collapse = " x "))
-                else "every sampled stratum",
-                if (band) "; band = +/- 1 sd across those strata"
-                else if (has(shape_var))
-                  "; each shape is drawn separately, so there is no band"
-                else ""),
-        strata_sentence(grp_vars, catch0), plus_txt, bars_txt)
-      if (!nzchar(subt)) subt <- NULL
+        sprintf("bars = fish measured (right axis)%s",
+                if (no_count) "; no bar = count unknown" else "")
+      band_txt <- if (has(shape_var)) sprintf("each %s drawn separately (no band)", shape_var)
+                  else if (band) "band = +/-1 sd across grouped strata"
+      cap <- paste(c("line = numbers-wtd mean weight", band_txt, plus_txt, bars_txt),
+                   collapse = "\n")
+      subt <- if (is.null(distributions)) NULL
+              else strata_sentence(grp_vars, catch0)
 
       # the bars read back as fish on the right; they start on the panel floor
       p <- p + (if (bars)
@@ -1492,7 +1476,7 @@ plot_meanweight_at_length_age <- function(data, distributions = NULL,
       p <- p +
         facet_two(facet1, facet2, ncol = 2, scales = scales) +
         labs(title = paste0(sprintf("Mean weight at %s", cls), cc_suffix),
-             subtitle = subt,
+             subtitle = subt, caption = cap,
              x = class_label, y = "Mean weight (g)",
              colour = colour_var,
              fill = if (has(shape_var) && !bars) NULL else colour_var,

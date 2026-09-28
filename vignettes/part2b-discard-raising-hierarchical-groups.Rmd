@@ -65,7 +65,7 @@ catch_data <- read.csv(file.path(cef_dir, "bll", "bll_2025_catches_CEF_v17.1.csv
 `areaValue`, plus `Country` and `Season`.
 
 ```{r derive}
-catch_data <- derive_fields(catch_data)
+catch_data <- derive_fields(x = catch_data)
 nrow(catch_data)
 ```
 
@@ -83,7 +83,7 @@ would silently match nothing. Keep them in sync whenever either one changes.
 
 ```{r dims}
 dims <- c("Country", "Season", "mesh", "metier4")
-strata0 <- build_strata(catch_data, dims)
+strata0 <- build_strata(catch_data = catch_data, dims = dims)
 cat(sprintf("%d strata at %s, %s t landed\n",
             nrow(strata0), paste(dims, collapse = " + "),
             format(round(sum(strata0$landings), 1), big.mark = ",")))
@@ -96,7 +96,7 @@ written against whichever stratum a row belongs to, so the ids have to be on
 the CEF rows.
 
 ```{r stratum-metrics}
-catch_data <- add_stratum_metrics(catch_data, dims)
+catch_data <- add_stratum_metrics(data = catch_data, dims = dims)
 ```
 
 # Hierarchical grouping
@@ -111,15 +111,17 @@ and finally everything.
 here) recycles to that length, so all five read 50%.
 
 `recommend_raising()` takes the catch straight in and builds its own strata
-(`build_strata(catch_data, dims)`, with `dims` defaulting to `hierarchy` - the
-same columns `dims` above already used to stamp `stratum_id`). Pass an
-already-built stratum table instead and it is used as it is.
+(`build_strata(catch_data = catch_data, dims = dims)`, with `dims` defaulting
+to `hierarchy` - the same columns `dims` above already used to stamp
+`stratum_id`). Pass an already-built stratum table instead and it is used as
+it is.
 
 ```{r recommend}
 hierarchy  <- c("Country", "Season", "mesh", "metier4")
 thresholds <- 50
 
-rec <- recommend_raising(catch_data, hierarchy, thresholds)
+rec <- recommend_raising(strata = catch_data, hierarchy = hierarchy,
+                         thresholds = thresholds)
 ```
 
 ## The cascade, step by step
@@ -130,7 +132,8 @@ reads the same way as every other: every `dims` column at once, nothing pooled
 - so the whole table is one consistent progression from all four kept to none.
 
 ```{r tree}
-tree <- decision_tree(rec, hierarchy, thresholds, cumulative = TRUE)
+tree <- decision_tree(rec = rec, hierarchy = hierarchy, thresholds = thresholds,
+                      cumulative = TRUE)
 tree[, c("step", "pool", "threshold", "n_strata", "pct_landings",
          "cum_pct_landings")]
 ```
@@ -139,7 +142,7 @@ The cascade is a strict partition - every stratum leaves it at exactly one
 step, and the landings add back to the total:
 
 ```{r partition}
-chk <- check_partition(rec, tree)
+chk <- check_partition(rec = rec, tr = tree)
 cat(sprintf("partition check: %s strata / %s landings accounted for%s\n",
             if (chk$n_ok) "all" else sprintf("%d of %d", chk$n_steps, chk$n_total),
             if (chk$l_ok) "all" else sprintf("%s of %s t", chk$l_steps, chk$l_total),
@@ -185,7 +188,7 @@ they are every stratum that shares the pool's values, including strata that
 were resolved at a finer level in another group.
 
 ```{r conds}
-auto_conds <- conds_from_auto(rec)
+auto_conds <- conds_from_auto(rec = rec)
 
 # the group of every stratum, for the CAR further down - the same lookup
 # conds_from_auto() itself already built
@@ -203,12 +206,14 @@ identical to the manual scheme. The engine prints a "Condition diagnostics"
 banner for each condition; it is hidden here.
 
 ```{r check-h, results = "hide", message = FALSE}
-cond_st_h <- check_group_conditions(catch_data, auto_conds$strataCond,
+cond_st_h <- check_group_conditions(catch_data = catch_data,
+                                    condition_list = auto_conds$strataCond,
                                     domain = "domainCatchDis",
                                     originType = "WGEstimate",
                                     variableType = "WeightLive",
                                     logFile = NULL, append = TRUE)
-cond_md_h <- check_group_conditions(catch_data, auto_conds$matchedDataCond,
+cond_md_h <- check_group_conditions(catch_data = catch_data,
+                                    condition_list = auto_conds$matchedDataCond,
                                     conditionType = "matched_data",
                                     domain = "domainCatchDis",
                                     originType = "WGEstimate",
@@ -320,18 +325,18 @@ always the fill, imported / raised is always the shading, and whatever you put
 on `x` or `facet` is the aggregation.
 
 ```{r overview-table}
-raised_overview_table(raised_hier)
+raised_overview_table(raised = raised_hier)
 ```
 
 ```{r overview-metier, fig.alt = "Imported and raised weight by metier"}
-plot_raised_composition(raised_hier, x_var = "metier4")
+plot_raised_composition(raised = raised_hier, x_var = "metier4")
 ```
 
 By country, faceted by season - a finer aggregation than the group
 definitions themselves ever used:
 
 ```{r overview-country, fig.height = 6.5, fig.alt = "Imported and raised weight by country, one panel per season"}
-plot_raised_composition(raised_hier, x_var = "Country", facet_var = "Season")
+plot_raised_composition(raised = raised_hier, x_var = "Country", facet_var = "Season")
 ```
 
 # Discard rate across the raising groups
@@ -360,7 +365,7 @@ donor_detail_hier <- bind_rows(lapply(names(auto_conds$matchedDataCond), functio
            !is.na(domainCatchDis),
            originType == "WGEstimate",
            variableType == "WeightLive") %>%
-    build_coverage_strata(c("domainCatchDis", "metier4"))
+    build_coverage_strata(dims = c("domainCatchDis", "metier4"))
   # NULL for a group with no landings / discards among its donors at all
   if (!is.null(donors)) mutate(donors, donor_group = g, .before = 1)
 }))
@@ -370,7 +375,7 @@ The highest-numbered group is the catch-all (`raise_condition` is `"TRUE"`),
 whose pool is every stratum there is - the widest and least targeted rate.
 
 ```{r donors-plot, fig.width = 9, fig.height = 5.5, fig.alt = "Discard rate of the donor strata behind each raising group, coloured by metier"}
-plot_discard_rate(donor_detail_hier, x = "donor_group", colour = "metier4",
+plot_discard_rate(catch = donor_detail_hier, x = "donor_group", colour = "metier4",
                   jitter = TRUE)
 ```
 

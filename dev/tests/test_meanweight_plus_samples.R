@@ -177,6 +177,8 @@ ok(near(plus$mean_weight, m_all) && plus$n_strata == 2 &&
 ## ---- 4. the plot ---------------------------------------------------------
 sbt <- function(p) gsub("\n", " ", p$labels$subtitle, fixed = TRUE)
 says <- function(p, s) grepl(s, sbt(p), fixed = TRUE)
+cap  <- function(p) gsub("\n", " ", p$labels$caption, fixed = TRUE)
+says_cap <- function(p, s) grepl(s, cap(p), fixed = TRUE)
 xlab <- function(p) ggplot_build(p)$layout$panel_params[[1]]$x$get_labels()
 
 p0 <- plot_meanweight_at_length_age(cd, dd, distributionType = "Age",
@@ -189,9 +191,9 @@ ok(max(p0$data$.class) == 7 && max(pp3$data$.class) == 3 && drawable(pp3),
 ok("3+" %in% xlab(pp3) && !any(grepl("+", setdiff(xlab(pp3), "3+"), fixed = TRUE)) &&
      !any(grepl("+", xlab(p0), fixed = TRUE)),
    "the pooled class is labelled 3+ on the axis, the others plain; no plus without the option")
-ok(says(pp3, "Ages 3 and older are pooled into a plus group (3+)") &&
-     says(pp3, "pooled within each stratum first") && !says(p0, "plus group"),
-   "the subtitle says which ages are pooled, and how")
+ok(says_cap(pp3, "3+ = ages 3+ pooled (per-distribution mean)") &&
+     !says_cap(p0, "pooled"),
+   "the caption says which ages are pooled, and how")
 ok(identical(pp3$theme$legend.position, "right"),
    "with a plus group the legend moves outside the panel")
 
@@ -204,18 +206,19 @@ ok(drawable(pb) && inherits(pb$layers[[1]]$geom, "GeomCol") &&
    "show_samples puts bars first (behind the lines) and a second axis on the right; without it neither")
 top <- max(c(pb$data$mean_weight, pb$data$mean_weight + pb$data$sd_weight), na.rm = TRUE)
 bars <- layer_data(pb, 1)
-ok(near(max(bars$ymax), 0.4 * top, tol = 1e-6),
-   "the tallest stack of bars reaches 40% of the tallest line")
+ok(near(max(bars$ymax), 0.75 * top, tol = 1e-6),
+   "the tallest stack of bars reaches 75% of the tallest line")
+ok(identical(bars$colour[1], "black") && identical(bars$linewidth[1], 0.25),
+   "the sample-size bars carry a black outline")
 tot_n <- tapply(pb$data$n_fish, pb$data$.class, sum, na.rm = TRUE)
 top_b <- tapply(bars$ymax, bars$x, max)
 top_b <- top_b[tot_n[names(top_b)] > 0]
 r <- as.numeric(top_b) / as.numeric(tot_n[names(top_b)])
 ok(length(r) > 1 && all(is.finite(r)) && near(r, rep(r[1], length(r))),
    "bar heights are proportional to the fish at each age, summed over the colour groups")
-ok(says(pb, "Bars (right axis) = fish measured at each age") &&
-     says(pb, "shared out over its ages in proportion to its numbers") &&
-     identical(pb$theme$legend.position, "right") && !says(p0, "Bars"),
-   "the subtitle explains the bars")
+ok(says_cap(pb, "bars = fish measured (right axis)") &&
+     identical(pb$theme$legend.position, "right") && !says_cap(p0, "bars ="),
+   "the caption explains the bars")
 pn <- plot_meanweight_at_length_age(cd, dd, distributionType = "Age",
                                     catchCategory = "Lan", show_samples = TRUE,
                                     plus_group = TRUE, plus_group_start = 3)
@@ -225,7 +228,7 @@ ok(drawable(pn) && inherits(pn$layers[[1]]$geom, "GeomCol") && "3+" %in% xlab(pn
 pl <- plot_meanweight_at_length_age(cd, dd, distributionType = "LengthTotal",
                                     catchCategory = "Lan", colour = "Country",
                                     facet = "Season", show_samples = TRUE)
-ok(drawable(pl) && says(pl, "fish measured at each length"),
+ok(drawable(pl) && says_cap(pl, "bars = fish measured (right axis)"),
    "and on lengths, faceted")
 
 ## a summary built from a pooled link says so in its `plus` column, so a plot
@@ -235,7 +238,7 @@ tab_pp <- length_meanweight(pool_plus_group(
   link_dist_to_strata(cd, dd, dims_a, "Lan", "Age"), 3, dims_a), "Country")
 pt_pp <- plot_meanweight_at_length_age(tab_pp, colour = "Country")
 ok(max(pt_pp$data$.class) == 3 && "3+" %in% xlab(pt_pp) &&
-     says(pt_pp, "Ages 3 and older are pooled into a plus group (3+)") &&
+     says_cap(pt_pp, "3+ = ages 3+ pooled (per-distribution mean)") &&
      identical(pt_pp$theme$legend.position, "right"),
    "a pooled summary is labelled 3+ from its `plus` column, with no plus_group argument")
 ok(!any(grepl("+", xlab(plot_meanweight_at_length_age(
@@ -249,7 +252,7 @@ tab <- length_meanweight(link_dist_to_strata(cd, dd, c("catchCategory", "Country
 pt <- plot_meanweight_at_length_age(tab, colour = "Country", show_samples = TRUE)
 ok("n_fish" %in% names(tab) && drawable(pt) &&
      inherits(pt$layers[[1]]$geom, "GeomCol") &&
-     says(pt, "Bars (right axis) = fish measured at each "),
+     says_cap(pt, "bars = fish measured (right axis)"),
    "a length_meanweight() table draws the bars from its n_fish column")
 
 ## ---- 5. arguments that do not fit ----------------------------------------

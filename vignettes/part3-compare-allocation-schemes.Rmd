@@ -60,7 +60,7 @@ catch_data <- read.csv(file.path(cef_dir, "bll", "bll_2025_catches_CEF_v17.1.csv
 ```
 
 ```{r derive}
-catch_data <- derive_fields(catch_data)
+catch_data <- derive_fields(x = catch_data)
 ```
 
 ## The stratum resolution
@@ -80,7 +80,7 @@ extra columns for the manual scheme's plain `metier4` / `catchCategory` /
 
 ```{r dims}
 dims <- c("Country", "Season", "mesh", "metier4")
-catch_data <- add_stratum_metrics(catch_data, dims)
+catch_data <- add_stratum_metrics(data = catch_data, dims = dims)
 ```
 
 # The two schemes, raised
@@ -129,12 +129,14 @@ raise itself. The engine prints a "Condition diagnostics" banner for each
 condition; it is hidden here.
 
 ```{r manual-raise, results = "hide", message = FALSE}
-cond_st <- check_group_conditions(catch_data, strataCond_manual,
+cond_st <- check_group_conditions(catch_data = catch_data,
+                                  condition_list = strataCond_manual,
                                   domain = "domainCatchDis",
                                   originType = "WGEstimate",
                                   variableType = "WeightLive",
                                   logFile = NULL, append = TRUE)
-cond_md <- check_group_conditions(catch_data, matchedDataCond_manual,
+cond_md <- check_group_conditions(catch_data = catch_data,
+                                  condition_list = matchedDataCond_manual,
                                   conditionType = "matched_data",
                                   domain = "domainCatchDis",
                                   originType = "WGEstimate",
@@ -172,18 +174,21 @@ as the manual scheme. See vignette 2b for the cascade step by step.
 hierarchy  <- c("Country", "Season", "mesh", "metier4")
 thresholds <- 50
 
-rec <- recommend_raising(catch_data, hierarchy, thresholds)
-auto_conds <- conds_from_auto(rec)
+rec <- recommend_raising(strata = catch_data, hierarchy = hierarchy,
+                         thresholds = thresholds)
+auto_conds <- conds_from_auto(rec = rec)
 nrow(auto_conds$groups)   # groups
 ```
 
 ```{r hier-raise, results = "hide", message = FALSE}
-cond_st_h <- check_group_conditions(catch_data, auto_conds$strataCond,
+cond_st_h <- check_group_conditions(catch_data = catch_data,
+                                    condition_list = auto_conds$strataCond,
                                     domain = "domainCatchDis",
                                     originType = "WGEstimate",
                                     variableType = "WeightLive",
                                     logFile = NULL, append = TRUE)
-cond_md_h <- check_group_conditions(catch_data, auto_conds$matchedDataCond,
+cond_md_h <- check_group_conditions(catch_data = catch_data,
+                                    condition_list = auto_conds$matchedDataCond,
                                     conditionType = "matched_data",
                                     domain = "domainCatchDis",
                                     originType = "WGEstimate",
@@ -218,11 +223,11 @@ discards are always the fill, imported / raised is always the shading, and
 whatever you put on `x` or `facet` is the aggregation.
 
 ```{r overview-table-manual}
-raised_overview_table(raised_manual)
+raised_overview_table(raised = raised_manual)
 ```
 
 ```{r overview-table-hier}
-raised_overview_table(raised_hier)
+raised_overview_table(raised = raised_hier)
 ```
 
 The bottom line side by side: the total discards each scheme ends up with
@@ -242,22 +247,22 @@ data.frame(
 By metier, one scheme after the other:
 
 ```{r overview-metier-manual, fig.height = 4, fig.alt = "Manual scheme: imported and raised weight by metier"}
-plot_raised_composition(raised_manual, x_var = "metier4")
+plot_raised_composition(raised = raised_manual, x_var = "metier4")
 ```
 
 ```{r overview-metier-hier, fig.height = 4, fig.alt = "Hierarchical scheme: imported and raised weight by metier"}
-plot_raised_composition(raised_hier, x_var = "metier4")
+plot_raised_composition(raised = raised_hier, x_var = "metier4")
 ```
 
 By country, faceted by season - a finer aggregation than the group
 definitions themselves ever used:
 
 ```{r overview-country-manual, fig.height = 6.5, fig.alt = "Manual scheme: imported and raised weight by country, one panel per season"}
-plot_raised_composition(raised_manual, x_var = "Country", facet_var = "Season")
+plot_raised_composition(raised = raised_manual, x_var = "Country", facet_var = "Season")
 ```
 
 ```{r overview-country-hier, fig.height = 6.5, fig.alt = "Hierarchical scheme: imported and raised weight by country, one panel per season"}
-plot_raised_composition(raised_hier, x_var = "Country", facet_var = "Season")
+plot_raised_composition(raised = raised_hier, x_var = "Country", facet_var = "Season")
 ```
 
 # Do the groups agree with themselves?
@@ -288,14 +293,14 @@ donor_detail_manual <- bind_rows(lapply(names(matchedDataCond_manual), function(
            !is.na(domainCatchDis),
            originType == "WGEstimate",
            variableType == "WeightLive") %>%
-    build_coverage_strata(c("domainCatchDis", "metier4"))
+    build_coverage_strata(dims = c("domainCatchDis", "metier4"))
   # NULL for a group with no landings / discards among its donors at all
   if (!is.null(donors)) mutate(donors, donor_group = g, .before = 1)
 }))
 ```
 
 ```{r donors-manual-plot, fig.height = 5, fig.alt = "Discard rate of the donor strata behind each manual group, coloured by metier"}
-plot_discard_rate(donor_detail_manual, x = "donor_group", colour = "metier4",
+plot_discard_rate(catch = donor_detail_manual, x = "donor_group", colour = "metier4",
                   jitter = TRUE)
 ```
 
@@ -324,13 +329,13 @@ donor_detail_hier <- bind_rows(lapply(names(auto_conds$matchedDataCond), functio
            !is.na(domainCatchDis),
            originType == "WGEstimate",
            variableType == "WeightLive") %>%
-    build_coverage_strata(c("domainCatchDis", "metier4"))
+    build_coverage_strata(dims = c("domainCatchDis", "metier4"))
   if (!is.null(donors)) mutate(donors, donor_group = g, .before = 1)
 }))
 ```
 
 ```{r donors-hier-plot, fig.width = 9, fig.height = 5.5, fig.alt = "Discard rate of the donor strata behind each hierarchical group, coloured by metier"}
-plot_discard_rate(donor_detail_hier, x = "donor_group", colour = "metier4",
+plot_discard_rate(catch = donor_detail_hier, x = "donor_group", colour = "metier4",
                   jitter = TRUE)
 ```
 
@@ -385,37 +390,40 @@ whatever is left).
 
 ```{r scenarios}
 manual_rules <- list(
-  new_rule("G1", "TBB",
+  new_rule(id = "G1", label = "TBB",
            raise = list(list(var = "metier4", values = "TBB", negate = FALSE))),
-  new_rule("G2", "GTR / GNS",
+  new_rule(id = "G2", label = "GTR / GNS",
            raise = list(list(var = "metier4", values = c("GTR", "GNS"),
                              negate = FALSE))),
-  new_rule("G3", "OTB / SSC / SDN",
+  new_rule(id = "G3", label = "OTB / SSC / SDN",
            raise = list(list(var = "metier4", values = c("OTB", "SSC", "SDN"),
                              negate = FALSE))),
-  new_rule("G4", "Rest of the gears"))
+  new_rule(id = "G4", label = "Rest of the gears"))
 
 dims_area <- c(dims, "areaValue")    # only the Country > area > metier4 variant needs it
 
 scenarios <- list(
-  manual_used = scenario_manual("Manual (gear split)", dims, manual_rules, list()),
-  hier_used   = scenario_auto("Country > Season > mesh > metier4 (the 2b cascade)",
-                              dims, hierarchy, thresholds,
+  manual_used = scenario_manual(name = "Manual (gear split)", dims = dims,
+                                rules = manual_rules, sets = list()),
+  hier_used   = scenario_auto(name = "Country > Season > mesh > metier4 (the 2b cascade)",
+                              dims = dims, hierarchy = hierarchy, thresholds = thresholds,
                               self_threshold = thresholds[1]),
-  hier_metier_only            = scenario_auto("metier4 only", dims,
-                                              "metier4", 50, self_threshold = 50),
-  hier_country_metier         = scenario_auto("Country > metier4", dims,
-                                              c("Country", "metier4"), c(50, 50),
+  hier_metier_only            = scenario_auto(name = "metier4 only", dims = dims,
+                                              hierarchy = "metier4", thresholds = 50,
                                               self_threshold = 50),
-  hier_country_season_metier  = scenario_auto("Country > Season > metier4", dims,
-                                              c("Country", "Season", "metier4"),
-                                              c(50, 50, 50), self_threshold = 50),
-  hier_country_area_metier    = scenario_auto("Country > area > metier4", dims_area,
-                                              c("Country", "areaValue", "metier4"),
-                                              c(50, 50, 50), self_threshold = 50))
+  hier_country_metier         = scenario_auto(name = "Country > metier4", dims = dims,
+                                              hierarchy = c("Country", "metier4"),
+                                              thresholds = c(50, 50),
+                                              self_threshold = 50),
+  hier_country_season_metier  = scenario_auto(name = "Country > Season > metier4", dims = dims,
+                                              hierarchy = c("Country", "Season", "metier4"),
+                                              thresholds = c(50, 50, 50), self_threshold = 50),
+  hier_country_area_metier    = scenario_auto(name = "Country > area > metier4", dims = dims_area,
+                                              hierarchy = c("Country", "areaValue", "metier4"),
+                                              thresholds = c(50, 50, 50), self_threshold = 50))
 
 runs <- lapply(scenarios, run_scenario, catch_data = catch_data)
-cmp  <- compare_scenarios(runs, dims)
+cmp  <- compare_scenarios(runs = runs, dims = dims)
 ```
 
 ## One stratum, every scenario
@@ -425,7 +433,7 @@ discards (plus what was imported), so a single stratum's answer can be read
 straight across - the biggest strata first.
 
 ```{r comparison-table}
-ct <- comparison_table(cmp, dims)
+ct <- comparison_table(cmp = cmp, keys = dims)
 val_cols <- setdiff(names(ct), dims)
 head(ct[order(-rowSums(ct[val_cols], na.rm = TRUE)), ], 10)
 ```
@@ -433,9 +441,9 @@ head(ct[order(-rowSums(ct[val_cols], na.rm = TRUE)), ], 10)
 ## The scenarios drawn
 
 ```{r comparison-metier, fig.alt = "Estimated discards by metier, one bar group per scenario"}
-plot_comparison(cmp, x_var = "metier4")
+plot_comparison(cmp = cmp, x_var = "metier4")
 ```
 
 ```{r comparison-country, fig.width = 8, fig.height = 8, fig.alt = "Estimated discards by country, one panel per metier, one bar group per scenario"}
-plot_comparison(cmp, x_var = "Country", facet_var = "metier4")
+plot_comparison(cmp = cmp, x_var = "Country", facet_var = "metier4")
 ```

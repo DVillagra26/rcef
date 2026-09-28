@@ -6539,9 +6539,17 @@ server <- function(input, output, session) {
     title = function() "Discard rate - per stratum",
     note = function() sprintf("fleet = %s, area = %s",
       paste(panel_dims("dr"), collapse = ", "), ""),
-    prep = function()
+    # plot_discard_rate() on raw catch now resolves at the finest columns
+    # the catch carries, unioned with whatever is plotted (see its
+    # @details) - so the kept table has to be built the same way, or the
+    # saved script would reproduce a coarser (and so different) set of
+    # points than the one on screen.
+    prep = function() {
+      base <- intersect(c("fleetValue", "areaValue", "Country", "Season"),
+                        names(explore_dat("dr")))
       sprintf("strata_dr <- build_coverage_strata(catch_data, %s)",
-              fmt_vals(panel_dims("dr"))),
+              fmt_vals(unique(c(base, panel_dims("dr")))))
+    },
     call = function() taf_call("plot_discard_rate", list(
         "strata_dr", x = taf_q(role("dr", "x")),
         colour = taf_q(role("dr", "fill")), shape = taf_q(role("dr", "shape")),

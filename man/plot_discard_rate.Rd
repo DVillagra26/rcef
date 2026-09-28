@@ -46,24 +46,24 @@ A ggplot object, or \code{NULL} when no stratum has a discard rate.
 }
 \description{
 One point per stratum, its discard rate on the y axis and its landings as
-the point size. Change \code{x}, \code{colour}, \code{shape} or \code{facet} and the strata -
-and the points - are rebuilt at that resolution: a point is never an
-average of finer strata. A horizontal line, with a diamond at its centre,
-marks the mean rate of each \code{x} level, weighted by landings, and an
-optional \code{reference} draws a dashed line and labels the strata above it.
+the point size - the finest a stratum gets, never an average of finer ones.
+A thin line behind the points marks the mean rate of each \code{x} level,
+weighted by landings, and an optional \code{reference} draws a dashed line and
+names the strata above it.
 }
 \details{
 \subsection{What a point is}{
 
 A stratum is one row of the discard coverage table
-(\code{\link[=build_coverage_strata]{build_coverage_strata()}}). Given raw catch, the table is built at
-exactly the plotted columns (\code{x} + \code{colour} + \code{shape} + \code{facet}), so a point
-is the rate of that combination with everything else - the other areas,
-seasons, countries and fleets - pooled into it; the subtitle names what is
-pooled. Given a discard coverage table, its rows are drawn as they are, so a
-table built finer than the plotted columns shows one point per finer
-stratum. Strata with no discard estimate have no rate and are not drawn: a
-rate is a property of sampled strata only.
+(\code{\link[=build_coverage_strata]{build_coverage_strata()}}). Given a discard coverage table, its rows are
+drawn exactly as they are - one point per row. Given raw catch, the table
+is built at the finest resolution the catch carries (\code{fleetValue},
+\code{areaValue}, \code{Country}, \code{Season}, whichever are present) \emph{together with}
+\code{x} / \code{colour} / \code{shape} / \code{facet}, so a point is always an individual,
+un-pooled stratum: several points can share one \code{x} level. \code{strata_vars}
+(the columns behind a point's label, see below) is exactly this set.
+Strata with no discard estimate have no rate and are not drawn: a rate is
+a property of sampled strata only.
 }
 
 \subsection{The rate}{
@@ -82,20 +82,23 @@ discards as a share of those landings plus the discards - the
 
 \subsection{The weighted mean}{
 
-The line and diamond on each \code{x} level (in each panel, when faceted) mark
-the mean of the plotted rates of the strata at that level, weighted by the
-landings that carry a discard estimate (\code{weightingTotal}, the CAS weight):
-a big stratum counts for more than a small one. For \code{"D/L"} it equals the
-rate of the \code{x} level built directly, \code{build_coverage_strata(catch, x)}.
+The line on each \code{x} level (in each panel, when faceted) is the mean of
+the plotted rates of the strata at that level, weighted by the landings
+that carry a discard estimate (\code{weightingTotal}, the CAS weight): a big
+stratum counts for more than a small one. For \code{"D/L"} it equals the rate
+of the \code{x} level built directly, \code{build_coverage_strata(catch, x)}. It sits
+behind the points, thin and muted, so it reads as a reference, not the
+headline.
 }
 
 \subsection{The reference line}{
 
 \code{reference} is a rate on the same scale as the axis, as a fraction (\code{0.3} is
-30\%; with \code{"D/(L+D)"} it must lie between 0 and 1). A dashed line marks it
-and the strata above it are labelled with their identity - the plotted
-columns, joined with \code{" | "} - so the ones to look at are named on the
-figure.
+30\%; with \code{"D/(L+D)"} it must lie between 0 and 1). A dashed line marks it,
+and the strata above it are labelled with every \code{strata_vars} column named
+(\code{"metier4=MIS | Country=Denmark | areaValue=... | Season=..."}) - a point
+is an individual stratum, so its label identifies it fully, not just by
+the columns you happened to plot.
 }
 
 \subsection{The y axis}{
@@ -116,7 +119,7 @@ plot_discard_rate(anchoveta_catch, x = "Country", colour = "metier4",
                   facet = "Season")
 
 # discards as a share of landings + discards, with a reference line: the
-# strata above 20\% are named
+# strata above 20\% are named, in full
 plot_discard_rate(anchoveta_catch, x = "metier4", colour = "Country",
                   rate = "D/(L+D)", reference = 0.2)
 

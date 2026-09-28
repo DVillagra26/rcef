@@ -115,21 +115,19 @@ cov_title <- function(what, weight_label, view = c("weight", "strata"),
           if (length(by)) paste0(" by ", paste(by, collapse = " and ")) else "")
 }
 
-#' What "% covered" means for a coverage plot
+#' What "% covered" means for a coverage plot, as a short formula
 #'
 #' @param what `"discard"`, `"length"` or `"age"`.
 #' @param weight_label As for [weight_words()].
-#' @return e.g. `"% covered = landed weight that carries a discard estimate /
-#'   landed weight"`.
+#' @return e.g. `"%covered = landed weight w/ discard est. / landed weight"`.
 #' @keywords internal
 #' @noRd
 #' @export
 covered_phrase <- function(what, weight_label) {
   noun <- weight_words(weight_label)$noun
-  sprintf("%% covered = %s that %s / %s", noun,
-          switch(what, length = "is linked to a length distribution",
-                 age = "is linked to an age distribution",
-                 "carries a discard estimate"),
+  sprintf("%%covered = %s w/ %s / %s", noun,
+          switch(what, length = "length dist.", age = "age dist.",
+                 "discard est."),
           noun)
 }
 
