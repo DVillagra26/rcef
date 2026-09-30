@@ -195,21 +195,44 @@ raised_overview_table <- function(raised) {
     mutate(`Caton (t)` = round(`Caton (t)`, 3))
 }
 
-# Landings and discards split into imported and raised
-#' @noRd
+#' Raised catch composition: landings and discards, imported and raised
+#'
+#' A stacked bar of catch weight after raising, at any aggregation: bars are
+#' landings/discards (or just the one, via `catchCategory`), shading is
+#' imported from the data versus added by raising.
+#'
+#' @param raised_catch Output of [catchRaising()]: `raised` with
+#'   `importedOrRaised` and `DrGroup` columns.
+#' @param x Column on the x axis: one bar (or bar segment) per level.
+#' @param facet Optional facet column.
+#' @param catchCategory Optional filter to just `"Lan"` or `"Dis"` (matched
+#'   case-insensitively), so discards are readable on their own when landings
+#'   would otherwise dominate the scale. `NULL` (default) keeps both, stacked.
+#' @param ncol Facet columns, when `facet` is set.
+#' @return A ggplot object.
+#' @seealso [plot_raised_DR()] for the discard rate of the same raised catch.
+#' @family raising plots
+#' @md
 #' @export
-plot_raised_composition <- function(raised, x_var = NULL, facet_var = NULL,
-                                    ncol = 2) {
-  u <- if ("variableUnit" %in% names(raised)) raised$variableUnit else NULL
+plot_raised_catches <- function(raised_catch, x = NULL, facet = NULL,
+                                catchCategory = NULL, ncol = 2) {
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
-  d <- raised %>%
+  u <- if ("variableUnit" %in% names(raised_catch)) raised_catch$variableUnit else NULL
+  d <- raised_catch %>%
     mutate(.t = to_tonnes(total, u),
            src = factor(ifelse(importedOrRaised %in% "raised", "Raised", "Imported"),
                         levels = c("Imported", "Raised")),
            .cat = ifelse(toupper(catchCategory) %in% c("LAN", "LANDINGS"),
                          "Landings", "Discards"),
-           .x = if (has(x_var)) as.character(.data[[x_var]]) else "All")
-  keys <- c(".x", ".cat", "src", if (has(facet_var)) facet_var)
+           .x = if (has(x)) as.character(.data[[x]]) else "All")
+  if (has(catchCategory)) {
+    want <- if (toupper(catchCategory) %in% c("LAN", "LANDINGS")) "Landings" else "Discards"
+    d <- d[d$.cat == want, , drop = FALSE]
+  }
+  cc_label <- if (!has(catchCategory)) "Catch"
+             else if (toupper(catchCategory) %in% c("LAN", "LANDINGS")) "Landings"
+             else "Discards"
+  keys <- c(".x", ".cat", "src", if (has(facet)) facet)
   d <- d %>% group_by(across(all_of(keys))) %>%
     summarise(t = sum(.t, na.rm = TRUE), .groups = "drop")
 
@@ -221,11 +244,17 @@ plot_raised_composition <- function(raised, x_var = NULL, facet_var = NULL,
     scale_alpha_manual(values = c(Imported = 1, Raised = 0.45), name = NULL,
                        guide = guide_legend(override.aes = list(fill = "grey30"))) +
     scale_y_continuous(labels = scales::comma) +
-    (if (has(facet_var)) facet_wrap(vars(.data[[facet_var]]), ncol = ncol,
-                                    scales = "free_y") else NULL) +
-    labs(title = "Catch after raising",
-         subtitle = "Solid = imported from the data, translucent = added by raising",
-         x = if (has(x_var)) x_var else NULL, y = "Tonnes") +
+    (if (has(facet)) facet_wrap(vars(.data[[facet]]), ncol = ncol,
+                                scales = "free_y") else NULL) +
+    labs(title = sprintf("Raised %s per stratum", tolower(cc_label)),
+         caption = sub_wrap(
+           "grouping = no grouping, raw data per stratum.",
+           sprintf("bars = %s weight (t), summed per stratum.", tolower(cc_label)),
+           if (!has(catchCategory))
+             "color = landings or discards.",
+           "shade = imported from the data, or added by raising.",
+           width = 110),
+         x = if (has(x)) x else NULL, y = sprintf("%s (t)", cc_label)) +
     app_theme() +
     theme(axis.text.x = element_text(angle = 45, hjust = 1))
 }

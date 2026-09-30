@@ -48,6 +48,8 @@ from each pool, and which strata were swept into the fallback.
 
 Other raising plots: 
 \code{\link{plot_comparison}()},
+\code{\link{plot_raised_DR}()},
+\code{\link{plot_raised_catches}()},
 \code{\link{plot_river_level}()}
 }
 \concept{raising plots}

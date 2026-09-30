@@ -30,6 +30,8 @@ every other rung for space.
 
 Other raising plots: 
 \code{\link{plot_comparison}()},
+\code{\link{plot_raised_DR}()},
+\code{\link{plot_raised_catches}()},
 \code{\link{plot_river}()}
 }
 \concept{raising plots}

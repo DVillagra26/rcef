@@ -1,7 +1,7 @@
 ---
 title: "3. Comparing group allocation schemes"
 output:
-  rmarkdown::html_vignette:
+  rmarkdown::pdf_document:
     toc: true
     toc_depth: 3
     number_sections: true
@@ -217,7 +217,7 @@ cat(sprintf("hierarchical raising: %d rows (%d imported, %d raised)\n",
 # How much weight each scheme raises
 
 Imported against raised, at any aggregation, shown for both schemes so the
-same weight can be compared scheme to scheme. `plot_raised_composition()`
+same weight can be compared scheme to scheme. `plot_raised_catches()`
 takes any catch-side column on `x` and an optional `facet`: landings /
 discards are always the fill, imported / raised is always the shading, and
 whatever you put on `x` or `facet` is the aggregation.
@@ -247,22 +247,22 @@ data.frame(
 By metier, one scheme after the other:
 
 ```{r overview-metier-manual, fig.height = 4, fig.alt = "Manual scheme: imported and raised weight by metier"}
-plot_raised_composition(raised = raised_manual, x_var = "metier4")
+plot_raised_catches(raised_catch = raised_manual, x = "metier4")
 ```
 
 ```{r overview-metier-hier, fig.height = 4, fig.alt = "Hierarchical scheme: imported and raised weight by metier"}
-plot_raised_composition(raised = raised_hier, x_var = "metier4")
+plot_raised_catches(raised_catch = raised_hier, x = "metier4")
 ```
 
 By country, faceted by season - a finer aggregation than the group
 definitions themselves ever used:
 
 ```{r overview-country-manual, fig.height = 6.5, fig.alt = "Manual scheme: imported and raised weight by country, one panel per season"}
-plot_raised_composition(raised = raised_manual, x_var = "Country", facet_var = "Season")
+plot_raised_catches(raised_catch = raised_manual, x = "Country", facet = "Season")
 ```
 
 ```{r overview-country-hier, fig.height = 6.5, fig.alt = "Hierarchical scheme: imported and raised weight by country, one panel per season"}
-plot_raised_composition(raised = raised_hier, x_var = "Country", facet_var = "Season")
+plot_raised_catches(raised_catch = raised_hier, x = "Country", facet = "Season")
 ```
 
 # Do the groups agree with themselves?
@@ -276,81 +276,30 @@ a guess, no matter how well it covers the stock.
 
 ## Manual
 
-`matchedDataCond_manual` filtered straight against `catch_data`, at the
-`domainCatchDis` granularity `catchRaising()` itself estimates a ratio from -
-the same check the source example runs before raising ("Per-stratum spread
-behind each group average"). Each group's rows are turned into donor strata by
-`build_coverage_strata()` and fed to `plot_discard_rate()`. A stratum table at
-`metier4` + `Country` + `Season` cannot stand in here: `catchCategory` and
-`fleetValue` (both load-bearing above, G4's exclusions especially) do not
-survive that aggregation. The table's `rate` is discards / covered landings -
-the source example's `dis_ratio` and the CAS output's `rate`.
+`plot_raised_DR()` re-tests `matchedDataCond_manual` against `catch_data`
+internally (the same "per-stratum spread behind each group average" check the
+source example runs before raising) and plots one point per donor stratum,
+muted, underneath the raised catch's own points. The table's `rate` is
+discards / covered landings - the source example's `dis_ratio` and the CAS
+output's `rate`.
 
-```{r donors-manual}
-donor_detail_manual <- bind_rows(lapply(names(matchedDataCond_manual), function(g) {
-  donors <- catch_data %>%
-    filter(!!matchedDataCond_manual[[g]],
-           !is.na(domainCatchDis),
-           originType == "WGEstimate",
-           variableType == "WeightLive") %>%
-    build_coverage_strata(dims = c("domainCatchDis", "metier4"))
-  # NULL for a group with no landings / discards among its donors at all
-  if (!is.null(donors)) mutate(donors, donor_group = g, .before = 1)
-}))
-```
-
-```{r donors-manual-plot, fig.height = 5, fig.alt = "Discard rate of the donor strata behind each manual group, coloured by metier"}
-plot_discard_rate(catch = donor_detail_manual, x = "donor_group", colour = "metier4",
-                  jitter = TRUE)
-```
-
-```{r donors-manual-summary}
-donor_detail_manual %>% group_by(donor_group) %>%
-  summarise(n = n(),
-            mean_rate = round(weighted.mean(rate, w = weightingTotal, na.rm = TRUE), 3),
-            sd_rate = round(sd(rate, na.rm = TRUE), 3),
-            min_rate = round(min(rate, na.rm = TRUE), 3),
-            max_rate = round(max(rate, na.rm = TRUE), 3),
-            .groups = "drop")
+```{r donors-manual-plot, fig.height = 5, fig.alt = "Discard rate of the manual scheme's raised catch and its donor strata, coloured by metier"}
+plot_raised_DR(raised_catch = raised_manual, catch_data = catch_data,
+              matched_data_cond = matchedDataCond_manual,
+              x = "DrGroup", colour = "metier4")
 ```
 
 ## Hierarchical
 
 Here too the donors of a group are *not* the strata it raises: a stratum
 raised from a wide pool often has no discard data of its own, and the pool a
-group draws on is every stratum sharing its key values. So the same check
-applies - each group's `matchedDataCond` filtered against `catch_data`, at the
-`domainCatchDis` granularity, turned into donor strata and plotted.
+group draws on is every stratum sharing its key values - `auto_conds$matchedDataCond`,
+not `auto_conds$strataCond`.
 
-```{r donors-hier}
-donor_detail_hier <- bind_rows(lapply(names(auto_conds$matchedDataCond), function(g) {
-  donors <- catch_data %>%
-    filter(!!auto_conds$matchedDataCond[[g]],
-           !is.na(domainCatchDis),
-           originType == "WGEstimate",
-           variableType == "WeightLive") %>%
-    build_coverage_strata(dims = c("domainCatchDis", "metier4"))
-  if (!is.null(donors)) mutate(donors, donor_group = g, .before = 1)
-}))
-```
-
-```{r donors-hier-plot, fig.width = 9, fig.height = 5.5, fig.alt = "Discard rate of the donor strata behind each hierarchical group, coloured by metier"}
-plot_discard_rate(catch = donor_detail_hier, x = "donor_group", colour = "metier4",
-                  jitter = TRUE)
-```
-
-The groups with the most donor strata behind their rate:
-
-```{r donors-hier-summary}
-donor_detail_hier %>% group_by(donor_group) %>%
-  summarise(n = n(),
-            mean_rate = round(weighted.mean(rate, w = weightingTotal, na.rm = TRUE), 3),
-            sd_rate = round(sd(rate, na.rm = TRUE), 3),
-            min_rate = round(min(rate, na.rm = TRUE), 3),
-            max_rate = round(max(rate, na.rm = TRUE), 3),
-            .groups = "drop") %>%
-  arrange(desc(n)) %>%
-  head(10)
+```{r donors-hier-plot, fig.width = 9, fig.height = 5.5, fig.alt = "Discard rate of the hierarchical scheme's raised catch and its donor strata, coloured by metier"}
+plot_raised_DR(raised_catch = raised_hier, catch_data = catch_data,
+              matched_data_cond = auto_conds$matchedDataCond,
+              x = "DrGroup", colour = "metier4")
 ```
 
 # Scenarios: what the hierarchy's shape changes

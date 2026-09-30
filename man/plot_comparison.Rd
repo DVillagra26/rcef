@@ -27,6 +27,8 @@ than only in the totals.
 [compare_scenarios()], [comparison_table()]
 
 Other raising plots: 
+\code{\link{plot_raised_DR}()},
+\code{\link{plot_raised_catches}()},
 \code{\link{plot_river}()},
 \code{\link{plot_river_level}()}
 }

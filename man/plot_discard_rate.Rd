@@ -134,5 +134,8 @@ head(cov[!is.na(cov$rate), c("metier4", "Country", "total", "rate",
 \seealso{
 \code{\link[=build_coverage_strata]{build_coverage_strata()}} for the table behind the points;
 \link{coverage-plots} for how well those strata are sampled.
+
+Other discard-rate plots: 
+\code{\link{plot_raised_DR}()}
 }
 \concept{discard-rate plots}

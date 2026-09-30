@@ -1,7 +1,7 @@
 ---
 title: "2b. Group allocation and discard raising: hierarchically defined groups, and the CC, CAR and CAS tables"
 output:
-  rmarkdown::html_vignette:
+  rmarkdown::pdf_document:
     toc: true
     toc_depth: 3
     number_sections: true
@@ -319,79 +319,50 @@ The rest of this vignette uses the uncapped run, `raised_hier`.
 
 # Overview of the raised weight
 
-Imported against raised, at any aggregation. `plot_raised_composition()` takes
-any catch-side column on `x` and an optional `facet`: landings / discards are
+Imported against raised, at any aggregation. `plot_raised_catches()` takes any
+catch-side column on `x` and an optional `facet`: landings / discards are
 always the fill, imported / raised is always the shading, and whatever you put
-on `x` or `facet` is the aggregation.
+on `x` or `facet` is the aggregation. `catchCategory` narrows it to just
+`"Lan"` or `"Dis"`, useful whenever one of the two makes the other hard to see.
 
 ```{r overview-table}
 raised_overview_table(raised = raised_hier)
 ```
 
 ```{r overview-metier, fig.alt = "Imported and raised weight by metier"}
-plot_raised_composition(raised = raised_hier, x_var = "metier4")
+plot_raised_catches(raised_catch = raised_hier, x = "metier4")
 ```
 
 By country, faceted by season - a finer aggregation than the group
 definitions themselves ever used:
 
 ```{r overview-country, fig.height = 6.5, fig.alt = "Imported and raised weight by country, one panel per season"}
-plot_raised_composition(raised = raised_hier, x_var = "Country", facet_var = "Season")
+plot_raised_catches(raised_catch = raised_hier, x = "Country", facet = "Season")
 ```
 
 # Discard rate across the raising groups
 
 Not how much weight moved, but whether the *strata a group draws its rate
-from* agree with each other. `plot_discard_rate()` draws one point per stratum
-from any table carrying a discard rate; put the raising **group** on `x` and
-every point under a group is one of the strata that fed its rate - a group
-with points scattered from 2% to 40% is not a group, it is a guess, no matter
-how well it covers the stock.
+from* agree with each other. `plot_raised_DR()` is `plot_discard_rate()` for
+after raising: one point per stratum of the raised catch (shaded by how much
+of its own discard weight was raised rather than sampled), plus - underneath,
+muted - one point per donor stratum actually behind each group's rate,
+re-testing `matched_data_cond` against `catch_data` internally. Put the
+raising **group** on `x` (`"DrGroup"`) and a group whose donor cloud is tight
+is a real group; one scattered from 2% to 40% is a guess dressed up as a
+group, no matter how plausible its own raised rate looks on top.
 
 Here the donors of a group are *not* the strata it raises - a stratum raised
-from a wide pool often has no discard data of its own. So, exactly as for the
-manual scheme in 2a, each group's `matchedDataCond` is filtered straight
-against `catch_data`, at the `domainCatchDis` granularity `catchRaising()`
-itself estimates a ratio from. Each group's rows are turned into donor strata
-by `build_coverage_strata()` and fed to `plot_discard_rate()`. The table's
-`rate` is discards / covered landings - the very number the CAS output reports
-as `rate` (there per CEF row, here per donor stratum), so what is plotted here
-is what ends up in the CAS.
+from a wide pool often has no discard data of its own, exactly as for the
+manual scheme in 2a - so `auto_conds$matchedDataCond` (not
+`auto_conds$strataCond`) is what `plot_raised_DR()` needs. The highest-numbered
+group is the catch-all (`raise_condition` is `"TRUE"`), whose pool is every
+stratum there is - the widest and least targeted rate.
 
-```{r donors}
-donor_detail_hier <- bind_rows(lapply(names(auto_conds$matchedDataCond), function(g) {
-  donors <- catch_data %>%
-    filter(!!auto_conds$matchedDataCond[[g]],
-           !is.na(domainCatchDis),
-           originType == "WGEstimate",
-           variableType == "WeightLive") %>%
-    build_coverage_strata(dims = c("domainCatchDis", "metier4"))
-  # NULL for a group with no landings / discards among its donors at all
-  if (!is.null(donors)) mutate(donors, donor_group = g, .before = 1)
-}))
-```
-
-The highest-numbered group is the catch-all (`raise_condition` is `"TRUE"`),
-whose pool is every stratum there is - the widest and least targeted rate.
-
-```{r donors-plot, fig.width = 9, fig.height = 5.5, fig.alt = "Discard rate of the donor strata behind each raising group, coloured by metier"}
-plot_discard_rate(catch = donor_detail_hier, x = "donor_group", colour = "metier4",
-                  jitter = TRUE)
-```
-
-The groups with the most donor strata behind their rate, and how much those
-rates spread:
-
-```{r donors-summary}
-donor_detail_hier %>% group_by(donor_group) %>%
-  summarise(n = n(),
-            mean_rate = round(weighted.mean(rate, w = weightingTotal, na.rm = TRUE), 3),
-            sd_rate = round(sd(rate, na.rm = TRUE), 3),
-            min_rate = round(min(rate, na.rm = TRUE), 3),
-            max_rate = round(max(rate, na.rm = TRUE), 3),
-            .groups = "drop") %>%
-  arrange(desc(n)) %>%
-  head(10)
+```{r donors-plot, fig.width = 9, fig.height = 5.5, fig.alt = "Discard rate of the raised catch and its donor strata behind each raising group, coloured by metier"}
+plot_raised_DR(raised_catch = raised_hier, catch_data = catch_data,
+              matched_data_cond = auto_conds$matchedDataCond,
+              x = "DrGroup", colour = "metier4")
 ```
 
 # Output: CC (Catch Combined)
@@ -450,15 +421,17 @@ for now, per-row CAR and per-donor-stratum CAS.
 ## CAR: every row `catchRaising()` produced
 
 Each row is tagged with the **group** that raised it. `catchAllocationGroupName`
-is filled *only* where a row was actually raised (blank on every imported row -
-nothing raised it, so there is nothing to name); `imported` is Y / N, matching
-the source RDBESStockCoord convention rather than rcef's own "imported" /
-"raised" wording.
+is filled *only* where a row was actually raised - `imported` is Y / N,
+matching the source RDBESStockCoord convention rather than rcef's own
+"imported" / "raised" wording, and it is that column, not the group name, that
+marks a row as sampled.
 
-The group is looked up by `stratum_id` against `rec`'s own `group_id`: the
-cascade is a strict partition, so every stratum belongs to exactly one group.
-The engine records the same thing in its own `DrGroup` column, which is checked
-against the lookup below, so the tag does not depend on an engine column.
+The group itself is looked up by `stratum_id` against `rec`'s own `group_id`:
+the cascade is a strict partition, so every stratum belongs to exactly one
+group, imported or raised alike (the engine's own `DrGroup` column agrees, and
+is filled the same way on both - it is `.car_group` below, not `DrGroup`, that
+is blanked back out on imported rows, only because the CAR schema itself only
+names a group where raising actually happened).
 
 ```{r car}
 raised_hier <- raised_hier %>%
@@ -495,6 +468,18 @@ car_out %>%
   select(catchAllocationGroupName, imported, vesselFlagCountry, seasonValue,
          areaValue, fleetValue, catchCategory, total) %>%
   head(10)
+```
+
+## Which strata are raised from which group
+
+`rec` already carries everything this needs - `raise_level` (which cascade
+pool a stratum settled at) and `landings`, both native to
+`recommend_raising()`'s own output, nothing derived here. `plot_river()` draws
+it as an alluvial: metier on the left, cascade pool on the right, ribbon width
+the landings weight.
+
+```{r river, fig.height = 5.5, fig.alt = "Alluvial plot of landings weight flowing from each metier to the cascade pool it settled at"}
+plot_river(rec, left_var = "metier4")
 ```
 
 ## CAS: the donor strata behind each group's rate

@@ -6839,8 +6839,8 @@ server <- function(input, output, session) {
 
   fin_plot_obj <- gated(fin_g, {
     validate(need(!is.null(rv$final), "Run the raising first."))
-    plot_raised_composition(fin_d(), col_of("nr", input$fin_x),
-                            col_of("nr", input$fin_facet)) })
+    plot_raised_catches(fin_d(), col_of("nr", input$fin_x),
+                        col_of("nr", input$fin_facet)) })
 
   output$fin_plot <- renderPlot({
     p <- fin_plot_obj()
@@ -6852,7 +6852,7 @@ server <- function(input, output, session) {
     note = function() sprintf("adopted allocation: %s",
                               input$final_alloc %||% "(none)"),
     prep = "d_fin <- derive_fields(catch_data_raised)",
-    call = function() taf_call("plot_raised_composition", list(
+    call = function() taf_call("plot_raised_catches", list(
       "d_fin", taf_q(col_of("nr", input$fin_x)),
       taf_q(col_of("nr", input$fin_facet)))))
 
