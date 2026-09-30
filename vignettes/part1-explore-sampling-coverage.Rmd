@@ -182,7 +182,7 @@ labelling rule.
 ## Bars: sampled against not-sampled weight
 
 ```{r disc-bar, fig.alt = "Sampled versus unsampled landed weight per metier"}
-plot_coverage_bar(catch = catch_data, y = "metier4")
+plot_coverage_bar(catch = catch_data, y = "metier4", facet = "metier4")
 ```
 
 ## Heatmap: status per metier, country and season
@@ -405,6 +405,41 @@ above[order(-above$discardRate),
         "total", "weightingTotal", "rate", "discardRate")]
 ```
 
+# Discard-rate clusters
+
+A different question from the discard rate itself: which strata *share* a
+rate, and which of `metier4`, `mesh`, `Country`, `Season` and `areaValue`
+actually predicts that? Most of those are categorical, so an ordinary PCA
+does not apply - `build_discard_clusters()` uses MCA (Multiple Correspondence
+Analysis) instead, the categorical equivalent, to place every stratum on a
+map from how its categories co-occur. Clustering itself runs on the discard
+rate alone (`k` groups, k-means), not on the MCA coordinates, so a cluster
+always means "similar discard rate" - the map is only where those clusters
+are then shown.
+
+```{r clusters}
+dc <- build_discard_clusters(catch_data,
+                             dims = c("metier4", "mesh", "Country", "Season",
+                                      "areaValue"))
+dc$importance
+```
+
+On the map, an ellipse per cluster shows whether it occupies its own part of
+variable space or is scattered through it - and the axes rarely capture more
+than a fifth of the total structure, so read it as a sketch, not the full
+picture:
+
+```{r clusters-map, fig.width = 8, fig.height = 6.5, fig.alt = "Every stratum on the MCA map of metier4, mesh, Country, Season and areaValue, coloured by its discard-rate cluster, with an ellipse per cluster"}
+plot_discard_clusters(dc)
+```
+
+Which variable actually drives the clustering - Cramer's V of each against
+the cluster, 0 unrelated, 1 fully determining it:
+
+```{r clusters-importance, fig.height = 4, fig.alt = "Cramer's V of metier4, mesh, Country, Season and areaValue against the discard-rate cluster, sorted strongest first"}
+plot_cluster_variables(dc)
+```
+
 # Length distribution
 
 `plot_NaLoA()` is a histogram (`variableType` is always `Number`);
@@ -592,9 +627,9 @@ unknown sample size, not zero - and the caption says so.
 
 ```{r age-mw-n, fig.height = 5, fig.alt = "Mean weight at age of the landings with bars of the fish measured behind the lines, one line per country"}
 plot_MWaLoA(data = age_catch, distributions = age_dist, distributionType = "Age",
-           catchCategory = "Dis", colour = "Country", facet = "metier4",
+           catchCategory = "Lan", colour = "Country", facet = "metier4",
            show_samples = TRUE,
-           plus_group = 8)
+           plus_group = 7)
 ```
 
 Together, for one line (no `colour`): the plus group turns the thin tail of
