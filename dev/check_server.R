@@ -293,26 +293,26 @@ if (length(fx)) {
 
       ## ---- discard rate ----
       session$setInputs(dr_x = "metier4", dr_fill = "Country", dr_shape = "",
-                        dr_facet = "", dr_jitter = TRUE, dr_rate = "D/L",
+                        dr_facet = "", dr_jitter = TRUE, dr_rate = "ratio",
                         dr_ref = NA)
       session$setInputs(dr_apply = 1); session$flushReact()
       p0 <- dr_plot_obj(); s0 <- gate_reg[["dr"]]$sig()
-      session$setInputs(dr_rate = "D/(L+D)", dr_ref = 20); session$flushReact()
+      session$setInputs(dr_rate = "rate", dr_ref = 20); session$flushReact()
       ob$dr_stale <- !identical(gate_reg[["dr"]]$sig(), s0) &&
         isTRUE(gate_reg[["dr"]]$stale())
       session$setInputs(dr_apply = 2); session$flushReact()
       p1 <- dr_plot_obj()
-      ob$dr_before <- identical(p0$labels$y, "Discard rate (D/L)") &&
+      ob$dr_before <- identical(p0$labels$y, "Discard ratio") &&
         !has_layer(p0, "GeomHline")
       hl <- Filter(function(l) inherits(l$geom, "GeomHline"), p1$layers)
-      ob$dr_after <- identical(p1$labels$y, "Discard rate (D/(L+D))") &&
+      ob$dr_after <- identical(p1$labels$y, "Discard rate") &&
         length(hl) == 1 && isTRUE(all.equal(hl[[1]]$data$yintercept, 20)) &&
         isTRUE(all.equal(p1$data$.y, p1$data$discardRate * 100))
-      ob$dr_live <- grepl('rate = "D/(L+D)"', active_plots()[[1]], fixed = TRUE) &&
+      ob$dr_live <- grepl('rate = "rate"', active_plots()[[1]], fixed = TRUE) &&
         grepl("reference = 0.2", active_plots()[[1]], fixed = TRUE)
       session$setInputs(dr_plot_keep = 1); session$flushReact()
       kt <- kept_text()
-      ob$dr_script <- grepl('rate = "D/(L+D)"', kt, fixed = TRUE) &&
+      ob$dr_script <- grepl('rate = "rate"', kt, fixed = TRUE) &&
         grepl("reference = 0.2", kt, fixed = TRUE)
       env <- list2env(list(catch_data = explore_dat("dr")), parent = environment())
       pr <- tryCatch(eval(parse(text = kt), env), error = function(e) NULL)
@@ -324,12 +324,29 @@ if (length(fx)) {
       e150 <- tryCatch({ dr_plot_obj(); "no error" }, error = function(e) class(e))
       ob$dr_bad <- "shiny.silent.error" %in% e150
       ## and without a reference, and the default rate, nothing extra is written
-      session$setInputs(dr_rate = "D/L", dr_ref = NA, dr_apply = 4)
+      session$setInputs(dr_rate = "ratio", dr_ref = NA, dr_apply = 4)
       session$flushReact()
       session$setInputs(dr_plot_keep = 2); session$flushReact()
       kt0 <- kept_text()
       ob$dr_plain <- !grepl("rate =", kt0, fixed = TRUE) &&
         !grepl("reference", kt0, fixed = TRUE)
+
+      ## ---- discard coverage: the live heatmap and bubbles still render ----
+      ## coverage_call()'s min_fish defaults to NULL and is only ever attached
+      ## for length / age - min_fish = 0 (its old default) is active per
+      ## thr_active(), which plot_coverage_heat()/_bubble() now refuse for
+      ## what = "discard", and this tab never sets `what` at all.
+      session$setInputs(cov_y = "metier4", cov_fill = "Country", cov_facet = "",
+                        threshold = 50, cov_trips = 2, cov_apply = 1)
+      session$flushReact()
+      session$setInputs(cov_type = "heatmap"); session$flushReact()
+      v <- tryCatch({ force(output$cov_plot); "rendered" },
+                    error = function(e) paste("ERROR:", conditionMessage(e)))
+      ob$cov_heat_render <- identical(v, "rendered")
+      session$setInputs(cov_type = "bubbles"); session$flushReact()
+      v <- tryCatch({ force(output$cov_plot); "rendered" },
+                    error = function(e) paste("ERROR:", conditionMessage(e)))
+      ob$cov_bubble_render <- identical(v, "rendered")
 
       ## ---- mean weight: bars on both tabs, a plus group on the age tab ----
       for (pf in c("len", "age")) {
@@ -392,14 +409,16 @@ if (length(fx)) {
   say(isTRUE(res5), "the new plot options run through the app", res5)
   if (isTRUE(res5)) {
     say(isTRUE(ob$dr_stale), "discard rate: changing rate / reference makes the panel stale")
-    say(isTRUE(ob$dr_before), "discard rate: the default is D/L with no reference line")
+    say(isTRUE(ob$dr_before), "discard rate: the default is the ratio, with no reference line")
     say(isTRUE(ob$dr_after),
-        "discard rate: D/(L+D) is plotted and 20% becomes a reference line at 20")
+        "discard rate: the rate is plotted and 20% becomes a reference line at 20")
     say(isTRUE(ob$dr_live), "discard rate: the live script shows both options")
     say(isTRUE(ob$dr_script), "discard rate: the kept script carries both options")
     say(isTRUE(ob$dr_repro), "discard rate: the kept script reproduces the plot")
-    say(isTRUE(ob$dr_bad), "discard rate: a reference D/(L+D) cannot reach is refused")
+    say(isTRUE(ob$dr_bad), "discard rate: a reference the rate cannot reach is refused")
     say(isTRUE(ob$dr_plain), "discard rate: the defaults write nothing extra")
+    say(isTRUE(ob$cov_heat_render), "discard coverage: the live heatmap still renders (min_fish default fix)")
+    say(isTRUE(ob$cov_bubble_render), "discard coverage: the live bubble grid still renders (min_fish default fix)")
     for (pf in c("len", "age")) {
       say(isTRUE(ob[[paste0(pf, "_stale")]]),
           sprintf("%s mean weight: ticking the bars makes the panel stale", pf))

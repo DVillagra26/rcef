@@ -78,7 +78,9 @@ Always active: coverage is never dropped from the classification.}
 no reported trip count still fails that check.}
 
 \item{min_fish}{Minimum measurements for \code{what = "length"} / \code{"age"}, or
-\code{NULL} (the default) to leave measurements out of the classification.}
+\code{NULL} (the default) to leave measurements out of the classification.
+An error with \code{what = "discard"} (no fish are measured for a discard
+estimate).}
 
 \item{palette}{\code{"default"} or \code{"colorblind"}. Recolours the bar fill; on
 the heatmap and bubbles the status colours are fixed, and asking for
@@ -153,7 +155,7 @@ covered stratum with no trip count reads "safe" at \code{min_trip = NULL} but
 stays a warning at \code{min_trip = 0} (see \code{\link[=classify_strata]{classify_strata()}}).
 }
 
-\subsection{What the title and subtitle say}{
+\subsection{What the title and caption say}{
 
 The title names what is sampled, then the weight it is judged against:
 "Discard sampling of landed weight", "Length sampling of landed strata",
@@ -162,14 +164,16 @@ The title names what is sampled, then the weight it is judged against:
 coverage is always over the landings); "weight" is the bar chart and the
 map, "strata" the heatmap and bubbles.
 
-The subtitle spells out how the numbers on the figure are worked out - the
-value in a tile, the "\% covered" (the weight that carries a discard
-estimate, or is linked to a length / age distribution, over the weight),
-the staircase of the bar chart (the cumulative percentage of the weight) -
-and says what a stratum is here: the plotted columns. Every other stratum
-column is pooled into it ("Stratum = metier4 x Country x Season, pooled
-over finer fleet levels (fleetValue) and area (areaValue)"), so the same
-figure drawn at other columns has other strata behind it.
+The caption's first line says what a stratum is here: the plotted
+columns, grouped over every other stratum column ("grouping = metier4 x
+Country x Season, grouped over finer fleet levels (fleetValue) and area
+(areaValue)"), so the same figure drawn at other columns has other strata
+behind it. The rest of the caption spells out how the numbers on the
+figure are worked out - the value in a tile, what a bubble's size or a
+bar means - leaving out anything a legend already shows. On the heatmap
+and bubble grid the active thresholds move into their own boxed guide,
+bottom right, under the in-panel status legend - a detail section of it,
+not a caption about the plot itself.
 }
 
 \subsection{Bars and palettes}{

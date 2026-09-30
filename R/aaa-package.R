@@ -31,7 +31,7 @@
 #' | add the strata-ready columns (`Country`, `Season`, `metier4`, ...) | [derive_fields()] |
 #' | see discard rates and sampling coverage per stratum, as a table | [build_coverage_strata()] |
 #' | look at them | [coverage-plots] (heatmap, bubbles, bars), [plot_coverage_map()], [plot_discard_rate()] |
-#' | look at numbers and mean weight at length or age | [plot_numbers_at_length_age()], [plot_meanweight_at_length_age()] |
+#' | look at numbers and mean weight at length or age | [plot_NaLoA()], [plot_MWaLoA()] |
 #' | build the raising-side stratum table and judge it | [build_strata()], [classify_strata()] |
 #' | define raising groups automatically (a cascade that coarsens until coverage clears a bar) | [recommend_raising()], [conds_from_auto()] |
 #' | define them by hand | [new_rule()], [conds_from_rules()] |

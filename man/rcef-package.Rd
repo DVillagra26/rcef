@@ -20,7 +20,7 @@ script or an ICES TAF script set. A shiny application, started with
    add the strata-ready columns (\code{Country}, \code{Season}, \code{metier4}, ...) \tab \code{\link[=derive_fields]{derive_fields()}} \cr
    see discard rates and sampling coverage per stratum, as a table \tab \code{\link[=build_coverage_strata]{build_coverage_strata()}} \cr
    look at them \tab \link{coverage-plots} (heatmap, bubbles, bars), \code{\link[=plot_coverage_map]{plot_coverage_map()}}, \code{\link[=plot_discard_rate]{plot_discard_rate()}} \cr
-   look at numbers and mean weight at length or age \tab \code{\link[=plot_numbers_at_length_age]{plot_numbers_at_length_age()}}, \code{\link[=plot_meanweight_at_length_age]{plot_meanweight_at_length_age()}} \cr
+   look at numbers and mean weight at length or age \tab \code{\link[=plot_NaLoA]{plot_NaLoA()}}, \code{\link[=plot_MWaLoA]{plot_MWaLoA()}} \cr
    build the raising-side stratum table and judge it \tab \code{\link[=build_strata]{build_strata()}}, \code{\link[=classify_strata]{classify_strata()}} \cr
    define raising groups automatically (a cascade that coarsens until coverage clears a bar) \tab \code{\link[=recommend_raising]{recommend_raising()}}, \code{\link[=conds_from_auto]{conds_from_auto()}} \cr
    define them by hand \tab \code{\link[=new_rule]{new_rule()}}, \code{\link[=conds_from_rules]{conds_from_rules()}} \cr

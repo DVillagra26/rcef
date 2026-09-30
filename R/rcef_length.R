@@ -446,7 +446,7 @@ pool_plus_group <- function(linked, from, dims = character(0)) {
 #'   `mean_weight` (the stratum's own value), `.w` (its weight in the
 #'   mean) and `n_group`, the number of values sharing that class and
 #'   group. `NULL` if there is nothing to draw.
-#' @seealso [length_meanweight()], [plot_meanweight_at_length_age()]
+#' @seealso [length_meanweight()], [plot_MWaLoA()]
 #' @export
 length_meanweight_raw <- function(linked, group_vars = character(0)) {
   if (is.null(linked) || !nrow(linked)) return(NULL)

@@ -40,7 +40,8 @@ Imports:
     stats,
     utils,
     tools,
-    grDevices
+    grDevices,
+    grid
 VignetteBuilder: knitr
 Suggests:
     knitr,

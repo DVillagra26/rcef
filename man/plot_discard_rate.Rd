@@ -10,7 +10,7 @@ plot_discard_rate(
   colour = NULL,
   shape = NULL,
   facet = NULL,
-  rate = c("D/L", "D/(L+D)"),
+  rate = c("ratio", "rate"),
   reference = NULL,
   jitter = TRUE,
   palette = c("default", "colorblind")
@@ -29,8 +29,8 @@ plot_discard_rate(
 
 \item{facet}{Optional facet column.}
 
-\item{rate}{\code{"D/L"} (default) or \code{"D/(L+D)"}: which discard rate is the y
-variable. See \emph{The rate}.}
+\item{rate}{\code{"ratio"} (default, discards / landings) or \code{"rate"} (discards
+/ catch): which discard rate is the y variable. See \emph{The rate}.}
 
 \item{reference}{Optional single rate, as a fraction (\code{0.3} = 30\%), on the
 scale of \code{rate}. Draws a dashed line and labels the strata above it.}
@@ -70,13 +70,14 @@ a property of sampled strata only.
 
 \code{rate} chooses what is plotted, and both are columns of the coverage table:
 \itemize{
-\item \code{"D/L"} (the default) is \code{rate} = \code{total / weightingTotal}: the
-stratum's discards D over the landings L that carry a discard estimate -
-the same number the CAS output reports. It is a ratio, so it can exceed
+\item \code{"ratio"} (the default, the "discard ratio") is \code{rate} = \code{total / weightingTotal}: the stratum's discards D over the landings L that carry
+a discard estimate - the same number the CAS output reports. It is a
+ratio, so it can exceed 100\%.
+\item \code{"rate"} (the "discard rate") is \code{discardRate} = `total / (weightingTotal
+\itemize{
+\item total)\verb{: the discards as a share of the catch - those landings plus the discards, the }discard_rate` of \code{\link[=build_strata]{build_strata()}}. It stays between 0 and
 100\%.
-\item \code{"D/(L+D)"} is \code{discardRate} = \code{total / (weightingTotal + total)}: the
-discards as a share of those landings plus the discards - the
-\code{discard_rate} of \code{\link[=build_strata]{build_strata()}}. It stays between 0 and 100\%.
+}
 }
 }
 
@@ -85,7 +86,7 @@ discards as a share of those landings plus the discards - the
 The line on each \code{x} level (in each panel, when faceted) is the mean of
 the plotted rates of the strata at that level, weighted by the landings
 that carry a discard estimate (\code{weightingTotal}, the CAS weight): a big
-stratum counts for more than a small one. For \code{"D/L"} it equals the rate
+stratum counts for more than a small one. For \code{"ratio"} it equals the rate
 of the \code{x} level built directly, \code{build_coverage_strata(catch, x)}. It sits
 behind the points, thin and muted, so it reads as a reference, not the
 headline.
@@ -94,21 +95,23 @@ headline.
 \subsection{The reference line}{
 
 \code{reference} is a rate on the same scale as the axis, as a fraction (\code{0.3} is
-30\%; with \code{"D/(L+D)"} it must lie between 0 and 1). A dashed line marks it,
-and the strata above it are labelled with every \code{strata_vars} column named
-(\code{"metier4=MIS | Country=Denmark | areaValue=... | Season=..."}) - a point
-is an individual stratum, so its label identifies it fully, not just by
-the columns you happened to plot.
+30\%; with \code{rate = "rate"} it must lie between 0 and 1). A dashed line marks
+it, and the strata above it are labelled with their identity - the finest
+column of each stratum family present (so a coarser alias already
+determined by a finer one you also plotted, \code{metier4} alongside
+\code{fleetValue} say, is not repeated), bare values joined by \code{"|"}
+(\code{"PS_SPF_0_0_0|87.1.2|Chile|1"}) - a point is an individual stratum, so
+its label identifies it fully, not just by the columns you happened to
+plot.
 }
 
 \subsection{The y axis}{
 
-For \code{"D/L"} the axis is pseudo-log: linear near zero (zero stays zero) and
-logarithmic above about 5\%. A few tiny strata (a few kilograms of covered
-landings) give ratios of many hundreds of percent that would flatten
-everything else on a plain axis. Add \code{+ ggplot2::scale_y_continuous()} to
-the returned plot to replace it with an ordinary one. \code{"D/(L+D)"} is
-bounded, so its axis is an ordinary 0-100\% one.
+For \code{"ratio"} the axis is pseudo-log: linear near zero (zero stays zero)
+and logarithmic above about 5\%. A few tiny strata (a few kilograms of
+covered landings) give ratios of many hundreds of percent that would
+flatten everything else on a plain axis. Add \code{+ ggplot2::scale_y_continuous()} to the returned plot to replace it with an
+ordinary one. \code{"rate"} is bounded, so its axis is an ordinary 0-100\% one.
 }
 }
 \examples{
@@ -118,10 +121,10 @@ plot_discard_rate(anchoveta_catch, x = "metier4", colour = "Country")
 plot_discard_rate(anchoveta_catch, x = "Country", colour = "metier4",
                   facet = "Season")
 
-# discards as a share of landings + discards, with a reference line: the
-# strata above 20\% are named, in full
+# discards as a share of the catch, with a reference line: the strata
+# above 20\% are named, in full
 plot_discard_rate(anchoveta_catch, x = "metier4", colour = "Country",
-                  rate = "D/(L+D)", reference = 0.2)
+                  rate = "rate", reference = 0.2)
 
 # the table behind the points
 cov <- build_coverage_strata(anchoveta_catch, c("metier4", "Country"))

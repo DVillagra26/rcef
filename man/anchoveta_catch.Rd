@@ -43,7 +43,7 @@ Already through \code{\link[=derive_fields]{derive_fields()}}, so it drops strai
 plot: the derived columns (\code{Country}, \code{Season}, \code{metier4}, the parsed area
 parts, ...) are present and consistent. Pair it with \link{anchoveta_dist} for
 the \code{what = "length"} / \code{what = "age"} coverage views and for
-\code{\link[=plot_numbers_at_length_age]{plot_numbers_at_length_age()}} and \code{\link[=plot_meanweight_at_length_age]{plot_meanweight_at_length_age()}}.
+\code{\link[=plot_NaLoA]{plot_NaLoA()}} and \code{\link[=plot_MWaLoA]{plot_MWaLoA()}}.
 \subsection{Raising the discards}{
 
 The rows are shaped the way the raising engine reads them:

@@ -115,64 +115,117 @@ cov_title <- function(what, weight_label, view = c("weight", "strata"),
           if (length(by)) paste0(" by ", paste(by, collapse = " and ")) else "")
 }
 
-#' What "% covered" means for a coverage plot, as a short formula
+#' The four stratum families and their column levels, finest first
 #'
-#' @param what `"discard"`, `"length"` or `"age"`.
-#' @param weight_label As for [weight_words()].
-#' @return e.g. `"%covered = landed weight w/ discard est. / landed weight"`.
+#' Shared by [strata_sentence()] and [finest_per_family()]: fleet
+#' (`fleetValue` > `metier6` > `metier5` > `metier4`/`gear`/`target`/`mesh` >
+#' `FleetType`), area (`areaValue` > `ICESSubdivision` > `ICESDivision` >
+#' `ICESSubArea`), country and season (`Country`/`vesselFlagCountry`,
+#' `Season`/`seasonValue` - a single level each, unlike fleet/area).
+#'
+#' @return A named list of named integer vectors (column name -> level,
+#'   1 = finest).
 #' @keywords internal
 #' @noRd
 #' @export
-covered_phrase <- function(what, weight_label) {
-  noun <- weight_words(weight_label)$noun
-  sprintf("%%covered = %s w/ %s / %s", noun,
-          switch(what, length = "length dist.", age = "age dist.",
-                 "discard est."),
-          noun)
+strata_families <- function() list(
+  fleet   = c(fleetValue = 1, metier6 = 2, metier5 = 3, metier4 = 4,
+              gear = 4, target = 4, mesh = 4, FleetType = 5),
+  area    = c(areaValue = 1, ICESSubdivision = 2, ICESDivision = 3,
+              ICESSubArea = 4),
+  country = c(Country = 1, vesselFlagCountry = 1),
+  season  = c(Season = 1, seasonValue = 1))
+
+#' Join strings with a trailing "and", Oxford comma for three or more
+#'
+#' Distinct from [and_list()] (used elsewhere for the cascade step
+#' descriptions), which does not use an Oxford comma - the grouping
+#' sentence's own wording asks for one ("fleet, area, country, and season").
+#'
+#' @param x A character vector.
+#' @return `"a"`, `"a and b"` or `"a, b, and c"`.
+#' @keywords internal
+#' @noRd
+#' @export
+oxford_list <- function(x) {
+  n <- length(x)
+  if (n <= 2) paste(x, collapse = " and ")
+  else paste0(paste(x[-n], collapse = ", "), ", and ", x[n])
 }
 
-#' The subtitle sentence naming the strata and what they pool over
+#' Drop a column when a strictly finer member of its family is also present
+#'
+#' Used where several columns of the same family - `metier4` alongside
+#' `fleetValue`, say - would otherwise repeat the same information: `metier4`
+#' is a coarser grouping `fleetValue` always determines, so naming both says
+#' nothing that `fleetValue` alone does not already say. Columns outside
+#' [strata_families()] pass through unchanged.
+#'
+#' @param vars A character vector of column names.
+#' @return `vars`, minus any column strictly coarser than another member of
+#'   the same family that is also present. Ties (two columns at the same
+#'   level) are both kept.
+#' @keywords internal
+#' @noRd
+#' @export
+finest_per_family <- function(vars) {
+  vars <- unique(as.character(vars))
+  drop <- unlist(lapply(strata_families(), function(m) {
+    s <- intersect(vars, names(m))
+    if (length(s) > 1) s[m[s] > min(m[s])]
+  }))
+  setdiff(vars, drop)
+}
+
+#' What "% covered" means for a coverage plot, as a short phrase
+#'
+#' @param what `"discard"`, `"length"` or `"age"`.
+#' @param weight_label As for [weight_words()].
+#' @return e.g. `"share of landed weight with discard estimates"`.
+#' @keywords internal
+#' @noRd
+#' @export
+share_phrase <- function(what, weight_label)
+  sprintf("share of %s with %s", weight_words(weight_label)$noun,
+          switch(what, length = "length distributions", age = "age distributions",
+                 "discard estimates"))
+
+#' The caption sentence naming the strata and what they group over
 #'
 #' A stratum is fleet x area x country x season. A figure that shows only some
-#' of those - metier4 by Country, say - pools everything else into each mark:
-#' every area and season, and every fleet finer than metier4. This names what
-#' is shown and what is pooled, so a subtitle can say it.
+#' of those - metier4 by Country, say - groups everything else into each
+#' mark: every area and season, and every fleet finer than metier4. This
+#' names what is shown and what is grouped over, so a caption can say it.
 #'
-#' The variables are grouped into the four families the cascade keys use:
-#' fleet (`fleetValue` > `metier6` > `metier5` > `metier4`, and `gear`,
-#' `target`, `mesh`, `FleetType`), area (`areaValue` > `ICESSubdivision` >
-#' `ICESDivision` > `ICESSubArea`), country and season. A family with no
-#' variable shown is pooled entirely; one shown at a coarse level is pooled
-#' over the finer levels the data has. `Stratum`, and the domain columns
-#' `domainCatchDis` / `domainBiology`, stand for all four at their finest (a
-#' domain names its fleet, area, country and season), so nothing is pooled.
+#' The variables are grouped into the four families [strata_families()]
+#' defines. A family with no variable shown is grouped over entirely; one
+#' shown at a coarse level is grouped over the finer levels the data has. A
+#' family with only one member (country, season) is never parenthesised -
+#' there is no coarser/finer level to disambiguate, unlike fleet/area.
+#' `Stratum`, and the domain columns `domainCatchDis` / `domainBiology`,
+#' stand for all four at their finest (a domain names its fleet, area,
+#' country and season), so nothing is grouped over.
 #'
 #' @param vars The columns the figure shows or splits by.
 #' @param data The data the figure is made from. Raw catch says which stratum
 #'   columns exist, so only variables it really has are named; a coverage
 #'   table no longer has them and `NULL` has nothing to say, so both assume
 #'   the finest of each family.
-#' @param noun What to call the unit: `"Stratum"`, `"Area"`, `"Bar"`, ...
-#' @return e.g. `"Stratum = metier4 x Country x Season, pooled over area
-#'   (areaValue) and finer fleet levels (fleetValue)."`; `""` when `vars` names
-#'   no column.
+#' @return e.g. `"grouping = metier4 x Country x Season, grouped over finer
+#'   fleet levels (fleetValue) and area (areaValue)."`; `"grouping = no
+#'   grouping, raw data as in CEF (CN) data."` when nothing is grouped over;
+#'   `""` when `vars` names no column.
 #' @keywords internal
 #' @noRd
 #' @export
-strata_sentence <- function(vars, data = NULL, noun = "Stratum") {
+strata_sentence <- function(vars, data = NULL) {
   vars <- unique(as.character(vars[!is.na(vars) & nzchar(vars)]))
   if (!length(vars)) return("")
   have <- if (is.data.frame(data) && is.na(coverage_table_what(data))) names(data)
-  fam <- list(
-    fleet   = c(fleetValue = 1, metier6 = 2, metier5 = 3, metier4 = 4,
-                gear = 4, target = 4, mesh = 4, FleetType = 5),
-    area    = c(areaValue = 1, ICESSubdivision = 2, ICESDivision = 3,
-                ICESSubArea = 4),
-    country = c(Country = 1, vesselFlagCountry = 1),
-    season  = c(Season = 1, seasonValue = 1))
+  fam <- strata_families()
   canonical <- c(fleet = "fleetValue", area = "areaValue", country = "Country",
                  season = "Season")
-  pooled <- character(0)
+  grouped <- character(0)
   if (!any(c("Stratum", "domainCatchDis", "domainBiology") %in% vars)) {
     for (f in names(fam)) {
       m <- fam[[f]]
@@ -180,19 +233,18 @@ strata_sentence <- function(vars, data = NULL, noun = "Stratum") {
       if (!length(present)) next
       finest <- present[which.min(m[present])]
       shown <- intersect(vars, names(m))
+      one_level <- all(m == m[[1]])
       if (!length(shown)) {
-        pooled <- c(pooled, sprintf("%s (%s)", f, finest))
+        grouped <- c(grouped, if (one_level) f else sprintf("%s (%s)", f, finest))
       } else if (m[[finest]] < min(m[shown])) {
-        pooled <- c(pooled, sprintf("finer %s levels (%s)", f, finest))
+        grouped <- c(grouped, sprintf("finer %s levels (%s)", f, finest))
       }
     }
   }
-  tail <- if (!length(pooled)) " (nothing pooled)"
-          else paste0(", pooled over ",
-                      if (length(pooled) == 1) pooled
-                      else paste0(paste(pooled[-length(pooled)], collapse = ", "),
-                                  " and ", pooled[length(pooled)]))
-  paste0(noun, " = ", paste(vars, collapse = " x "), tail, ".")
+  if (!length(grouped))
+    return("grouping = no grouping, raw data as in CEF (CN) data.")
+  paste0("grouping = ", paste(vars, collapse = " x "), ", grouped over ",
+         oxford_list(grouped), ".")
 }
 
 #' Wrap subtitle text to a plot's width
@@ -213,21 +265,99 @@ sub_wrap <- function(..., width = 96) {
         collapse = "\n")
 }
 
-#' Caption naming the thresholds a status figure was judged against
+#' Threshold-box text lines for a coverage heatmap or bubble grid
+#'
+#' One line per active threshold, each stating what it means as well as its
+#' value, plus a closing line about the per-cell shortfall labels. Meant for
+#' [thr_guide()], not the ordinary caption - see [coverage-plots].
 #'
 #' @param threshold Minimum coverage, in percent.
 #' @param min_trips,min_meas Minimum trips / measured fish, or `NULL` when
 #'   that question is not part of the classification.
+#' @param what `"discard"`, `"length"` or `"age"`.
+#' @param weight_label As for [weight_words()].
+#' @return A character vector, one threshold definition per element.
 #' @keywords internal
 #' @noRd
 #' @export
-thr_caption <- function(threshold, min_trips = NULL, min_meas = NULL) {
-  bits <- sprintf("coverage >= %s%%", threshold)
-  if (thr_active(min_trips)) bits <- c(bits, sprintf("trips >= %s", min_trips))
-  if (thr_active(min_meas))
-    bits <- c(bits, sprintf("measured fish >= %s",
-                            format(min_meas, big.mark = ",", trim = TRUE)))
-  paste0("Thresholds: ", paste(bits, collapse = ", "))
+thr_lines <- function(threshold, min_trips = NULL, min_meas = NULL,
+                      what = "discard", weight_label = "landings") {
+  behind <- switch(what, length = "length distributions", age = "age distributions",
+                   "discard estimates")
+  c(sprintf("coverage >= %s%%: %s.", threshold, share_phrase(what, weight_label)),
+    if (thr_active(min_trips))
+      sprintf("trips >= %s: sampled trips behind the %s, summed across strata.",
+              min_trips, behind),
+    if (thr_active(min_meas) && what %in% c("length", "age"))
+      sprintf("measured fish >= %s: fish measured for %s estimates, summed across strata.",
+              format(min_meas, big.mark = ",", trim = TRUE),
+              if (identical(what, "age")) "NaA/MWaA" else "NaL/MWaL"),
+    "labels: each unmet threshold is shown as a label.")
+}
+
+#' A boxed "Thresholds" guide, positioned under the panel like a legend
+#'
+#' @description
+#' Draws [thr_lines()]' text as its own guide, via [ggplot2::guide_custom()],
+#' so it keeps the plot a plain ggplot object (no composite/patchwork return)
+#' while reading as a bordered box below the panel, right-justified under
+#' where [app_theme()] already puts the in-panel status legend - a detail
+#' section of it, not a caption about the plot itself.
+#'
+#' @param lines Character vector, one fact per line - typically [thr_lines()].
+#' @param size Text size, in points.
+#' @return A list of two ggplot layers (`guides()` + `theme()`) to add with
+#'   `+`, after [app_theme()] (a complete theme resets `legend.justification`).
+#' @seealso [thr_lines()]
+#' @keywords internal
+#' @noRd
+#' @export
+thr_guide <- function(lines, size = 8) {
+  tg <- grid::textGrob(paste(lines, collapse = "\n"), x = 0, y = 1,
+                       hjust = 0, vjust = 1,
+                       gp = grid::gpar(fontsize = size, col = "grey25",
+                                       lineheight = 1.1))
+  list(guides(thresholds = guide_custom(
+         tg, title = "Thresholds", position = "bottom", order = 99,
+         theme = theme(legend.title = element_text(face = "bold", size = size)))),
+       theme(legend.justification.bottom = "right"))
+}
+
+#' Per-cell "which threshold did this miss" label for a coverage plot
+#'
+#' Reads the shortfall directly off [classify_strata()]'s own `cat_key`
+#' (`warn_cov` / `warn_trip` / `warn_meas`, singly or underscore-joined when
+#' several are missed) rather than re-deriving it from the raw values, so the
+#' label always agrees with the colour. Blank for every row that is not a
+#' warning category.
+#'
+#' @param d A classified coverage data frame (as `plot_coverage_heat()` /
+#'   `plot_coverage_bubble()` build it): needs `cat_key`, `coverage`, and
+#'   (when active) `n_measurements` / `numTrips`.
+#' @param sep Joins a cell's shortfalls when it misses more than one
+#'   threshold - `"\n"` for the bubble grid (repelled text), `", "` for the
+#'   heatmap (one line under the tile number).
+#' @return A character vector, aligned to `d`, `""` for a non-warning row.
+#' @keywords internal
+#' @noRd
+#' @export
+shortfall_label <- function(d, sep = "\n") {
+  k <- as.character(d$cat_key); n <- nrow(d)
+  miss <- function(t) grepl(paste0("^warn_.*", t), k)
+  cov <- ifelse(miss("cov"), paste0(round(d$coverage, 1), "%"), "")
+  mea <- if ("n_measurements" %in% names(d))
+    ifelse(miss("meas"), paste0("n=", format(round(d$n_measurements),
+                                             big.mark = ",", trim = TRUE)), "")
+  else rep("", n)
+  trp <- if (!("numTrips" %in% names(d))) ifelse(miss("trip"), "trips n/a", "")
+         else ifelse(miss("trip"),
+                    ifelse(is.na(d$numTrips), "trips n/a",
+                           paste0(round(d$numTrips), " trip",
+                                  ifelse(round(d$numTrips) == 1, "", "s"))), "")
+  vapply(seq_len(n), function(i) {
+    b <- c(cov[i], mea[i], trp[i])
+    paste(b[nzchar(b)], collapse = sep)
+  }, character(1))
 }
 
 #' Canonicalise a `what` argument
@@ -513,7 +643,7 @@ catch_category_parts <- function(cc) {
 #' @param distributionType "LengthTotal" (default) or "Age".
 #' @param quantity "numbers" (default) or "meanweight".
 #' @return A list: `class_label`, `value_label`, `value_scale`.
-#' @seealso [prep_distributions()], [plot_numbers_at_length_age()]
+#' @seealso [prep_distributions()], [plot_NaLoA()]
 #' @keywords internal
 #' @export
 biology_axis_labels <- function(distributionType = "LengthTotal",
@@ -527,8 +657,8 @@ biology_axis_labels <- function(distributionType = "LengthTotal",
 
 #' Link + summarise a biology distribution for the plot functions
 #'
-#' The shared front half of [plot_numbers_at_length_age()] and
-#' [plot_meanweight_at_length_age()]: when `distributions` is given, run
+#' The shared front half of [plot_NaLoA()] and [plot_MWaLoA()]: when
+#' `distributions` is given, run
 #' [link_dist_to_strata()] then [length_numbers()] / [length_meanweight()]
 #' (numbers are scaled to thousands, N3); otherwise `data` is already a
 #' summarised table and is used unchanged. Returns the axis labels that

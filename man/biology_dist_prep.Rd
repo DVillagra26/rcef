@@ -37,8 +37,8 @@ pooled into one plus class (`pool_plus_group()`).}
 `list(data, class_label, value_label)`.
 }
 \description{
-The shared front half of [plot_numbers_at_length_age()] and
-[plot_meanweight_at_length_age()]: when `distributions` is given, run
+The shared front half of [plot_NaLoA()] and [plot_MWaLoA()]: when
+`distributions` is given, run
 [link_dist_to_strata()] then [length_numbers()] / [length_meanweight()]
 (numbers are scaled to thousands, N3); otherwise `data` is already a
 summarised table and is used unchanged. Returns the axis labels that

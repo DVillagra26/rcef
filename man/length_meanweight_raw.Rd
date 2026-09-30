@@ -34,5 +34,5 @@ summary statistic; a box answers it with the values, which for four or
 five strata is the more honest picture.
 }
 \seealso{
-[length_meanweight()], [plot_meanweight_at_length_age()]
+[length_meanweight()], [plot_MWaLoA()]
 }

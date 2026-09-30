@@ -7,7 +7,7 @@
 ## 2. n_fish: numMeasurements is one count per distribution, shared out over
 ##    its classes in proportion to the numbers; a distribution counts once
 ##    however many stratum keys it is linked to.
-## 3. The plus group pools the ages from `plus_group_start` upward inside each
+## 3. The plus group pools the ages from `plus_group` upward inside each
 ##    distribution (numbers add, mean weights are number-weighted), labelled
 ##    "7+", and the plot says so.
 
@@ -175,19 +175,17 @@ ok(near(plus$mean_weight, m_all) && plus$n_strata == 2 &&
    "two distributions: pooled inside each first, so the band is the spread across strata")
 
 ## ---- 4. the plot ---------------------------------------------------------
-sbt <- function(p) gsub("\n", " ", p$labels$subtitle, fixed = TRUE)
-says <- function(p, s) grepl(s, sbt(p), fixed = TRUE)
 cap  <- function(p) gsub("\n", " ", p$labels$caption, fixed = TRUE)
 says_cap <- function(p, s) grepl(s, cap(p), fixed = TRUE)
 xlab <- function(p) ggplot_build(p)$layout$panel_params[[1]]$x$get_labels()
 
-p0 <- plot_meanweight_at_length_age(cd, dd, distributionType = "Age",
-                                    catchCategory = "Lan", colour = "Country")
-pp3 <- plot_meanweight_at_length_age(cd, dd, distributionType = "Age",
-                                     catchCategory = "Lan", colour = "Country",
-                                     plus_group = TRUE, plus_group_start = 3)
+p0 <- plot_MWaLoA(cd, dd, distributionType = "Age",
+                  catchCategory = "Lan", colour = "Country")
+pp3 <- plot_MWaLoA(cd, dd, distributionType = "Age",
+                   catchCategory = "Lan", colour = "Country",
+                   plus_group = 3)
 ok(max(p0$data$.class) == 7 && max(pp3$data$.class) == 3 && drawable(pp3),
-   "plus_group_start = 3 stops the age axis at the plus class (ages 0-7 become 0-3+)")
+   "plus_group = 3 stops the age axis at the plus class (ages 0-7 become 0-3+)")
 ok("3+" %in% xlab(pp3) && !any(grepl("+", setdiff(xlab(pp3), "3+"), fixed = TRUE)) &&
      !any(grepl("+", xlab(p0), fixed = TRUE)),
    "the pooled class is labelled 3+ on the axis, the others plain; no plus without the option")
@@ -197,9 +195,9 @@ ok(says_cap(pp3, "3+ = ages 3+ pooled (per-distribution mean)") &&
 ok(identical(pp3$theme$legend.position, "right"),
    "with a plus group the legend moves outside the panel")
 
-pb <- plot_meanweight_at_length_age(cd, dd, distributionType = "Age",
-                                    catchCategory = "Lan", colour = "Country",
-                                    show_samples = TRUE)
+pb <- plot_MWaLoA(cd, dd, distributionType = "Age",
+                  catchCategory = "Lan", colour = "Country",
+                  show_samples = TRUE)
 ok(drawable(pb) && inherits(pb$layers[[1]]$geom, "GeomCol") &&
      !inherits(pb$scales$get_scales("y")$secondary.axis, "waiver") &&
      !inherits(p0$scales$get_scales("y")$secondary.axis, "AxisSecondary"),
@@ -219,15 +217,15 @@ ok(length(r) > 1 && all(is.finite(r)) && near(r, rep(r[1], length(r))),
 ok(says_cap(pb, "bars = fish measured (right axis)") &&
      identical(pb$theme$legend.position, "right") && !says_cap(p0, "bars ="),
    "the caption explains the bars")
-pn <- plot_meanweight_at_length_age(cd, dd, distributionType = "Age",
-                                    catchCategory = "Lan", show_samples = TRUE,
-                                    plus_group = TRUE, plus_group_start = 3)
+pn <- plot_MWaLoA(cd, dd, distributionType = "Age",
+                  catchCategory = "Lan", show_samples = TRUE,
+                  plus_group = 3)
 ok(drawable(pn) && inherits(pn$layers[[1]]$geom, "GeomCol") && "3+" %in% xlab(pn) &&
      max(pn$data$.class) == 3,
    "bars and the plus group together, with no colour column")
-pl <- plot_meanweight_at_length_age(cd, dd, distributionType = "LengthTotal",
-                                    catchCategory = "Lan", colour = "Country",
-                                    facet = "Season", show_samples = TRUE)
+pl <- plot_MWaLoA(cd, dd, distributionType = "LengthTotal",
+                  catchCategory = "Lan", colour = "Country",
+                  facet = "Season", show_samples = TRUE)
 ok(drawable(pl) && says_cap(pl, "bars = fish measured (right axis)"),
    "and on lengths, faceted")
 
@@ -236,12 +234,12 @@ ok(drawable(pl) && says_cap(pl, "bars = fish measured (right axis)"),
 dims_a <- c("catchCategory", "Country")
 tab_pp <- length_meanweight(pool_plus_group(
   link_dist_to_strata(cd, dd, dims_a, "Lan", "Age"), 3, dims_a), "Country")
-pt_pp <- plot_meanweight_at_length_age(tab_pp, colour = "Country")
+pt_pp <- plot_MWaLoA(tab_pp, colour = "Country")
 ok(max(pt_pp$data$.class) == 3 && "3+" %in% xlab(pt_pp) &&
      says_cap(pt_pp, "3+ = ages 3+ pooled (per-distribution mean)") &&
      identical(pt_pp$theme$legend.position, "right"),
    "a pooled summary is labelled 3+ from its `plus` column, with no plus_group argument")
-ok(!any(grepl("+", xlab(plot_meanweight_at_length_age(
+ok(!any(grepl("+", xlab(plot_MWaLoA(
        length_meanweight(link_dist_to_strata(cd, dd, dims_a, "Lan", "Age"), "Country"),
        colour = "Country")), fixed = TRUE)),
    "and a summary that was not pooled shows no plus")
@@ -249,37 +247,34 @@ ok(!any(grepl("+", xlab(plot_meanweight_at_length_age(
 ## a summarised table carries n_fish (length_meanweight), so it can show the bars
 tab <- length_meanweight(link_dist_to_strata(cd, dd, c("catchCategory", "Country"),
                                              "Lan", "Age"), "Country")
-pt <- plot_meanweight_at_length_age(tab, colour = "Country", show_samples = TRUE)
+pt <- plot_MWaLoA(tab, colour = "Country", show_samples = TRUE)
 ok("n_fish" %in% names(tab) && drawable(pt) &&
      inherits(pt$layers[[1]]$geom, "GeomCol") &&
      says_cap(pt, "bars = fish measured (right axis)"),
    "a length_meanweight() table draws the bars from its n_fish column")
 
 ## ---- 5. arguments that do not fit ----------------------------------------
-ok(grepl("plus_group_start", err(plot_meanweight_at_length_age(
+ok(grepl("plus_group", err(plot_MWaLoA(
      cd, dd, distributionType = "Age", plus_group = TRUE))),
-   "plus_group = TRUE without plus_group_start is an error that names it")
-ok(grepl("plus_group_start", err(plot_meanweight_at_length_age(
-     cd, dd, distributionType = "Age", plus_group = TRUE, plus_group_start = "7"))),
-   "... and a start that is not a number is one too")
-ok(grepl("only applies to ages", warn(plot_meanweight_at_length_age(
-     cd, dd, colour = "Country", plus_group = TRUE, plus_group_start = 3))),
-   "a plus group on lengths warns: it is for ages")
-ok(grepl("only used with plus_group = TRUE", warn(plot_meanweight_at_length_age(
-     cd, dd, distributionType = "Age", plus_group_start = 3))),
-   "a start without plus_group = TRUE warns rather than being ignored silently")
-ok(grepl("only applies when `distributions`", warn(plot_meanweight_at_length_age(
-     tab, colour = "Country", plus_group = TRUE, plus_group_start = 3))),
+   "plus_group = TRUE is not a single number - an error that names plus_group")
+ok(grepl("plus_group", err(plot_MWaLoA(
+     cd, dd, distributionType = "Age", plus_group = "7"))),
+   "... and a start that is not numeric is one too")
+ok(grepl("only applies to ages", err(plot_MWaLoA(
+     cd, dd, colour = "Country", plus_group = 3))),
+   "a plus group on lengths is now an error: it is for ages")
+ok(grepl("only applies when `distributions`", warn(plot_MWaLoA(
+     tab, colour = "Country", plus_group = 3))),
    "a plus group on an already-summarised table warns: it cannot be pooled again")
-ok(grepl("no age reaches", warn(plot_meanweight_at_length_age(
-     cd, dd, distributionType = "Age", plus_group = TRUE, plus_group_start = 50))),
+ok(grepl("no age reaches", warn(plot_MWaLoA(
+     cd, dd, distributionType = "Age", plus_group = 50))),
    "a start beyond the oldest age says there is no plus group")
-ok(grepl("nothing to draw", warn(plot_meanweight_at_length_age(
+ok(grepl("nothing to draw", warn(plot_MWaLoA(
      tab[, setdiff(names(tab), "n_fish")], colour = "Country", show_samples = TRUE))),
    "show_samples on a table without n_fish says why nothing is drawn")
-ok(grepl("TRUE or FALSE", err(plot_meanweight_at_length_age(
+ok(grepl("show_samples.*TRUE or FALSE", err(plot_MWaLoA(
      cd, dd, show_samples = "yes"))),
-   "show_samples and plus_group are each TRUE or FALSE")
+   "show_samples is TRUE or FALSE")
 
 cat(sprintf("\nDONE  %d failure(s)\n", FAIL))
 if (FAIL) quit(status = 1L)

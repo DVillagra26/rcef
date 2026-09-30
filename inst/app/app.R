@@ -284,11 +284,12 @@ drates_ui <- function() tagList(
     options = tagList(
       h4("Discard rate"),
       radioButtons("dr_rate", NULL,
-                   c("D / L" = "D/L", "D / (L + D)" = "D/(L+D)"), "D/L"),
+                   c("Discard ratio (D / L)" = "ratio",
+                     "Discard rate (D / (L + D))" = "rate"), "ratio"),
       span(class = "note",
-           "D / L: discards over the landings that carry a discard ",
-           "estimate (the CAS rate, can pass 100%). D / (L + D): discards as ",
-           "a share of landings plus discards, within 0-100%."),
+           "Discard ratio: discards over the landings that carry a discard ",
+           "estimate (the CAS rate, can pass 100%). Discard rate: discards ",
+           "as a share of landings plus discards, within 0-100%."),
       numericInput("dr_ref", "Reference line (%)", NA, 0, NA, 5),
       span(class = "note",
            "A dashed line at this rate, and the strata above it named on ",
@@ -2503,12 +2504,15 @@ server <- function(input, output, session) {
   # name for emit - no catchCategory here, that was chosen upstream.
   coverage_call <- function(data, view, y, second, facet,
                             what = "discard",
-                            min_cov = 50, min_trip = 2, min_fish = 0,
+                            min_cov = 50, min_trip = 2, min_fish = NULL,
                             emit = FALSE) {
     fn  <- switch(view, bars = "plot_coverage_bar",
                   bubbles = "plot_coverage_bubble", "plot_coverage_heat")
     is_bar <- identical(view, "bars")
     role   <- if (is_bar) "fill" else "x"
+    # min_fish is an error on plot_coverage_heat/_bubble() when what =
+    # "discard" (no fish are measured for a discard estimate) - only ever
+    # attach it for length / age, and only when it is actually active
     if (isTRUE(emit)) {
       a <- list(data, y = taf_q(y))
       a[[role]] <- taf_q(second)
@@ -2516,15 +2520,18 @@ server <- function(input, output, session) {
       if (!identical(what, "discard")) a$what <- taf_q(what)
       if (!is_bar) {
         a$min_cov <- min_cov; a$min_trip <- min_trip
-        if (min_fish) a$min_fish <- min_fish
+        if (!identical(what, "discard") && thr_active(min_fish))
+          a$min_fish <- min_fish
       }
       return(taf_call(fn, a))
     }
     a <- list(data, y = y, facet = facet)
     a[[role]] <- second
     if (!identical(what, "discard")) a$what <- what
-    if (!is_bar) { a$min_cov <- min_cov; a$min_trip <- min_trip
-      a$min_fish <- min_fish }
+    if (!is_bar) {
+      a$min_cov <- min_cov; a$min_trip <- min_trip
+      if (!identical(what, "discard")) a$min_fish <- min_fish
+    }
     do.call(fn, a)
   }
 
@@ -3555,7 +3562,10 @@ server <- function(input, output, session) {
                         "px")) })
     output[[paste0(p, "_cov_plot")]] <- renderPlot({
       pl <- cov_obj(); validate(need(!is.null(pl), "Nothing to plot."))
-      pl + theme(legend.position = "none") })
+      # guides(), not theme(legend.position=): a complete "none" also hides
+      # the Thresholds box plot_coverage_heat()/_bubble() now draw as a
+      # guide of its own (guide_custom()), not a legend.position-controlled one
+      pl + guides(fill = "none", size = "none") })
     output[[paste0(p, "_cov_legend")]] <- renderPlot({
       pl <- cov_obj(); validate(need(!is.null(pl), "")); draw_legend(pl) },
       bg = "transparent")
@@ -3598,7 +3608,7 @@ server <- function(input, output, session) {
     num_obj <- gated(n_gate, {
       d <- num_data()
       validate(need(!is.null(d) && nrow(d), "No numbers-at-length rows."))
-      plot_numbers_at_length_age(d,
+      plot_NaLoA(d,
         fill = rc("n","fill"), facet = rc_facet("n"),
         stacked = isTRUE(input[[paste0(p, "_n_stack")]]),
         scales = facet_scales(isTRUE(input[[paste0(p, "_n_freex")]]),
@@ -3631,7 +3641,7 @@ server <- function(input, output, session) {
         sprintf("d_num <- length_numbers(linked, %s)",
                 fmt_vals(unique(na.omit(c(rc("n","fill"), rc("n","facet"),
                                           rc("n","shape"))))))),
-      call = function() taf_call("plot_numbers_at_length_age", list(
+      call = function() taf_call("plot_NaLoA", list(
         "d_num",
         fill = taf_q(rc("n","fill")), facet = taf_facet("n"),
         stacked = if (isTRUE(input[[paste0(p, "_n_stack")]])) "TRUE" else "FALSE")))
@@ -3652,8 +3662,8 @@ server <- function(input, output, session) {
       validate(need(!is.null(lk) && nrow(lk), "No length distributions."))
       # A plus group is pooled in the link, before anything is averaged. The
       # summary keeps the mark (a `plus` column) and the plot labels the
-      # class from it, so the picture matches plot_meanweight_at_length_age()
-      # given the raw catch and plus_group = TRUE.
+      # class from it, so the picture matches plot_MWaLoA() given the raw
+      # catch and plus_group = <from>.
       if (identical(type, "Age") && isTRUE(input[[paste0(p, "_w_plus")]])) {
         from <- plus_from_w()
         validate(need(!is.null(from), "Give the age the plus group starts at."))
@@ -3673,7 +3683,7 @@ server <- function(input, output, session) {
         showNotification(paste("No fish counts to draw: these distributions carry no",
                                "numMeasurements (or report 0), so there are no bars."),
                          type = "warning", duration = 6)
-      plot_meanweight_at_length_age(d,
+      plot_MWaLoA(d,
         colour = rc("w","fill"), facet = rc_facet("w"),
         shape = len_dim_col(p, input[[paste0(p, "_w_pt")]]),
         show_samples = samples_w(),
@@ -3711,7 +3721,7 @@ server <- function(input, output, session) {
                 fmt_vals(unique(na.omit(c(rc("w","fill"), rc("w","facet"),
                           rc("w","shape"),
                           len_dim_col(p, input[[paste0(p, "_w_pt")]]))))))),
-      call = function() taf_call("plot_meanweight_at_length_age", list(
+      call = function() taf_call("plot_MWaLoA", list(
         "d_mw",
         colour = taf_q(rc("w","fill")), facet = taf_facet("w"),
         shape = taf_q(len_dim_col(p, input[[paste0(p, "_w_pt")]])),
@@ -6394,7 +6404,7 @@ server <- function(input, output, session) {
       sprintf('plot_discard_rate(strata, x = %s, colour = %s, shape = %s, facet = %s%s%s)',
               r(role("dr","x")), r(role("dr","fill")),
               r(role("dr","shape")), r(role("dr","facet")),
-              if (!identical(dr_rate_arg(), "D/L"))
+              if (!identical(dr_rate_arg(), "ratio"))
                 sprintf(', rate = "%s"', dr_rate_arg()) else "",
               if (!is.null(dr_ref_arg()))
                 sprintf(", reference = %s", format(dr_ref_arg())) else ""),
@@ -6466,7 +6476,8 @@ server <- function(input, output, session) {
   output$cov_plot <- renderPlot({
     p <- cov_plot_obj()
     validate(need(!is.null(p), no_plot_msg("cov")))
-    p + theme(legend.position = "none") })
+    # see the length/age coverage panel above for why guides(), not theme()
+    p + guides(fill = "none", size = "none") })
 
   output$cov_legend <- renderPlot({
     p <- cov_plot_obj(); validate(need(!is.null(p), ""))
@@ -6493,7 +6504,7 @@ server <- function(input, output, session) {
   # discard-rate plot (one view: raw per-stratum points)
   # The two options as plot_discard_rate() takes them: which rate is plotted,
   # and the reference as a fraction - the box is in percent, empty for none.
-  dr_rate_arg <- function() input$dr_rate %||% "D/L"
+  dr_rate_arg <- function() input$dr_rate %||% "ratio"
   dr_ref_arg <- function() {
     v <- input$dr_ref
     if (is.numeric(v) && length(v) == 1 && is.finite(v)) v / 100 else NULL
@@ -6512,8 +6523,8 @@ server <- function(input, output, session) {
     validate(
       need(is.null(rf) || rf >= 0,
            "The reference line is a percentage of zero or more."),
-      need(is.null(rf) || !identical(dr_rate_arg(), "D/(L+D)") || rf <= 1,
-           "With D / (L + D) the reference line is a percentage between 0 and 100."))
+      need(is.null(rf) || !identical(dr_rate_arg(), "rate") || rf <= 1,
+           "With the discard rate the reference line is a percentage between 0 and 100."))
     plot_discard_rate(explore_dat("dr"),
                 x = role("dr","x"), colour = role("dr","fill"),
                 shape = role("dr","shape"), facet = role("dr","facet"),
@@ -6554,7 +6565,7 @@ server <- function(input, output, session) {
         "strata_dr", x = taf_q(role("dr", "x")),
         colour = taf_q(role("dr", "fill")), shape = taf_q(role("dr", "shape")),
         facet = taf_q(role("dr", "facet")),
-        rate = if (!identical(dr_rate_arg(), "D/L")) taf_q(dr_rate_arg()),
+        rate = if (!identical(dr_rate_arg(), "ratio")) taf_q(dr_rate_arg()),
         reference = if (!is.null(dr_ref_arg())) format(dr_ref_arg()),
         jitter = if (isTRUE(input$dr_jitter)) "TRUE" else "FALSE")))
 

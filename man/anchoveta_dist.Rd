@@ -29,8 +29,8 @@ The length- and age-distribution companion to \link{anchoveta_catch}: a made-up
 CEF distributions table carrying, for both \code{LengthTotal} (mm, classes
 40--200) and \code{Age} (years, 0--7), a \code{Number} row (numbers at class,
 \code{valueType = "Total"}) AND a \code{WeightLive} row (mean weight at class in
-grams, \code{valueType = "Mean"}) - so \code{\link[=plot_numbers_at_length_age]{plot_numbers_at_length_age()}} and
-\code{\link[=plot_meanweight_at_length_age]{plot_meanweight_at_length_age()}} both have real data, and so does the
+grams, \code{valueType = "Mean"}) - so \code{\link[=plot_NaLoA]{plot_NaLoA()}} and
+\code{\link[=plot_MWaLoA]{plot_MWaLoA()}} both have real data, and so does the
 length and age allocation.
 }
 \details{
@@ -62,12 +62,12 @@ head(build_coverage_strata(anchoveta_catch, c("metier4", "Country"),
 plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
                    what = "length", distributions = anchoveta_dist,
                    min_fish = 50)
-plot_numbers_at_length_age(anchoveta_catch, anchoveta_dist,
-                           distributionType = "Age", fill = "Country")
+plot_NaLoA(anchoveta_catch, anchoveta_dist,
+          distributionType = "Age", fill = "Country")
 }
 \seealso{
 \link{anchoveta_catch}, \link{coverage-plots},
-\code{\link[=plot_numbers_at_length_age]{plot_numbers_at_length_age()}}, \code{\link[=plot_meanweight_at_length_age]{plot_meanweight_at_length_age()}}
+\code{\link[=plot_NaLoA]{plot_NaLoA()}}, \code{\link[=plot_MWaLoA]{plot_MWaLoA()}}
 
 Other example data: 
 \code{\link{anchoveta_catch}}

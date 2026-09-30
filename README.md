@@ -39,10 +39,10 @@ tab
 plot_coverage_heat(tab, y = "metier4", x = "Country", min_cov = 50)
 plot_discard_rate(tab, x = "metier4", colour = "Country")
 
-# discards as a share of landings + discards (D/(L+D)) instead of D/L, and a
-# dashed reference line that names the strata above 30%
+# the discard rate (discards as a share of the catch) instead of the ratio,
+# and a dashed reference line that names the strata above 30%
 plot_discard_rate(tab, x = "metier4", colour = "Country",
-                  rate = "D/(L+D)", reference = 0.3)
+                  rate = "rate", reference = 0.3)
 
 # length and age: add the distributions
 build_coverage_strata(anchoveta_catch, c("metier4", "Country"),
@@ -50,15 +50,14 @@ build_coverage_strata(anchoveta_catch, c("metier4", "Country"),
 
 # mean weight at age, the ages from 3 upward pooled into a "3+" plus group, and
 # the fish measured at each age as bars behind the lines
-plot_meanweight_at_length_age(anchoveta_catch, anchoveta_dist,
-                              distributionType = "Age", colour = "Country",
-                              plus_group = TRUE, plus_group_start = 3,
-                              show_samples = TRUE)
+plot_MWaLoA(anchoveta_catch, anchoveta_dist,
+           distributionType = "Age", colour = "Country",
+           plus_group = 3, show_samples = TRUE)
 ```
 
 Every title says what is sampled and over which weight ("Discard sampling of
-landed weight"), and every subtitle says how the numbers on the figure are
-worked out and which columns each mark pools over.
+landed weight"), and every caption says how the numbers on the figure are
+worked out and which columns each mark is grouped over.
 
 `?build_coverage_strata` lists every column, `?"coverage-plots"` every plot
 argument, and `vignette("part1-explore-sampling-coverage", package = "rcef")`

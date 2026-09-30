@@ -1,7 +1,7 @@
 ---
 title: "1. Exploring the data: sampling coverage, discard rates, and lengths, ages and weights of the sampled strata"
 output:
-  rmarkdown::html_vignette:
+  rmarkdown::pdf_document:
     toc: true
     toc_depth: 3
     number_sections: true
@@ -122,7 +122,7 @@ head(cov_mc[order(-cov_mc$landings), ], 10)
 The aggregation is yours - coarser:
 
 ```{r tab-coarse}
-build_coverage_strata(catch = catch_data, dims = "Season")
+build_coverage_strata(catch = catch_data, dims = "metier4")
 ```
 
 or finer:
@@ -160,18 +160,24 @@ averaged.
 catch (or the table above) and, given raw catch, builds the table itself. `y`
 is required. Heat and bubble put the second category on `x`; bars put it on
 `fill`. `min_cov` and `min_trip` colour the heat and bubble status - a bar
-chart ignores them (passing them is an error). The status is worked out here
-from the thresholds, not stored in the table. The status legend always lists
+chart ignores them (passing them is an error); `min_fish` is length/age
+only, an error on a discard plot (no fish are measured for a discard
+estimate). The status is worked out here from the thresholds, not stored in
+the table. The status legend always lists
 every *reachable* category - a stratum with no landed or caught weight at all
 draws no cell (nothing to judge), so "no landings" is not one of them.
 
-**Title, subtitle, caption.** The title says what is sampled and its weight.
-The subtitle names the stratum only - the columns you plot, everything else
-pooled into it ("Stratum = metier4 x Country, pooled over ... Season"); put
-`Season` on `facet` and it stops being pooled. The caption gives the formula
-behind the mark (a tile's value, a bubble's area, the bar staircase) and the
-active thresholds - never something a legend already shows (a bubble's size
-scale, for instance, is never repeated in words).
+**Title, caption, and a boxed "Thresholds" guide.** There is no subtitle: the
+caption's first line says what a stratum is - the columns you plot, grouped
+over everything else ("grouping = metier4 x Country, grouped over ...
+season"); put `Season` on `facet` and it stops being grouped over. The rest
+of the caption gives the formula behind the mark (a tile's value, a bubble's
+size, the bar staircase) - never something a legend already shows (a
+bubble's size scale, for instance, is never repeated in words). On the
+heatmap and bubble grid the active thresholds move out of the caption
+entirely, into their own bordered box bottom right, under the in-panel
+status legend - a detail section of it, each threshold a formula, plus the
+labelling rule.
 
 ## Bars: sampled against not-sampled weight
 
@@ -182,8 +188,7 @@ plot_coverage_bar(catch = catch_data, y = "metier4")
 ## Heatmap: status per metier, country and season
 
 ```{r disc-heat-1, fig.width = 8, fig.height = 7, fig.alt = "Coverage heatmap, metier by country, one panel per season"}
-plot_coverage_heat(catch = catch_data, y = "metier4", x = "Country",
-                   facet = "Season", min_cov = 50)
+plot_coverage_heat(catch = catch_data, y = "metier4", min_cov = 50, min_trip = 2)
 ```
 
 The same with a trip threshold switched on:
@@ -196,8 +201,7 @@ plot_coverage_heat(catch = catch_data, y = "metier4", x = "Country",
 ## Bubbles: the weighted status grid
 
 ```{r disc-bubble, fig.height = 5, fig.alt = "Coverage bubble grid, bubble area proportional to landed weight"}
-plot_coverage_bubble(catch = catch_data, y = "metier4", x = "Country",
-                     min_cov = 50, min_trip = 2)
+plot_coverage_bubble(catch = catch_data, y = "metier4",min_cov = 50, min_trip = 2)
 ```
 
 Same grid as the heatmap, but a tiny un-sampled stratum now reads as a tiny
@@ -211,7 +215,7 @@ level the pies are drawn at (`areaValue`, `ICESDivision`, `ICESSubArea`).
 `group` puts a labelled box of pies per area, one pie per level.
 
 ```{r disc-map, fig.height = 5, fig.alt = "Coverage map, one sampled / not-sampled pie per area"}
-plot_coverage_map(catch = catch_data, area = "ICESDivision")
+plot_coverage_map(catch = catch_data, area = "ICESDivision", group = "metier4")
 ```
 
 ```{r disc-map-season, fig.height = 6, fig.alt = "Coverage map with one box of pies per area, split by season"}
@@ -347,22 +351,20 @@ plot (`x`, `colour`, `shape`, `facet`) - so several points can share one `x`
 level, never merged into it. A stratum with no discard estimate has no rate
 and gets no point; point size is the landings.
 
-`rate` chooses the y variable - both are columns of the table:
+`rate` chooses the y variable and the word the title and axis use - both are
+columns of the table:
 
-* `"D/L"` (default): `rate` = D / L(w/ est.). Can exceed 100%, so the axis is
-  pseudo-log.
-* `"D/(L+D)"`: `discardRate` = D / (L(w/ est.) + D). Bounded 0-100%, so the
-  axis is an ordinary one.
+* `"ratio"` (default, the discard ratio): `rate` = discards / landings(w/
+  est.). Can exceed 100%, so the axis is pseudo-log.
+* `"rate"` (the discard rate): `discardRate` = discards / catch(w/ est.).
+  Bounded 0-100%, so the axis is an ordinary one.
 
 A thin grey line behind the points (no diamond) marks each `x` level's mean,
-weighted by landings - for D/L, `build_coverage_strata(catch = catch_data,
-dims = "metier4")`'s rate directly.
+weighted by landings - for the ratio, `build_coverage_strata(catch =
+catch_data, dims = "metier4")`'s rate directly.
 
 ```{r dr, fig.width = 8, fig.height = 6, fig.alt = "Discard rate per metier and country, one point per stratum, a line for the weighted mean of each metier"}
-plot_discard_rate(catch = catch_data,
-                  x = "metier4",
-                  colour = "Country",
-                  jitter = TRUE)
+plot_discard_rate(catch = catch_data,x = "metier4",colour = "Country",jitter = TRUE, rate = "rate",reference = 0.5)
 ```
 
 Faceted by area, the strata are unaffected (they were already the finest the
@@ -378,14 +380,16 @@ plot_discard_rate(catch = catch_data,
 
 `reference` draws a dashed line at a rate and names the strata above it, so
 the ones to look at are on the figure - a fraction on the scale of the `rate`
-you chose (`0.3` is 30%). Each label names every stratum column in full, as
-`name=value` joined by `|`: a point is an individual raw stratum now, so
-`metier4=MIS | Country=Denmark` alone could still be several areas or
-seasons - the label always says which.
+you chose (`0.3` is 30%). Each label is the stratum's identity in full - bare
+values, only the finest column of each family (a coarser alias already
+determined by a finer one you also plotted, `metier4` alongside `fleetValue`
+say, is left out), joined by `|`: a point is an individual raw stratum now,
+so `MIS|Denmark` alone could still be several areas or seasons - the label
+always says which.
 
-```{r dr-ref, fig.width = 8, fig.height = 6, fig.alt = "Discard rate D/(L+D) per metier and country, a dashed reference line at 30%, the strata above it labelled"}
+```{r dr-ref, fig.width = 8, fig.height = 6, fig.alt = "Discard rate per metier and country, a dashed reference line at 30%, the strata above it labelled"}
 plot_discard_rate(catch = catch_data, x = "metier4", colour = "Country",
-                  rate = "D/(L+D)", reference = 0.3)
+                  rate = "rate", reference = 0.3)
 ```
 
 The labelled strata are the rows of the finest-resolution table above the
@@ -403,35 +407,30 @@ above[order(-above$discardRate),
 
 # Length distribution
 
-`plot_numbers_at_length_age()` is a histogram (`variableType` is always
-`Number`); `plot_meanweight_at_length_age()` is a line, always. Both take a
-prepared table **or** raw catch plus `distributions` - then the link and the
-summary run inside, with `catchCategory` choosing the part. Numbers are in
-thousands (N3), length in cm. The subtitle names the stratum a bar or a line
-pools: the sampled strata that share the plotted columns (`fill` or
-`colour`, and `facet`); everything else is pooled into it. The caption gives
-the arithmetic: bars are numbers summed over those strata, a line is their
-mean weight weighted by numbers measured, with a band for the spread across
-them. Distributions reach the catch through `domainBiology` **and the
-country**: two countries can use the same domain name, each with its own
-distributions, and a country's strata get only its own.
+`plot_NaLoA()` is a histogram (`variableType` is always `Number`);
+`plot_MWaLoA()` is a line, always - Numbers and Mean Weight at Length or
+Age. Both take a prepared table **or** raw catch plus `distributions` - then
+the link and the summary run inside, with `catchCategory` choosing the part.
+Numbers are in thousands (N3), length in cm. The caption's first line names
+the stratum a bar or a line pools: the sampled strata that share the plotted
+columns (`fill` or `colour`, and `facet`); everything else is grouped into
+it. The rest gives the arithmetic: bars are NaL/NaA (numbers at length/age)
+summed over those strata, a line is MWaL/MWaA (mean weight) weighted by
+numbers measured, with a ribbon for the spread across them. Distributions
+reach the catch through `domainBiology` **and the country**: two countries
+can use the same domain name, each with its own distributions, and a
+country's strata get only its own.
 
 ## Numbers at length
 
 ```{r num-len, fig.height = 5.5, fig.alt = "Numbers at length of the landings, stacked by country, one panel per metier"}
-plot_numbers_at_length_age(data = catch_data, distributions = distribution_data,
-                           distributionType = "LengthTotal",
-                           catchCategory = "Lan", facet = "Country",
-                           fill = "metier4", stacked = TRUE)
+plot_NaLoA(data = catch_data, distributions = distribution_data, distributionType = "LengthTotal", catchCategory = "Lan", fill = "metier4", stacked = TRUE)
 ```
 
 ## Mean weight at length
 
 ```{r mw-len, fig.height = 5, fig.alt = "Mean weight at length of the landings, one line per country, one panel per season"}
-plot_meanweight_at_length_age(data = catch_data, distributions = distribution_data,
-                              distributionType = "LengthTotal",
-                              catchCategory = "Lan", colour = "Country",
-                              facet = "Season")
+plot_MWaLoA(data = catch_data, distributions = distribution_data, distributionType = "LengthTotal", colour = "metier4", show_samples = TRUE)
 ```
 
 ### The fish behind each point
@@ -443,10 +442,10 @@ stacked by `colour`, so each country's fish at a length are its own segment,
 and they share one scale across the panels:
 
 ```{r mw-len-n, fig.height = 5.5, fig.alt = "Mean weight at length of the landings with bars of the fish measured behind the lines, one panel per season"}
-plot_meanweight_at_length_age(data = catch_data, distributions = distribution_data,
-                              distributionType = "LengthTotal",
-                              catchCategory = "Lan", colour = "Country",
-                              facet = "Season", show_samples = TRUE)
+plot_MWaLoA(data = catch_data, distributions = distribution_data,
+           distributionType = "LengthTotal",
+           catchCategory = "Lan", colour = "Country",
+           facet = "Season", show_samples = TRUE)
 ```
 
 The distributions record `numMeasurements` once for a whole distribution, not
@@ -533,50 +532,50 @@ file (`age_catch` / `age_dist`). Landings throughout.
 ## Numbers and mean weight at age
 
 ```{r age-num, fig.height = 5.5, fig.alt = "Numbers at age of the landings, stacked by country"}
-plot_numbers_at_length_age(data = age_catch, distributions = age_dist, distributionType = "Age",
-                           catchCategory = "Lan", fill = "Country",
-                           stacked = TRUE)
+plot_NaLoA(data = age_catch, distributions = age_dist, distributionType = "Age",
+          catchCategory = "Lan", fill = "Country",
+          stacked = TRUE)
 ```
 
 ```{r age-num-facet, fig.width = 8, fig.height = 7, fig.alt = "Numbers at age of the landings, one panel per season"}
-plot_numbers_at_length_age(data = age_catch, distributions = age_dist, distributionType = "Age",
-                           catchCategory = "Lan", fill = "metier4",
-                           facet = "Season", stacked = TRUE)
+plot_NaLoA(data = age_catch, distributions = age_dist, distributionType = "Age",
+          catchCategory = "Lan", fill = "metier4",
+          facet = "Season", stacked = TRUE)
 ```
 
 ```{r age-mw, fig.height = 5, fig.alt = "Mean weight at age of the landings, one line per country"}
-plot_meanweight_at_length_age(data = age_catch, distributions = age_dist, distributionType = "Age",
-                              catchCategory = "Lan", colour = "Country", facet = "Season")
+plot_MWaLoA(data = age_catch, distributions = age_dist, distributionType = "Age",
+           catchCategory = "Lan", colour = "Country", facet = "Season")
 ```
 
 ### The plus group
 
 The oldest ages are a handful of fish each, so the right-hand end of a
-mean-weight curve is ragged. `plus_group = TRUE, plus_group_start = 7` pools
-every age from 7 upward into one class - labelled `7+` on the axis and in the
-caption - to show what a plus group does to the curve. Inside each
-distribution the numbers of those ages are added and their mean weights
-averaged, weighted by those numbers; the pooled class is then averaged over
-strata like any other point, so the band is still a spread across strata, not
-across ages. It is for ages only, and needs raw catch with `distributions`
+mean-weight curve is ragged. `plus_group = 7` pools every age from 7 upward
+into one class - labelled `7+` on the axis and in the caption - to show what
+a plus group does to the curve. Inside each distribution the numbers of
+those ages are added and their mean weights averaged, weighted by those
+numbers; the pooled class is then averaged over strata like any other point,
+so the ribbon is still a spread across strata, not across ages. It is for
+ages only (a hard error on lengths), and needs raw catch with `distributions`
 (a summary that has already been averaged cannot be pooled again).
 
 ```{r age-mw-plus, fig.height = 5, fig.alt = "Mean weight at age of the landings with ages 7 and older pooled into 7+, one line per country"}
-plot_meanweight_at_length_age(data = age_catch, distributions = age_dist, distributionType = "Age",
-                              catchCategory = "Lan", colour = "Country",
-                              plus_group = TRUE, plus_group_start = 7)
+plot_MWaLoA(data = age_catch, distributions = age_dist, distributionType = "Age",
+           catchCategory = "Lan", colour = "Country",
+           plus_group = 7)
 ```
 
 The start is yours to move. One line for all countries, without and with the
 plus group from 5, 10 and 15:
 
 ```{r age-mw-plus-sweep, fig.height = 4, fig.alt = "Mean weight at age of the landings without a plus group and with plus groups from 5, 10 and 15"}
-print(plot_meanweight_at_length_age(data = age_catch, distributions = age_dist, distributionType = "Age",
-                                    catchCategory = "Lan"))
+print(plot_MWaLoA(data = age_catch, distributions = age_dist, distributionType = "Age",
+                  catchCategory = "Lan"))
 for (start in c(5, 10, 15)) {
-  print(plot_meanweight_at_length_age(data = age_catch, distributions = age_dist, distributionType = "Age",
-                                      catchCategory = "Lan",
-                                      plus_group = TRUE, plus_group_start = start))
+  print(plot_MWaLoA(data = age_catch, distributions = age_dist, distributionType = "Age",
+                    catchCategory = "Lan",
+                    plus_group = start))
 }
 ```
 
@@ -592,16 +591,17 @@ distributions: their points have mean weights and numbers but no bar - an
 unknown sample size, not zero - and the caption says so.
 
 ```{r age-mw-n, fig.height = 5, fig.alt = "Mean weight at age of the landings with bars of the fish measured behind the lines, one line per country"}
-plot_meanweight_at_length_age(data = age_catch, distributions = age_dist, distributionType = "Age",
-                              catchCategory = "Lan", colour = "Country",
-                              show_samples = TRUE)
+plot_MWaLoA(data = age_catch, distributions = age_dist, distributionType = "Age",
+           catchCategory = "Dis", colour = "Country", facet = "metier4",
+           show_samples = TRUE,
+           plus_group = 8)
 ```
 
 Together, for one line (no `colour`): the plus group turns the thin tail of
 old ages, each on a few fish, into one point with many.
 
 ```{r age-mw-plus-n, fig.height = 5, fig.alt = "Mean weight at age of the landings with a plus group from 10 and bars of the fish measured"}
-plot_meanweight_at_length_age(data = age_catch, distributions = age_dist, distributionType = "Age",
-                              catchCategory = "Lan", show_samples = TRUE,
-                              plus_group = TRUE, plus_group_start = 10)
+plot_MWaLoA(data = age_catch, distributions = age_dist, distributionType = "Age",
+           catchCategory = "Lan", show_samples = TRUE,
+           plus_group = 7)
 ```
