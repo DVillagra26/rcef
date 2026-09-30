@@ -673,12 +673,14 @@ biology_axis_labels <- function(distributionType = "LengthTotal",
 #' @param dims Stratum dimensions for the link; a default is used when `NULL`.
 #' @param plus_from Optional: the class (an age) from which everything is
 #'   pooled into one plus class (`pool_plus_group()`).
+#' @param bin_from Optional: a bin width (for lengths) to pool every class
+#'   into (`pool_length_bins()`).
 #' @return `list(data, class_label, value_label)`.
 #' @keywords internal
 #' @export
 biology_dist_prep <- function(data, distributions, distributionType,
                               catchCategory, quantity, grp, dims,
-                              plus_from = NULL) {
+                              plus_from = NULL, bin_from = NULL) {
   lab <- biology_axis_labels(distributionType, quantity)
   if (!is.null(distributions)) {
     if (is.null(dims))
@@ -687,10 +689,47 @@ biology_dist_prep <- function(data, distributions, distributionType,
     linked <- link_dist_to_strata(data, distributions, dims, catchCategory,
                                   type = distributionType)
     if (!is.null(plus_from)) linked <- pool_plus_group(linked, plus_from, dims)
+    if (!is.null(bin_from)) linked <- pool_length_bins(linked, bin_from, dims)
     data <- if (identical(quantity, "numbers"))
       length_numbers(linked, grp) else length_meanweight(linked, grp)
     if (!is.null(data) && nrow(data) && identical(quantity, "numbers"))
       data$number <- data$number * lab$value_scale
   }
   list(data = data, class_label = lab$class_label, value_label = lab$value_label)
+}
+
+#' Continuous x scale for a pooled length/age class axis
+#'
+#' The plus class reads "N+"; a length axis binned by [pool_length_bins()]
+#' reads every break "lo-hi". Shared by [plot_NaLoA()] and [plot_MWaLoA()];
+#' at most one of `plus_from` / `bin_from` is ever set (ages take a plus
+#' group, lengths take bins). Returns `NULL` (a no-op added to a plot) when
+#' neither applies.
+#'
+#' @param classes The `.class` values actually present.
+#' @param plus_from Optional: the plus class.
+#' @param bin_from Optional: the bin width.
+#' @return A `ggplot2::scale_x_continuous()`, or `NULL`.
+#' @keywords internal
+#' @noRd
+#' @export
+class_axis_scale <- function(classes, plus_from = NULL, bin_from = NULL) {
+  classes <- sort(unique(classes))
+  if (!is.null(plus_from) && plus_from %in% classes) {
+    pf <- plus_from
+    return(scale_x_continuous(
+      breaks = function(lim) {
+        lo <- ceiling(lim[1]); hi <- floor(lim[2])
+        b <- if (hi - lo <= 15) seq(lo, hi) else scales::extended_breaks()(lim)
+        sort(unique(c(b[b < pf], pf)))
+      },
+      labels = function(b) ifelse(b == pf, paste0(format(pf, trim = TRUE), "+"),
+                                  format(b, trim = TRUE))))
+  }
+  if (!is.null(bin_from))
+    return(scale_x_continuous(
+      breaks = classes,
+      labels = paste0(format(classes, trim = TRUE), "-",
+                      format(classes + bin_from, trim = TRUE))))
+  NULL
 }

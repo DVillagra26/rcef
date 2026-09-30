@@ -12,7 +12,8 @@ biology_dist_prep(
   quantity,
   grp,
   dims,
-  plus_from = NULL
+  plus_from = NULL,
+  bin_from = NULL
 )
 }
 \arguments{
@@ -32,6 +33,9 @@ biology_dist_prep(
 
 \item{plus_from}{Optional: the class (an age) from which everything is
 pooled into one plus class (`pool_plus_group()`).}
+
+\item{bin_from}{Optional: a bin width (for lengths) to pool every class
+into (`pool_length_bins()`).}
 }
 \value{
 `list(data, class_label, value_label)`.

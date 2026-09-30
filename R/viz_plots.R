@@ -1263,6 +1263,11 @@ plot_raised_DR <- function(raised_catch, catch_data, matched_data_cond, x,
 #' takes one column (a wrapped set of panels) or two (`c("row", "col")`, a
 #' grid).
 #'
+#' `plus_group` (ages) and `bin_width` (lengths) pool the classes exactly as
+#' in [plot_MWaLoA()] - see that function's *The plus group* and *Length
+#' bins* - except numbers simply add rather than being averaged, so there is
+#' no per-distribution weighting step to speak of.
+#'
 #' @param data Raw CEF catch data, or a `length_numbers()` table.
 #' @param distributions A CEF distributions table. Needed with raw catch;
 #'   leave it out when `data` is already a `length_numbers()` table.
@@ -1273,6 +1278,11 @@ plot_raised_DR <- function(raised_catch, catch_data, matched_data_cond, x,
 #' @param fill Column mapped to the bar fill.
 #' @param facet Up to two facet columns: `"col"` or `c("row", "col")`.
 #' @param stacked Stack the bars on `fill` (default) rather than dodge them.
+#' @param plus_group The first age of the plus group: `7` pools ages 7 and
+#'   older into one class, shown as `7+`. `NULL` (default): no plus group.
+#'   Ages only.
+#' @param bin_width Width, in cm, of the length bins every class is pooled
+#'   into. `NULL` (default): no binning. Lengths only.
 #' @param scales Facet scales: `"fixed"` (default), `"free_x"`, `"free_y"` or
 #'   `"free"`.
 #' @param palette `"default"` or `"colorblind"`.
@@ -1293,46 +1303,105 @@ plot_raised_DR <- function(raised_catch, catch_data, matched_data_cond, x,
 #' plot_NaLoA(anchoveta_catch, anchoveta_dist,
 #'           distributionType = "Age", fill = "Country",
 #'           facet = "Season", stacked = FALSE)
+#'
+#' # every age from 3 upward pooled into "3+"
+#' plot_NaLoA(anchoveta_catch, anchoveta_dist,
+#'           distributionType = "Age", fill = "Country", plus_group = 3)
+#'
+#' # length classes pooled into 2cm bins
+#' plot_NaLoA(anchoveta_catch, anchoveta_dist, fill = "Country", bin_width = 2)
 #' @export
 plot_NaLoA <- function(data, distributions = NULL,
                        distributionType = c("LengthTotal", "Age"),
                        catchCategory = "All",
                        fill = NULL, facet = NULL,
-                       stacked = TRUE, scales = "fixed",
+                       stacked = TRUE,
+                       plus_group = NULL, bin_width = NULL,
+                       scales = "fixed",
                        palette = c("default", "colorblind")) {
+  fn <- "plot_NaLoA(): "
   typed_dt <- !missing(distributionType); typed_cc <- !missing(catchCategory)
   dims <- NULL
   distributionType <- match.arg(distributionType)
   palette <- match.arg(palette)
   catchCategory <- match.arg(catchCategory, c("Lan", "Dis", "BMS", "All"))
   if (length(facet) > 2)
-    stop("plot_NaLoA(): `facet` takes at most two columns",
-         call. = FALSE)
+    stop(fn, "`facet` takes at most two columns", call. = FALSE)
   facet1 <- if (length(facet) >= 1) facet[1] else NULL
   facet2 <- if (length(facet) >= 2) facet[2] else NULL
   has_ <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
   if (is.null(distributions) && (typed_dt || typed_cc))
-    warning("plot_NaLoA(): distributionType / catchCategory ",
+    warning(fn, "distributionType / catchCategory ",
             "only matter when `distributions` is supplied (building from ",
             "raw catch)", call. = FALSE)
+  # A plus group (ages) and length bins (lengths) - see plot_MWaLoA()'s own
+  # versions of these two, which this mirrors exactly.
+  plus_from <- NULL
+  if (!is.null(plus_group)) {
+    if (!(is.numeric(plus_group) && length(plus_group) == 1 &&
+          is.finite(plus_group) && plus_group >= 0))
+      stop(fn, "`plus_group` is the first age of the plus group - a single ",
+           "number (plus_group = 7 pools ages 7 and older) - or NULL for ",
+           "none", call. = FALSE)
+    if (is.null(distributions))
+      warning(fn, "plus_group only applies when `distributions` is supplied ",
+              "(a summarised table cannot be pooled again)", call. = FALSE)
+    else if (!identical(distributionType, "Age"))
+      stop(fn, "plus_group only applies to ages (distributionType = ",
+           "\"Age\"): lengths have no plus group", call. = FALSE)
+    else plus_from <- plus_group
+  }
+  bin_from <- NULL
+  if (!is.null(bin_width)) {
+    if (!(is.numeric(bin_width) && length(bin_width) == 1 &&
+          is.finite(bin_width) && bin_width > 0))
+      stop(fn, "`bin_width` is a single positive number - a bin width in cm ",
+           "(bin_width = 5 groups length into 5cm bins) - or NULL for none",
+           call. = FALSE)
+    if (is.null(distributions))
+      warning(fn, "bin_width only applies when `distributions` is supplied ",
+              "(a summarised table cannot be pooled again)", call. = FALSE)
+    else if (!identical(distributionType, "LengthTotal"))
+      stop(fn, "bin_width only applies to lengths (distributionType = ",
+           "\"LengthTotal\"): ages use plus_group instead", call. = FALSE)
+    else bin_from <- bin_width
+  }
   grp <- unique(c(if (has_(fill)) fill, if (has_(facet1)) facet1,
                   if (has_(facet2)) facet2))
   catch0 <- if (!is.null(distributions)) data   # `data` is summarised below
   pr <- biology_dist_prep(data, distributions, distributionType,
                           catch_category_parts(catchCategory),
-                          "numbers", grp, dims)
+                          "numbers", grp, dims, plus_from = plus_from,
+                          bin_from = bin_from)
   data <- pr$data
   cl <- pr$class_label
   vl <- pr$value_label
-  cc_word   <- switch(catchCategory, Lan = "landings", Dis = "discards",
-                      BMS = "BMS catch", All = "catch")
-  cc_suffix <- if (!is.null(distributions)) paste0(" (", cc_word, ")") else ""
+  cc_word  <- switch(catchCategory, Lan = "Landings", Dis = "Discards",
+                     BMS = "BMS Catch", All = "Catch")
+  cc_title <- if (!is.null(distributions)) paste0(cc_word, " - ") else ""
   d <- data; fill_var <- fill; group_var <- fill
   class_label <- cl; value_label <- vl
+  # A summary built from a link that pool_plus_group() / pool_length_bins()
+  # pooled says so in its `plus` / `bin_width` column (how the app draws it).
+  if (is.null(plus_from) && !is.null(d) && "plus" %in% names(d) &&
+      any(d$plus %in% TRUE)) {
+    pc <- unique(d$.class[d$plus %in% TRUE])
+    if (length(pc) == 1) plus_from <- pc
+  }
+  if (is.null(bin_from) && !is.null(d) && "bin_width" %in% names(d) &&
+      any(is.finite(d$bin_width))) {
+    bwv <- unique(d$bin_width[is.finite(d$bin_width)])
+    if (length(bwv) == 1) bin_from <- bwv
+  }
 
   p <- {
       if (is.null(d) || !nrow(d)) return(NULL)
       has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+      plus_on <- !is.null(plus_from) && plus_from %in% d$.class
+      if (!is.null(plus_from) && !plus_on)
+        warning(fn, "no age reaches plus_group = ", plus_from,
+                ", so there is no plus group", call. = FALSE)
+      bin_on <- !is.null(bin_from)
       bw <- { u <- sort(unique(d$.class)); if (length(u) > 1) min(diff(u)) else 1 }
 
       p <- ggplot(d, aes(x = .class, y = number))
@@ -1353,20 +1422,28 @@ plot_NaLoA <- function(data, distributions = NULL,
                  else switch(catchCategory, Lan = "Landings ", Dis = "Discards ",
                             BMS = "BMS catch ", All = "Catch ")
       cls_word <- if (identical(distributionType, "Age")) "NaA" else "NaL"
+      plus_txt <- if (plus_on)
+        sprintf("%s+ = ages %s+ pooled.", format(plus_from), format(plus_from))
+      bin_txt <- if (bin_on)
+        sprintf("length classes pooled into %scm bins.",
+                format(bin_from, trim = TRUE))
       cap <- sub_wrap(
         if (is.null(distributions)) NULL else strata_sentence(grp, catch0),
         sprintf("bars = %s%s summed over strata.", cc_lead, cls_word),
         if (has(fill_var))
           sprintf("%s by %s.", if (stacked) "stacked" else "dodged", fill_var),
+        plus_txt, bin_txt,
         width = 110)
+      p <- p + class_axis_scale(d$.class, plus_from = if (plus_on) plus_from,
+                                bin_from = if (bin_on) bin_from)
       p +
         scale_y_continuous(labels = scales::comma) +
         facet_two(facet1, facet2, ncol = 2, scales = scales) +
-        labs(title = paste0(sprintf("Numbers at %s",
-                                    tolower(sub(" .*", "", class_label))), cc_suffix),
+        labs(title = paste0(cc_title, sprintf("Numbers at %s",
+                                              sub(" .*", "", class_label))),
              caption = cap,
              x = class_label, y = value_label, fill = fill_var) +
-        app_theme()
+        app_theme() + theme(plot.title = element_text(size = 11))
   }
   p
 }
@@ -1422,6 +1499,16 @@ plot_NaLoA <- function(data, distributions = NULL,
 #' `plus` column instead, and the plot labels the class from it: that is how
 #' the app draws a plus group.
 #'
+#' ## Length bins
+#'
+#' `bin_width = 5` is the length counterpart: every length class is grouped
+#' into 5cm bins (`10`-`14` becomes one class labelled `10-15`), pooled the
+#' same way a plus group is - numbers added, mean weights averaged weighted
+#' by those numbers, inside each distribution first, then strata averaged as
+#' usual. It applies to lengths only (`distributionType = "LengthTotal"`),
+#' and needs raw catch with `distributions`, same restriction and the same
+#' `bin_width` column fallback as the plus group.
+#'
 #' ## The fish behind each point
 #'
 #' `show_samples = TRUE` draws, behind the lines, semi-transparent bars of the
@@ -1456,6 +1543,8 @@ plot_NaLoA <- function(data, distributions = NULL,
 #' @param plus_group The first age of the plus group: `7` pools ages 7 and
 #'   older into one class, shown as `7+`. `NULL` (default): no plus group.
 #'   Ages only. See *The plus group*.
+#' @param bin_width Width, in cm, of the length bins every class is pooled
+#'   into. `NULL` (default): no binning. Lengths only. See *Length bins*.
 #' @param show_samples `TRUE` draws bars of the fish measured at each class
 #'   behind the lines, on a second axis. Default `FALSE`. See *The fish behind
 #'   each point*.
@@ -1485,6 +1574,10 @@ plot_NaLoA <- function(data, distributions = NULL,
 #'            distributionType = "Age", colour = "Country",
 #'            plus_group = 3)
 #'
+#' # length classes pooled into 2cm bins
+#' plot_MWaLoA(anchoveta_catch, anchoveta_dist, colour = "Country",
+#'            bin_width = 2)
+#'
 #' # the fish measured at each age, as bars behind the lines
 #' plot_MWaLoA(anchoveta_catch, anchoveta_dist,
 #'            distributionType = "Age", colour = "Country",
@@ -1495,6 +1588,7 @@ plot_MWaLoA <- function(data, distributions = NULL,
                         catchCategory = "All",
                         colour = NULL, facet = NULL, shape = NULL,
                         plus_group = NULL,
+                        bin_width = NULL,
                         show_samples = FALSE,
                         scales = "fixed",
                         palette = c("default", "colorblind")) {
@@ -1533,28 +1627,52 @@ plot_MWaLoA <- function(data, distributions = NULL,
            "\"Age\"): lengths have no plus group", call. = FALSE)
     else plus_from <- plus_group
   }
+  # Length classes pooled into fixed-width bins - the length counterpart of
+  # a plus group, so the same rules apply: needs raw catch with
+  # distributions, and only for LengthTotal (ages take a plus group instead).
+  bin_from <- NULL
+  if (!is.null(bin_width)) {
+    if (!(is.numeric(bin_width) && length(bin_width) == 1 &&
+          is.finite(bin_width) && bin_width > 0))
+      stop(fn, "`bin_width` is a single positive number - a bin width in cm ",
+           "(bin_width = 5 groups length into 5cm bins) - or NULL for none",
+           call. = FALSE)
+    if (is.null(distributions))
+      warning(fn, "bin_width only applies when `distributions` is supplied ",
+              "(a summarised table cannot be pooled again)", call. = FALSE)
+    else if (!identical(distributionType, "LengthTotal"))
+      stop(fn, "bin_width only applies to lengths (distributionType = ",
+           "\"LengthTotal\"): ages use plus_group instead", call. = FALSE)
+    else bin_from <- bin_width
+  }
   grp <- unique(c(if (has_(colour)) colour, if (has_(facet1)) facet1,
                   if (has_(facet2)) facet2, if (has_(shape)) shape))
   grp_vars <- grp
   catch0 <- if (!is.null(distributions)) data   # `data` is summarised below
   pr <- biology_dist_prep(data, distributions, distributionType,
                           catch_category_parts(catchCategory),
-                          "meanweight", grp, dims, plus_from = plus_from)
+                          "meanweight", grp, dims, plus_from = plus_from,
+                          bin_from = bin_from)
   data <- pr$data
   cl <- pr$class_label
-  cc_word   <- switch(catchCategory, Lan = "landings", Dis = "discards",
-                      BMS = "BMS catch", All = "catch")
-  cc_suffix <- if (!is.null(distributions)) paste0(" (", cc_word, ")") else ""
+  cc_word  <- switch(catchCategory, Lan = "Landings", Dis = "Discards",
+                     BMS = "BMS Catch", All = "Catch")
+  cc_title <- if (!is.null(distributions)) paste0(cc_word, " - ") else ""
   d <- data; colour_var <- colour; shape_var <- shape
   class_label <- cl
   cls <- tolower(sub(" .*", "", class_label))   # "age" or "length"
-  # A summary built from a link that pool_plus_group() pooled says so in its
-  # `plus` column, so the class is labelled without being told (which is how
-  # the app draws it).
+  # A summary built from a link that pool_plus_group() / pool_length_bins()
+  # pooled says so in its `plus` / `bin_width` column, so the class is
+  # labelled without being told (which is how the app draws it).
   if (is.null(plus_from) && !is.null(d) && "plus" %in% names(d) &&
       any(d$plus %in% TRUE)) {
     pc <- unique(d$.class[d$plus %in% TRUE])
     if (length(pc) == 1) plus_from <- pc
+  }
+  if (is.null(bin_from) && !is.null(d) && "bin_width" %in% names(d) &&
+      any(is.finite(d$bin_width))) {
+    bwv <- unique(d$bin_width[is.finite(d$bin_width)])
+    if (length(bwv) == 1) bin_from <- bwv
   }
 
   p <- {
@@ -1565,6 +1683,7 @@ plot_MWaLoA <- function(data, distributions = NULL,
       if (!is.null(plus_from) && !plus_on)
         warning(fn, "no age reaches plus_group = ", plus_from,
                 ", so there is no plus group", call. = FALSE)
+      bin_on <- !is.null(bin_from)
       # the fish behind each point, when the data can say
       n_ok <- "n_fish" %in% names(d) && any(is.finite(d$n_fish) & d$n_fish > 0)
       bars <- show_samples && n_ok
@@ -1674,6 +1793,9 @@ plot_MWaLoA <- function(data, distributions = NULL,
       plus_txt <- if (plus_on)
         sprintf("%s+ = ages %s+ pooled (per-distribution mean).",
                 format(plus_from), format(plus_from))
+      bin_txt <- if (bin_on)
+        sprintf("length classes pooled into %scm bins (per-distribution mean).",
+                format(bin_from, trim = TRUE))
       # a point with no bar is not "no fish": its distributions report no count
       no_count <- bars && any(is.na(d$n_fish) | d$n_fish == 0)
       bars_txt <- if (bars)
@@ -1683,7 +1805,7 @@ plot_MWaLoA <- function(data, distributions = NULL,
         "bars scaled per panel (right axis exact for the panel with the most fish)."
       cap <- sub_wrap(
         if (is.null(distributions)) NULL else strata_sentence(grp_vars, catch0),
-        dots_txt, ribbon_txt, plus_txt, bars_txt, scaled_txt, width = 110)
+        dots_txt, ribbon_txt, plus_txt, bin_txt, bars_txt, scaled_txt, width = 110)
 
       # the bars read back as fish on the right; they start on the panel floor
       p <- p + (if (bars)
@@ -1692,28 +1814,20 @@ plot_MWaLoA <- function(data, distributions = NULL,
                            sec.axis = sec_axis(~ . / kbar, name = "Fish measured (n)",
                                                labels = scales::comma))
         else scale_y_continuous(labels = scales::comma))
-      # the pooled class is named for what it holds: "7+", not "7"
-      if (plus_on) {
-        pf <- plus_from
-        p <- p + scale_x_continuous(
-          breaks = function(lim) {
-            lo <- ceiling(lim[1]); hi <- floor(lim[2])
-            b <- if (hi - lo <= 15) seq(lo, hi) else scales::extended_breaks()(lim)
-            sort(unique(c(b[b < pf], pf)))
-          },
-          labels = function(b) ifelse(b == pf, paste0(format(pf), "+"),
-                                      format(b, trim = TRUE)))
-      }
+      # the pooled class is named for what it holds: "7+", not "10-15"
+      p <- p + class_axis_scale(d$.class, plus_from = if (plus_on) plus_from,
+                                bin_from = if (bin_on) bin_from)
 
       p <- p +
         facet_two(facet1, facet2, ncol = 2, scales = scales) +
-        labs(title = paste0(sprintf("Mean weight at %s", cls), cc_suffix),
+        labs(title = paste0(cc_title, sprintf("Mean Weight at %s",
+                                              sub(" .*", "", class_label))),
              caption = cap,
              x = class_label, y = "Mean weight (g)",
              colour = colour_var,
              fill = if (has(shape_var) && !bars) NULL else colour_var,
              shape = shape_var) +
-        app_theme()
+        app_theme() + theme(plot.title = element_text(size = 11))
       # The theme keeps the legend inside the panel, bottom right. With bars
       # that is where the second axis is, and with a plus group it is the
       # right-hand end of the curve the eye is on - so it moves outside.

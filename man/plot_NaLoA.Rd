@@ -12,6 +12,8 @@ plot_NaLoA(
   fill = NULL,
   facet = NULL,
   stacked = TRUE,
+  plus_group = NULL,
+  bin_width = NULL,
   scales = "fixed",
   palette = c("default", "colorblind")
 )
@@ -33,6 +35,13 @@ titled "catch"), \code{"Lan"}, \code{"Dis"} or \code{"BMS"}. Only used with
 \item{facet}{Up to two facet columns: \code{"col"} or \code{c("row", "col")}.}
 
 \item{stacked}{Stack the bars on \code{fill} (default) rather than dodge them.}
+
+\item{plus_group}{The first age of the plus group: \code{7} pools ages 7 and
+older into one class, shown as \verb{7+}. \code{NULL} (default): no plus group.
+Ages only.}
+
+\item{bin_width}{Width, in cm, of the length bins every class is pooled
+into. \code{NULL} (default): no binning. Lengths only.}
 
 \item{scales}{Facet scales: \code{"fixed"} (default), \code{"free_x"}, \code{"free_y"} or
 \code{"free"}.}
@@ -58,6 +67,11 @@ a repeat is not a second sample.
 \code{fill} colours (and stacks) the bars by a column of the catch. \code{facet}
 takes one column (a wrapped set of panels) or two (\code{c("row", "col")}, a
 grid).
+
+\code{plus_group} (ages) and \code{bin_width} (lengths) pool the classes exactly as
+in \code{\link[=plot_MWaLoA]{plot_MWaLoA()}} - see that function's \emph{The plus group} and \emph{Length
+bins} - except numbers simply add rather than being averaged, so there is
+no per-distribution weighting step to speak of.
 }
 \examples{
 data(anchoveta_catch)
@@ -71,6 +85,13 @@ plot_NaLoA(anchoveta_catch, anchoveta_dist,
 plot_NaLoA(anchoveta_catch, anchoveta_dist,
           distributionType = "Age", fill = "Country",
           facet = "Season", stacked = FALSE)
+
+# every age from 3 upward pooled into "3+"
+plot_NaLoA(anchoveta_catch, anchoveta_dist,
+          distributionType = "Age", fill = "Country", plus_group = 3)
+
+# length classes pooled into 2cm bins
+plot_NaLoA(anchoveta_catch, anchoveta_dist, fill = "Country", bin_width = 2)
 }
 \seealso{
 \code{\link[=plot_MWaLoA]{plot_MWaLoA()}} for the mean weight in the same classes;

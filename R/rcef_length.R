@@ -293,10 +293,21 @@ length_numbers <- function(linked, group_vars = character(0)) {
   d <- linked[linked$.var_kind == "numbers", , drop = FALSE]
   if (!nrow(d)) return(NULL)
   keys <- unique(c(".class", group_vars))
-  d %>% group_by(across(all_of(keys))) %>%
+  # a link that pool_plus_group() / pool_length_bins() marked keeps the
+  # mark, so a plot of this summary knows a class is pooled without being
+  # told again
+  has_plus <- ".plus" %in% names(d)
+  has_bin  <- ".bin_width" %in% names(d)
+  out <- d %>% group_by(across(all_of(keys))) %>%
     summarise(number = sum(.value_std, na.rm = TRUE),
-              n_meas = sum(.n_meas, na.rm = TRUE), .groups = "drop") %>%
+              n_meas = sum(.n_meas, na.rm = TRUE),
+              plus = if (has_plus) any(.plus %in% TRUE) else NA,
+              bin_width = if (has_bin) .bin_width[1] else NA_real_,
+              .groups = "drop") %>%
     filter(number > 0) %>% as.data.frame()
+  if (!has_plus) out$plus <- NULL
+  if (!has_bin) out$bin_width <- NULL
+  out
 }
 
 # Mean weight at length: NOT additive. Pooling strata takes a mean
@@ -349,9 +360,11 @@ length_meanweight <- function(linked, group_vars = character(0)) {
   mw$.inst   <- biology_key(mw, inst)
 
   keys <- unique(c(".class", group_vars))
-  # a link that pool_plus_group() pooled marks the class, and the summary
-  # keeps the mark (a `plus` column) so a plot of it can label the class
+  # a link that pool_plus_group() / pool_length_bins() marked keeps the
+  # mark, so a plot of this summary knows a class is pooled without being
+  # told again
   has_plus <- ".plus" %in% names(mw)
+  has_bin  <- ".bin_width" %in% names(mw)
   out <- mw %>% group_by(across(all_of(keys))) %>%
     summarise(mean_weight = sum(.value_std * .w, na.rm = TRUE) /
                             sum(.w, na.rm = TRUE),
@@ -368,9 +381,11 @@ length_meanweight <- function(linked, group_vars = character(0)) {
                        else sum(.n_fish[!duplicated(.inst)], na.rm = TRUE),
               weight_basis = sum(.w, na.rm = TRUE),
               plus = if (has_plus) any(.plus %in% TRUE) else NA,
+              bin_width = if (has_bin) .bin_width[1] else NA_real_,
               .groups = "drop") %>%
     filter(is.finite(mean_weight)) %>% as.data.frame()
   if (!has_plus) out$plus <- NULL
+  if (!has_bin) out$bin_width <- NULL
   out
 }
 
@@ -422,6 +437,57 @@ pool_plus_group <- function(linked, from, dims = character(0)) {
   if (is.null(lo$.plus)) lo$.plus <- FALSE
   pooled$.plus <- TRUE
   rbind(lo, pooled)
+}
+
+# Length classes grouped into fixed-width bins, distribution by distribution:
+# the same pooling rule as pool_plus_group() (numbers add, mean weight is
+# numbers-weighted), applied to every bin along the whole axis rather than
+# to one tail. A bin is named by its lower edge (`bin_width = 5` turns class
+# 12 into 10, shown later as "10-15"). Works on a linked table
+# (link_dist_to_strata()); `dims` are the stratum columns that link carried.
+#' @noRd
+#' @export
+pool_length_bins <- function(linked, bin_width, dims = character(0)) {
+  if (is.null(linked) || !nrow(linked)) return(linked)
+  fin <- is.finite(linked$.class)
+  if (!any(fin)) return(linked)
+  id <- c(intersect(c("domainBiology", "catchCategory", "vesselFlagCountry"),
+                    names(linked)), intersect(dims, names(linked)))
+  bin_of <- function(cl) floor(cl / bin_width) * bin_width
+  gid <- function(x) paste(biology_key(x, id), bin_of(x$.class), sep = "\r")
+
+  n <- linked[fin & linked$.var_kind == "numbers", , drop = FALSE]
+  w <- linked[fin & linked$.var_kind == "meanweight", , drop = FALSE]
+
+  # numbers add up, within each bin of each distribution instance
+  gn <- gid(n)
+  pn <- n[!duplicated(gn), , drop = FALSE]
+  pn$.value_std <- unname(tapply(n$.value_std, gn, sum, na.rm = TRUE)[gid(pn)])
+  pn$.class <- bin_of(pn$.class)
+
+  # a mean weight is weighted by the numbers at its own original class; an
+  # instance with no numbers to weigh by is averaged plainly
+  gw <- gid(w)
+  wt <- n$.value_std[match(paste(gw, w$.class), paste(gn, n$.class))]
+  wt[!is.finite(wt) | wt < 0 | !is.finite(w$.value_std)] <- 0
+  none <- unname(tapply(wt, gw, sum)[gw]) <= 0
+  wt[none & is.finite(w$.value_std)] <- 1
+  pw <- w[!duplicated(gw), , drop = FALSE]
+  pw$.value_std <- unname((tapply(wt * ifelse(wt > 0, w$.value_std, 0), gw, sum) /
+                             tapply(wt, gw, sum))[gid(pw)])
+  pw$.class <- bin_of(pw$.class)
+
+  pooled <- rbind(pn, pw)
+  if ("distributionClass" %in% names(pooled))
+    pooled$distributionClass <- if (is.character(linked$distributionClass))
+      as.character(pooled$.class) else pooled$.class
+  # marked with the bin width itself (not just TRUE/FALSE), so a summary
+  # built from this link - and the plot drawn from it - knows both that a
+  # class is binned and how wide the bin is, without being told again
+  nonfin <- linked[!fin, , drop = FALSE]
+  if (is.null(nonfin$.bin_width)) nonfin$.bin_width <- rep(NA_real_, nrow(nonfin))
+  pooled$.bin_width <- bin_width
+  rbind(nonfin, pooled)
 }
 
 #' The values behind each mean-weight point, un-collapsed

@@ -13,6 +13,7 @@ plot_MWaLoA(
   facet = NULL,
   shape = NULL,
   plus_group = NULL,
+  bin_width = NULL,
   show_samples = FALSE,
   scales = "fixed",
   palette = c("default", "colorblind")
@@ -40,6 +41,9 @@ opens the averaged group back up and drops the band.}
 \item{plus_group}{The first age of the plus group: \code{7} pools ages 7 and
 older into one class, shown as \verb{7+}. \code{NULL} (default): no plus group.
 Ages only. See \emph{The plus group}.}
+
+\item{bin_width}{Width, in cm, of the length bins every class is pooled
+into. \code{NULL} (default): no binning. Lengths only. See \emph{Length bins}.}
 
 \item{show_samples}{\code{TRUE} draws bars of the fish measured at each class
 behind the lines, on a second axis. Default \code{FALSE}. See \emph{The fish behind
@@ -100,6 +104,17 @@ again. A table built from a link that \code{pool_plus_group()} pooled carries a
 the app draws a plus group.
 }
 
+\subsection{Length bins}{
+
+\code{bin_width = 5} is the length counterpart: every length class is grouped
+into 5cm bins (\code{10}-\code{14} becomes one class labelled \code{10-15}), pooled the
+same way a plus group is - numbers added, mean weights averaged weighted
+by those numbers, inside each distribution first, then strata averaged as
+usual. It applies to lengths only (\code{distributionType = "LengthTotal"}),
+and needs raw catch with \code{distributions}, same restriction and the same
+\code{bin_width} column fallback as the plus group.
+}
+
 \subsection{The fish behind each point}{
 
 \code{show_samples = TRUE} draws, behind the lines, semi-transparent bars of the
@@ -138,6 +153,10 @@ plot_MWaLoA(anchoveta_catch, anchoveta_dist,
 plot_MWaLoA(anchoveta_catch, anchoveta_dist,
            distributionType = "Age", colour = "Country",
            plus_group = 3)
+
+# length classes pooled into 2cm bins
+plot_MWaLoA(anchoveta_catch, anchoveta_dist, colour = "Country",
+           bin_width = 2)
 
 # the fish measured at each age, as bars behind the lines
 plot_MWaLoA(anchoveta_catch, anchoveta_dist,
