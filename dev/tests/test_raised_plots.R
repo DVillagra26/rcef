@@ -73,6 +73,10 @@ ok(!any(vapply(p2$layers, function(l)
    "plot_raised_DR(): no reference line when `reference` is not set")
 ok(sum(vapply(p2$layers, function(l) inherits(l$geom, "GeomPoint"), logical(1))) == 2,
    "plot_raised_DR(): two point layers - the raised catch and the donor strata")
+ok(min(p2$data$landings) >= max(p2$data$landings) * (0.1 / 1.1) - 1e-9,
+   "plot_raised_DR(): bubble size is shifted up, same as plot_DR()")
+ok(length(unique(p2$data$landings)) > 1,
+   "plot_raised_DR(): the shift is additive - strata with different landings still differ")
 
 p2_rate <- plot_raised_DR(raised_catch = raised, catch_data = c23,
                           matched_data_cond = matched_data_cond,

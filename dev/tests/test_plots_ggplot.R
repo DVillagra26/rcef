@@ -189,8 +189,11 @@ ok(identical(ggplot_build(d_raw)$layout$panel_scales_y[[1]]$trans$name,
    "the y axis is pseudo-log, so a few huge ratios do not flatten the rest")
 ok("size" %in% names(d_raw$mapping),
    "point size is mapped to landings")
-ok(min(d_raw$data$landings) >= max(d_raw$data$landings) * 0.15 - 1e-9,
-   "no bubble sizes below 15% of the largest - a tiny stratum's colour stays readable")
+ok(min(d_raw$data$landings) >= max(d_raw$data$landings) * (0.1 / 1.1) - 1e-9,
+   "no bubble sizes below ~9% of the largest - a tiny stratum's colour stays readable")
+ok(length(unique(d_raw$data$landings)) ==
+     length(unique(tab_fine$landings[!is.na(tab_fine$rate)])),
+   "the size shift is additive, not a floor - distinct landings stay distinct")
 ok(grepl("discard coverage table", err(plot_DR(lt, x = "metier4"))),
    "a length coverage table is not a discard-rate input")
 ok(is.null(plot_DR(cd[cd$catchCategory == "Lan", ], x = "metier4")),

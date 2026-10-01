@@ -916,11 +916,15 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL,
   # go look up into something the plot itself answers. Off when landings
   # is degenerate (every value 0 or NA).
   has_landings <- any(is.finite(d$landings) & d$landings > 0)
-  # Floored at 15% of the largest landings in THIS plot (not a fixed
-  # tonnage, so it adapts to the data): area scaling alone shrinks a tiny
-  # stratum's bubble to a sliver too thin to read its colour.
+  # Every bubble is shifted up by 10% of the largest landings in THIS plot
+  # (not a fixed tonnage, so it adapts to the data): area scaling alone
+  # shrinks a tiny stratum's bubble to a sliver too thin to read its
+  # colour. An ADDITIVE shift, not a floor that clamps every small value to
+  # the same number - that gave every small stratum the exact same bubble,
+  # no contrast between them at all. Shifting instead keeps every stratum's
+  # bubble a little bigger than the last, all the way down.
   if (has_landings)
-    d$landings <- pmax(d$landings, max(d$landings, na.rm = TRUE) * 0.15)
+    d$landings <- d$landings + max(d$landings, na.rm = TRUE) * 0.1
 
   # What a point is: every stratum column the table carries - the table's
   # own dims, drawn as they are. This is the finest available (see above),
@@ -1002,7 +1006,7 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL,
   # area-, not radius-, proportional - the honest way to size a point by
   # a weight, and the same convention the coverage bubble plots already use.
   if (has_landings)
-    p <- p + scale_size_area(max_size = 8, labels = scales::comma,
+    p <- p + scale_size_area(max_size = 10, labels = scales::comma,
                              name = "Landings (t)")
 
   # the ratio can exceed 100% - and a few tiny strata (a few kg of covered
@@ -1166,11 +1170,11 @@ plot_raised_DR <- function(raised_catch, catch_data, matched_data_cond, x,
            else rd$.discards / (rd$landings + rd$.discards)) * 100
   rd$landings <- rd$landings / 1000   # kg -> tonnes, for bubble size and labels only
   has_landings <- any(is.finite(rd$landings) & rd$landings > 0)
-  # Floored at 15% of the largest landings in THIS plot, as in plot_DR():
-  # area scaling alone shrinks a tiny stratum's bubble to a sliver too thin
-  # to read its colour.
+  # Shifted up by 10% of the largest landings in THIS plot, as in plot_DR():
+  # an additive shift, not a floor that clamps every small stratum to the
+  # same number and so to the same, indistinguishable bubble.
   if (has_landings)
-    rd$landings <- pmax(rd$landings, max(rd$landings, na.rm = TRUE) * 0.15)
+    rd$landings <- rd$landings + max(rd$landings, na.rm = TRUE) * 0.1
 
   # ---- donor layer: matched_data_cond re-tested against catch_data --------
   # "DrGroup" names the group *this loop* is testing donors for - it is not a
@@ -1232,7 +1236,7 @@ plot_raised_DR <- function(raised_catch, catch_data, matched_data_cond, x,
     p <- p + scale_fill_var(colour_var, rd[[colour_var]], name = colour_var,
                             palette = palette)
   if (has_landings)
-    p <- p + scale_size_area(max_size = 8, labels = scales::comma,
+    p <- p + scale_size_area(max_size = 10, labels = scales::comma,
                              name = "Landings (t)")
 
   p <- p +
