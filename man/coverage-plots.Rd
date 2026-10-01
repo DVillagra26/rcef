@@ -157,12 +157,12 @@ stays a warning at \code{min_trip = 0} (see \code{\link[=classify_strata]{classi
 
 \subsection{What the title and caption say}{
 
-The title names what is sampled, then the weight it is judged against:
-"Discard sampling of landed weight", "Length sampling of landed strata",
-"Age sampling of discarded weight". The weight word comes from
-\code{catchCategory} (landed, discarded, BMS, or the catch as a whole; discard
-coverage is always over the landings); "weight" is the bar chart and the
-map, "strata" the heatmap and bubbles.
+The title names the weight a figure is judged against first, then what is
+sampled: "Landings - Sampling of Length", "Discards - Sampling of Age".
+The weight word comes from \code{catchCategory} (landed, discarded, BMS, or the
+catch as a whole). Discard coverage drops it entirely - "Sampling of
+Discards" - since it is always judged against the landings, so naming
+that weight would only repeat itself.
 
 The caption's first line says what a stratum is here: the plotted
 columns, grouped over every other stratum column ("grouping = metier4 x
@@ -212,7 +212,7 @@ plot_coverage_heat(cov, y = "metier4", x = "Country", min_cov = 50)
 }
 \seealso{
 \code{\link[=build_coverage_strata]{build_coverage_strata()}} for the table, \code{\link[=plot_coverage_map]{plot_coverage_map()}},
-\code{\link[=plot_discard_rate]{plot_discard_rate()}}; \code{\link[=classify_strata]{classify_strata()}} and \code{\link[=cat_lookup]{cat_lookup()}} for the
+\code{\link[=plot_DR]{plot_DR()}}; \code{\link[=classify_strata]{classify_strata()}} and \code{\link[=cat_lookup]{cat_lookup()}} for the
 classification behind the colours.
 
 Other coverage plots: 

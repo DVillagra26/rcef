@@ -1,5 +1,5 @@
 ## plot_raised_catches() (renamed from plot_raised_composition()) and the new
-## plot_raised_DR() - the after-raising counterparts of plot_discard_rate().
+## plot_raised_DR() - the after-raising counterparts of plot_DR().
 ##
 ## Uses the bundled anchoveta example and run_native_raising() (as
 ## test_anchoveta_example.R does) rather than a local-machine-only CEF file,
@@ -67,7 +67,7 @@ ok(drawable(p2), "plot_raised_DR(): draws")
 ok(identical(p2$labels$title, "Discard ratio per stratum, raised"),
    "plot_raised_DR(): default rate is ratio, named in the title")
 ok(!has_geom(p2, "GeomErrorbar"),
-   "plot_raised_DR(): no weighted-mean line (unlike plot_discard_rate())")
+   "plot_raised_DR(): no weighted-mean line (unlike plot_DR())")
 ok(!any(vapply(p2$layers, function(l)
     inherits(l$geom, "GeomHline"), logical(1))),
    "plot_raised_DR(): no reference line when `reference` is not set")

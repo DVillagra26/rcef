@@ -85,7 +85,7 @@
 #'     links a catch stratum to its length / age distribution.}
 #' }
 #' @seealso [anchoveta_dist], [coverage-plots], [build_coverage_strata()],
-#'   [plot_discard_rate()]
+#'   [plot_DR()]
 #' @family example data
 #' @keywords datasets
 #' @name anchoveta_catch

@@ -39,7 +39,7 @@ group (as passed to \code{\link[=catchRaising]{catchRaising()}}'s
 
 \item{rate}{\code{"ratio"} (default, discards / landings) or \code{"rate"} (discards
 / catch): which discard rate is the y variable. See
-\code{\link[=plot_discard_rate]{plot_discard_rate()}}.}
+\code{\link[=plot_DR]{plot_DR()}}.}
 
 \item{reference}{Optional single rate, as a fraction (\code{0.3} = 30\%), on the
 scale of \code{rate}. Draws a dashed line.}
@@ -53,7 +53,7 @@ colours (see \code{\link[=var_palette]{var_palette()}}).}
 A ggplot object, or \code{NULL} when no stratum has a discard rate.
 }
 \description{
-\code{\link[=plot_discard_rate]{plot_discard_rate()}} for after raising: one point per stratum from the
+\code{\link[=plot_DR]{plot_DR()}} for after raising: one point per stratum from the
 raised catch, shaded by how much of its discard weight was raised rather
 than sampled (as in \code{\link[=plot_raised_catches]{plot_raised_catches()}}'s imported/raised shading, but
 as a share rather than a strict either/or - a point can blend both when the
@@ -79,19 +79,19 @@ actually set its rate does not. Re-testing \code{matched_data_cond} against
 
 \subsection{The rate, and the reference line}{
 
-Both work exactly as in \code{\link[=plot_discard_rate]{plot_discard_rate()}}: \code{rate} chooses \code{"ratio"}
+Both work exactly as in \code{\link[=plot_DR]{plot_DR()}}: \code{rate} chooses \code{"ratio"}
 (discards / landings, the default) or \code{"rate"} (discards / catch), and
 \code{reference} draws a dashed line at a fixed threshold. Unlike
-\code{\link[=plot_discard_rate]{plot_discard_rate()}}, there is no weighted-mean line - the raised points
+\code{\link[=plot_DR]{plot_DR()}}, there is no weighted-mean line - the raised points
 themselves are the reference here - and no per-point labels.
 }
 }
 \seealso{
-\code{\link[=plot_discard_rate]{plot_discard_rate()}} for the pre-raising counterpart;
+\code{\link[=plot_DR]{plot_DR()}} for the pre-raising counterpart;
 \code{\link[=plot_raised_catches]{plot_raised_catches()}} for the raised weight itself.
 
 Other discard-rate plots: 
-\code{\link{plot_discard_rate}()}
+\code{\link{plot_DR}()}
 
 Other raising plots: 
 \code{\link{plot_comparison}()},

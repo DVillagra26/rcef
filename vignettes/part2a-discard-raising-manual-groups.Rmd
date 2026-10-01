@@ -257,7 +257,7 @@ plot_raised_catches(raised_catch = raised_manual, x = "metier4", facet = "Countr
 # Discard rate across the raising groups
 
 Not how much weight moved, but whether the *strata a group draws its rate
-from* agree with each other. `plot_raised_DR()` is `plot_discard_rate()` for
+from* agree with each other. `plot_raised_DR()` is `plot_DR()` for
 after raising: one point per stratum of the raised catch (shaded by how much
 of its own discard weight was raised rather than sampled), plus - underneath,
 muted - one point per donor stratum actually behind each group's rate,
@@ -425,7 +425,7 @@ unlike the CC table, CAR and CAS stay in the CEF's native kg throughout), and
 `rate` is this row's discards over that landed weight (discards / landings,
 *not* the raising side's `discard_rate` = discards / (landings + discards) -
 matching the source RDBESStockCoord convention's unbounded `dis_ratio`, and
-the same `rate` `build_coverage_strata()` and `plot_discard_rate()` use,
+the same `rate` `build_coverage_strata()` and `plot_DR()` use,
 confirmed against the reference CAR-CAS_detailed.csv: its `rate` column is
 exactly `total / weightingTotal`, occasionally above 1).
 

@@ -29,7 +29,7 @@ cd <- anchoveta_catch; dd <- anchoveta_dist
 
 ## ---- 1. one engine: no `engine`, no `n_per_screen` ----------------------
 fns <- c("plot_coverage_heat", "plot_coverage_bubble", "plot_coverage_bar",
-         "plot_coverage_map", "plot_discard_rate",
+         "plot_coverage_map", "plot_DR",
          "plot_NaLoA", "plot_MWaLoA")
 gone <- c("engine", "n_per_screen")
 ok(!any(vapply(fns, function(f) any(gone %in% names(formals(get(f)))),
@@ -144,12 +144,15 @@ ok(grepl("only used when building from raw", warn(
      plot_coverage_heat(lt, dd, y = "metier4", min_cov = 50))),
    "distributions handed in alongside a table are noted as ignored")
 la <- build_coverage_strata(cd, c("metier4", "Country"), dd, what = "length")
-ok(grepl("catch strata", plot_coverage_heat(la, y = "metier4")$labels$title) &&
-     grepl("landed strata", plot_coverage_heat(la, y = "metier4",
-                                               catchCategory = "Lan")$labels$title) &&
-     grepl("discarded strata", plot_coverage_heat(la, y = "metier4",
-                                                  catchCategory = "Dis")$labels$title),
-   "a Lan+Dis table titles itself 'catch'; choosing a part filters it and says which")
+ok(identical(plot_coverage_heat(la, y = "metier4")$labels$title,
+             "Catch - Sampling of Length") &&
+     identical(plot_coverage_heat(la, y = "metier4",
+                                  catchCategory = "Lan")$labels$title,
+               "Landings - Sampling of Length") &&
+     identical(plot_coverage_heat(la, y = "metier4",
+                                  catchCategory = "Dis")$labels$title,
+               "Discards - Sampling of Length"),
+   "a Lan+Dis table titles itself 'Catch'; choosing a part filters it and says which")
 ok(drawable(plot_coverage_bar(cd, dd, y = "metier4", fill = "Country",
                               what = "length", catchCategory = "Lan")) &&
      drawable(plot_coverage_bubble(cd, dd, y = "metier4", x = "Country",
@@ -173,8 +176,8 @@ if (requireNamespace("maps", quietly = TRUE)) {
 ## stratum, never several pooled under one shared (x, colour) name
 tab_fine <- build_coverage_strata(cd, c("fleetValue", "areaValue", "Country",
                                         "Season", "metier4"))
-d_raw <- plot_discard_rate(cd,       x = "metier4", colour = "Country")
-d_tab <- plot_discard_rate(tab_fine, x = "metier4", colour = "Country")
+d_raw <- plot_DR(cd,       x = "metier4", colour = "Country")
+d_tab <- plot_DR(tab_fine, x = "metier4", colour = "Country")
 ok(drawable(d_raw) && same(d_raw, d_tab),
    "discard rate: raw catch == the finest table, unioned with the plotted columns")
 ok(nrow(d_raw$data) > sum(!is.na(tab$rate)),
@@ -186,9 +189,11 @@ ok(identical(ggplot_build(d_raw)$layout$panel_scales_y[[1]]$trans$name,
    "the y axis is pseudo-log, so a few huge ratios do not flatten the rest")
 ok("size" %in% names(d_raw$mapping),
    "point size is mapped to landings")
-ok(grepl("discard coverage table", err(plot_discard_rate(lt, x = "metier4"))),
+ok(min(d_raw$data$landings) >= max(d_raw$data$landings) * 0.15 - 1e-9,
+   "no bubble sizes below 15% of the largest - a tiny stratum's colour stays readable")
+ok(grepl("discard coverage table", err(plot_DR(lt, x = "metier4"))),
    "a length coverage table is not a discard-rate input")
-ok(is.null(plot_discard_rate(cd[cd$catchCategory == "Lan", ], x = "metier4")),
+ok(is.null(plot_DR(cd[cd$catchCategory == "Lan", ], x = "metier4")),
    "no discard estimate anywhere -> NULL, not an error")
 
 ## both discard rates are columns of the table: the ratio is `rate`, the
@@ -212,18 +217,18 @@ ok(isTRUE(all.equal(pooled$rate, tab$rate)) &&
    "a finer table pooled to metier4 x Country re-derives both rates from the summed weights")
 
 ## the y variable
-d_ld <- plot_discard_rate(cd, x = "metier4", colour = "Country", rate = "rate")
+d_ld <- plot_DR(cd, x = "metier4", colour = "Country", rate = "rate")
 ok(drawable(d_ld) && isTRUE(all.equal(d_ld$data$.y, d_ld$data$discardRate * 100)) &&
      isTRUE(all.equal(d_raw$data$.y, d_raw$data$rate * 100)),
    "rate = 'ratio' plots `rate`, rate = 'rate' plots `discardRate` (both in percent)")
 ok(!identical(ggplot_build(d_ld)$layout$panel_scales_y[[1]]$trans$name, "pseudo_log") &&
-     identical(d_ld$labels$y, "Discard rate") &&
-     identical(d_raw$labels$y, "Discard ratio"),
-   "the rate is bounded, so it gets an ordinary axis; the axis is named for the rate")
+     identical(d_ld$labels$y, "Discard rate (D/(L+D))") &&
+     identical(d_raw$labels$y, "Discard ratio (D/L)"),
+   "the rate is bounded, so it gets an ordinary axis; the axis is named for the rate, formula included")
 ok(identical(sort(paste(d_ld$data$metier4, d_ld$data$Country)),
              sort(paste(d_raw$data$metier4, d_raw$data$Country))),
    "both rates draw the same strata")
-ok(grepl("should be one of", err(plot_discard_rate(cd, x = "metier4", rate = "nonsense"))),
+ok(grepl("should be one of", err(plot_DR(cd, x = "metier4", rate = "nonsense"))),
    "an unknown `rate` names the valid ones")
 
 ## the weighted mean of each x level: a thin line behind the points (no
@@ -247,7 +252,7 @@ ok(all(vapply(seq_len(nrow(dia_ld)), function(i) {
      isTRUE(all.equal(stats::weighted.mean(s$.y, s$weightingTotal), dia_ld$.y[i]))
    }, logical(1))),
    "for the rate the line is the mean of the plotted rates weighted by landings")
-d_fac <- plot_discard_rate(cd, x = "metier4", colour = "Country", facet = "Season")
+d_fac <- plot_DR(cd, x = "metier4", colour = "Country", facet = "Season")
 lin_f <- avglines(d_fac)[[1]]$data
 ok(all(c("metier4", "Season") %in% names(lin_f)) &&
      all(paste(lin_f$metier4, lin_f$Season) %in%
@@ -260,7 +265,7 @@ ok(all(c("metier4", "Season") %in% names(lin_f)) &&
 ## "|" - a point is now an individual raw stratum, so its label identifies
 ## it fully, and "MIS|Denmark" alone could still be any area or season
 ref   <- stats::median(d_raw$data$.y) / 100
-d_ref <- plot_discard_rate(cd, x = "metier4", colour = "Country", reference = ref)
+d_ref <- plot_DR(cd, x = "metier4", colour = "Country", reference = ref)
 lab   <- d_ref$data$.lab != ""
 ok(any(vapply(d_ref$layers, function(l) inherits(l$geom, "GeomHline"), logical(1))) &&
      !any(vapply(d_raw$layers, function(l) inherits(l$geom, "GeomHline"), logical(1))),
@@ -276,11 +281,11 @@ ok(identical(d_ref$data$.lab[lab], exp_lab[lab]) &&
      !any(grepl("=", exp_lab[lab])) &&
      identical(lab_vars, c("fleetValue", "areaValue", "Country", "Season")),
    "a label is bare values, finest-per-family only (metier4 dropped for fleetValue), joined with '|'")
-ok(grepl("fraction between 0 and 1", err(plot_discard_rate(
+ok(grepl("fraction between 0 and 1", err(plot_DR(
      cd, x = "metier4", rate = "rate", reference = 30))) &&
-     grepl("single number", err(plot_discard_rate(cd, x = "metier4",
+     grepl("single number", err(plot_DR(cd, x = "metier4",
                                                   reference = c(0.1, 0.2)))) &&
-     grepl("single number", err(plot_discard_rate(cd, x = "metier4",
+     grepl("single number", err(plot_DR(cd, x = "metier4",
                                                   reference = "a"))),
    "a reference that is not one fraction is an error (30 for the rate is named as such)")
 
@@ -318,13 +323,13 @@ box_text <- function(p) {
   if (is.null(g)) NA_character_ else flat(g$params$grob$label)
 }
 
-ok(identical(ttl(r_raw), "Discard sampling of landed weight") &&
+ok(identical(ttl(r_raw), "Sampling of Discards") &&
      is.null(r_raw$labels$subtitle) &&
      says_cap(r_raw, "grouping = metier4 x Country, grouped over finer fleet levels (fleetValue), area (areaValue), and season.") &&
      says_cap(r_raw, "staircase = cumulative % of landings weight (top axis).") &&
      says_cap(r_raw, "bar = landings weight (bottom axis)."),
    "bars: no subtitle; the caption names the grouping, the staircase and the bar")
-ok(identical(ttl(h_raw), "Discard sampling of landed strata") &&
+ok(identical(ttl(h_raw), "Sampling of Discards") &&
      is.null(h_raw$labels$subtitle) &&
      says_cap(h_raw, "grouping = metier4 x Country, grouped over finer fleet levels (fleetValue), area (areaValue), and season.") &&
      says_cap(h_raw, "tile number = landings weight (t).") &&
@@ -344,21 +349,21 @@ ok(says_cap(h_fac, "grouping = metier4 x Country x Season, grouped over finer fl
    "a facet column is part of the stratum, so it is no longer grouped over")
 ok(identical(cap(h_raw), cap(h_tab)),
    "the caption reads the same from raw catch and from the coverage table")
-ok(identical(ttl(lh_raw), "Length sampling of landed strata") &&
+ok(identical(ttl(lh_raw), "Landings - Sampling of Length") &&
      grepl("measured fish >= 100: fish measured for NaL/MWaL estimates", box_text(lh_raw)) &&
      identical(ttl(plot_coverage_bar(cd, dd, y = "metier4", what = "age",
                                      catchCategory = "Dis")),
-               "Age sampling of discarded weight") &&
+               "Discards - Sampling of Age") &&
      identical(ttl(plot_coverage_bar(cd, dd, y = "metier4", what = "length")),
-               "Length sampling of catch weight"),
-   "titles start with what is sampled (Length / Age / Discard) and end with the weight (landed / discarded / catch)")
+               "Catch - Sampling of Length"),
+   "titles name the weight first (Landings / Discards / Catch), then what is sampled - dropped entirely for discard coverage, always the landings")
 ok(grepl("coverage >= 50%", box_text(h_raw)) &&
      !grepl("trips", box_text(h_raw)) &&
      grepl("trips >= 2", box_text(b_raw)),
    "the box names the thresholds the colours were judged against (only the active ones)")
 if (requireNamespace("maps", quietly = TRUE)) {
   mp <- suppressWarnings(plot_coverage_map(cd))
-  ok(identical(ttl(mp), "Discard sampling of landed weight by areaValue") &&
+  ok(identical(ttl(mp), "Sampling of Discards by areaValue") &&
        is.null(mp$labels$subtitle) &&
        says_cap(mp, "grouping = areaValue, grouped over fleet (fleetValue), country, and season.") &&
        says_cap(mp, "area = areaValue.") &&
@@ -414,13 +419,13 @@ ok(identical(strata_sentence(c("donor_group", "domainCatchDis", "metier4")),
              "grouping = no grouping, raw data as in CEF (CN) data.") &&
      identical(strata_sentence("Stratum"), "grouping = no grouping, raw data as in CEF (CN) data."),
    "a domain (or Stratum) column already names fleet, area, country and season: nothing is grouped over")
-ok(identical(cov_title("age", "landings", "weight"), "Age sampling of landed weight") &&
-     identical(cov_title("length", "catch", "strata"), "Length sampling of catch strata") &&
-     identical(cov_title("discard", "landings", "weight", by = c("a", "b")),
-               "Discard sampling of landed weight by a and b") &&
+ok(identical(cov_title("age", "landings"), "Landings - Sampling of Age") &&
+     identical(cov_title("length", "catch"), "Catch - Sampling of Length") &&
+     identical(cov_title("discard", "landings", by = c("a", "b")),
+               "Sampling of Discards by a and b") &&
      identical(share_phrase("age", "discards"),
                "share of discarded weight with age distributions"),
-   "cov_title() / share_phrase(): the sampled thing first, then the weight")
+   "cov_title(): the weight first (dropped for discard coverage), then what is sampled / share_phrase()")
 wrapped <- strsplit(sub_wrap(paste(rep("word", 60), collapse = " "), "short"), "\n")[[1]]
 ok(all(nchar(wrapped) <= 96) && identical(wrapped[length(wrapped)], "short"),
    "sub_wrap() wraps each paragraph on its own")

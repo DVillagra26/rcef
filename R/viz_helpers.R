@@ -93,26 +93,24 @@ weight_words <- function(weight_label) {
   list(adj = adj, noun = paste(adj, "weight"))
 }
 
-#' Title of a coverage plot: what is sampled, and of which weight
+#' Title of a coverage plot: which weight, sampling what
 #'
-#' "Discard sampling of landed weight", "Length sampling of catch strata",
-#' "Age sampling of discarded weight by areaValue": the thing being sampled
-#' first, then the weight it is looked at over.
+#' "Landings - Sampling of Length", "Catch - Sampling of Age by areaValue",
+#' "Sampling of Discards": the weight a figure is judged over first (dropped
+#' entirely for `what = "discard"`, where it is always the landings, so
+#' naming it would only repeat itself), then what is being sampled.
 #'
 #' @param what `"discard"`, `"length"` or `"age"`.
 #' @param weight_label As for [weight_words()].
-#' @param view `"weight"` (bars, map) or `"strata"` (heatmap, bubbles).
 #' @param by Optional columns the figure is split by, named at the end.
 #' @keywords internal
 #' @noRd
 #' @export
-cov_title <- function(what, weight_label, view = c("weight", "strata"),
-                      by = NULL) {
-  view <- match.arg(view)
-  sprintf("%s sampling of %s %s%s", cov_title_what(what),
-          weight_words(weight_label)$adj,
-          if (view == "weight") "weight" else "strata",
-          if (length(by)) paste0(" by ", paste(by, collapse = " and ")) else "")
+cov_title <- function(what, weight_label, by = NULL) {
+  by_txt <- if (length(by)) paste0(" by ", paste(by, collapse = " and ")) else ""
+  if (identical(what, "discard")) return(paste0("Sampling of Discards", by_txt))
+  paste0(tools::toTitleCase(weight_label), " - Sampling of ",
+         cov_title_what(what), by_txt)
 }
 
 #' The four stratum families and their column levels, finest first

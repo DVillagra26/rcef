@@ -99,7 +99,7 @@ table(raised$catchCategory, raised$importedOrRaised)
 }
 \seealso{
 \link{anchoveta_dist}, \link{coverage-plots}, \code{\link[=build_coverage_strata]{build_coverage_strata()}},
-\code{\link[=plot_discard_rate]{plot_discard_rate()}}
+\code{\link[=plot_DR]{plot_DR()}}
 
 Other example data: 
 \code{\link{anchoveta_dist}}

@@ -19,7 +19,7 @@ script or an ICES TAF script set. A shiny application, started with
    read InterCatch files into CEF \tab \code{\link[=funICoutCEF]{funICoutCEF()}} \cr
    add the strata-ready columns (\code{Country}, \code{Season}, \code{metier4}, ...) \tab \code{\link[=derive_fields]{derive_fields()}} \cr
    see discard rates and sampling coverage per stratum, as a table \tab \code{\link[=build_coverage_strata]{build_coverage_strata()}} \cr
-   look at them \tab \link{coverage-plots} (heatmap, bubbles, bars), \code{\link[=plot_coverage_map]{plot_coverage_map()}}, \code{\link[=plot_discard_rate]{plot_discard_rate()}} \cr
+   look at them \tab \link{coverage-plots} (heatmap, bubbles, bars), \code{\link[=plot_coverage_map]{plot_coverage_map()}}, \code{\link[=plot_DR]{plot_DR()}} \cr
    look at numbers and mean weight at length or age \tab \code{\link[=plot_NaLoA]{plot_NaLoA()}}, \code{\link[=plot_MWaLoA]{plot_MWaLoA()}} \cr
    build the raising-side stratum table and judge it \tab \code{\link[=build_strata]{build_strata()}}, \code{\link[=classify_strata]{classify_strata()}} \cr
    define raising groups automatically (a cascade that coarsens until coverage clears a bar) \tab \code{\link[=recommend_raising]{recommend_raising()}}, \code{\link[=conds_from_auto]{conds_from_auto()}} \cr
@@ -44,7 +44,7 @@ discard raising, and the CC, CAR and CAS tables) and
 Exploring the data first is its own short chain:
 
 \if{html}{\out{<div class="sourceCode">}}\preformatted{derive_fields() -> build_coverage_strata()
-  -> plot_coverage_heat() / _bubble() / _bar() / _map() | plot_discard_rate()
+  -> plot_coverage_heat() / _bubble() / _bar() / _map() | plot_DR()
 }\if{html}{\out{</div>}}
 
 \code{\link[=build_coverage_strata]{build_coverage_strata()}} is the discard-rate / sampling-coverage table

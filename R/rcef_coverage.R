@@ -14,7 +14,7 @@
 #' that define a stratum; for length and age, also the distributions.
 #'
 #' This is the table behind [plot_coverage_heat()], [plot_coverage_bubble()],
-#' [plot_coverage_bar()], [plot_coverage_map()] and [plot_discard_rate()].
+#' [plot_coverage_bar()], [plot_coverage_map()] and [plot_DR()].
 #' They build it themselves from raw catch and take it directly when you
 #' pass it, so every number in a figure can be found in this table, and a
 #' table can always be looked at as a figure.
@@ -113,7 +113,7 @@
 #'   there is nothing to describe (no landings or discards, or no catch rows
 #'   for that `catchCategory`). Distributions that link to nothing are not
 #'   "nothing": every stratum is then reported with coverage 0.
-#' @seealso [coverage-plots] and [plot_discard_rate()], which draw this
+#' @seealso [coverage-plots] and [plot_DR()], which draw this
 #'   table; [build_strata()], the raising-side stratum table;
 #'   [classify_strata()], which judges strata against thresholds.
 #' @family coverage plots
@@ -144,7 +144,7 @@
 #'
 #' # the plots draw the same table, from the raw catch or from the table
 #' plot_coverage_heat(cov, y = "metier4", x = "Country", min_cov = 50)
-#' plot_discard_rate(cov, x = "metier4", colour = "Country")
+#' plot_DR(cov, x = "metier4", colour = "Country")
 #' @export
 build_coverage_strata <- function(catch, dims = NULL, distributions = NULL,
                                   what = "discard", catchCategory = NULL) {

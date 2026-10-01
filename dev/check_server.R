@@ -302,10 +302,10 @@ if (length(fx)) {
         isTRUE(gate_reg[["dr"]]$stale())
       session$setInputs(dr_apply = 2); session$flushReact()
       p1 <- dr_plot_obj()
-      ob$dr_before <- identical(p0$labels$y, "Discard ratio") &&
+      ob$dr_before <- identical(p0$labels$y, "Discard ratio (D/L)") &&
         !has_layer(p0, "GeomHline")
       hl <- Filter(function(l) inherits(l$geom, "GeomHline"), p1$layers)
-      ob$dr_after <- identical(p1$labels$y, "Discard rate") &&
+      ob$dr_after <- identical(p1$labels$y, "Discard rate (D/(L+D))") &&
         length(hl) == 1 && isTRUE(all.equal(hl[[1]]$data$yintercept, 20)) &&
         isTRUE(all.equal(p1$data$.y, p1$data$discardRate * 100))
       ob$dr_live <- grepl('rate = "rate"', active_plots()[[1]], fixed = TRUE) &&

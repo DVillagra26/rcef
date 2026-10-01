@@ -50,7 +50,7 @@ at whatever aggregation you choose. Give it the catch and the columns
 that define a stratum; for length and age, also the distributions.
 
 This is the table behind \code{\link[=plot_coverage_heat]{plot_coverage_heat()}}, \code{\link[=plot_coverage_bubble]{plot_coverage_bubble()}},
-\code{\link[=plot_coverage_bar]{plot_coverage_bar()}}, \code{\link[=plot_coverage_map]{plot_coverage_map()}} and \code{\link[=plot_discard_rate]{plot_discard_rate()}}.
+\code{\link[=plot_coverage_bar]{plot_coverage_bar()}}, \code{\link[=plot_coverage_map]{plot_coverage_map()}} and \code{\link[=plot_DR]{plot_DR()}}.
 They build it themselves from raw catch and take it directly when you
 pass it, so every number in a figure can be found in this table, and a
 table can always be looked at as a figure.
@@ -158,10 +158,10 @@ head(len[order(-len$total), ])
 
 # the plots draw the same table, from the raw catch or from the table
 plot_coverage_heat(cov, y = "metier4", x = "Country", min_cov = 50)
-plot_discard_rate(cov, x = "metier4", colour = "Country")
+plot_DR(cov, x = "metier4", colour = "Country")
 }
 \seealso{
-\link{coverage-plots} and \code{\link[=plot_discard_rate]{plot_discard_rate()}}, which draw this
+\link{coverage-plots} and \code{\link[=plot_DR]{plot_DR()}}, which draw this
 table; \code{\link[=build_strata]{build_strata()}}, the raising-side stratum table;
 \code{\link[=classify_strata]{classify_strata()}}, which judges strata against thresholds.
 

@@ -20,7 +20,7 @@
 #                                sampled - `what` switches discard / length /
 #                                age, `catchCategory` the landings / discards
 #                                part for length & age.
-#    plot_discard_rate()         per-stratum discard-rate points.
+#    plot_DR()                   per-stratum discard-rate points.
 #    plot_NaLoA()                numbers at length/age (histogram).
 #    plot_MWaLoA()               mean weight at length/age (line + points).
 #
@@ -214,7 +214,7 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
   allx <- c(agg$cx, if (boxed) c(boxes$x0, boxes$x1) else agg$lon)
   ally <- c(agg$cy, if (boxed) c(boxes$y0, boxes$y1 + 0.5) else agg$lat)
   xlim <- pad(allx, 2.5); ylim <- pad(ally, 1.8)
-  ttl  <- cov_title(what, weight_label, "weight",
+  ttl  <- cov_title(what, weight_label,
                     by = c(area_var, if (has(group_var)) group_var))
   # the area level itself is never "grouped over" - it is the unit each pie
   # is drawn at - so it goes in the sentence's own vars, group first
@@ -336,12 +336,12 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #'
 #' ## What the title and caption say
 #'
-#' The title names what is sampled, then the weight it is judged against:
-#' "Discard sampling of landed weight", "Length sampling of landed strata",
-#' "Age sampling of discarded weight". The weight word comes from
-#' `catchCategory` (landed, discarded, BMS, or the catch as a whole; discard
-#' coverage is always over the landings); "weight" is the bar chart and the
-#' map, "strata" the heatmap and bubbles.
+#' The title names the weight a figure is judged against first, then what is
+#' sampled: "Landings - Sampling of Length", "Discards - Sampling of Age".
+#' The weight word comes from `catchCategory` (landed, discarded, BMS, or the
+#' catch as a whole). Discard coverage drops it entirely - "Sampling of
+#' Discards" - since it is always judged against the landings, so naming
+#' that weight would only repeat itself.
 #'
 #' The caption's first line says what a stratum is here: the plotted
 #' columns, grouped over every other stratum column ("grouping = metier4 x
@@ -400,7 +400,7 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #'   heatmap and bubbles also carry a `"status_legend"` attribute: the
 #'   specification [status_legend_plot()] rebuilds a complete legend from.
 #' @seealso [build_coverage_strata()] for the table, [plot_coverage_map()],
-#'   [plot_discard_rate()]; [classify_strata()] and [cat_lookup()] for the
+#'   [plot_DR()]; [classify_strata()] and [cat_lookup()] for the
 #'   classification behind the colours.
 #' @name coverage-plots
 #' @family coverage plots
@@ -484,7 +484,7 @@ plot_coverage_heat <- function(catch, distributions = NULL, y, x = NULL,
                       labels = status_abbr(threshold, what, min_meas, min_trips),
                       drop = FALSE, name = "Sampling status") +
     maybe_facet(facet_var) +
-    labs(title = cov_title(what, weight_label, "strata"),
+    labs(title = cov_title(what, weight_label),
          caption = sub_wrap(strata_sentence(c(y, x, facet), catch),
                             sprintf("tile number = %s weight (t).", weight_label),
                             width = 110),
@@ -583,7 +583,7 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
                       guide = guide_legend(override.aes = list(size = 5))) +
     scale_x_discrete(expand = expansion(0.2)) +
     maybe_facet(facet_var) +
-    labs(title = cov_title(what, weight_label, "strata"),
+    labs(title = cov_title(what, weight_label),
          caption = sub_wrap(strata_sentence(c(y, x, facet), catch),
                             sprintf("bubble size = %s weight (t).", weight_label),
                             width = 110),
@@ -721,7 +721,7 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
                    palette = palette) +
     (if (has(facet_var)) facet_wrap(vars(.facet), scales = "free_y", ncol = 2)
      else NULL) +
-    labs(title = cov_title(what, weight_label, "weight"),
+    labs(title = cov_title(what, weight_label),
          caption = sub_wrap(
            strata_sentence(c(y, fill, facet), catch),
            sprintf("staircase = cumulative %% of %s weight (top axis).", weight_label),
@@ -827,37 +827,37 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 #' @examples
 #' data(anchoveta_catch)
 #'
-#' plot_discard_rate(anchoveta_catch, x = "metier4", colour = "Country")
-#' plot_discard_rate(anchoveta_catch, x = "Country", colour = "metier4",
-#'                   facet = "Season")
+#' plot_DR(anchoveta_catch, x = "metier4", colour = "Country")
+#' plot_DR(anchoveta_catch, x = "Country", colour = "metier4",
+#'        facet = "Season")
 #'
 #' # discards as a share of the catch, with a reference line: the strata
 #' # above 20% are named, in full
-#' plot_discard_rate(anchoveta_catch, x = "metier4", colour = "Country",
-#'                   rate = "rate", reference = 0.2)
+#' plot_DR(anchoveta_catch, x = "metier4", colour = "Country",
+#'        rate = "rate", reference = 0.2)
 #'
 #' # the table behind the points
 #' cov <- build_coverage_strata(anchoveta_catch, c("metier4", "Country"))
 #' head(cov[!is.na(cov$rate), c("metier4", "Country", "total", "rate",
 #'                              "discardRate")])
 #' @export
-plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
-                              facet = NULL, rate = c("ratio", "rate"),
-                              reference = NULL, jitter = TRUE,
-                              palette = c("default", "colorblind")) {
+plot_DR <- function(catch, x, colour = NULL, shape = NULL,
+                    facet = NULL, rate = c("ratio", "rate"),
+                    reference = NULL, jitter = TRUE,
+                    palette = c("default", "colorblind")) {
   palette <- match.arg(palette)
   rate_type <- match.arg(rate)
   if (!is.null(reference) && !(is.numeric(reference) && length(reference) == 1 &&
                                is.finite(reference) && reference >= 0))
-    stop("plot_discard_rate(): `reference` must be a single number, a rate ",
+    stop("plot_DR(): `reference` must be a single number, a rate ",
          "as a fraction (0.3 = 30%)", call. = FALSE)
   # the discard rate cannot exceed 100%, so 30 meant as a percent would draw
   # a line off the plot and label nothing - say so instead of drawing nothing
   if (!is.null(reference) && identical(rate_type, "rate") && reference > 1)
-    stop("plot_discard_rate(): with rate = \"rate\" the reference line is a ",
+    stop("plot_DR(): with rate = \"rate\" the reference line is a ",
          "fraction between 0 and 1 (0.3 = 30%), not a percent", call. = FALSE)
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
-  if (!has(x)) stop("plot_discard_rate(): `x` is required", call. = FALSE)
+  if (!has(x)) stop("plot_DR(): `x` is required", call. = FALSE)
   x_var <- x; colour_var <- colour; shape_var <- shape; facet_var <- facet
   keys <- unique(c(x, if (has(colour)) colour, if (has(shape)) shape,
                    if (has(facet)) facet))
@@ -875,14 +875,14 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
   } else if (identical(tw, "discard")) {
     d <- catch
   } else {
-    stop("plot_discard_rate(): `catch` is a ", tw, " coverage table - a ",
+    stop("plot_DR(): `catch` is a ", tw, " coverage table - a ",
          "discard rate needs raw catch or a discard coverage table",
          call. = FALSE)
   }
   if (is.null(d)) return(NULL)
   miss <- setdiff(keys, names(d))
   if (length(miss))
-    stop("plot_discard_rate(): column(s) not in the coverage table: ",
+    stop("plot_DR(): column(s) not in the coverage table: ",
          paste(miss, collapse = ", "), call. = FALSE)
 
   # rate is NA for a stratum with no discard estimate (nobody looked -
@@ -902,6 +902,11 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
   # go look up into something the plot itself answers. Off when landings
   # is degenerate (every value 0 or NA).
   has_landings <- any(is.finite(d$landings) & d$landings > 0)
+  # Floored at 15% of the largest landings in THIS plot (not a fixed
+  # tonnage, so it adapts to the data): area scaling alone shrinks a tiny
+  # stratum's bubble to a sliver too thin to read its colour.
+  if (has_landings)
+    d$landings <- pmax(d$landings, max(d$landings, na.rm = TRUE) * 0.15)
 
   # What a point is: every stratum column the table carries - the table's
   # own dims, drawn as they are. This is the finest available (see above),
@@ -1016,7 +1021,9 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
              sprintf("labels = strata ID exceeding reference line (%s).",
                      paste(lab_vars, collapse = "|")),
            width = 110),
-         y = paste("Discard", rate_type), x = x_var,
+         y = sprintf("Discard %s (%s)", rate_type,
+                    if (identical(rate_type, "ratio")) "D/L" else "D/(L+D)"),
+         x = x_var,
          fill = if (has(colour_var)) colour_var else NULL,
          shape = if (has(shape_var)) shape_var else NULL) +
     app_theme() +
@@ -1029,7 +1036,7 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
 #' Discard rate after raising: the raised catch, and the donor strata behind it
 #'
 #' @description
-#' [plot_discard_rate()] for after raising: one point per stratum from the
+#' [plot_DR()] for after raising: one point per stratum from the
 #' raised catch, shaded by how much of its discard weight was raised rather
 #' than sampled (as in [plot_raised_catches()]'s imported/raised shading, but
 #' as a share rather than a strict either/or - a point can blend both when the
@@ -1054,10 +1061,10 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
 #'
 #' ## The rate, and the reference line
 #'
-#' Both work exactly as in [plot_discard_rate()]: `rate` chooses `"ratio"`
+#' Both work exactly as in [plot_DR()]: `rate` chooses `"ratio"`
 #' (discards / landings, the default) or `"rate"` (discards / catch), and
 #' `reference` draws a dashed line at a fixed threshold. Unlike
-#' [plot_discard_rate()], there is no weighted-mean line - the raised points
+#' [plot_DR()], there is no weighted-mean line - the raised points
 #' themselves are the reference here - and no per-point labels.
 #'
 #' @param raised_catch Output of [catchRaising()].
@@ -1073,14 +1080,14 @@ plot_discard_rate <- function(catch, x, colour = NULL, shape = NULL,
 #' @param facet Optional facet column.
 #' @param rate `"ratio"` (default, discards / landings) or `"rate"` (discards
 #'   / catch): which discard rate is the y variable. See
-#'   [plot_discard_rate()].
+#'   [plot_DR()].
 #' @param reference Optional single rate, as a fraction (`0.3` = 30%), on the
 #'   scale of `rate`. Draws a dashed line.
 #' @param jitter Jitter the points horizontally. Cosmetic only.
 #' @param palette `"default"` or `"colorblind"`: the raised-layer point
 #'   colours (see [var_palette()]).
 #' @return A ggplot object, or `NULL` when no stratum has a discard rate.
-#' @seealso [plot_discard_rate()] for the pre-raising counterpart;
+#' @seealso [plot_DR()] for the pre-raising counterpart;
 #'   [plot_raised_catches()] for the raised weight itself.
 #' @family discard-rate plots
 #' @family raising plots
@@ -1143,6 +1150,11 @@ plot_raised_DR <- function(raised_catch, catch_data, matched_data_cond, x,
            else rd$.discards / (rd$landings + rd$.discards)) * 100
   rd$landings <- rd$landings / 1000   # kg -> tonnes, for bubble size and labels only
   has_landings <- any(is.finite(rd$landings) & rd$landings > 0)
+  # Floored at 15% of the largest landings in THIS plot, as in plot_DR():
+  # area scaling alone shrinks a tiny stratum's bubble to a sliver too thin
+  # to read its colour.
+  if (has_landings)
+    rd$landings <- pmax(rd$landings, max(rd$landings, na.rm = TRUE) * 0.15)
 
   # ---- donor layer: matched_data_cond re-tested against catch_data --------
   # "DrGroup" names the group *this loop* is testing donors for - it is not a
@@ -1229,7 +1241,9 @@ plot_raised_DR <- function(raised_catch, catch_data, matched_data_cond, x,
            if (!is.null(ref_y))
              "dashed line = reference arbitrary threshold in the same units as y axis.",
            width = 110),
-         y = paste("Discard", rate_type), x = x_var,
+         y = sprintf("Discard %s (%s)", rate_type,
+                    if (identical(rate_type, "ratio")) "D/L" else "D/(L+D)"),
+         x = x_var,
          fill = if (has(colour_var)) colour_var else NULL,
          shape = if (has(shape_var)) shape_var else NULL) +
     app_theme() +

@@ -280,7 +280,7 @@ drates_ui <- function() tagList(
   control_deck("dr", label = "Discard rate controls",
     # Which rate is the y axis, and a reference to read the strata against.
     # The reference is typed in percent (the axis is in percent) and handed
-    # to plot_discard_rate() as a fraction.
+    # to plot_DR() as a fraction.
     options = tagList(
       h4("Discard rate"),
       radioButtons("dr_rate", NULL,
@@ -6401,7 +6401,7 @@ server <- function(input, output, session) {
   active_plots <- reactive({
     r <- function(v) if (is.null(v) || !nzchar(v)) "NULL" else sprintf('"%s"', v)
     list(
-      sprintf('plot_discard_rate(strata, x = %s, colour = %s, shape = %s, facet = %s%s%s)',
+      sprintf('plot_DR(strata, x = %s, colour = %s, shape = %s, facet = %s%s%s)',
               r(role("dr","x")), r(role("dr","fill")),
               r(role("dr","shape")), r(role("dr","facet")),
               if (!identical(dr_rate_arg(), "ratio"))
@@ -6502,7 +6502,7 @@ server <- function(input, output, session) {
       min_trip = input$cov_trips %||% 2, emit = TRUE))
 
   # discard-rate plot (one view: raw per-stratum points)
-  # The two options as plot_discard_rate() takes them: which rate is plotted,
+  # The two options as plot_DR() takes them: which rate is plotted,
   # and the reference as a fraction - the box is in percent, empty for none.
   dr_rate_arg <- function() input$dr_rate %||% "ratio"
   dr_ref_arg <- function() {
@@ -6525,7 +6525,7 @@ server <- function(input, output, session) {
            "The reference line is a percentage of zero or more."),
       need(is.null(rf) || !identical(dr_rate_arg(), "rate") || rf <= 1,
            "With the discard rate the reference line is a percentage between 0 and 100."))
-    plot_discard_rate(explore_dat("dr"),
+    plot_DR(explore_dat("dr"),
                 x = role("dr","x"), colour = role("dr","fill"),
                 shape = role("dr","shape"), facet = role("dr","facet"),
                 rate = dr_rate_arg(), reference = rf,
@@ -6550,7 +6550,7 @@ server <- function(input, output, session) {
     title = function() "Discard rate - per stratum",
     note = function() sprintf("fleet = %s, area = %s",
       paste(panel_dims("dr"), collapse = ", "), ""),
-    # plot_discard_rate() on raw catch now resolves at the finest columns
+    # plot_DR() on raw catch now resolves at the finest columns
     # the catch carries, unioned with whatever is plotted (see its
     # @details) - so the kept table has to be built the same way, or the
     # saved script would reproduce a coarser (and so different) set of
@@ -6561,7 +6561,7 @@ server <- function(input, output, session) {
       sprintf("strata_dr <- build_coverage_strata(catch_data, %s)",
               fmt_vals(unique(c(base, panel_dims("dr")))))
     },
-    call = function() taf_call("plot_discard_rate", list(
+    call = function() taf_call("plot_DR", list(
         "strata_dr", x = taf_q(role("dr", "x")),
         colour = taf_q(role("dr", "fill")), shape = taf_q(role("dr", "shape")),
         facet = taf_q(role("dr", "facet")),

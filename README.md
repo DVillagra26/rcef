@@ -37,12 +37,12 @@ tab
 
 # the same numbers as figures (raw catch or the table both work)
 plot_coverage_heat(tab, y = "metier4", x = "Country", min_cov = 50)
-plot_discard_rate(tab, x = "metier4", colour = "Country")
+plot_DR(tab, x = "metier4", colour = "Country")
 
 # the discard rate (discards as a share of the catch) instead of the ratio,
 # and a dashed reference line that names the strata above 30%
-plot_discard_rate(tab, x = "metier4", colour = "Country",
-                  rate = "rate", reference = 0.3)
+plot_DR(tab, x = "metier4", colour = "Country",
+       rate = "rate", reference = 0.3)
 
 # length and age: add the distributions
 build_coverage_strata(anchoveta_catch, c("metier4", "Country"),

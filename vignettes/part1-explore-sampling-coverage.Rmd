@@ -344,7 +344,7 @@ plot_coverage_map(catch = age_catch, distributions = age_dist,
 
 # Discard rate
 
-`plot_discard_rate()` auto-builds the table from raw catch (or takes it). A
+`plot_DR()` auto-builds the table from raw catch (or takes it). A
 point is always an individual, un-pooled stratum: from raw catch the table is
 built at the finest columns the catch carries, together with whatever you
 plot (`x`, `colour`, `shape`, `facet`) - so several points can share one `x`
@@ -352,30 +352,31 @@ level, never merged into it. A stratum with no discard estimate has no rate
 and gets no point; point size is the landings.
 
 `rate` chooses the y variable and the word the title and axis use - both are
-columns of the table:
+columns of the table. The y axis names the formula too, right next to the
+word, so a reader never has to look the definition up:
 
 * `"ratio"` (default, the discard ratio): `rate` = discards / landings(w/
-  est.). Can exceed 100%, so the axis is pseudo-log.
+  est.). Can exceed 100%, so the axis is pseudo-log. Axis: "Discard ratio (D/L)".
 * `"rate"` (the discard rate): `discardRate` = discards / catch(w/ est.).
-  Bounded 0-100%, so the axis is an ordinary one.
+  Bounded 0-100%, so the axis is an ordinary one. Axis: "Discard rate (D/(L+D))".
 
 A thin grey line behind the points (no diamond) marks each `x` level's mean,
 weighted by landings - for the ratio, `build_coverage_strata(catch =
 catch_data, dims = "metier4")`'s rate directly.
 
 ```{r dr, fig.width = 8, fig.height = 6, fig.alt = "Discard rate per metier and country, one point per stratum, a line for the weighted mean of each metier"}
-plot_discard_rate(catch = catch_data,x = "metier4",colour = "Country",jitter = TRUE, rate = "rate",reference = 0.5)
+plot_DR(catch = catch_data,x = "metier4",colour = "Country",jitter = TRUE, rate = "rate",reference = 0.5)
 ```
 
 Faceted by area, the strata are unaffected (they were already the finest the
 catch carries) - only the panels change:
 
 ```{r dr-facet, fig.width = 8, fig.height = 7, fig.alt = "Discard rate per stratum, by metier, coloured by country, one panel per area"}
-plot_discard_rate(catch = catch_data,
-                  x = "metier4",
-                  colour = "Country",
-                  facet = "areaValue",
-                  jitter = TRUE)
+plot_DR(catch = catch_data,
+       x = "metier4",
+       colour = "Country",
+       facet = "areaValue",
+       jitter = TRUE)
 ```
 
 `reference` draws a dashed line at a rate and names the strata above it, so
@@ -388,8 +389,8 @@ so `MIS|Denmark` alone could still be several areas or seasons - the label
 always says which.
 
 ```{r dr-ref, fig.width = 8, fig.height = 6, fig.alt = "Discard rate per metier and country, a dashed reference line at 30%, the strata above it labelled"}
-plot_discard_rate(catch = catch_data, x = "metier4", colour = "Country",
-                  rate = "rate", reference = 0.3)
+plot_DR(catch = catch_data, x = "metier4", colour = "Country",
+       rate = "rate", reference = 0.3)
 ```
 
 The labelled strata are the rows of the finest-resolution table above the
