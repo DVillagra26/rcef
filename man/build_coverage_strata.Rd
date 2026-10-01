@@ -125,6 +125,17 @@ actually present in \code{catch} - so a stratum here is as fine as the data
 itself, and only naming \code{dims} yourself asks for anything coarser.
 }
 
+\subsection{The other derived columns are not lost}{
+
+A column \code{\link[=derive_fields]{derive_fields()}} added but you left out of \code{dims} (\code{mesh} when
+\code{dims} is just \code{"metier4"}, say) still rides along on each row, \emph{when}
+that stratum pins it to a single value - so the table can be filtered on
+it afterwards without having named it as part of the aggregation. A
+stratum coarser than the column - several meshes inside one \code{metier4} -
+reports \code{NA} there instead of an arbitrary pick, since no single value
+would be true of the whole row.
+}
+
 \subsection{Build once, draw many}{
 
 For length and age the expensive step is linking the catch to the

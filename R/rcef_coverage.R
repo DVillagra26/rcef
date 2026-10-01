@@ -84,6 +84,16 @@
 #' actually present in `catch` - so a stratum here is as fine as the data
 #' itself, and only naming `dims` yourself asks for anything coarser.
 #'
+#' ## The other derived columns are not lost
+#'
+#' A column [derive_fields()] added but you left out of `dims` (`mesh` when
+#' `dims` is just `"metier4"`, say) still rides along on each row, *when*
+#' that stratum pins it to a single value - so the table can be filtered on
+#' it afterwards without having named it as part of the aggregation. A
+#' stratum coarser than the column - several meshes inside one `metier4` -
+#' reports `NA` there instead of an arbitrary pick, since no single value
+#' would be true of the whole row.
+#'
 #' ## Build once, draw many
 #'
 #' For length and age the expensive step is linking the catch to the
@@ -217,6 +227,8 @@ build_coverage_strata <- function(catch, dims = NULL, distributions = NULL,
     out$landings          <- st$landings
     out$coverage          <- st$coverage
     out$numTrips          <- st$numTrips
+    ex <- coverage_extra_cols(d, dims)
+    if (!is.null(ex)) out <- left_join(out, ex, by = dims)
     return(out)
   }
 
@@ -254,7 +266,39 @@ build_coverage_strata <- function(catch, dims = NULL, distributions = NULL,
   out$coverage         <- bl$coverage
   out$numMeasurements  <- bl$numMeasurements
   out$numTrips         <- bl$numTrips
+  ex <- coverage_extra_cols(catch, dims)
+  if (!is.null(ex)) out <- left_join(out, ex, by = dims)
   out
+}
+
+#' The other `derive_fields()` columns, kept where a stratum pins them
+#'
+#' The columns a stratum (`dims`) does not already name - `mesh`, `metier5`,
+#' the ICES area levels, and so on ([DIMS_ALL_CANDIDATES]) - computed as the
+#' single value they share, or `NA` where the stratum spans more than one
+#' (so picking one would misrepresent the row). `NULL` when none of those
+#' columns are present, or every one of them is already part of `dims`.
+#'
+#' @param src Catch data to read the extra columns from, carrying `dims`.
+#' @param dims The stratum columns already accounted for.
+#' @return A data frame of `dims` plus whichever extra columns apply, one
+#'   row per stratum - ready to [dplyr::left_join()] onto a strata table by
+#'   `dims` - or `NULL`.
+#' @seealso [build_coverage_strata()], [DIMS_ALL_CANDIDATES]
+#' @keywords internal
+#' @noRd
+#' @export
+coverage_extra_cols <- function(src, dims) {
+  extra <- setdiff(intersect(DIMS_ALL_CANDIDATES, names(src)), dims)
+  if (!length(extra)) return(NULL)
+  uniq_or_na <- function(x) {
+    u <- unique(x[!is.na(x)])
+    if (length(u) == 1) u else NA_character_
+  }
+  src %>%
+    group_by(across(all_of(dims))) %>%
+    summarise(across(all_of(extra), ~ uniq_or_na(as.character(.x))),
+             .groups = "drop")
 }
 
 # ---------------------------------------------------------------------
@@ -332,7 +376,14 @@ coverage_cells <- function(catch, distributions, keys, what, what_given,
                                  catchCategory)
   }
   if (is.null(tbl) || !nrow(tbl)) return(NULL)
-  miss <- setdiff(keys, names(tbl))
+  # A coverage_extra_cols() column rides along even where no stratum in the
+  # table pins it down at all - all `NA`, nothing to plot by. Treated the
+  # same as a column that is not there, so asking to plot by one still
+  # names it, instead of silently grouping everything into one NA level.
+  present <- intersect(keys, names(tbl))
+  all_na  <- present[vapply(present, function(k) all(is.na(tbl[[k]])),
+                            logical(1))]
+  miss <- union(setdiff(keys, names(tbl)), all_na)
   if (length(miss))
     stop(fn, "(): column(s) not in the coverage table: ",
          paste(miss, collapse = ", "), " (it has: ",
