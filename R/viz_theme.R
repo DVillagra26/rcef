@@ -98,6 +98,24 @@ OUTLINE_LW <- 0.25
 PAL_CB <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2",
            "#D55E00", "#CC79A7", "#000000")
 
+#' Paired qualitative palette, for levels with a natural order
+#'
+#' ColorBrewer's 12-colour "Paired" palette: six hues, each a light and a
+#' dark step next to each other. [PAL_BASE] and [PAL_CB] are built so
+#' arbitrary, unordered levels are easy to tell apart, which is the
+#' opposite of what this one is for - its steps read as a gradual
+#' progression, so it suits a variable whose levels already have a real
+#' order and where that order is worth keeping visible in the colour
+#' itself (mesh size bins, length or age classes grouped coarser, ...).
+#' An alternative to [PAL_BASE] for [var_palette()]'s `palette =
+#' "gradual"`.
+#'
+#' @keywords internal
+#' @export
+PAL_GRADUAL <- c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99",
+                 "#E31A1C", "#FDBF6F", "#FF7F00", "#CAB2D6", "#6A3D9A",
+                 "#FFFF99", "#B15928")
+
 #' Stable colours for the levels of a variable
 #'
 #' Returns a named colour vector for `values`, reusing the colours already
@@ -107,14 +125,17 @@ PAL_CB <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2",
 #'
 #' @param var Name of the variable being coloured.
 #' @param values The levels to colour.
-#' @param palette `"default"` ([PAL_BASE]) or `"colorblind"` ([PAL_CB]).
+#' @param palette `"default"` ([PAL_BASE]), `"colorblind"` ([PAL_CB]) or
+#'   `"gradual"` ([PAL_GRADUAL]).
 #' @return A character vector of colours, named by level.
 #' @seealso [scale_fill_var()], [scale_colour_var()], [reset_palettes()]
 #' @keywords internal
 #' @export
-var_palette <- function(var, values, palette = c("default", "colorblind")) {
+var_palette <- function(var, values,
+                        palette = c("default", "colorblind", "gradual")) {
   palette <- match.arg(palette)
-  pal_src <- if (identical(palette, "colorblind")) PAL_CB else PAL_BASE
+  pal_src <- switch(palette, colorblind = PAL_CB, gradual = PAL_GRADUAL,
+                    PAL_BASE)
   # cached per (variable, palette) - not just per variable, or asking
   # for "colorblind" after "default" already ran for this variable in
   # this session returns the stale default colours instead of actually
@@ -201,13 +222,15 @@ reset_palettes <- function() rm(list = ls(.LEVEL_COLOURS), envir = .LEVEL_COLOUR
 #' @param var Name of the variable being coloured.
 #' @param values The levels present.
 #' @param name Legend title; defaults to `var`.
-#' @param palette "default" or "colorblind" - passed to [var_palette()].
+#' @param palette "default", "colorblind" or "gradual" - passed to
+#'   [var_palette()].
 #' @param ... Passed to [ggplot2::scale_fill_manual()].
 #' @return A ggplot fill scale.
 #' @seealso [var_palette()]
 #' @export
 scale_fill_var <- function(var, values, name = var,
-                           palette = c("default", "colorblind"), ...)
+                           palette = c("default", "colorblind", "gradual"),
+                           ...)
   scale_fill_manual(values = var_palette(var, values, match.arg(palette)),
                     name = name, na.value = "grey85", ...)
 
@@ -221,7 +244,8 @@ scale_fill_var <- function(var, values, name = var,
 #' @seealso [var_palette()], [scale_fill_var()]
 #' @export
 scale_colour_var <- function(var, values, name = var,
-                             palette = c("default", "colorblind"), ...)
+                             palette = c("default", "colorblind", "gradual"),
+                             ...)
   scale_colour_manual(values = var_palette(var, values, match.arg(palette)),
                       name = name, na.value = "grey70", ...)
 

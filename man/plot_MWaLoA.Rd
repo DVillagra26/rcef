@@ -16,7 +16,7 @@ plot_MWaLoA(
   bin_width = NULL,
   show_samples = FALSE,
   scales = "fixed",
-  palette = c("default", "colorblind")
+  palette = c("default", "colorblind", "gradual")
 )
 }
 \arguments{
@@ -52,7 +52,8 @@ each point}.}
 \item{scales}{Facet scales: \code{"fixed"} (default), \code{"free_x"}, \code{"free_y"} or
 \code{"free"}.}
 
-\item{palette}{\code{"default"} or \code{"colorblind"}.}
+\item{palette}{\code{"default"}, \code{"colorblind"} or \code{"gradual"} (see
+\code{\link[=var_palette]{var_palette()}}).}
 }
 \value{
 A ggplot object, or \code{NULL} when there is nothing to draw.

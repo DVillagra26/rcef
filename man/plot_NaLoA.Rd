@@ -15,7 +15,7 @@ plot_NaLoA(
   plus_group = NULL,
   bin_width = NULL,
   scales = "fixed",
-  palette = c("default", "colorblind")
+  palette = c("default", "colorblind", "gradual")
 )
 }
 \arguments{
@@ -46,7 +46,8 @@ into. \code{NULL} (default): no binning. Lengths only.}
 \item{scales}{Facet scales: \code{"fixed"} (default), \code{"free_x"}, \code{"free_y"} or
 \code{"free"}.}
 
-\item{palette}{\code{"default"} or \code{"colorblind"}.}
+\item{palette}{\code{"default"}, \code{"colorblind"} or \code{"gradual"} (see
+\code{\link[=var_palette]{var_palette()}}).}
 }
 \value{
 A ggplot object, or \code{NULL} when there is nothing to draw.

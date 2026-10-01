@@ -18,7 +18,7 @@ plot_coverage_heat(
   min_cov = 50,
   min_trip = NULL,
   min_fish = NULL,
-  palette = c("default", "colorblind")
+  palette = c("default", "colorblind", "gradual")
 )
 
 plot_coverage_bubble(
@@ -32,7 +32,7 @@ plot_coverage_bubble(
   min_cov = 50,
   min_trip = NULL,
   min_fish = NULL,
-  palette = c("default", "colorblind")
+  palette = c("default", "colorblind", "gradual")
 )
 
 plot_coverage_bar(
@@ -43,7 +43,7 @@ plot_coverage_bar(
   facet = NULL,
   what = "discard",
   catchCategory = NULL,
-  palette = c("default", "colorblind")
+  palette = c("default", "colorblind", "gradual")
 )
 }
 \arguments{
@@ -82,9 +82,9 @@ no reported trip count still fails that check.}
 An error with \code{what = "discard"} (no fish are measured for a discard
 estimate).}
 
-\item{palette}{\code{"default"} or \code{"colorblind"}. Recolours the bar fill; on
-the heatmap and bubbles the status colours are fixed, and asking for
-\code{"colorblind"} warns.}
+\item{palette}{\code{"default"}, \code{"colorblind"} or \code{"gradual"} (see
+\code{\link[=var_palette]{var_palette()}}). Recolours the bar fill; on the heatmap and bubbles the
+status colours are fixed, and asking for anything but \code{"default"} warns.}
 
 \item{fill}{Bar fill category (bars only). \code{NULL} uses \code{y}.}
 }
@@ -181,7 +181,7 @@ not a caption about the plot itself.
 The bar chart shows sampled versus unsampled weight, which no threshold
 changes, so it takes none: passing \code{min_cov} or \code{min_trip} is an error.
 \code{palette} recolours the bars; the status colours are a fixed scale, so
-\code{palette = "colorblind"} on the heatmap or bubbles warns.
+any \code{palette} other than \code{"default"} on the heatmap or bubbles warns.
 }
 
 \subsection{Argument order}{

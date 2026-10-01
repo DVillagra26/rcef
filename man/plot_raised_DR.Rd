@@ -15,7 +15,7 @@ plot_raised_DR(
   rate = c("ratio", "rate"),
   reference = NULL,
   jitter = TRUE,
-  palette = c("default", "colorblind")
+  palette = c("default", "colorblind", "gradual")
 )
 }
 \arguments{
@@ -46,8 +46,8 @@ scale of \code{rate}. Draws a dashed line.}
 
 \item{jitter}{Jitter the points horizontally. Cosmetic only.}
 
-\item{palette}{\code{"default"} or \code{"colorblind"}: the raised-layer point
-colours (see \code{\link[=var_palette]{var_palette()}}).}
+\item{palette}{\code{"default"}, \code{"colorblind"} or \code{"gradual"}: the
+raised-layer point colours (see \code{\link[=var_palette]{var_palette()}}).}
 }
 \value{
 A ggplot object, or \code{NULL} when no stratum has a discard rate.

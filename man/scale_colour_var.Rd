@@ -8,7 +8,7 @@ scale_colour_var(
   var,
   values,
   name = var,
-  palette = c("default", "colorblind"),
+  palette = c("default", "colorblind", "gradual"),
   ...
 )
 }
@@ -19,7 +19,8 @@ scale_colour_var(
 
 \item{name}{Legend title; defaults to `var`.}
 
-\item{palette}{"default" or "colorblind" - passed to [var_palette()].}
+\item{palette}{"default", "colorblind" or "gradual" - passed to
+[var_palette()].}
 
 \item{...}{Passed to [ggplot2::scale_fill_manual()].}
 }

@@ -360,7 +360,7 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #' The bar chart shows sampled versus unsampled weight, which no threshold
 #' changes, so it takes none: passing `min_cov` or `min_trip` is an error.
 #' `palette` recolours the bars; the status colours are a fixed scale, so
-#' `palette = "colorblind"` on the heatmap or bubbles warns.
+#' any `palette` other than `"default"` on the heatmap or bubbles warns.
 #'
 #' ## Argument order
 #'
@@ -394,9 +394,9 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #'   `NULL` (the default) to leave measurements out of the classification.
 #'   An error with `what = "discard"` (no fish are measured for a discard
 #'   estimate).
-#' @param palette `"default"` or `"colorblind"`. Recolours the bar fill; on
-#'   the heatmap and bubbles the status colours are fixed, and asking for
-#'   `"colorblind"` warns.
+#' @param palette `"default"`, `"colorblind"` or `"gradual"` (see
+#'   [var_palette()]). Recolours the bar fill; on the heatmap and bubbles the
+#'   status colours are fixed, and asking for anything but `"default"` warns.
 #' @return A ggplot object, or `NULL` when there is nothing to draw. The
 #'   heatmap and bubbles also carry a `"status_legend"` attribute: the
 #'   specification [status_legend_plot()] rebuilds a complete legend from.
@@ -433,11 +433,12 @@ plot_coverage_heat <- function(catch, distributions = NULL, y, x = NULL,
                                facet = NULL, what = "discard",
                                catchCategory = NULL,
                                min_cov = 50, min_trip = NULL, min_fish = NULL,
-                               palette = c("default", "colorblind")) {
+                               palette = c("default", "colorblind",
+                                          "gradual")) {
   fn <- "plot_coverage_heat"
   palette <- match.arg(palette)
   if (is.null(y) || !nzchar(y)) stop(fn, "(): `y` is required", call. = FALSE)
-  if (identical(palette, "colorblind"))
+  if (!identical(palette, "default"))
     warning(fn, "(): palette does not recolour a status heatmap / bubble grid ",
             "(the cells use a fixed semantic scale)", call. = FALSE)
 
@@ -508,11 +509,12 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
                                  facet = NULL, what = "discard",
                                  catchCategory = NULL,
                                  min_cov = 50, min_trip = NULL, min_fish = NULL,
-                                 palette = c("default", "colorblind")) {
+                                 palette = c("default", "colorblind",
+                                            "gradual")) {
   fn <- "plot_coverage_bubble"
   palette <- match.arg(palette)
   if (is.null(y) || !nzchar(y)) stop(fn, "(): `y` is required", call. = FALSE)
-  if (identical(palette, "colorblind"))
+  if (!identical(palette, "default"))
     warning(fn, "(): palette does not recolour a status heatmap / bubble grid ",
             "(the cells use a fixed semantic scale)", call. = FALSE)
 
@@ -608,7 +610,8 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
 plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
                               facet = NULL, what = "discard",
                               catchCategory = NULL,
-                              palette = c("default", "colorblind")) {
+                              palette = c("default", "colorblind",
+                                         "gradual")) {
   fn <- "plot_coverage_bar"
   palette <- match.arg(palette)
   if (is.null(y) || !nzchar(y)) stop(fn, "(): `y` is required", call. = FALSE)
@@ -827,8 +830,8 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 #'   scale of `rate`. Draws a dashed line and labels the strata above it.
 #' @param jitter Jitter the points horizontally. Cosmetic only - one point is
 #'   still one stratum.
-#' @param palette `"default"` or `"colorblind"`: the point colours (see
-#'   [var_palette()]).
+#' @param palette `"default"`, `"colorblind"` or `"gradual"`: the point
+#'   colours (see [var_palette()]).
 #' @return A ggplot object, or `NULL` when no stratum has a discard rate.
 #' @seealso [build_coverage_strata()] for the table behind the points;
 #'   [coverage-plots] for how well those strata are sampled.
@@ -854,7 +857,7 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 plot_DR <- function(catch, x, colour = NULL, shape = NULL,
                     facet = NULL, rate = c("ratio", "rate"),
                     reference = NULL, jitter = TRUE,
-                    palette = c("default", "colorblind")) {
+                    palette = c("default", "colorblind", "gradual")) {
   palette <- match.arg(palette)
   rate_type <- match.arg(rate)
   if (!is.null(reference) && !(is.numeric(reference) && length(reference) == 1 &&
@@ -1095,8 +1098,8 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL,
 #' @param reference Optional single rate, as a fraction (`0.3` = 30%), on the
 #'   scale of `rate`. Draws a dashed line.
 #' @param jitter Jitter the points horizontally. Cosmetic only.
-#' @param palette `"default"` or `"colorblind"`: the raised-layer point
-#'   colours (see [var_palette()]).
+#' @param palette `"default"`, `"colorblind"` or `"gradual"`: the
+#'   raised-layer point colours (see [var_palette()]).
 #' @return A ggplot object, or `NULL` when no stratum has a discard rate.
 #' @seealso [plot_DR()] for the pre-raising counterpart;
 #'   [plot_raised_catches()] for the raised weight itself.
@@ -1107,7 +1110,8 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL,
 plot_raised_DR <- function(raised_catch, catch_data, matched_data_cond, x,
                            colour = NULL, shape = NULL, facet = NULL,
                            rate = c("ratio", "rate"), reference = NULL,
-                           jitter = TRUE, palette = c("default", "colorblind")) {
+                           jitter = TRUE,
+                           palette = c("default", "colorblind", "gradual")) {
   palette <- match.arg(palette)
   rate_type <- match.arg(rate)
   if (!is.null(reference) && !(is.numeric(reference) && length(reference) == 1 &&
@@ -1312,7 +1316,8 @@ plot_raised_DR <- function(raised_catch, catch_data, matched_data_cond, x,
 #'   into. `NULL` (default): no binning. Lengths only.
 #' @param scales Facet scales: `"fixed"` (default), `"free_x"`, `"free_y"` or
 #'   `"free"`.
-#' @param palette `"default"` or `"colorblind"`.
+#' @param palette `"default"`, `"colorblind"` or `"gradual"` (see
+#'   [var_palette()]).
 #' @return A ggplot object, or `NULL` when there is nothing to draw.
 #' @seealso [plot_MWaLoA()] for the mean weight in the same classes;
 #'   [coverage-plots] for whether the strata have a distribution at all.
@@ -1345,7 +1350,7 @@ plot_NaLoA <- function(data, distributions = NULL,
                        stacked = TRUE,
                        plus_group = NULL, bin_width = NULL,
                        scales = "fixed",
-                       palette = c("default", "colorblind")) {
+                       palette = c("default", "colorblind", "gradual")) {
   fn <- "plot_NaLoA(): "
   typed_dt <- !missing(distributionType); typed_cc <- !missing(catchCategory)
   dims <- NULL
@@ -1578,7 +1583,8 @@ plot_NaLoA <- function(data, distributions = NULL,
 #'   each point*.
 #' @param scales Facet scales: `"fixed"` (default), `"free_x"`, `"free_y"` or
 #'   `"free"`.
-#' @param palette `"default"` or `"colorblind"`.
+#' @param palette `"default"`, `"colorblind"` or `"gradual"` (see
+#'   [var_palette()]).
 #' @return A ggplot object, or `NULL` when there is nothing to draw.
 #' @seealso [plot_NaLoA()] for the numbers in the same classes;
 #'   [coverage-plots] for whether the strata have a distribution at all.
@@ -1619,7 +1625,7 @@ plot_MWaLoA <- function(data, distributions = NULL,
                         bin_width = NULL,
                         show_samples = FALSE,
                         scales = "fixed",
-                        palette = c("default", "colorblind")) {
+                        palette = c("default", "colorblind", "gradual")) {
   fn <- "plot_MWaLoA(): "
   typed_dt <- !missing(distributionType); typed_cc <- !missing(catchCategory)
   dims <- NULL

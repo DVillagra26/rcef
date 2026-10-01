@@ -4,14 +4,15 @@
 \alias{var_palette}
 \title{Stable colours for the levels of a variable}
 \usage{
-var_palette(var, values, palette = c("default", "colorblind"))
+var_palette(var, values, palette = c("default", "colorblind", "gradual"))
 }
 \arguments{
 \item{var}{Name of the variable being coloured.}
 
 \item{values}{The levels to colour.}
 
-\item{palette}{`"default"` ([PAL_BASE]) or `"colorblind"` ([PAL_CB]).}
+\item{palette}{`"default"` ([PAL_BASE]), `"colorblind"` ([PAL_CB]) or
+`"gradual"` ([PAL_GRADUAL]).}
 }
 \value{
 A character vector of colours, named by level.
