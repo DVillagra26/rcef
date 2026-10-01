@@ -141,7 +141,8 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 
   lev <- NULL; ngrp <- 1L
   if (has(group_var)) {
-    lev  <- sort(unique(as.character(agg[[group_var]])))
+    lev  <- if (identical(group_var, "mesh")) mesh_levels(agg[[group_var]])
+            else sort(unique(as.character(agg[[group_var]])))
     ngrp <- length(lev)
     if (ngrp <= 1)
       warning("plot_coverage_map(): group_var = \"", group_var,
@@ -457,6 +458,7 @@ plot_coverage_heat <- function(catch, distributions = NULL, y, x = NULL,
   d <- coverage_status(cv$cells, what, threshold, min_trips, min_meas)
   d <- d[d$cat_key != "none", , drop = FALSE]
   if (!nrow(d)) return(NULL)
+  d <- reorder_mesh(d, c(y_var, x_var, facet_var))
   if (is.null(x_var) || !nzchar(x_var)) { d$.x <- "All"; x_var <- ".x" }
   fmt <- function(v) ifelse(is.na(v) | v <= 0, "",
                      ifelse(v > 99, sprintf("%.0f", v),
@@ -532,6 +534,7 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
   d <- coverage_status(cv$cells, what, threshold, min_trips, min_meas)
   d <- d[d$cat_key != "none", , drop = FALSE]
   if (!nrow(d)) return(NULL)
+  d <- reorder_mesh(d, c(y_var, x_var, facet_var))
   if (is.null(x_var) || !nzchar(x_var)) { d$.x <- "All"; x_var <- ".x" }
   smallest <- suppressWarnings(min(d$landings[d$landings > 0], na.rm = TRUE))
   if (!is.finite(smallest)) smallest <- 1
@@ -632,6 +635,13 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
   d$.lab   <- as.character(d[[y_var]])
   d$.facet <- if (has(facet_var)) as.character(d[[facet_var]]) else ""
   d$.fill  <- if (has(fill_var))  as.character(d[[fill_var]])  else d$.lab
+  # .fill / .facet are built as plain character above (the row order itself
+  # is by landings, not by category - see below), so mesh's size order has
+  # to be reapplied here rather than carried through from d$mesh directly
+  if (identical(if (has(fill_var)) fill_var else y_var, "mesh"))
+    d$.fill <- factor(d$.fill, levels = mesh_levels(d$.fill))
+  if (identical(facet_var, "mesh"))
+    d$.facet <- factor(d$.facet, levels = mesh_levels(d$.facet))
 
   wi <- paste("With", samp_word(what), "sampling")
   wo <- paste("Without", samp_word(what), "sampling")
@@ -890,6 +900,7 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL,
   # whichever rate is plotted, so the two show the same strata
   d <- d[!is.na(d$rate), , drop = FALSE]
   if (!nrow(d)) return(NULL)
+  d <- reorder_mesh(d, c(x_var, colour_var, shape_var, facet_var))
   # The y variable, in percent. Both rates are columns of the coverage
   # table; one built before `discardRate` existed gets it worked out here
   # from the two weights it does carry.
@@ -1145,6 +1156,7 @@ plot_raised_DR <- function(raised_catch, catch_data, matched_data_cond, x,
               .groups = "drop")
   rd <- rd[rd$landings > 0, , drop = FALSE]
   if (!nrow(rd)) return(NULL)
+  rd <- reorder_mesh(rd, c(x_var, colour_var, shape_var, facet_var))
   rd$.raised_share <- ifelse(rd$.discards > 0, rd$.raised / rd$.discards, 0)
   rd$.y <- (if (identical(rate_type, "ratio")) rd$.discards / rd$landings
            else rd$.discards / (rd$landings + rd$.discards)) * 100
@@ -1177,6 +1189,7 @@ plot_raised_DR <- function(raised_catch, catch_data, matched_data_cond, x,
     donor <- donor[!is.na(donor$.y), , drop = FALSE]
     has_donor <- nrow(donor) > 0
   }
+  if (has_donor) donor <- reorder_mesh(donor, c(x_var, facet_var))
 
   pos <- if (jitter) position_jitter(width = 0.18, height = 0, seed = 1) else "identity"
   ref_y <- if (is.null(reference)) NULL else reference * 100
@@ -1410,6 +1423,7 @@ plot_NaLoA <- function(data, distributions = NULL,
 
   p <- {
       if (is.null(d) || !nrow(d)) return(NULL)
+      d <- reorder_mesh(d, c(fill_var, facet1, facet2))
       has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
       plus_on <- !is.null(plus_from) && plus_from %in% d$.class
       if (!is.null(plus_from) && !plus_on)
@@ -1691,6 +1705,7 @@ plot_MWaLoA <- function(data, distributions = NULL,
 
   p <- {
       if (is.null(d) || !nrow(d)) return(NULL)
+      d <- reorder_mesh(d, c(colour_var, shape_var, facet1, facet2))
       has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
       # the plus class only exists when some age reached it
       plus_on <- !is.null(plus_from) && plus_from %in% d$.class

@@ -16,6 +16,70 @@
 #' @importFrom rlang .data
 NULL
 
+#' Natural size order for `mesh` range strings
+#'
+#' `mesh` values are strings like `"16-31"`, `"<16"`, `">=120"`, `"0"`,
+#' `"all"` - sorted as plain text, `"100-119"` comes before `"16-31"` and
+#' `"all"` comes before `"90-99"`. This sorts by each range's own lower
+#' bound (the upper bound only breaks a tie, e.g. `"90-99"` before
+#' `"90-119"`): `"<N"` sits just below `N`, `">=N"` just above any closed
+#' range that also starts at `N`, and `"all"` / `"All"` sort last. A value
+#' matching none of those shapes sorts last too, rather than erroring - an
+#' unrecognised mesh string should not stop a plot from drawing.
+#'
+#' @param x A character (or factor) vector of mesh values.
+#' @return The distinct, non-`NA` values of `x`, in natural size order.
+#' @seealso [reorder_mesh()], which applies this to a plot's own data.
+#' @keywords internal
+#' @noRd
+#' @export
+mesh_levels <- function(x) {
+  u <- unique(as.character(x))
+  u <- u[!is.na(u)]
+  if (!length(u)) return(u)
+  is_all <- tolower(trimws(u)) == "all"
+  lo <- rep(Inf, length(u)); hi <- rep(Inf, length(u))
+  rng <- regmatches(u, regexec("^\\s*([0-9.]+)\\s*-\\s*([0-9.]+)\\s*$", u))
+  lt  <- regmatches(u, regexec("^\\s*<\\s*([0-9.]+)\\s*$", u))
+  ge  <- regmatches(u, regexec("^\\s*>=\\s*([0-9.]+)\\s*$", u))
+  num <- regmatches(u, regexec("^\\s*([0-9.]+)\\s*$", u))
+  for (i in seq_along(u)) {
+    if (is_all[i]) next
+    if (length(rng[[i]]) == 3) {
+      lo[i] <- as.numeric(rng[[i]][2]); hi[i] <- as.numeric(rng[[i]][3])
+    } else if (length(lt[[i]]) == 2) {
+      lo[i] <- as.numeric(lt[[i]][2]) - 0.1; hi[i] <- lo[i]
+    } else if (length(ge[[i]]) == 2) {
+      lo[i] <- as.numeric(ge[[i]][2]) + 0.1; hi[i] <- Inf
+    } else if (length(num[[i]]) == 2) {
+      lo[i] <- as.numeric(num[[i]][2]); hi[i] <- lo[i]
+    }
+  }
+  u[order(lo, hi, u)]
+}
+
+#' Relevel a plot's `mesh` column into size order, if it carries one
+#'
+#' Every rcef plot that can take `mesh` on an axis, a fill, a colour or a
+#' facet calls this once its data frame is final, so `mesh` reads in the
+#' same size order ([mesh_levels()]) wherever it turns up - a no-op unless
+#' one of `vars` is literally `"mesh"` and `d` actually carries that column.
+#'
+#' @param d A data frame.
+#' @param vars Column names the plot is about to use (`x`, `y`, `fill`,
+#'   `colour`, `shape`, `facet`, ... - `NULL` entries are fine).
+#' @return `d`, with `d$mesh` releveled when `"mesh" %in% vars`.
+#' @seealso [mesh_levels()]
+#' @keywords internal
+#' @noRd
+#' @export
+reorder_mesh <- function(d, vars) {
+  vars <- vars[!is.na(vars) & nzchar(vars)]
+  if (!"mesh" %in% vars || !"mesh" %in% names(d)) return(d)
+  d$mesh <- factor(d$mesh, levels = mesh_levels(d$mesh))
+  d
+}
+
 #' Facet layer for the coverage and discard-rate plots
 #'
 #' Builds a single-variable [ggplot2::facet_wrap()], or `NULL` when no facet
