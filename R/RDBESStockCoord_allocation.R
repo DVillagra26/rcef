@@ -16,12 +16,18 @@
 #    - cross-package calls namespace-qualified
 #    - CRLF -> LF
 #    - roxygen @family / @source added for provenance
+#    - distributionType takes CEF's own value "LengthTotal" where upstream
+#      says "Length": the four argument defaults and the three match.arg()
+#      calls (seven places, each marked)
 #
 #  Exported: catchAllocationAoL(), catchAtAoLAggregation(), meanWoLatAoLAggregation(),
 #            grp_AoL_alloc_N(), grp_AoL_alloc_WL(), grp_AoL_alloc_condition()
 #
-#  distributionType is matched against c("Age","Length"); CEF writes
-#  "LengthTotal", so callers must translate the column BEFORE the call.
+#  distributionType is matched against c("Age","LengthTotal"), the values
+#  CEF writes, so the distributions table goes in as it is and the
+#  aggregations name their columns N_LengthTotal_<class> / W_LengthTotal_<class>.
+#  Upstream matches "Length" and callers had to rewrite the column before
+#  the call; a re-vendor has to carry the seven marked edits over.
 # =====================================================================
 
 #-*- coding: utf-8 -*-
@@ -44,7 +50,7 @@ grp_AoL_alloc_N <- function(alloc_st_catch,
                             matched_data_catch,
                             distribution_data,
                             groupName = NA_character_,
-                            distributionType = c("Age", "Length"),
+                            distributionType = c("Age", "LengthTotal"), ## [pkg] CEF value
                             verbose = TRUE)
 {
     ## Purpose:
@@ -53,7 +59,7 @@ grp_AoL_alloc_N <- function(alloc_st_catch,
     ## ----------------------------------------------------------------------
     ## Author: Yves Reecht, Date: 22 Oct 2025, 14:58
 
-    distributionType <- match.arg(distributionType, c("Age", "Length"), several.ok = FALSE)
+    distributionType <- match.arg(distributionType, c("Age", "LengthTotal"), several.ok = FALSE) ## [pkg] CEF value
 
     ## Basic check: must work within one year and stock
     if (nrow(unique(alloc_st_catch %>% select(year, stock))) > 1)
@@ -240,7 +246,7 @@ grp_AoL_alloc_WL <- function(alloc_st_catch,
                              variableType_mean = c("WeightLive"), # Here for the averaged
                                         # quantity. Only mean weight for now.
                              weighting = c("NumberAtAoL", "CATON"), # weighting for mean weights at age|length.
-                             distributionType = c("Age", "Length"),
+                             distributionType = c("Age", "LengthTotal"), ## [pkg] CEF value
                              verbose = TRUE)
 {
     ## Purpose:
@@ -251,7 +257,7 @@ grp_AoL_alloc_WL <- function(alloc_st_catch,
     ## ###########################################################################
     ## Weights-at-age or -length:
 
-    distributionType <- match.arg(distributionType, c("Age", "Length"), several.ok = FALSE)
+    distributionType <- match.arg(distributionType, c("Age", "LengthTotal"), several.ok = FALSE) ## [pkg] CEF value
     weighting <- match.arg(weighting,
                            c("NumberAtAoL", "CATON"), several.ok = FALSE)
 
@@ -379,7 +385,7 @@ grp_AoL_alloc_WL <- function(alloc_st_catch,
         stop("mean weighting \"", weighting,
              "\" not implemented for weights-at-age|length")
     ## if (any(is.na(catch_samp_W$NaAoL))) browser() [!!!]
-    ## Aggregation of mean W or L over per Age/Length class + Attributes:
+    ## Aggregation of mean W or L over per Age/LengthTotal class + Attributes:
     aggr_W_samp <- catch_samp_W %>%
         mutate(across(all_of(wgField), ~ ifelse(is.na(.x), 0, .x))) %>%
         dplyr::group_by(distributionType, distributionUnit, distributionClass,
@@ -467,7 +473,7 @@ grp_AoL_alloc_condition <- function(catch_data,
                                         # quantity. Only mean weight for now; complete for mean
                                         # length when defined.
                                     weighting = c("NumberAtAoL", "CATON"), # weighting for mean weights at age|length.
-                                    distributionType = c("Age", "Length"),
+                                    distributionType = c("Age", "LengthTotal"), ## [pkg] CEF value
                                     verbose = TRUE)
 {
     ## Purpose:
@@ -488,7 +494,7 @@ grp_AoL_alloc_condition <- function(catch_data,
                                     several.ok = FALSE) # (not relevant to mix weights
                                         # and numbers for catch-number-at-age or length.)
     
-    distributionType <- match.arg(distributionType, c("Age", "Length"), several.ok = TRUE)
+    distributionType <- match.arg(distributionType, c("Age", "LengthTotal"), several.ok = TRUE) ## [pkg] CEF value
     variableType_mean <- match.arg(variableType_mean,
                                    c("WeightLive"), several.ok = TRUE)
 
@@ -645,7 +651,7 @@ catchAllocationAoL <- function(catch_data,
                                distribution_data,
                                condition_alloc_st_list,
                                condition_matched_data_list = condition_alloc_st_list,
-                               distributionType = c("Age", "Length"),
+                               distributionType = c("Age", "LengthTotal"), ## [pkg] CEF value
                                originType_catch = c("WGEstimate", "Official"),
                                variableType_catch = c("WeightLive", "Number"), # fraction to apply it to.
                                variableType_mean = c("WeightLive"), # For the averaged

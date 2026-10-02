@@ -84,8 +84,9 @@
 #'
 #' * `R/RDBESStockCoord_*.R`: vendored from the ICES RDBESStockCoord working
 #'   group code. Algorithms, argument lists and return shapes are upstream's.
-#'   Local edits are packaging-only and are marked `## [pkg]`. Do not
-#'   refactor these; fix upstream and re-vendor.
+#'   Local edits are packaging, plus one - `distributionType` takes CEF's own
+#'   `"LengthTotal"` where upstream says `"Length"` - and are marked
+#'   `## [pkg]`. Do not refactor these; fix upstream and re-vendor.
 #' * `R/rcef_*.R`: written here - strata, classification, coverage, grouping,
 #'   scenarios, script emission. Free to refactor.
 #' * `R/viz_*.R`: written here - the theme and the plots. Pure ggplot2, no

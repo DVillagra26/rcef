@@ -29,7 +29,8 @@ names.}
 
 \item{catchCategory}{Optional filter to just \code{"Lan"} or \code{"Dis"} (matched
 case-insensitively), so discards are readable on their own when landings
-would otherwise dominate the scale. \code{NULL} (default) keeps both, summed.}
+would otherwise dominate the scale. \code{NULL} (default) keeps every
+category, summed.}
 
 \item{ncol}{Facet columns, when \code{facet} is set.}
 
@@ -55,9 +56,10 @@ name of its own is called what its object is called, and \code{scenarios_names}
 overrides either. Every raised catch must carry the columns \code{x} and \code{facet}
 name.
 
-Any catch category other than landings counts with the discards, as in
-\code{\link[=plot_raised_catches]{plot_raised_catches()}}, so a scenario's bars add up to the same weight in
-both plots. \code{\link[=raised_overview_table]{raised_overview_table()}} gives the same comparison as a table.
+Catch is every catch category: landings, discards and anything else the
+raised catch carries (BMS), which counts toward the catch but is neither
+landings nor discards. \code{\link[=raised_overview_table]{raised_overview_table()}} gives the same comparison
+as a table, category by category.
 }
 \examples{
 \donttest{

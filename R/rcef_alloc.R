@@ -14,42 +14,12 @@
 # ============================================================
 
 # ------------------------------------------------------------
-#  Vocabulary bridge
-# ------------------------------------------------------------
-# The CEF exchange format writes distributionType as "LengthTotal";
-# catchAllocationAoL() match.arg()s it against c("Age", "Length") and
-# then filters the distribution table on the same value. Passing
-# "LengthTotal" fails the match.arg, and passing "Length" silently
-# matches no rows. So the value is translated for the call AND the
-# column is rewritten to agree with it.
-#' @noRd
-#' @export
-ALLOC_TYPE <- c(LengthTotal = "Length", Length = "Length", Age = "Age")
-
-#' @noRd
-#' @export
-alloc_type_of <- function(app_type) {
-  v <- unname(ALLOC_TYPE[app_type])
-  if (is.na(v)) stop("no allocation vocabulary for distributionType '",
-                     app_type, "'")
-  v
-}
-
-# Rewrite distributionType so the function's internal filter finds the
-# rows it was handed. Nothing else about the table is touched.
-#' @noRd
-#' @export
-prep_for_alloc <- function(dist, app_type = "LengthTotal") {
-  d <- as.data.frame(dist, stringsAsFactors = FALSE)
-  target <- alloc_type_of(app_type)
-  d <- d[d$distributionType %in% app_type, , drop = FALSE]
-  if (nrow(d)) d$distributionType <- target
-  d
-}
-
-# ------------------------------------------------------------
 #  Running the allocation
 # ------------------------------------------------------------
+# distributionType is CEF's own: "LengthTotal" or "Age". It is what
+# catchAllocationAoL() matches against and what it filters the
+# distributions on, so the table goes in as the file wrote it and the
+# aggregations name their columns after it (N_LengthTotal_<class>).
 # groups: either the app's own group list (a named list, each group with
 # $alloc and $matched conditions written as text) or the strataCond /
 # matchedDataCond pair that define_raising_groups_auto() / _manual()
@@ -117,7 +87,8 @@ run_allocation <- function(catch_raised, dist, groups,
   if (length(jdims))
     catch_raised <- add_stratum_metrics(catch_raised, jdims, dist = dist)
 
-  d <- prep_for_alloc(dist, app_type)
+  d <- as.data.frame(dist, stringsAsFactors = FALSE)
+  d <- d[d$distributionType %in% app_type, , drop = FALSE]
   if (!nrow(d))
     return(structure(list(message = paste0(
       "No rows of distributionType '", app_type, "' in the distributions table.")),
@@ -145,7 +116,7 @@ run_allocation <- function(catch_raised, dist, groups,
                        condition_matched_data_list = match_l,
                        originType_catch = originType_catch,
                        variableType_catch = variableType_catch,
-                       distributionType = alloc_type_of(app_type),
+                       distributionType = app_type,
                        variableType_mean = variableType_mean,
                        weighting = weighting,
                        verbose = verbose,
@@ -156,7 +127,7 @@ run_allocation <- function(catch_raised, dist, groups,
   if (inherits(res, "alloc_error")) return(res)
 
   list(distribution = res$distribution, catch = res$catch, checks = chk,
-       type = alloc_type_of(app_type), app_type = app_type)
+       type = app_type)
 }
 
 # ------------------------------------------------------------
@@ -208,13 +179,13 @@ agg_meanweight <- function(alloc, grouping = c("catchCategory", "sampledOrEstima
 # ------------------------------------------------------------
 # The aggregation functions return WIDE tables: one row per grouping
 # combination, with the class encoded in the column NAME -
-#   N_Length_2900  = numbers at length class 2900
-#   W_Age_3        = mean weight at age 3
+#   N_LengthTotal_2900  = numbers at length class 2900
+#   W_Age_3             = mean weight at age 3
 # so the class has to be read out of the name and pivoted long before
 # anything can be plotted.
 #' @noRd
 #' @export
-ALLOC_WIDE_RE <- "^([NW])_(Length|Age)_(.+)$"
+ALLOC_WIDE_RE <- "^([NW])_(LengthTotal|Age)_(.+)$"
 
 #' @noRd
 #' @export
@@ -266,7 +237,7 @@ alloc_compare_numbers <- function(alloc, grouping = c("catchCategory")) {
   sc <- alloc_src_col(long)
   long$.src <- if (!is.null(sc)) alloc_src_label(long[[sc]]) else "Allocated"
   # length classes come through on the file's own scale; show them in cm
-  if (any(long$.aol == "Length")) long$.cls <- long$.cls / 10
+  if (any(long$.aol == "LengthTotal")) long$.cls <- long$.cls / 10
   long[is.finite(long$.cls) & is.finite(long$.val), , drop = FALSE]
 }
 
@@ -288,7 +259,7 @@ alloc_stock_weight <- function(alloc, grouping = c("catchCategory")) {
   j$.tonnes <- j$.val * j$.mw / 1e6
   sc <- alloc_src_col(j)
   j$.src <- if (!is.null(sc)) alloc_src_label(j[[sc]]) else "Allocated"
-  if (any(j$.aol == "Length")) j$.cls <- j$.cls / 10
+  if (any(j$.aol == "LengthTotal")) j$.cls <- j$.cls / 10
   j[is.finite(j$.cls) & is.finite(j$.tonnes), , drop = FALSE]
 }
 
@@ -379,24 +350,24 @@ emit_alloc_agg_code <- function(tag = "Length") {
     "    distribution_data = distribution_alloc, catch_data = catch_alloc,",
     "    grouping = c(\"catchCategory\", \"sampledOrEstimated\"),",
     sprintf("    distributionType = \"%s\", round = 0, plusGroup = FALSE)",
-            if (tag == "Age") "Age" else "Length"),
+            if (tag == "Age") "Age" else "LengthTotal"),
     "",
     "## aggregated mean weights, in g and in kg",
     "meanw_at_g <- meanWoLatAoLAggregation(",
     "    distribution_data = distribution_alloc, catch_data = catch_alloc,",
     "    grouping = c(\"catchCategory\", \"sampledOrEstimated\"),",
     sprintf("    distributionType = \"%s\", unit = \"g\", round = 0)",
-            if (tag == "Age") "Age" else "Length"),
+            if (tag == "Age") "Age" else "LengthTotal"),
     "meanw_at_kg <- meanWoLatAoLAggregation(",
     "    distribution_data = distribution_alloc, catch_data = catch_alloc,",
     "    grouping = c(\"catchCategory\", \"sampledOrEstimated\"),",
     sprintf("    distributionType = \"%s\", unit = \"kg\", round = 3)",
-            if (tag == "Age") "Age" else "Length"),
+            if (tag == "Age") "Age" else "LengthTotal"),
     "",
     "## stock weight = numbers x mean weight, in tonnes",
     "alloc_res <- list(distribution = distribution_alloc,",
     sprintf("                  catch = catch_alloc, type = \"%s\")",
-            if (tag == "Age") "Age" else "Length"),
+            if (tag == "Age") "Age" else "LengthTotal"),
     "stock_weight <- alloc_stock_weight(alloc_res)",
     "",
     "## the two comparison plots",
