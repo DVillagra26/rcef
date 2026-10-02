@@ -50,6 +50,7 @@ Other raising plots:
 \code{\link{plot_comparison}()},
 \code{\link{plot_raised_DR}()},
 \code{\link{plot_raised_catches}()},
-\code{\link{plot_river_level}()}
+\code{\link{plot_river_level}()},
+\code{\link{plot_scenario_comparison}()}
 }
 \concept{raising plots}

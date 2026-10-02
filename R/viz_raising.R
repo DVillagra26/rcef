@@ -1,7 +1,7 @@
 # ============================================================
 #  viz_raising.R
 #  Raising / allocation diagnostic plots - alluvial flow diagrams and the
-#  scenario-comparison line plot. Built on ggalluvial and deliberately
+#  scenario-comparison plots. Built on ggalluvial and deliberately
 #  ggplot-only (a base-R alluvial is impractical), so unlike the
 #  exploratory plots in viz_plots.R these carry no `engine` argument.
 # ============================================================
@@ -123,21 +123,174 @@ plot_river_level <- function(rec_g, step_id, dims, pal,
              stratum_axis = stratum_axis_label(dims))
 }
 
-#' Compare scenarios side by side
+#' Raised catch of several scenarios, side by side
+#'
+#' @description
+#' [plot_raised_catches()] for two or more raised catches at once - two ways of
+#' defining the groups, say. For each level of `x` (and each panel of `facet`)
+#' one bar per scenario: its colour says which scenario, its shade whether the
+#' weight came with the data (imported, solid) or was added by the raising
+#' (raised, transparent). The bars are catch weight, or only the landings or
+#' only the discards with `catchCategory`.
+#'
+#' @details
+#' Only the raised catches are needed: the plot sums each of them itself, at
+#' whatever `x` and `facet` name, so changing either never needs a table built
+#' first. They are written `list(a, b)` or `c(a, b)`; a scenario without a
+#' name of its own is called what its object is called, and `scenarios_names`
+#' overrides either. Every raised catch must carry the columns `x` and `facet`
+#' name.
+#'
+#' Catch is every catch category: landings, discards and anything else the
+#' raised catch carries (BMS), which counts toward the catch but is neither
+#' landings nor discards. [raised_overview_table()] gives the same comparison
+#' as a table, category by category.
+#'
+#' @param raised_catch_scenarios Two or more raised catches (the output of
+#'   [catchRaising()]), written `list(a, b)` or `c(a, b)`.
+#' @param scenarios_names Optional names for the scenarios, in the same order.
+#'   Default: the names given inside `c()` / `list()`, or else the object
+#'   names.
+#' @param x Column on the x axis: one group of bars per level. `NULL`
+#'   (default): one group for everything.
+#' @param facet Optional facet column.
+#' @param catchCategory Optional filter to just `"Lan"` or `"Dis"` (matched
+#'   case-insensitively), so discards are readable on their own when landings
+#'   would otherwise dominate the scale. `NULL` (default) keeps every
+#'   category, summed.
+#' @param ncol Facet columns, when `facet` is set.
+#' @param palette `"default"`, `"colorblind"` or `"gradual"`: the scenario
+#'   colours (see [var_palette()]).
+#' @return A ggplot object, or `NULL` when there is nothing to draw.
+#' @seealso [raised_overview_table()] for the same comparison as a table;
+#'   [plot_raised_catches()] for one raised catch.
+#' @family raising plots
+#' @md
+#' @examples
+#' \donttest{
+#' data(anchoveta_catch)
+#' cef  <- subset(anchoveta_catch, year == 2023)
+#' dims <- c("metier4", "ICESDivision", "seasonValue")
+#' log  <- tempfile(fileext = ".txt")
+#' strict  <- define_raising_groups_auto(cef, hierarchy = dims,
+#'                                       thresholds = c(80, 60, 40))
+#' relaxed <- define_raising_groups_auto(cef, hierarchy = dims,
+#'                                       thresholds = c(50, 40, 30))
+#' raised_strict  <- run_native_raising(cef, dims, strict,
+#'                                      type = "discards", log_file = log)
+#' raised_relaxed <- run_native_raising(cef, dims, relaxed,
+#'                                      type = "discards", log_file = log)
+#'
+#' # the scenarios are named after the objects ...
+#' plot_comparison(c(raised_strict, raised_relaxed), x = "metier4")
+#'
+#' # ... or after you; discards only, one panel per quarter
+#' plot_comparison(c(strict = raised_strict, relaxed = raised_relaxed),
+#'                 x = "metier4", facet = "seasonValue", catchCategory = "Dis")
+#' }
+#' @export
+plot_comparison <- function(raised_catch_scenarios, scenarios_names = NULL,
+                            x = NULL, facet = NULL, catchCategory = NULL,
+                            ncol = 2,
+                            palette = c("default", "colorblind", "gradual")) {
+  palette <- match.arg(palette)
+  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+  sc <- scenario_list(substitute(raised_catch_scenarios),
+                      function() raised_catch_scenarios, parent.frame(),
+                      scenarios_names, fn = "plot_comparison()", min = 2L)$data
+  keys <- c(if (has(x)) x, if (has(facet)) facet)
+  for (nm in names(sc)) {
+    miss <- setdiff(keys, names(sc[[nm]]))
+    if (length(miss))
+      stop("plot_comparison(): '", nm, "' has no column ",
+           paste0("'", miss, "'", collapse = ", "), call. = FALSE)
+  }
+  want <- NULL
+  if (has(catchCategory))
+    want <- switch(toupper(catchCategory),
+                   LAN = , LANDINGS = "Landings",
+                   DIS = , DISCARDS = "Discards",
+                   stop("plot_comparison(): `catchCategory` must be \"Lan\" ",
+                        "or \"Dis\"", call. = FALSE))
+  cc_label <- if (is.null(want)) "Catch" else want
+
+  # one row per raised-catch row, in tonnes, tagged with its scenario and
+  # whether it was imported or raised - the same reading as plot_raised_catches()
+  d <- do.call(rbind, lapply(names(sc), function(nm) {
+    r <- sc[[nm]]
+    u <- if ("variableUnit" %in% names(r)) r$variableUnit else NULL
+    out <- data.frame(
+      scenario = rep(nm, nrow(r)),
+      .t = to_tonnes(r$total, u),
+      src = ifelse(r$importedOrRaised %in% "raised", "Raised", "Imported"),
+      .cat = ifelse(toupper(r$catchCategory) %in% c("LAN", "LANDINGS"), "Landings",
+             ifelse(toupper(r$catchCategory) %in% c("DIS", "DISCARDS"),
+                    "Discards", "Other")),
+      .x = if (has(x)) as.character(r[[x]]) else rep("All", nrow(r)),
+      stringsAsFactors = FALSE)
+    if (has(facet)) out$.f <- as.character(r[[facet]])
+    out
+  }))
+  if (!is.null(want)) d <- d[d$.cat == want, , drop = FALSE]
+  if (!nrow(d)) return(NULL)
+  d$.x <- level_factor(d$.x, if (has(x)) scenario_levels(sc, x) else "All")
+  if (has(facet)) d$.f <- level_factor(d$.f, scenario_levels(sc, facet))
+  d$scenario <- factor(d$scenario, levels = names(sc))
+  d$src <- factor(d$src, levels = c("Imported", "Raised"))
+  d <- d %>%
+    group_by(across(all_of(c(".x", "scenario", "src",
+                             if (has(facet)) ".f")))) %>%
+    summarise(t = sum(.t, na.rm = TRUE), .groups = "drop")
+
+  # each level of x holds one slot per scenario, side by side; imported and
+  # raised stack inside a scenario's slot
+  xl <- levels(d$.x)
+  n  <- nlevels(d$scenario)
+  w  <- 0.84 / n
+  d$.xn <- as.integer(d$.x) + (as.integer(d$scenario) - (n + 1) / 2) * w
+
+  ggplot(d, aes(x = .xn, y = t, fill = scenario, alpha = src)) +
+    geom_col(width = w * 0.9, position = position_stack(reverse = TRUE),
+             colour = OUTLINE, linewidth = 0.25) +
+    scale_x_continuous(breaks = seq_along(xl), labels = xl,
+                       expand = expansion(add = 0.55)) +
+    scale_fill_var("scenario", levels(d$scenario), name = "Scenario",
+                   palette = palette) +
+    scale_alpha_manual(values = c(Imported = 1, Raised = 0.45), name = NULL,
+                       guide = guide_legend(override.aes = list(fill = "grey30"))) +
+    scale_y_continuous(labels = scales::comma) +
+    (if (has(facet)) facet_wrap(vars(.data[[".f"]]), ncol = ncol,
+                                scales = "free_y") else NULL) +
+    labs(title = sprintf("Raised %s per stratum, by scenario", tolower(cc_label)),
+         caption = sub_wrap(
+           "grouping = no grouping, raw data per stratum.",
+           sprintf("bars = %s weight (t), summed per stratum.", tolower(cc_label)),
+           "color = discard raising/allocation scenario.",
+           "shade = imported from the data, or added by raising.",
+           width = 110),
+         x = if (has(x)) x else NULL, y = sprintf("%s (t)", cc_label)) +
+    app_theme() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+}
+
+#' Compare saved scenarios side by side, at stratum level
 #'
 #' Draws the raised result of several scenarios against each other, so the
 #' effect of a different threshold or hierarchy is visible per stratum rather
-#' than only in the totals.
+#' than only in the totals. This is the stratum-level preview the application
+#' uses - the scenarios of [run_scenario()], lined up by
+#' [compare_scenarios()]; for the raised catches that [catchRaising()] returns
+#' use [plot_comparison()].
 #'
 #' @param cmp Output of [compare_scenarios()].
 #' @param x_var Column on the x axis.
 #' @param facet_var Optional facet column.
 #' @param ncol Facet columns.
 #' @return A ggplot object, or `NULL`.
-#' @seealso [compare_scenarios()], [comparison_table()]
+#' @seealso [compare_scenarios()], [comparison_table()], [plot_comparison()]
 #' @family raising plots
 #' @export
-plot_comparison <- function(cmp, x_var, facet_var = NULL, ncol = 2) {
+plot_scenario_comparison <- function(cmp, x_var, facet_var = NULL, ncol = 2) {
   if (!nrow(cmp)) return(NULL)
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
 

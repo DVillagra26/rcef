@@ -2,34 +2,95 @@
 % Please edit documentation in R/viz_raising.R
 \name{plot_comparison}
 \alias{plot_comparison}
-\title{Compare scenarios side by side}
+\title{Raised catch of several scenarios, side by side}
 \usage{
-plot_comparison(cmp, x_var, facet_var = NULL, ncol = 2)
+plot_comparison(
+  raised_catch_scenarios,
+  scenarios_names = NULL,
+  x = NULL,
+  facet = NULL,
+  catchCategory = NULL,
+  ncol = 2,
+  palette = c("default", "colorblind", "gradual")
+)
 }
 \arguments{
-\item{cmp}{Output of [compare_scenarios()].}
+\item{raised_catch_scenarios}{Two or more raised catches (the output of
+\code{\link[=catchRaising]{catchRaising()}}), written \code{list(a, b)} or \code{c(a, b)}.}
 
-\item{x_var}{Column on the x axis.}
+\item{scenarios_names}{Optional names for the scenarios, in the same order.
+Default: the names given inside \code{c()} / \code{list()}, or else the object
+names.}
 
-\item{facet_var}{Optional facet column.}
+\item{x}{Column on the x axis: one group of bars per level. \code{NULL}
+(default): one group for everything.}
 
-\item{ncol}{Facet columns.}
+\item{facet}{Optional facet column.}
+
+\item{catchCategory}{Optional filter to just \code{"Lan"} or \code{"Dis"} (matched
+case-insensitively), so discards are readable on their own when landings
+would otherwise dominate the scale. \code{NULL} (default) keeps both, summed.}
+
+\item{ncol}{Facet columns, when \code{facet} is set.}
+
+\item{palette}{\code{"default"}, \code{"colorblind"} or \code{"gradual"}: the scenario
+colours (see \code{\link[=var_palette]{var_palette()}}).}
 }
 \value{
-A ggplot object, or `NULL`.
+A ggplot object, or \code{NULL} when there is nothing to draw.
 }
 \description{
-Draws the raised result of several scenarios against each other, so the
-effect of a different threshold or hierarchy is visible per stratum rather
-than only in the totals.
+\code{\link[=plot_raised_catches]{plot_raised_catches()}} for two or more raised catches at once - two ways of
+defining the groups, say. For each level of \code{x} (and each panel of \code{facet})
+one bar per scenario: its colour says which scenario, its shade whether the
+weight came with the data (imported, solid) or was added by the raising
+(raised, transparent). The bars are catch weight, or only the landings or
+only the discards with \code{catchCategory}.
+}
+\details{
+Only the raised catches are needed: the plot sums each of them itself, at
+whatever \code{x} and \code{facet} name, so changing either never needs a table built
+first. They are written \code{list(a, b)} or \code{c(a, b)}; a scenario without a
+name of its own is called what its object is called, and \code{scenarios_names}
+overrides either. Every raised catch must carry the columns \code{x} and \code{facet}
+name.
+
+Any catch category other than landings counts with the discards, as in
+\code{\link[=plot_raised_catches]{plot_raised_catches()}}, so a scenario's bars add up to the same weight in
+both plots. \code{\link[=raised_overview_table]{raised_overview_table()}} gives the same comparison as a table.
+}
+\examples{
+\donttest{
+data(anchoveta_catch)
+cef  <- subset(anchoveta_catch, year == 2023)
+dims <- c("metier4", "ICESDivision", "seasonValue")
+log  <- tempfile(fileext = ".txt")
+strict  <- define_raising_groups_auto(cef, hierarchy = dims,
+                                      thresholds = c(80, 60, 40))
+relaxed <- define_raising_groups_auto(cef, hierarchy = dims,
+                                      thresholds = c(50, 40, 30))
+raised_strict  <- run_native_raising(cef, dims, strict,
+                                     type = "discards", log_file = log)
+raised_relaxed <- run_native_raising(cef, dims, relaxed,
+                                     type = "discards", log_file = log)
+
+# the scenarios are named after the objects ...
+plot_comparison(c(raised_strict, raised_relaxed), x = "metier4")
+
+# ... or after you; discards only, one panel per quarter
+plot_comparison(c(strict = raised_strict, relaxed = raised_relaxed),
+                x = "metier4", facet = "seasonValue", catchCategory = "Dis")
+}
 }
 \seealso{
-[compare_scenarios()], [comparison_table()]
+\code{\link[=raised_overview_table]{raised_overview_table()}} for the same comparison as a table;
+\code{\link[=plot_raised_catches]{plot_raised_catches()}} for one raised catch.
 
 Other raising plots: 
 \code{\link{plot_raised_DR}()},
 \code{\link{plot_raised_catches}()},
 \code{\link{plot_river}()},
-\code{\link{plot_river_level}()}
+\code{\link{plot_river_level}()},
+\code{\link{plot_scenario_comparison}()}
 }
 \concept{raising plots}

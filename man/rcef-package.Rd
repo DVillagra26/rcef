@@ -25,7 +25,8 @@ script or an ICES TAF script set. A shiny application, started with
    define raising groups automatically (a cascade that coarsens until coverage clears a bar) \tab \code{\link[=recommend_raising]{recommend_raising()}}, \code{\link[=conds_from_auto]{conds_from_auto()}} \cr
    define them by hand \tab \code{\link[=new_rule]{new_rule()}}, \code{\link[=conds_from_rules]{conds_from_rules()}} \cr
    check a group definition before raising \tab \code{\link[=check_group_conditions]{check_group_conditions()}} \cr
-   compare grouping schemes side by side \tab \code{\link[=scenario_auto]{scenario_auto()}}, \code{\link[=run_scenario]{run_scenario()}}, \code{\link[=compare_scenarios]{compare_scenarios()}} \cr
+   compare two or more raised catches, as a table or a figure \tab \code{\link[=raised_overview_table]{raised_overview_table()}}, \code{\link[=plot_comparison]{plot_comparison()}} \cr
+   compare grouping schemes side by side, before raising \tab \code{\link[=scenario_auto]{scenario_auto()}}, \code{\link[=run_scenario]{run_scenario()}}, \code{\link[=compare_scenarios]{compare_scenarios()}} \cr
    write the session out as an ICES TAF script set \tab \code{\link[=taf_bundle]{taf_bundle()}} \cr
    use all of this through the application \tab \code{\link[=run_app]{run_app()}} \cr
 }

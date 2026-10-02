@@ -216,53 +216,52 @@ cat(sprintf("hierarchical raising: %d rows (%d imported, %d raised)\n",
 
 # How much weight each scheme raises
 
-Imported against raised, at any aggregation, shown for both schemes so the
-same weight can be compared scheme to scheme. `plot_raised_catches()`
-takes any catch-side column on `x` and an optional `facet`: landings /
-discards are always the fill, imported / raised is always the shading, and
-whatever you put on `x` or `facet` is the aggregation.
+`raised_overview_table()` and `plot_comparison()` compare raised catches
+directly: give them two or more, written `list(a, b)` or `c(a, b)`, and nothing
+else is needed. A scheme is called after its object unless you name it, as
+below.
 
-```{r overview-table-manual}
-raised_overview_table(raised = raised_manual)
+Imported against raised, by catch category, for both schemes in one table - the
+scenarios of one figure sit next to each other so it reads across. A raised row
+whose group had no donor to draw a rate from comes out of the raising as
+`NaN`; it raises to nothing and counts as no weight (see the last section of 2a
+and 2b), and the `No donor (rows)` column counts those rows wherever there are
+any.
+
+```{r overview-table}
+raised_overview_table(c(manual = raised_manual, hierarchical = raised_hier))
 ```
 
-```{r overview-table-hier}
-raised_overview_table(raised = raised_hier)
+Add `by` to aggregate at any other level - a season, a metier, an area, the
+raising group - and every figure, Total included, is split by it:
+
+```{r overview-by}
+raised_overview_table(c(manual = raised_manual, hierarchical = raised_hier),
+                      by = "seasonValue")
 ```
 
-The bottom line side by side: the total discards each scheme ends up with
-(imported + raised, tonnes), and how many raised rows came out as `NaN` -
-a group with no donor to draw a rate from raises to nothing, and those rows
-are left out of the sum (see the last section of 2a and 2b).
-
-```{r bottom-line}
-schemes <- list(manual = raised_manual, hierarchical = raised_hier)
-data.frame(
-  discards_t = vapply(schemes, function(r)
-    round(sum(r$total[r$catchCategory == "Dis"], na.rm = TRUE) / 1000, 2), 0),
-  raised_rows = vapply(schemes, function(r) sum(r$importedOrRaised == "raised"), 0L),
-  nan_rows = vapply(schemes, function(r) sum(is.nan(r$total)), 0L))
+```{r overview-by-group}
+raised_overview_table(c(manual = raised_manual, hierarchical = raised_hier),
+                      by = "DrGroup")
 ```
 
-By metier, one scheme after the other:
+The same comparison drawn. For each level of `x` there is one bar per scheme
+(the colour), imported weight solid and raised weight transparent; `facet`
+splits it further and `catchCategory` keeps just the landings or the
+discards, which are otherwise dwarfed by the landings.
 
-```{r overview-metier-manual, fig.height = 4, fig.alt = "Manual scheme: imported and raised weight by metier"}
-plot_raised_catches(raised_catch = raised_manual, x = "metier4")
+```{r overview-plot-metier, fig.height = 4.5, fig.alt = "Discards by metier, one bar per scheme, imported solid and raised transparent"}
+plot_comparison(c(manual = raised_manual, hierarchical = raised_hier),
+                x = "metier4", catchCategory = "Dis")
 ```
 
-```{r overview-metier-hier, fig.height = 4, fig.alt = "Hierarchical scheme: imported and raised weight by metier"}
-plot_raised_catches(raised_catch = raised_hier, x = "metier4")
-```
-
-By country, faceted by season - a finer aggregation than the group
+By country, one panel per season - a finer aggregation than the group
 definitions themselves ever used:
 
-```{r overview-country-manual, fig.height = 6.5, fig.alt = "Manual scheme: imported and raised weight by country, one panel per season"}
-plot_raised_catches(raised_catch = raised_manual, x = "vesselFlagCountry", facet = "seasonValue")
-```
-
-```{r overview-country-hier, fig.height = 6.5, fig.alt = "Hierarchical scheme: imported and raised weight by country, one panel per season"}
-plot_raised_catches(raised_catch = raised_hier, x = "vesselFlagCountry", facet = "seasonValue")
+```{r overview-plot-country, fig.height = 6.5, fig.alt = "Discards by country, one panel per season, one bar per scheme"}
+plot_comparison(c(manual = raised_manual, hierarchical = raised_hier),
+                x = "vesselFlagCountry", facet = "seasonValue",
+                catchCategory = "Dis")
 ```
 
 # Do the groups agree with themselves?
@@ -299,7 +298,7 @@ it end to end - build the strata, define the groups, apply the raising - with
 the light *stratum-level* raising `apply_raising()` does, not the full
 CEF-row `catchRaising()` run above, which is what makes running several of
 them cheap enough to compare. `compare_scenarios()` lines the runs up on the
-same stratum keys; `plot_comparison()` draws them.
+same stratum keys; `plot_scenario_comparison()` draws them.
 
 The threshold policy is held **fixed** (50% at every level, the own-stratum
 bar included) and only the hierarchy itself varies - which keys get pooled
@@ -379,9 +378,9 @@ head(ct[order(-rowSums(ct[val_cols], na.rm = TRUE)), ], 10)
 ## The scenarios drawn
 
 ```{r comparison-metier, fig.alt = "Estimated discards by metier, one bar group per scenario"}
-plot_comparison(cmp = cmp, x_var = "metier4")
+plot_scenario_comparison(cmp = cmp, x_var = "metier4")
 ```
 
 ```{r comparison-country, fig.width = 8, fig.height = 8, fig.alt = "Estimated discards by country, one panel per metier, one bar group per scenario"}
-plot_comparison(cmp = cmp, x_var = "vesselFlagCountry", facet_var = "metier4")
+plot_scenario_comparison(cmp = cmp, x_var = "vesselFlagCountry", facet_var = "metier4")
 ```

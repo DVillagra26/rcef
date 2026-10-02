@@ -36,7 +36,8 @@
 #' | define raising groups automatically (a cascade that coarsens until coverage clears a bar) | [recommend_raising()], [conds_from_auto()] |
 #' | define them by hand | [new_rule()], [conds_from_rules()] |
 #' | check a group definition before raising | [check_group_conditions()] |
-#' | compare grouping schemes side by side | [scenario_auto()], [run_scenario()], [compare_scenarios()] |
+#' | compare two or more raised catches, as a table or a figure | [raised_overview_table()], [plot_comparison()] |
+#' | compare grouping schemes side by side, before raising | [scenario_auto()], [run_scenario()], [compare_scenarios()] |
 #' | write the session out as an ICES TAF script set | [taf_bundle()] |
 #' | use all of this through the application | [run_app()] |
 #'

@@ -81,6 +81,20 @@ raised <- run_native_raising(cef, dims, groups, type = "discards")
 table(raised$catchCategory, raised$importedOrRaised)   # what was imported, what was raised
 ```
 
+Raised it more than one way? Hand the raised catches to
+`raised_overview_table()` and `plot_comparison()` - two or more, written
+`c(a, b)` - and they are compared scenario by scenario. A scenario is named
+after its object unless you pass `scenarios_names`, and `by` aggregates the
+table at any other level:
+
+```r
+groups2 <- define_raising_groups_auto(cef, hierarchy = dims, thresholds = c(80, 60, 40))
+raised2 <- run_native_raising(cef, dims, groups2, type = "discards")
+
+raised_overview_table(c(raised, raised2), by = "seasonValue")   # imported vs raised
+plot_comparison(c(raised, raised2), x = "metier4", catchCategory = "Dis")
+```
+
 No shiny is loaded. On your own data, start from
 `cef <- derive_fields(read.csv("catches_CEF_v17.1.csv"))` and subset one
 stock and year the same way. Raising uses the discard estimates whose

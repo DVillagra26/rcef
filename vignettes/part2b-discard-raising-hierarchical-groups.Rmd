@@ -328,7 +328,7 @@ on `x` or `facet` is the aggregation. `catchCategory` narrows it to just
 `"Lan"` or `"Dis"`, useful whenever one of the two makes the other hard to see.
 
 ```{r overview-table}
-raised_overview_table(raised = raised_hier)
+raised_overview_table(raised_hier)
 ```
 
 ```{r overview-metier, fig.alt = "Imported and raised weight by metier"}

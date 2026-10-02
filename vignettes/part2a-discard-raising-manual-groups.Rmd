@@ -240,7 +240,7 @@ on `x` or `facet` is the aggregation. `catchCategory` narrows it to just
 `"Lan"` or `"Dis"`, useful whenever one of the two makes the other hard to see.
 
 ```{r overview-table}
-raised_overview_table(raised = raised_manual)
+raised_overview_table(raised_manual)
 ```
 
 By metier:

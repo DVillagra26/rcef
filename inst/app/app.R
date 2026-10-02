@@ -6294,7 +6294,7 @@ server <- function(input, output, session) {
 
   cmp_plot_obj <- gated(cmp_g, {
     x <- cmp_col(input$cmp_x); req(!is.null(x))
-    plot_comparison(cmp(), x, cmp_col(input$cmp_facet)) })
+    plot_scenario_comparison(cmp(), x, cmp_col(input$cmp_facet)) })
 
   output$cmp_plot <- renderPlot({
     validate(need(length(rv$scenarios) >= 1, "Save or load at least one group allocation."),
@@ -6319,7 +6319,7 @@ server <- function(input, output, session) {
       sprintf("cmp <- compare_scenarios(runs, %s)",
               fmt_vals(unique(c(cmp_col(input$cmp_x),
                                 cmp_col(input$cmp_facet)))))),
-    call = function() taf_call("plot_comparison", list(
+    call = function() taf_call("plot_scenario_comparison", list(
       "cmp", taf_q(cmp_col(input$cmp_x)), taf_q(cmp_col(input$cmp_facet)))))
 
   output$cmp_tbl <- renderDT({
