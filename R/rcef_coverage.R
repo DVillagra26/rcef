@@ -274,10 +274,13 @@ build_coverage_strata <- function(catch, dims = NULL, distributions = NULL,
 #' The other `derive_fields()` columns, kept where a stratum pins them
 #'
 #' The columns a stratum (`dims`) does not already name - `mesh`, `metier5`,
-#' the ICES area levels, and so on ([DIMS_ALL_CANDIDATES]) - computed as the
-#' single value they share, or `NA` where the stratum spans more than one
-#' (so picking one would misrepresent the row). `NULL` when none of those
-#' columns are present, or every one of them is already part of `dims`.
+#' `Stratum`, the ICES area levels, and so on ([DIMS_ALL_CANDIDATES], plus
+#' `Stratum` itself - the one [derive_fields()] column that constant leaves
+#' out, being the finest of all of them rather than a nested level of one) -
+#' computed as the single value they share, or `NA` where the stratum spans
+#' more than one (so picking one would misrepresent the row). `NULL` when
+#' none of those columns are present, or every one of them is already part
+#' of `dims`.
 #'
 #' @param src Catch data to read the extra columns from, carrying `dims`.
 #' @param dims The stratum columns already accounted for.
@@ -289,7 +292,12 @@ build_coverage_strata <- function(catch, dims = NULL, distributions = NULL,
 #' @noRd
 #' @export
 coverage_extra_cols <- function(src, dims) {
-  extra <- setdiff(intersect(DIMS_ALL_CANDIDATES, names(src)), dims)
+  # computed here, not as a top-level constant: a top-level
+  # c(DIMS_ALL_CANDIDATES, ...) would run at package-load time, when
+  # rcef_coverage.R (loaded before rcef_utils.R, alphabetically) cannot
+  # yet see DIMS_ALL_CANDIDATES
+  cand <- c(DIMS_ALL_CANDIDATES, "Stratum")
+  extra <- setdiff(intersect(cand, names(src)), dims)
   if (!length(extra)) return(NULL)
   uniq_or_na <- function(x) {
     u <- unique(x[!is.na(x)])

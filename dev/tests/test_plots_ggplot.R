@@ -277,7 +277,7 @@ ok(any(lab) && all(d_ref$data$.y[lab] > ref * 100) && all(d_ref$data$.y[!lab] <=
    "exactly the strata above the reference are labelled")
 sv <- setdiff(names(tab_fine), c("catchCategory", "variableUnit", "weightingCategory",
                                  "total", "weightingTotal", "rate", "discardRate",
-                                 "landings", "coverage", "numTrips"))
+                                 "landings", "coverage", "numTrips", "Stratum"))
 lab_vars <- finest_per_family(sv)
 exp_lab <- do.call(paste, c(lapply(lab_vars, function(v) d_ref$data[[v]]), sep = "|"))
 ok(identical(d_ref$data$.lab[lab], exp_lab[lab]) &&

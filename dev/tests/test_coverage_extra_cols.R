@@ -18,11 +18,13 @@ c23 <- subset(anchoveta_catch, year == 2023)
 
 ## ---- dims left out: the finest stratum, everything is pinned -----------
 cov0 <- build_coverage_strata(c23)
-ok(all(c("mesh", "metier5", "metier6", "target", "ICESSubArea") %in%
+ok(all(c("mesh", "metier5", "metier6", "target", "ICESSubArea", "Stratum") %in%
       names(cov0)),
   "build_coverage_strata(): the derived columns ride along, dims left out")
 ok(!any(is.na(cov0$mesh)),
   "build_coverage_strata(): at the finest resolution, mesh is never NA")
+ok(!any(is.na(cov0$Stratum)) && !anyDuplicated(cov0$Stratum),
+  "build_coverage_strata(): Stratum rides along too, one distinct value per row")
 
 ## ---- a coarser dims: pinned where the stratum agrees, NA where it doesn't
 cov1 <- build_coverage_strata(c23, c("metier4", "Country"))
@@ -37,6 +39,8 @@ ok(nrow(ps) > 0 && all(is.na(ps$mesh)),
   "build_coverage_strata(): mesh is NA where metier4 spans more than one mesh")
 ok(all(is.na(cov1$Season)),
   "build_coverage_strata(): Season is NA throughout - metier4 x Country never pins it")
+ok("Stratum" %in% names(cov1) && all(is.na(cov1$Stratum)),
+  "build_coverage_strata(): Stratum is NA too - the finest of all of them")
 
 ## ---- filtering on a column that was never named in dims -----------------
 mesh0 <- subset(cov1, mesh == "0")
@@ -55,7 +59,7 @@ ok(all(c("mesh", "metier5") %in% names(covL)),
   "build_coverage_strata(): length/age branch also keeps the derived columns")
 
 ## ---- coverage_extra_cols() directly: NULL when nothing applies -----------
-all_cand <- intersect(DIMS_ALL_CANDIDATES, names(c23))
+all_cand <- intersect(c(DIMS_ALL_CANDIDATES, "Stratum"), names(c23))
 ok(is.null(coverage_extra_cols(c23, all_cand)),
   "coverage_extra_cols(): NULL once dims already covers every candidate")
 ok(is.null(coverage_extra_cols(data.frame(x = 1), "x")),
@@ -75,6 +79,21 @@ ok("Season" %in% names(tab_no_season) && all(is.na(tab_no_season$Season)),
 ok(grepl("not in the coverage table: Season", err(
      plot_coverage_heat(tab_no_season, y = "metier4", x = "Season"))),
   "plot_coverage_heat(): an all-NA extra column is still named as unavailable")
+
+## ---- plot_DR() does not let Stratum (or an NA extra) into a label -------
+## Stratum is fleetValue/vesselFlagCountry/areaValue/seasonValue already
+## joined into one string - a composite of four other columns, not a
+## nested level of any one of them, so finest_per_family() never drops it
+## the way it drops metier6/metier5/metier4 once fleetValue is present. It
+## has to be kept out of a point's label by name, or a label repeats the
+## same four values again, pasted together, under a different format.
+suppressPackageStartupMessages(library(ggplot2))
+p_dr <- plot_DR(c23, x = "metier4", colour = "Country", reference = 0)
+labs <- p_dr$data$.lab[nzchar(p_dr$data$.lab)]
+ok(length(labs) > 0, "fixture: plot_DR(reference = 0) labels most strata")
+n_parts <- lengths(strsplit(labs, "|", fixed = TRUE))
+ok(all(n_parts == 4),
+  "plot_DR(): a label is exactly fleetValue|areaValue|Country|Season - Stratum adds no fifth part")
 
 cat(sprintf("\nDONE  %d failure(s)\n", FAIL))
 if (FAIL) quit(status = 1L)

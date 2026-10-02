@@ -929,11 +929,22 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL,
   # What a point is: every stratum column the table carries - the table's
   # own dims, drawn as they are. This is the finest available (see above),
   # so it is also what a label needs to identify the point in full.
+  # "Stratum" is excluded outright: it is fleetValue/vesselFlagCountry/
+  # areaValue/seasonValue already joined into one string, a composite of
+  # four OTHER columns rather than a nested level of any one of them, so
+  # finest_per_family() has no family to ever drop it from - it would just
+  # repeat the same four values again, pasted together. A
+  # coverage_extra_cols() column that is NOT reliably defined here (NA on
+  # some point) is also excluded - it is not part of what THIS table's
+  # strata are, just a bonus that happened to ride along, and a label or a
+  # grouping sentence showing "NA" for it would say nothing true.
   strata_vars <- setdiff(names(d), c("catchCategory", "variableUnit",
                                      "weightingCategory", "total",
                                      "weightingTotal", "rate",
                                      "discardRate", "landings", "coverage",
-                                     "numTrips", ".y"))
+                                     "numTrips", ".y", "Stratum"))
+  strata_vars <- strata_vars[!vapply(strata_vars,
+                                     function(v) anyNA(d[[v]]), logical(1))]
   # The mean of each x level (per panel), weighted by the landings behind
   # each rate - for the ratio exactly the rate of that level built directly.
   wkeys <- unique(c(x_var, if (has(facet_var)) facet_var))
