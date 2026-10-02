@@ -40,7 +40,7 @@ mapped.
 A map of the fishing area with one small pie per ICES area: the pie's
 radius is the area's landed (or caught) weight, and the pie is split into
 the sampled and the not-sampled share of that weight. With \code{group} (for
-example \code{"Season"}, \code{"Country"} or \code{"metier4"}) each area gets a labelled
+example \code{"seasonValue"}, \code{"vesselFlagCountry"} or \code{"metier4"}) each area gets a labelled
 box holding a tidy grid of pies, one per group level; overlapping boxes
 are nudged apart and a thin leader keeps each box tied to its area's true
 position.
@@ -60,7 +60,7 @@ map needs the suggested \code{maps} package.
 if (requireNamespace("maps", quietly = TRUE)) {
   data(anchoveta_catch)
   plot_coverage_map(anchoveta_catch)
-  plot_coverage_map(anchoveta_catch, group = "Season")
+  plot_coverage_map(anchoveta_catch, group = "seasonValue")
 }
 }
 \seealso{

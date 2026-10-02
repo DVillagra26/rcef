@@ -11,7 +11,7 @@ build_discard_clusters(catch, dims, k = 3, seed = 1)
 
 \item{dims}{Categorical columns to place on the map and to score for
 importance - typically fleet/area/country/season columns
-(\code{derive_fields()} output), e.g. \code{c("metier4", "mesh", "Country")}.}
+(\code{derive_fields()} output), e.g. \code{c("metier4", "mesh", "vesselFlagCountry")}.}
 
 \item{k}{Number of discard-rate clusters.}
 
@@ -33,7 +33,7 @@ MCA coordinates).
 Groups sampled strata into \code{k} clusters of similar discard rate (k-means),
 places every stratum on a map of \code{dims} built by MCA (Multiple
 Correspondence Analysis - the categorical equivalent of PCA, since \code{dims}
-is ordinarily categorical: metier4, mesh, Country...), and scores how
+is ordinarily categorical: metier4, mesh, vesselFlagCountry...), and scores how
 strongly each of \code{dims} lines up with the resulting clusters. The table
 this returns is what \code{\link[=plot_discard_clusters]{plot_discard_clusters()}} and
 \code{\link[=plot_cluster_variables]{plot_cluster_variables()}} draw; nothing here needs a distribution or a

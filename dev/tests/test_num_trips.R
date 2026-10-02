@@ -156,7 +156,7 @@ ok(u2$cat_key == "warn_trip",
 fx <- "anchoveta"
 if (length(fx)) {
   cd <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
-  ok("numTrips" %in% names(build_strata(cd, c("metier4", "Country"))),
+  ok("numTrips" %in% names(build_strata(cd, c("metier4", "vesselFlagCountry"))),
      "numTrips reaches build_strata()'s output")
 
   ## a synthetic case where max() vs sum() give different, checkable answers

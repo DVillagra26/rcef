@@ -79,7 +79,7 @@ extra columns for the manual scheme's plain `metier4` / `catchCategory` /
 `fleetValue` conditions, so one `catch_data` serves both.
 
 ```{r dims}
-dims <- c("Country", "Season", "mesh", "metier4")
+dims <- c("vesselFlagCountry", "seasonValue", "mesh", "metier4")
 catch_data <- add_stratum_metrics(data = catch_data, dims = dims)
 ```
 
@@ -171,7 +171,7 @@ turns the recommendation into the same `strataCond` / `matchedDataCond` shape
 as the manual scheme. See vignette 2b for the cascade step by step.
 
 ```{r hier}
-hierarchy  <- c("Country", "Season", "mesh", "metier4")
+hierarchy  <- c("vesselFlagCountry", "seasonValue", "mesh", "metier4")
 thresholds <- 50
 
 rec <- recommend_raising(strata = catch_data, hierarchy = hierarchy,
@@ -258,11 +258,11 @@ By country, faceted by season - a finer aggregation than the group
 definitions themselves ever used:
 
 ```{r overview-country-manual, fig.height = 6.5, fig.alt = "Manual scheme: imported and raised weight by country, one panel per season"}
-plot_raised_catches(raised_catch = raised_manual, x = "Country", facet = "Season")
+plot_raised_catches(raised_catch = raised_manual, x = "vesselFlagCountry", facet = "seasonValue")
 ```
 
 ```{r overview-country-hier, fig.height = 6.5, fig.alt = "Hierarchical scheme: imported and raised weight by country, one panel per season"}
-plot_raised_catches(raised_catch = raised_hier, x = "Country", facet = "Season")
+plot_raised_catches(raised_catch = raised_hier, x = "vesselFlagCountry", facet = "seasonValue")
 ```
 
 # Do the groups agree with themselves?
@@ -315,11 +315,11 @@ same stratum keys; `plot_comparison()` draws them.
 The threshold policy is held **fixed** (50% at every level, the own-stratum
 bar included) and only the hierarchy itself varies - which keys get pooled
 over, in what order. The first key listed is pooled over soonest and the last
-one kept longest: `c("Country", "metier4")` means "join countries first, then
-`metier4` alone"; `c("Country", "areaValue", "metier4")` means "join
-countries, then areas, then `metier4` alone". Every variant keeps `metier4` as
-the last, most-protected key except the first, which considers it alone from
-the start.
+one kept longest: `c("vesselFlagCountry", "metier4")` means "join countries
+first, then `metier4` alone"; `c("vesselFlagCountry", "areaValue", "metier4")`
+means "join countries, then areas, then `metier4` alone". Every variant keeps
+`metier4` as the last, most-protected key except the first, which considers it
+alone from the start.
 
 `scenario_auto()`'s own `dims` can be *wider* than the shared comparison
 `dims` (the Country > area > `metier4` variant needs `areaValue` in its own
@@ -361,14 +361,14 @@ scenarios <- list(
                                               hierarchy = "metier4", thresholds = 50,
                                               self_threshold = 50),
   hier_country_metier         = scenario_auto(name = "Country > metier4", dims = dims,
-                                              hierarchy = c("Country", "metier4"),
+                                              hierarchy = c("vesselFlagCountry", "metier4"),
                                               thresholds = c(50, 50),
                                               self_threshold = 50),
   hier_country_season_metier  = scenario_auto(name = "Country > Season > metier4", dims = dims,
-                                              hierarchy = c("Country", "Season", "metier4"),
+                                              hierarchy = c("vesselFlagCountry", "seasonValue", "metier4"),
                                               thresholds = c(50, 50, 50), self_threshold = 50),
   hier_country_area_metier    = scenario_auto(name = "Country > area > metier4", dims = dims_area,
-                                              hierarchy = c("Country", "areaValue", "metier4"),
+                                              hierarchy = c("vesselFlagCountry", "areaValue", "metier4"),
                                               thresholds = c(50, 50, 50), self_threshold = 50))
 
 runs <- lapply(scenarios, run_scenario, catch_data = catch_data)
@@ -394,5 +394,5 @@ plot_comparison(cmp = cmp, x_var = "metier4")
 ```
 
 ```{r comparison-country, fig.width = 8, fig.height = 8, fig.alt = "Estimated discards by country, one panel per metier, one bar group per scenario"}
-plot_comparison(cmp = cmp, x_var = "Country", facet_var = "metier4")
+plot_comparison(cmp = cmp, x_var = "vesselFlagCountry", facet_var = "metier4")
 ```

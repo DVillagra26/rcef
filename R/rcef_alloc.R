@@ -96,10 +96,11 @@ run_allocation <- function(catch_raised, dist, groups,
   }
 
   # The conditions are written against the DERIVED stratum fields
-  # (metier4, Country, Area1, Season), which a raw CEF catches table does
-  # not carry. Deriving here means the function works whether it is
-  # handed the raw import or an already-derived table, instead of only
-  # working from the one place that happened to derive first.
+  # (metier4, vesselFlagCountry, Area1, seasonValue), which a raw CEF
+  # catches table does not carry. Deriving here means the function works
+  # whether it is handed the raw import or an already-derived table,
+  # instead of only working from the one place that happened to derive
+  # first.
   catch_raised <- derive_fields(as.data.frame(catch_raised))
   # bioMatchedCond may say `coverage >= 50 & n_measurements >= 100`. Those
   # columns have to be present on the RAISED catch table or the condition
@@ -111,8 +112,8 @@ run_allocation <- function(catch_raised, dist, groups,
   # to the catch dims rather than skipping the join, because skipping it
   # is exactly the failure mode.
   jdims <- if (!is.null(alloc_dims) && length(alloc_dims)) alloc_dims
-           else intersect(c("catchCategory", "metier4", "Country",
-                            "ICESDivision", "Season"), names(catch_raised))
+           else intersect(c("catchCategory", "metier4", "vesselFlagCountry",
+                            "ICESDivision", "seasonValue"), names(catch_raised))
   if (length(jdims))
     catch_raised <- add_stratum_metrics(catch_raised, jdims, dist = dist)
 

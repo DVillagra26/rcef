@@ -24,7 +24,7 @@ set.seed(42)
 mk <- function(nm, shift) data.frame(
   .cls = rep(10:30, 4), .src = "allocated",
   catchCategory = rep(c("Lan", "Dis"), each = 42),
-  Country = rep(c("BE", "NL"), each = 21, length.out = 84),
+  vesselFlagCountry = rep(c("BE", "NL"), each = 21, length.out = 84),
   numbers = runif(84, 100, 1000) + shift,
   tonnes  = runif(84, 1, 9),
   allocation = nm, stringsAsFactors = FALSE)
@@ -43,7 +43,7 @@ for (v in c("numbers", "tonnes", "meanweight"))
 
 ## ---- 2. two facets, and they reach the layout ------------------------
 p2 <- plot_allocation_comparison(cmp, "numbers", facet_var = "catchCategory",
-                                 facet2 = "Country", what = "Length")
+                                 facet2 = "vesselFlagCountry", what = "Length")
 ok(drawable(p2), "two facets draw")
 ok(inherits(p2$facet, "FacetGrid"),
    "two facets become a grid, not a wrapped interaction")
@@ -53,7 +53,7 @@ ok(inherits(p1$facet, "FacetWrap"), "one facet still wraps")
 
 ## the grid really has both variables on it
 lay <- ggplot_build(p2)$layout$layout
-ok(all(c("catchCategory", "Country") %in% names(lay)),
+ok(all(c("catchCategory", "vesselFlagCountry") %in% names(lay)),
    "both facet variables appear in the panel layout")
 ok(nrow(lay) == 4, "2 categories x 2 countries = 4 panels")
 

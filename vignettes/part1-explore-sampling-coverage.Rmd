@@ -84,9 +84,10 @@ age_dist  <- read.csv(file.path(cef_dir, "pok", "pok_2022_distributions_CEF_v17.
 `derive_fields()` is what turns raw CEF into strata-ready data: it parses
 `metier4` / `metier5` / `metier6` and `target` / `mesh` out of
 `fleetValue`, and the ICES area levels (subarea, division, subdivision) out
-of `areaValue`, plus `Country`, `Season` and `Stratum` - the same columns
-every plot function below reads on `y` / `x` / `fill` / `facet`. The
-distributions need nothing of the kind.
+of `areaValue`, plus `Stratum` - the same columns every plot function below
+reads on `y` / `x` / `fill` / `facet`, alongside the native
+`vesselFlagCountry` and `seasonValue`. The distributions need nothing of
+the kind.
 
 ```{r derive}
 catch_data <- derive_fields(x = catch_data)
@@ -115,7 +116,7 @@ total)` (D/(L+D)). Nothing in it judges the sampling: no status, no decision;
 thresholds are a plotting choice.
 
 ```{r tab-disc}
-cov_mc <- build_coverage_strata(catch = catch_data, dims = c("metier4", "Country"))
+cov_mc <- build_coverage_strata(catch = catch_data, dims = c("metier4", "vesselFlagCountry"))
 head(cov_mc[order(-cov_mc$landings), ], 10)
 ```
 
@@ -129,12 +130,12 @@ or finer:
 
 ```{r tab-fine}
 cov_fine <- build_coverage_strata(catch = catch_data,
-                                  dims = c("fleetValue", "areaValue", "Season", "Country"))
-nrow(cov_fine)   # strata at fleetValue x areaValue x Season x Country
+                                  dims = c("fleetValue", "areaValue", "seasonValue", "vesselFlagCountry"))
+nrow(cov_fine)   # strata at fleetValue x areaValue x seasonValue x vesselFlagCountry
 ```
 
 `dims` left out entirely pools nothing at all: `fleetValue`, `areaValue`,
-`Country` and `Season`, whichever of those the catch actually carries - as
+`vesselFlagCountry` and `seasonValue`, whichever of those the catch actually carries - as
 fine as the one above, just in that column order. It is the default
 precisely so nothing is pooled away by accident - naming `dims` yourself is
 how you ask for anything coarser.
@@ -143,13 +144,13 @@ how you ask for anything coarser.
 cov_finest <- build_coverage_strata(catch = catch_data)
 nrow(cov_finest)
 identical(cov_finest, build_coverage_strata(catch = catch_data,
-                                            dims = c("fleetValue", "areaValue", "Country", "Season")))
+                                            dims = c("fleetValue", "areaValue", "vesselFlagCountry", "seasonValue")))
 ```
 
 Every figure below takes the table as readily as the raw catch:
-`plot_coverage_heat(catch = cov_mc, y = "metier4", x = "Country")` draws the
+`plot_coverage_heat(catch = cov_mc, y = "metier4", x = "vesselFlagCountry")` draws the
 same figure as `plot_coverage_heat(catch = catch_data, y = "metier4", x =
-"Country")`. A
+"vesselFlagCountry")`. A
 table built *finer* than the plotted columns is pooled to them - weights add
 up, coverage and rate are re-derived from the summed weights, never
 averaged.
@@ -169,8 +170,8 @@ draws no cell (nothing to judge), so "no landings" is not one of them.
 
 **Title, caption, and a boxed "Thresholds" guide.** There is no subtitle: the
 caption's first line says what a stratum is - the columns you plot, grouped
-over everything else ("grouping = metier4 x Country, grouped over ...
-season"); put `Season` on `facet` and it stops being grouped over. The rest
+over everything else ("grouping = metier4 x vesselFlagCountry, grouped over
+... season"); put `seasonValue` on `facet` and it stops being grouped over. The rest
 of the caption gives the formula behind the mark (a tile's value, a bubble's
 size, the bar staircase) - never something a legend already shows (a
 bubble's size scale, for instance, is never repeated in words). On the
@@ -194,8 +195,8 @@ plot_coverage_heat(catch = catch_data, y = "metier4", min_cov = 50, min_trip = 2
 The same with a trip threshold switched on:
 
 ```{r disc-heat-2, fig.width = 8, fig.height = 7, fig.alt = "The same heatmap with a minimum of two trips"}
-plot_coverage_heat(catch = catch_data, y = "metier4", x = "Country",
-                   facet = "Season", min_cov = 50, min_trip = 2)
+plot_coverage_heat(catch = catch_data, y = "metier4", x = "vesselFlagCountry",
+                   facet = "seasonValue", min_cov = 50, min_trip = 2)
 ```
 
 ## Bubbles: the weighted status grid
@@ -219,11 +220,11 @@ plot_coverage_map(catch = catch_data, area = "ICESDivision", group = "metier4")
 ```
 
 ```{r disc-map-season, fig.height = 6, fig.alt = "Coverage map with one box of pies per area, split by season"}
-plot_coverage_map(catch = catch_data, area = "ICESSubArea", group = "Season")
+plot_coverage_map(catch = catch_data, area = "ICESSubArea", group = "seasonValue")
 ```
 
 ```{r disc-map-country, fig.height = 6, fig.alt = "Coverage map with one box of pies per area, split by country"}
-plot_coverage_map(catch = catch_data, group = "Country")
+plot_coverage_map(catch = catch_data, group = "vesselFlagCountry")
 ```
 
 # Length coverage
@@ -235,7 +236,7 @@ distribution linked, and the measurements behind them.
 
 ```{r len-tab}
 cov_len <- build_coverage_strata(catch = catch_data,
-                                 dims = c("metier4", "Country"),
+                                 dims = c("metier4", "vesselFlagCountry"),
                                  distributions = distribution_data,
                                  what = "length",
                                  catchCategory = "Lan")
@@ -249,7 +250,7 @@ alone is enough to narrow a figure (`metier4` is a catch-table column, not
 one of the distributions).
 
 ```{r len-bar, fig.height = 9, fig.alt = "Length-sampled versus unsampled landed weight per metier, filled by country"}
-plot_coverage_bar(catch = catch_data, y = "metier4", fill = "Country",
+plot_coverage_bar(catch = catch_data, y = "metier4", fill = "vesselFlagCountry",
                   what = "length", catchCategory = "Lan",
                   distributions = distribution_data)
 ```
@@ -260,7 +261,7 @@ At the finest fleet level - `fleetValue` - there are dozens of rows, so this
 one is drawn without a `facet`; every facet repeats them.
 
 ```{r len-heat, fig.width = 8, fig.height = 10, fig.alt = "Length-sampling coverage of the landings by fleet and country"}
-plot_coverage_heat(catch = catch_data, y = "fleetValue", x = "Country",
+plot_coverage_heat(catch = catch_data, y = "fleetValue", x = "vesselFlagCountry",
                    what = "length", catchCategory = "Lan",
                    distributions = distribution_data,
                    min_cov = 70, min_fish = 100, min_trip = NULL)
@@ -269,7 +270,7 @@ plot_coverage_heat(catch = catch_data, y = "fleetValue", x = "Country",
 ## Bubbles
 
 ```{r len-bubble, fig.height = 5, fig.alt = "Length-sampling coverage of the landings, bubble grid"}
-plot_coverage_bubble(catch = catch_data, y = "metier4", x = "Country",
+plot_coverage_bubble(catch = catch_data, y = "metier4", x = "vesselFlagCountry",
                      what = "length", catchCategory = "Lan",
                      distributions = distribution_data,
                      min_cov = 50, min_fish = 100, min_trip = NULL)
@@ -291,7 +292,7 @@ season:
 ```{r len-map-season, fig.height = 6.5, fig.alt = "Length-sampling coverage map with one box of pies per division, split by season"}
 plot_coverage_map(catch = catch_data, distributions = distribution_data,
                   what = "length", catchCategory = "Lan",
-                  area = "ICESDivision", group = "Season")
+                  area = "ICESDivision", group = "seasonValue")
 ```
 
 # Age coverage
@@ -301,7 +302,7 @@ The brill file has no ages, so age coverage uses the saithe file
 `what = "age"`, `catchCategory = "Lan"`.
 
 ```{r age-tab}
-cov_age <- build_coverage_strata(catch = age_catch, dims = c("metier4", "Country"),
+cov_age <- build_coverage_strata(catch = age_catch, dims = c("metier4", "vesselFlagCountry"),
                                  distributions = age_dist, what = "age", catchCategory = "Lan")
 head(cov_age[order(-cov_age$total), ], 10)
 ```
@@ -316,7 +317,7 @@ plot_coverage_bar(catch = age_catch, y = "metier4",
 ## Heatmap
 
 ```{r age-heat, fig.width = 8.5, fig.height = 6, fig.alt = "Age-sampling coverage of the landings, metier by country"}
-plot_coverage_heat(catch = age_catch, y = "metier4", x = "Country",
+plot_coverage_heat(catch = age_catch, y = "metier4", x = "vesselFlagCountry",
                    what = "age", catchCategory = "Lan", distributions = age_dist,
                    min_cov = 50, min_fish = 100, min_trip = NULL)
 ```
@@ -324,7 +325,7 @@ plot_coverage_heat(catch = age_catch, y = "metier4", x = "Country",
 ## Bubbles
 
 ```{r age-bubble, fig.width = 8.5, fig.height = 6, fig.alt = "Age-sampling coverage of the landings, bubble grid"}
-plot_coverage_bubble(catch = age_catch, y = "metier4", x = "Country",
+plot_coverage_bubble(catch = age_catch, y = "metier4", x = "vesselFlagCountry",
                      what = "age", catchCategory = "Lan", distributions = age_dist,
                      min_cov = 50, min_fish = 100, min_trip = NULL)
 ```
@@ -339,7 +340,7 @@ plot_coverage_map(catch = age_catch, distributions = age_dist,
 ```{r age-map-country, fig.height = 7, fig.alt = "Age-sampling coverage map with one box of pies per division, split by country"}
 plot_coverage_map(catch = age_catch, distributions = age_dist,
                   what = "age", catchCategory = "Lan",
-                  area = "ICESDivision", group = "Country")
+                  area = "ICESDivision", group = "vesselFlagCountry")
 ```
 
 # Discard rate
@@ -365,7 +366,7 @@ weighted by landings - for the ratio, `build_coverage_strata(catch =
 catch_data, dims = "metier4")`'s rate directly.
 
 ```{r dr, fig.width = 8, fig.height = 6, fig.alt = "Discard rate per metier and country, one point per stratum, a line for the weighted mean of each metier"}
-plot_DR(catch = catch_data,x = "metier4",colour = "Country",jitter = TRUE, rate = "rate",reference = 0.5)
+plot_DR(catch = catch_data,x = "metier4",colour = "vesselFlagCountry",jitter = TRUE, rate = "rate",reference = 0.5)
 ```
 
 Faceted by area, the strata are unaffected (they were already the finest the
@@ -374,7 +375,7 @@ catch carries) - only the panels change:
 ```{r dr-facet, fig.width = 8, fig.height = 7, fig.alt = "Discard rate per stratum, by metier, coloured by country, one panel per area"}
 plot_DR(catch = catch_data,
        x = "metier4",
-       colour = "Country",
+       colour = "vesselFlagCountry",
        facet = "areaValue",
        jitter = TRUE)
 ```
@@ -389,7 +390,7 @@ so `MIS|Denmark` alone could still be several areas or seasons - the label
 always says which.
 
 ```{r dr-ref, fig.width = 8, fig.height = 6, fig.alt = "Discard rate per metier and country, a dashed reference line at 30%, the strata above it labelled"}
-plot_DR(catch = catch_data, x = "metier4", colour = "Country",
+plot_DR(catch = catch_data, x = "metier4", colour = "vesselFlagCountry",
        rate = "rate", reference = 0.3)
 ```
 
@@ -398,19 +399,19 @@ line:
 
 ```{r dr-ref-tab}
 above <- build_coverage_strata(catch = catch_data,
-                               dims = c("fleetValue", "areaValue", "Country",
-                                        "Season", "metier4"))
+                               dims = c("fleetValue", "areaValue", "vesselFlagCountry",
+                                        "seasonValue", "metier4"))
 above <- above[!is.na(above$discardRate) & above$discardRate > 0.3, ]
 above[order(-above$discardRate),
-      c("metier4", "Country", "fleetValue", "areaValue", "Season",
+      c("metier4", "vesselFlagCountry", "fleetValue", "areaValue", "seasonValue",
         "total", "weightingTotal", "rate", "discardRate")]
 ```
 
 # Discard-rate clusters
 
 A different question from the discard rate itself: which strata *share* a
-rate, and which of `metier4`, `mesh`, `Country`, `Season` and `areaValue`
-actually predicts that? Most of those are categorical, so an ordinary PCA
+rate, and which of `metier4`, `mesh`, `vesselFlagCountry`, `seasonValue`
+and `areaValue` actually predicts that? Most of those are categorical, so an ordinary PCA
 does not apply - `build_discard_clusters()` uses MCA (Multiple Correspondence
 Analysis) instead, the categorical equivalent, to place every stratum on a
 map from how its categories co-occur. Clustering itself runs on the discard
@@ -420,7 +421,7 @@ are then shown.
 
 ```{r clusters}
 dc <- build_discard_clusters(catch_data,
-                             dims = c("metier4", "mesh", "Country", "Season",
+                             dims = c("metier4", "mesh", "vesselFlagCountry", "seasonValue",
                                       "areaValue"))
 dc$importance
 ```
@@ -430,14 +431,14 @@ variable space or is scattered through it - and the axes rarely capture more
 than a fifth of the total structure, so read it as a sketch, not the full
 picture:
 
-```{r clusters-map, fig.width = 8, fig.height = 6.5, fig.alt = "Every stratum on the MCA map of metier4, mesh, Country, Season and areaValue, coloured by its discard-rate cluster, with an ellipse per cluster"}
+```{r clusters-map, fig.width = 8, fig.height = 6.5, fig.alt = "Every stratum on the MCA map of metier4, mesh, vesselFlagCountry, seasonValue and areaValue, coloured by its discard-rate cluster, with an ellipse per cluster"}
 plot_discard_clusters(dc)
 ```
 
 Which variable actually drives the clustering - Cramer's V of each against
 the cluster, 0 unrelated, 1 fully determining it:
 
-```{r clusters-importance, fig.height = 4, fig.alt = "Cramer's V of metier4, mesh, Country, Season and areaValue against the discard-rate cluster, sorted strongest first"}
+```{r clusters-importance, fig.height = 4, fig.alt = "Cramer's V of metier4, mesh, vesselFlagCountry, seasonValue and areaValue against the discard-rate cluster, sorted strongest first"}
 plot_cluster_variables(dc)
 ```
 
@@ -480,8 +481,8 @@ and they share one scale across the panels:
 ```{r mw-len-n, fig.height = 5.5, fig.alt = "Mean weight at length of the landings with bars of the fish measured behind the lines, one panel per season"}
 plot_MWaLoA(data = catch_data, distributions = distribution_data,
            distributionType = "LengthTotal",
-           catchCategory = "Lan", colour = "Country",
-           facet = "Season", show_samples = TRUE)
+           catchCategory = "Lan", colour = "vesselFlagCountry",
+           facet = "seasonValue", show_samples = TRUE)
 ```
 
 The distributions record `numMeasurements` once for a whole distribution, not
@@ -496,10 +497,10 @@ be read as numbers too - the thin ends of the curve are where they are small:
 
 ```{r mw-len-n-tab}
 linked <- link_dist_to_strata(catches = catch_data, dist = distribution_data,
-                              dims = c("catchCategory", "Country"),
+                              dims = c("catchCategory", "vesselFlagCountry"),
                               catch_category = "Lan", type = "LengthTotal")
-mw_len <- length_meanweight(linked = linked, group_vars = "Country")
-head(mw_len[order(mw_len$n_fish), c(".class", "Country", "mean_weight", "n_strata", "n_fish")], 8)
+mw_len <- length_meanweight(linked = linked, group_vars = "vesselFlagCountry")
+head(mw_len[order(mw_len$n_fish), c(".class", "vesselFlagCountry", "mean_weight", "n_strata", "n_fish")], 8)
 ```
 
 # Thresholds
@@ -533,15 +534,15 @@ never a threshold miss, and never a stratum with no weight at all (that draws
 no cell to begin with).
 
 ```{r thr-heat-cov, fig.height = 4.5, fig.alt = "Coverage heatmap, coverage alone"}
-plot_coverage_heat(catch = catch_data, y = "metier4", x = "Country", min_trip = NULL)
+plot_coverage_heat(catch = catch_data, y = "metier4", x = "vesselFlagCountry", min_trip = NULL)
 ```
 
 ```{r thr-heat-trip, fig.height = 4.5, fig.alt = "Coverage heatmap with trips added"}
-plot_coverage_heat(catch = catch_data, y = "metier4", x = "Country")
+plot_coverage_heat(catch = catch_data, y = "metier4", x = "vesselFlagCountry")
 ```
 
 ```{r thr-heat-len, fig.height = 4.5, fig.alt = "Length coverage heatmap, coverage and measurements"}
-plot_coverage_heat(catch = catch_data, y = "metier4", x = "Country",
+plot_coverage_heat(catch = catch_data, y = "metier4", x = "vesselFlagCountry",
                    what = "length", catchCategory = "Lan",
                    distributions = distribution_data,
                    min_trip = NULL, min_fish = 25)
@@ -552,7 +553,7 @@ crowds them into the worst-active warning shade instead. Red only ever comes
 from "no estimate / no distribution", never from a threshold comparison:
 
 ```{r thr-extreme}
-extreme <- classify_strata(s = build_strata(catch_data = catch_data, dims = c("metier4", "Country")),
+extreme <- classify_strata(s = build_strata(catch_data = catch_data, dims = c("metier4", "vesselFlagCountry")),
                            threshold = 1500, min_trips = 1000)
 table(extreme$cat_key)
 # red ("no_dist") only where there really is no discard estimate
@@ -569,19 +570,19 @@ file (`age_catch` / `age_dist`). Landings throughout.
 
 ```{r age-num, fig.height = 5.5, fig.alt = "Numbers at age of the landings, stacked by country"}
 plot_NaLoA(data = age_catch, distributions = age_dist, distributionType = "Age",
-          catchCategory = "Lan", fill = "Country",
+          catchCategory = "Lan", fill = "vesselFlagCountry",
           stacked = TRUE)
 ```
 
 ```{r age-num-facet, fig.width = 8, fig.height = 7, fig.alt = "Numbers at age of the landings, one panel per season"}
 plot_NaLoA(data = age_catch, distributions = age_dist, distributionType = "Age",
           catchCategory = "Lan", fill = "metier4",
-          facet = "Season", stacked = TRUE)
+          facet = "seasonValue", stacked = TRUE)
 ```
 
 ```{r age-mw, fig.height = 5, fig.alt = "Mean weight at age of the landings, one line per country"}
 plot_MWaLoA(data = age_catch, distributions = age_dist, distributionType = "Age",
-           catchCategory = "Lan", colour = "Country", facet = "Season")
+           catchCategory = "Lan", colour = "vesselFlagCountry", facet = "seasonValue")
 ```
 
 ### The plus group
@@ -598,7 +599,7 @@ ages only (a hard error on lengths), and needs raw catch with `distributions`
 
 ```{r age-mw-plus, fig.height = 5, fig.alt = "Mean weight at age of the landings with ages 7 and older pooled into 7+, one line per country"}
 plot_MWaLoA(data = age_catch, distributions = age_dist, distributionType = "Age",
-           catchCategory = "Lan", colour = "Country",
+           catchCategory = "Lan", colour = "vesselFlagCountry",
            plus_group = 7)
 ```
 
@@ -628,7 +629,7 @@ unknown sample size, not zero - and the caption says so.
 
 ```{r age-mw-n, fig.height = 5, fig.alt = "Mean weight at age of the landings with bars of the fish measured behind the lines, one line per country"}
 plot_MWaLoA(data = age_catch, distributions = age_dist, distributionType = "Age",
-           catchCategory = "Lan", colour = "Country", facet = "metier4",
+           catchCategory = "Lan", colour = "vesselFlagCountry", facet = "metier4",
            show_samples = TRUE,
            plus_group = 7)
 ```

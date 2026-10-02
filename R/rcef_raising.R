@@ -172,7 +172,7 @@ scenarios_from_json <- function(txt) {
 #' @seealso [scenario_auto()], [compare_scenarios()]
 #' @examples
 #' \dontrun{
-#' sc  <- scenario_auto("base", dims, c("metier4", "Country"), 50,
+#' sc  <- scenario_auto("base", dims, c("metier4", "vesselFlagCountry"), 50,
 #'                      self_threshold = 90)
 #' out <- run_scenario(sc, catch)
 #' }

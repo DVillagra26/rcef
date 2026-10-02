@@ -53,10 +53,10 @@ stratum's \code{n_measurements} is 0.
 \examples{
 data(anchoveta_catch)
 st <- classify_strata(build_strata(anchoveta_catch,
-                                   c("metier4", "Country")),
+                                   c("metier4", "vesselFlagCountry")),
                       threshold = 50)
 table(st$cat_key)
-head(st[, c("metier4", "Country", "coverage", "cat_key")])
+head(st[, c("metier4", "vesselFlagCountry", "coverage", "cat_key")])
 
 # coverage only: trips dropped from the verdict
 table(classify_strata(build_strata(anchoveta_catch, "metier4"), 50,

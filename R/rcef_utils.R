@@ -115,7 +115,13 @@ grouping_vars <- function(d, max_levels = 400, extra_drop = character(0)) {
   cand <- setdiff(names(d), c(structural, extra_drop))
   keep <- vapply(cand, function(k) {
     v <- d[[k]]
-    if (!(is.character(v) || is.factor(v) || is.logical(v))) return(FALSE)
+    # Numeric is allowed too - seasonValue is an integer quarter code in
+    # the raw CEF data, not a character column the way vesselFlagCountry
+    # already is, and it is still a grouping variable like any other. The
+    # level ceiling below is what keeps an actual measurement (weight,
+    # say) from being offered: those have far more than max_levels values.
+    if (!(is.character(v) || is.factor(v) || is.logical(v) || is.numeric(v)))
+      return(FALSE)
     n <- length(unique(v))
     # Stratum is exempt from the ceiling. It is one level per uploaded
     # stratum by construction - hundreds of them - and that is the point:
@@ -131,9 +137,9 @@ grouping_vars <- function(d, max_levels = 400, extra_drop = character(0)) {
   pref <- c("Stratum",
             "fleetValue", "metier6", "metier5", "metier4", "gear",
             "target", "mesh", "FleetType",
-            "Country", "vesselFlagCountry",
+            "vesselFlagCountry",
             "areaValue", "ICESSubdivision", "ICESDivision", "ICESSubArea",
-            "Season", "PSU")
+            "seasonValue", "PSU")
   ordered <- c(intersect(pref, cand), sort(setdiff(cand, pref)))
 
   lab <- c(Stratum = "Stratum (as uploaded)",
@@ -145,7 +151,7 @@ grouping_vars <- function(d, max_levels = 400, extra_drop = character(0)) {
            ICESSubdivision = "ICES subdivision (27.X.X.X)",
            ICESDivision = "ICES division (27.X.X)",
            ICESSubArea = "ICES subarea (27.X)",
-           Country = "Country", Season = "Season")
+           vesselFlagCountry = "Country", seasonValue = "Season")
   stats::setNames(ordered,
                   ifelse(is.na(lab[ordered]), ordered, lab[ordered]))
 }
@@ -184,7 +190,7 @@ grouping_vars <- function(d, max_levels = 400, extra_drop = character(0)) {
 #' @export
 KEY_FAMILY_RANK <- c(fleetValue = 1L, metier6 = 2L, metier5 = 3L, metier4 = 4L,
                      areaValue = 1L, ICESSubdivision = 2L, ICESDivision = 3L,
-                     ICESSubArea = 4L, Country = 1L, Season = 1L)
+                     ICESSubArea = 4L, vesselFlagCountry = 1L, seasonValue = 1L)
 
 #' Which family a cascade-key variable belongs to
 #' @keywords internal
@@ -192,7 +198,8 @@ KEY_FAMILY_RANK <- c(fleetValue = 1L, metier6 = 2L, metier5 = 3L, metier4 = 4L,
 KEY_FAMILY_OF <- c(fleetValue = "Fleet", metier6 = "Fleet", metier5 = "Fleet",
                    metier4 = "Fleet", areaValue = "Area",
                    ICESSubdivision = "Area", ICESDivision = "Area",
-                   ICESSubArea = "Area", Country = "Country", Season = "Season")
+                   ICESSubArea = "Area", vesselFlagCountry = "Country",
+                   seasonValue = "Season")
 
 #' Warn when a cascade key is finer than the strata definition
 #'
@@ -284,12 +291,12 @@ key_vocab_grouped <- function(d) {
                "metier6 (gear_tgt_mesh)" = "metier6",
                "metier5 (gear_target)" = "metier5",
                "metier4 (gear)" = "metier4"),
-    Country = c(Country = "Country"),
+    Country = c(Country = "vesselFlagCountry"),
     Area    = c("areaValue (full)" = "areaValue",
                "ICES subdivision (27.X.X.X)" = "ICESSubdivision",
                "ICES division (27.X.X)" = "ICESDivision",
                "ICES subarea (27.X)" = "ICESSubArea"),
-    Season  = c(Season = "Season"))
+    Season  = c(Season = "seasonValue"))
   out <- lapply(fam, function(v) v[v %in% gv])
   Filter(length, out)
 }
@@ -318,9 +325,9 @@ and_list <- function(v) {
 #' @keywords internal
 #' @export
 FILTER_VARS <- c("metier4", "metier5", "metier6", "fleetValue",
-                 "target", "mesh", "FleetType", "Country",
+                 "target", "mesh", "FleetType", "vesselFlagCountry",
                  "ICESSubArea", "ICESDivision", "ICESSubdivision",
-                 "areaValue", "Season")
+                 "areaValue", "seasonValue")
 
 # ----------------------------------------------------------
 #  Deriving the nested stratum fields
@@ -358,8 +365,10 @@ ices_area_levels <- function(area) {
 #' Adds the columns an assessment groups by, none of which the CEF format
 #' carries directly: the nested metier levels (`metier4` to `metier6`) plus
 #' gear, target and mesh from `fleetValue`; the three ICES area levels from
-#' `areaValue`; `Country` and `Season`; and a `stratum_id`. Existing columns
-#' are left untouched, so it is safe to call more than once.
+#' `areaValue`; and a `stratum_id`. Country and season are not among them -
+#' `vesselFlagCountry` and `seasonValue` already name them, so a `Country` /
+#' `Season` alias would only be a second name for the same column. Existing
+#' columns are left untouched, so it is safe to call more than once.
 #'
 #' @param x A CEF catch table (data frame).
 #' @return `x` with the derived columns added.
@@ -367,7 +376,7 @@ ices_area_levels <- function(area) {
 #' @examples
 #' \dontrun{
 #' catch <- derive_fields(catch)
-#' strata <- build_strata(catch, c("metier4", "Country"))
+#' strata <- build_strata(catch, c("metier4", "vesselFlagCountry"))
 #' }
 #' @export
 derive_fields <- function(x) {
@@ -385,8 +394,6 @@ derive_fields <- function(x) {
 
   x %>%
     mutate(
-      Country = as.character(vesselFlagCountry),
-      Season  = as.character(seasonValue),
       metier4 = tok_join(1),                 # GNS
       metier5 = tok_join(2),                 # GNS_DEF
       metier6 = tok_join(3),                 # GNS_DEF_120-219
@@ -455,7 +462,7 @@ stratum_label <- function(df, dims) {
 #' Axis title naming the dimensions a stratum is made of
 #'
 #' @param dims The key columns.
-#' @return A single string, e.g. `"Stratum (metier4 + Country)"`.
+#' @return A single string, e.g. `"Stratum (metier4 + vesselFlagCountry)"`.
 #' @export
 stratum_axis_label <- function(dims) {
   if (!length(dims)) return("Stratum")
@@ -465,7 +472,7 @@ stratum_axis_label <- function(dims) {
 #' Human-readable meaning of each stratum's donor rule
 #'
 #' Turns a group id into the condition that defines it, so a reader sees
-#' `metier4 %in% "SSC" & Country %in% "Denmark"` rather than `G23`, with a
+#' `metier4 %in% "SSC" & vesselFlagCountry %in% "Denmark"` rather than `G23`, with a
 #' plain phrase for the special cases (not raised, raised on its own data,
 #' raised from ALL) and the group id kept in brackets for cross-reference.
 #'
@@ -518,6 +525,6 @@ class_axis_label <- function(type = "LengthTotal")
 #'
 #' @format A character vector.
 #' @export
-DIMS_ALL_CANDIDATES <- c("metier4", "metier5", "metier6", "Country",
+DIMS_ALL_CANDIDATES <- c("metier4", "metier5", "metier6", "vesselFlagCountry",
                          "ICESSubArea", "ICESDivision", "ICESSubdivision",
-                         "Season", "FleetType", "target", "mesh")
+                         "seasonValue", "FleetType", "target", "mesh")

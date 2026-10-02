@@ -1,10 +1,11 @@
 ## The manual builder's overview tables (Overview, Strata to raise, Data
 ## used to raise, Rivers) were silently showing only whichever columns
 ## happened to overlap with an unrelated hardcoded default
-## (metier4/Country/ICESDivision/Season), instead of the manual builder's
-## OWN strata definition (mg_dims()) - a group defined on
-## Country+fleetValue+areaValue+Season+metier4 only ever showed
-## Country+Season+metier4 in these tables, because man_strata() was built
+## (metier4/vesselFlagCountry/ICESDivision/seasonValue), instead of the
+## manual builder's OWN strata definition (mg_dims()) - a group defined on
+## vesselFlagCountry+fleetValue+areaValue+seasonValue+metier4 only ever
+## showed vesselFlagCountry+seasonValue+metier4 in these tables, because
+## man_strata() was built
 ## from panel_dims("mg"), a mechanism for reading y/x/fill/shape/facet
 ## plot-axis inputs the manual builder never had.
 
@@ -31,10 +32,10 @@ if (nzchar(app)) {
 ## invocation (`Rscript -e "library(rcef); source(...)"`) attaches rcef
 ## FIRST. See test_num_trips.R for the same limitation, hit first there.
 ## Verified live and by hand instead (both orders, both confirmed): with
-## mg's strata definition customized to Country + fleetValue + areaValue
-## + Season + metier4, the OLD strata_p("mg") route kept only
-## Country/Season/metier4 (the coincidental overlap with an unrelated
-## fallback default); man_strata() now carries all five.
+## mg's strata definition customized to vesselFlagCountry + fleetValue +
+## areaValue + seasonValue + metier4, the OLD strata_p("mg") route kept
+## only vesselFlagCountry/seasonValue/metier4 (the coincidental overlap
+## with an unrelated fallback default); man_strata() now carries all five.
 ##
 ## What IS checked here, order-independent: the source change itself,
 ## and that build_strata()/mg_dims() compose correctly in isolation -
@@ -43,7 +44,7 @@ if (nzchar(app)) {
 fx <- "anchoveta"
 if (length(fx)) {
   cd <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
-  dims <- c("Country", "fleetValue", "areaValue", "Season", "metier4")
+  dims <- c("vesselFlagCountry", "fleetValue", "areaValue", "seasonValue", "metier4")
   st <- build_strata(cd, dims)
   ok(setequal(intersect(dims, names(st)), dims),
      "build_strata(dat, mg_dims()) - what man_strata() now calls - carries every column")

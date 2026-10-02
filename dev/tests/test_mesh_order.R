@@ -91,7 +91,7 @@ ok(identical(levels(p5$data$mesh), natural),
   "plot_DR(): x = mesh orders the x axis by size")
 
 ## ---- plot_raised_DR(): x = \"mesh\" ------------------------------------------
-dims <- c("metier4", "ICESDivision", "Season")
+dims <- c("metier4", "ICESDivision", "seasonValue")
 grp <- quiet(define_raising_groups_auto(c23, hierarchy = dims,
                                         thresholds = c(50, 40, 30)))
 raised <- quiet(run_native_raising(c23, dims, grp, type = "discards",

@@ -37,7 +37,7 @@ ok(identical(sort(unique(cc$year)), 2020:2023) && length(unique(cc$stock)) == 1,
    "one stock, four years")
 ok(all(cc$catchCategory %in% c("Lan", "Dis", "BMS")) && all(c("Lan", "Dis") %in% cc$catchCategory),
    "catch parts are Lan / Dis / BMS")
-ok(all(c("Country", "Season", "metier4", "ICESDivision", "Stratum") %in% names(cc)),
+ok(all(c("vesselFlagCountry", "seasonValue", "metier4", "ICESDivision", "Stratum") %in% names(cc)),
    "already through derive_fields()")
 lan <- cc[cc$catchCategory == "Lan", ]; dis <- cc[cc$catchCategory == "Dis", ]
 ok(all(dis$domainCatchDis %in% lan$domainCatchDis),
@@ -52,7 +52,7 @@ ok(!any(duplicated(dd)),
 
 ## ---- 2. discard raising, one year -------------------------------------
 c23 <- subset(cc, year == 2023); d23 <- subset(dd, year == 2023)
-dims <- c("metier4", "ICESDivision", "Season")
+dims <- c("metier4", "ICESDivision", "seasonValue")
 n_to_raise <- sum(c23$catchCategory == "Lan" & !nzchar(c23$domainCatchDis))
 
 grp <- quiet(define_raising_groups_auto(c23, hierarchy = dims, thresholds = c(50, 40, 30)))

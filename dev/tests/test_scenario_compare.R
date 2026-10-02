@@ -35,11 +35,11 @@ ok(length(tryCatch(vapply(list(bad), function(x)
    "so vapply(..., character(1)) throws exactly this error on it")
 
 ## ---- 2. scenario_auto() / scenario_manual() no longer have the field -
-sc <- scenario_auto("A", c("metier4", "Country"), c("metier4", "Country"),
+sc <- scenario_auto("A", c("metier4", "vesselFlagCountry"), c("metier4", "vesselFlagCountry"),
                     c(50, 50))
 ok(!"fleet_level" %in% names(sc) && !"area_level" %in% names(sc),
    "scenario_auto() no longer carries fleet_level/area_level")
-ok(identical(sc$dims, c("metier4", "Country")),
+ok(identical(sc$dims, c("metier4", "vesselFlagCountry")),
    "dims is still saved correctly - it always was")
 
 scm <- scenario_manual("B", c("metier4"), list(), list())
@@ -55,7 +55,7 @@ ok(length(keys) == length(scenarios),
 ok(length(unique(keys)) == 2,
    "and correctly detects that these two scenarios differ")
 
-same <- list(A = sc, B = scenario_auto("D", c("Country", "metier4"),
+same <- list(A = sc, B = scenario_auto("D", c("vesselFlagCountry", "metier4"),
                                        c("metier4"), 50))
 keys2 <- vapply(same, function(x) paste(sort(x$dims), collapse = ","),
                 character(1))

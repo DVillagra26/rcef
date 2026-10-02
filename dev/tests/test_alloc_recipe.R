@@ -14,12 +14,12 @@ ok <- function(cond, what) {
 }
 
 spec <- list(
-  keys = c("catchCategory", "metier4", "Country", "ICESDivision"),
+  keys = c("catchCategory", "metier4", "vesselFlagCountry", "ICESDivision"),
   thresholds = list(Lan = c(50, 50, 40), Dis = c(30, 30, 20)),
   min_meas = list(Lan = 100, Dis = 50), keep_cc = TRUE,
   donor_cov_min = 50, donor_meas_min = 100,
-  cols = c("catchCategory", "metier4", "Country", "ICESDivision"),
-  bms = TRUE, dims = c("catchCategory", "metier4", "Country"))
+  cols = c("catchCategory", "metier4", "vesselFlagCountry", "ICESDivision"),
+  bms = TRUE, dims = c("catchCategory", "metier4", "vesselFlagCountry"))
 
 groups <- list(
   GA1 = list(alloc = 'catchCategory %in% c("Dis", "BMS")',
@@ -34,7 +34,7 @@ ok(grepl("Approach A - hierarchical length allocation", txt),
 for (line in c("Strata defined by", "Hierarchy", "Coverage bars",
                "Measurement bars", "Donor coverage min", "Donor measurements"))
   ok(grepl(line, txt, fixed = TRUE), paste("the banner states:", line))
-ok(grepl("catchCategory > metier4 > Country > ICESDivision", txt, fixed = TRUE),
+ok(grepl("catchCategory > metier4 > vesselFlagCountry > ICESDivision", txt, fixed = TRUE),
    "the hierarchy reads finest-first with separators, like the discard side")
 
 ## Landings and discards are sampled differently and carry separate

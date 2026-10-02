@@ -69,7 +69,7 @@ NULL
 #' A map of the fishing area with one small pie per ICES area: the pie's
 #' radius is the area's landed (or caught) weight, and the pie is split into
 #' the sampled and the not-sampled share of that weight. With `group` (for
-#' example `"Season"`, `"Country"` or `"metier4"`) each area gets a labelled
+#' example `"seasonValue"`, `"vesselFlagCountry"` or `"metier4"`) each area gets a labelled
 #' box holding a tidy grid of pies, one per group level; overlapping boxes
 #' are nudged apart and a thin leader keeps each box tied to its area's true
 #' position.
@@ -107,7 +107,7 @@ NULL
 #' if (requireNamespace("maps", quietly = TRUE)) {
 #'   data(anchoveta_catch)
 #'   plot_coverage_map(anchoveta_catch)
-#'   plot_coverage_map(anchoveta_catch, group = "Season")
+#'   plot_coverage_map(anchoveta_catch, group = "seasonValue")
 #' }
 #' @export
 plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
@@ -346,8 +346,9 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #'
 #' The caption's first line says what a stratum is here: the plotted
 #' columns, grouped over every other stratum column ("grouping = metier4 x
-#' Country x Season, grouped over finer fleet levels (fleetValue) and area
-#' (areaValue)"), so the same figure drawn at other columns has other strata
+#' vesselFlagCountry x seasonValue, grouped over finer fleet levels
+#' (fleetValue) and area (areaValue)"), so the same figure drawn at other
+#' columns has other strata
 #' behind it. The rest of the caption spells out how the numbers on the
 #' figure are worked out - the value in a tile, what a bubble's size or a
 #' bar means - leaving out anything a legend already shows. On the heatmap
@@ -411,19 +412,19 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #' data(anchoveta_dist)
 #'
 #' # discard coverage: which metier x country strata carry a discard estimate?
-#' plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country")
-#' plot_coverage_bubble(anchoveta_catch, y = "metier4", x = "Country",
+#' plot_coverage_heat(anchoveta_catch, y = "metier4", x = "vesselFlagCountry")
+#' plot_coverage_bubble(anchoveta_catch, y = "metier4", x = "vesselFlagCountry",
 #'                      min_cov = 50, min_trip = 2)
-#' plot_coverage_bar(anchoveta_catch, y = "metier4", fill = "Country")
+#' plot_coverage_bar(anchoveta_catch, y = "metier4", fill = "vesselFlagCountry")
 #'
 #' # length coverage of the landings, with a floor on the measurements
 #' plot_coverage_heat(anchoveta_catch, anchoveta_dist, y = "metier4",
-#'                    x = "Country", what = "length", catchCategory = "Lan",
+#'                    x = "vesselFlagCountry", what = "length", catchCategory = "Lan",
 #'                    min_cov = 50, min_fish = 100)
 #'
 #' # the same figure from the table behind it
-#' cov <- build_coverage_strata(anchoveta_catch, c("metier4", "Country"))
-#' plot_coverage_heat(cov, y = "metier4", x = "Country", min_cov = 50)
+#' cov <- build_coverage_strata(anchoveta_catch, c("metier4", "vesselFlagCountry"))
+#' plot_coverage_heat(cov, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
 NULL
 
 
@@ -460,6 +461,7 @@ plot_coverage_heat <- function(catch, distributions = NULL, y, x = NULL,
   d <- d[d$cat_key != "none", , drop = FALSE]
   if (!nrow(d)) return(NULL)
   d <- reorder_mesh(d, c(y_var, x_var, facet_var))
+  d <- discrete_cols(d, c(y_var, x_var, facet_var))
   if (is.null(x_var) || !nzchar(x_var)) { d$.x <- "All"; x_var <- ".x" }
   fmt <- function(v) ifelse(is.na(v) | v <= 0, "",
                      ifelse(v > 99, sprintf("%.0f", v),
@@ -537,6 +539,7 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
   d <- d[d$cat_key != "none", , drop = FALSE]
   if (!nrow(d)) return(NULL)
   d <- reorder_mesh(d, c(y_var, x_var, facet_var))
+  d <- discrete_cols(d, c(y_var, x_var, facet_var))
   if (is.null(x_var) || !nzchar(x_var)) { d$.x <- "All"; x_var <- ".x" }
   smallest <- suppressWarnings(min(d$landings[d$landings > 0], na.rm = TRUE))
   if (!is.finite(smallest)) smallest <- 1
@@ -766,7 +769,7 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 #' ([build_coverage_strata()]). Given a discard coverage table, its rows are
 #' drawn exactly as they are - one point per row. Given raw catch, the table
 #' is built at the finest resolution the catch carries (`fleetValue`,
-#' `areaValue`, `Country`, `Season`, whichever are present) *together with*
+#' `areaValue`, `vesselFlagCountry`, `seasonValue`, whichever are present) *together with*
 #' `x` / `colour` / `shape` / `facet`, so a point is always an individual,
 #' un-pooled stratum: several points can share one `x` level. `strata_vars`
 #' (the columns behind a point's label, see below) is exactly this set.
@@ -840,18 +843,18 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 #' @examples
 #' data(anchoveta_catch)
 #'
-#' plot_DR(anchoveta_catch, x = "metier4", colour = "Country")
-#' plot_DR(anchoveta_catch, x = "Country", colour = "metier4",
-#'        facet = "Season")
+#' plot_DR(anchoveta_catch, x = "metier4", colour = "vesselFlagCountry")
+#' plot_DR(anchoveta_catch, x = "vesselFlagCountry", colour = "metier4",
+#'        facet = "seasonValue")
 #'
 #' # discards as a share of the catch, with a reference line: the strata
 #' # above 20% are named, in full
-#' plot_DR(anchoveta_catch, x = "metier4", colour = "Country",
+#' plot_DR(anchoveta_catch, x = "metier4", colour = "vesselFlagCountry",
 #'        rate = "rate", reference = 0.2)
 #'
 #' # the table behind the points
-#' cov <- build_coverage_strata(anchoveta_catch, c("metier4", "Country"))
-#' head(cov[!is.na(cov$rate), c("metier4", "Country", "total", "rate",
+#' cov <- build_coverage_strata(anchoveta_catch, c("metier4", "vesselFlagCountry"))
+#' head(cov[!is.na(cov$rate), c("metier4", "vesselFlagCountry", "total", "rate",
 #'                              "discardRate")])
 #' @export
 plot_DR <- function(catch, x, colour = NULL, shape = NULL,
@@ -882,7 +885,7 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL,
     # point (and its label) could be many different areas and seasons
     # wearing one name. A minimal catch with none of the four keeps the old
     # pooled-to-plotted-columns behaviour (nothing finer to build at).
-    base_dims <- intersect(c("fleetValue", "areaValue", "Country", "Season"),
+    base_dims <- intersect(c("fleetValue", "areaValue", "vesselFlagCountry", "seasonValue"),
                            names(as.data.frame(catch)))
     d <- build_coverage_strata(catch, dims = unique(c(base_dims, keys)))
   } else if (identical(tw, "discard")) {
@@ -904,6 +907,7 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL,
   d <- d[!is.na(d$rate), , drop = FALSE]
   if (!nrow(d)) return(NULL)
   d <- reorder_mesh(d, c(x_var, colour_var, shape_var, facet_var))
+  d <- discrete_cols(d, c(x_var, colour_var, shape_var, facet_var))
   # The y variable, in percent. Both rates are columns of the coverage
   # table; one built before `discardRate` existed gets it worked out here
   # from the two weights it does carry.
@@ -1161,7 +1165,7 @@ plot_raised_DR <- function(raised_catch, catch_data, matched_data_cond, x,
   # never links and always comes back NA. Landings, discards and the raised
   # share are instead summed directly off the rows in each group, which needs
   # no linking and treats a sampled stratum and a raised one the same way.
-  base_dims <- intersect(c("fleetValue", "areaValue", "Country", "Season"),
+  base_dims <- intersect(c("fleetValue", "areaValue", "vesselFlagCountry", "seasonValue"),
                         names(raised_catch))
   rc <- raised_catch[raised_catch$originType %in% "WGEstimate" &
                        raised_catch$variableType %in% "WeightLive", , drop = FALSE]
@@ -1176,6 +1180,7 @@ plot_raised_DR <- function(raised_catch, catch_data, matched_data_cond, x,
   rd <- rd[rd$landings > 0, , drop = FALSE]
   if (!nrow(rd)) return(NULL)
   rd <- reorder_mesh(rd, c(x_var, colour_var, shape_var, facet_var))
+  rd <- discrete_cols(rd, c(x_var, colour_var, shape_var, facet_var))
   rd$.raised_share <- ifelse(rd$.discards > 0, rd$.raised / rd$.discards, 0)
   rd$.y <- (if (identical(rate_type, "ratio")) rd$.discards / rd$landings
            else rd$.discards / (rd$landings + rd$.discards)) * 100
@@ -1191,8 +1196,8 @@ plot_raised_DR <- function(raised_catch, catch_data, matched_data_cond, x,
   # "DrGroup" names the group *this loop* is testing donors for - it is not a
   # real catch_data column (that only exists after raising), so it is never
   # asked of build_coverage_strata() here; every other key is a real column.
-  donor_dims <- unique(c(intersect(c("fleetValue", "areaValue", "Country",
-                                     "Season", "domainCatchDis"),
+  donor_dims <- unique(c(intersect(c("fleetValue", "areaValue", "vesselFlagCountry",
+                                     "seasonValue", "domainCatchDis"),
                                    names(catch_data)),
                         setdiff(struct_keys, "DrGroup")))
   donor <- bind_rows(lapply(names(matched_data_cond), function(g) {
@@ -1208,7 +1213,10 @@ plot_raised_DR <- function(raised_catch, catch_data, matched_data_cond, x,
     donor <- donor[!is.na(donor$.y), , drop = FALSE]
     has_donor <- nrow(donor) > 0
   }
-  if (has_donor) donor <- reorder_mesh(donor, c(x_var, facet_var))
+  if (has_donor) {
+    donor <- reorder_mesh(donor, c(x_var, facet_var))
+    donor <- discrete_cols(donor, c(x_var, facet_var))
+  }
 
   pos <- if (jitter) position_jitter(width = 0.18, height = 0, seed = 1) else "identity"
   ref_y <- if (is.null(reference)) NULL else reference * 100
@@ -1344,19 +1352,19 @@ plot_raised_DR <- function(raised_catch, catch_data, matched_data_cond, x,
 #'
 #' # numbers at length of the landings, stacked by country
 #' plot_NaLoA(anchoveta_catch, anchoveta_dist,
-#'           catchCategory = "Lan", fill = "Country")
+#'           catchCategory = "Lan", fill = "vesselFlagCountry")
 #'
 #' # numbers at age, one panel per quarter, dodged
 #' plot_NaLoA(anchoveta_catch, anchoveta_dist,
-#'           distributionType = "Age", fill = "Country",
-#'           facet = "Season", stacked = FALSE)
+#'           distributionType = "Age", fill = "vesselFlagCountry",
+#'           facet = "seasonValue", stacked = FALSE)
 #'
 #' # every age from 3 upward pooled into "3+"
 #' plot_NaLoA(anchoveta_catch, anchoveta_dist,
-#'           distributionType = "Age", fill = "Country", plus_group = 3)
+#'           distributionType = "Age", fill = "vesselFlagCountry", plus_group = 3)
 #'
 #' # length classes pooled into 2cm bins
-#' plot_NaLoA(anchoveta_catch, anchoveta_dist, fill = "Country", bin_width = 2)
+#' plot_NaLoA(anchoveta_catch, anchoveta_dist, fill = "vesselFlagCountry", bin_width = 2)
 #' @export
 plot_NaLoA <- function(data, distributions = NULL,
                        distributionType = c("LengthTotal", "Age"),
@@ -1611,25 +1619,25 @@ plot_NaLoA <- function(data, distributions = NULL,
 #'
 #' # mean weight at length of the landings, one line per country
 #' plot_MWaLoA(anchoveta_catch, anchoveta_dist,
-#'            catchCategory = "Lan", colour = "Country")
+#'            catchCategory = "Lan", colour = "vesselFlagCountry")
 #'
 #' # at age, one panel per quarter
 #' plot_MWaLoA(anchoveta_catch, anchoveta_dist,
 #'            distributionType = "Age",
-#'            colour = "Country", facet = "Season")
+#'            colour = "vesselFlagCountry", facet = "seasonValue")
 #'
 #' # what a plus group does: every age from 3 upward pooled into "3+"
 #' plot_MWaLoA(anchoveta_catch, anchoveta_dist,
-#'            distributionType = "Age", colour = "Country",
+#'            distributionType = "Age", colour = "vesselFlagCountry",
 #'            plus_group = 3)
 #'
 #' # length classes pooled into 2cm bins
-#' plot_MWaLoA(anchoveta_catch, anchoveta_dist, colour = "Country",
+#' plot_MWaLoA(anchoveta_catch, anchoveta_dist, colour = "vesselFlagCountry",
 #'            bin_width = 2)
 #'
 #' # the fish measured at each age, as bars behind the lines
 #' plot_MWaLoA(anchoveta_catch, anchoveta_dist,
-#'            distributionType = "Age", colour = "Country",
+#'            distributionType = "Age", colour = "vesselFlagCountry",
 #'            show_samples = TRUE)
 #' @export
 plot_MWaLoA <- function(data, distributions = NULL,

@@ -47,7 +47,7 @@ plot_river <- function(df, left_var, right_var = "raise_level",
   # df) giving the text to show on each axis. When supplied they override
   # the raw left_var / right_var values - this is how a stratum is shown
   # as its full Fleet | Country | Area | Season combination, and a donor
-  # group as the MEANING of its rule ("metier4 %in% ... & Country %in% ...")
+  # group as the MEANING of its rule ("metier4 %in% ... & vesselFlagCountry %in% ...")
   # rather than an opaque "G23".
   # stratum_axis: the label under the left column, e.g.
   #   "Stratum (metier4 + Country + Area1 + Season)"

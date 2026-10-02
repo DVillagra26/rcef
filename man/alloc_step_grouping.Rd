@@ -31,9 +31,10 @@ pooled across all Z"`.
 bug this fixes. `keys` is the cascade's OWN widening order - the
 columns a rung can drop as it widens. `dims` is the full set of
 columns the strata table was built on, which is usually broader: the
-raw uploaded stratum carries columns (Country, Season, ...) nobody
-chose as a cascade key, and those still need to show up as "pooled
-across" or the summary understates how much is being collapsed.
+raw uploaded stratum carries columns (vesselFlagCountry, seasonValue,
+...) nobody chose as a cascade key, and those still need to show up
+as "pooled across" or the summary understates how much is being
+collapsed.
 Reading `dims` where `keys` belongs did the opposite - it retained
 columns the cascade never touches, so every rung looked like it kept
 more than it actually did.

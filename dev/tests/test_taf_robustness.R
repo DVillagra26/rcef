@@ -25,13 +25,13 @@ ok <- function(cond, what) {
 
 ## ---- 1. length and age get independent dims in the emitted script ----
 ctx <- list(load_method = "cef",
-           dims_len = c("catchCategory", "metier4", "Country"),
-           dims_age = c("catchCategory", "areaValue", "Season"))
+           dims_len = c("catchCategory", "metier4", "vesselFlagCountry"),
+           dims_age = c("catchCategory", "areaValue", "seasonValue"))
 lines <- taf_model_explore_length_age(ctx)
-ok(any(grepl('dims_biology_length <- c("catchCategory", "metier4", "Country")',
+ok(any(grepl('dims_biology_length <- c("catchCategory", "metier4", "vesselFlagCountry")',
              lines, fixed = TRUE)),
    "length's own dims are emitted under their own name")
-ok(any(grepl('dims_biology_age    <- c("catchCategory", "areaValue", "Season")',
+ok(any(grepl('dims_biology_age    <- c("catchCategory", "areaValue", "seasonValue")',
              lines, fixed = TRUE)),
    "age's own dims are emitted separately, not reused from length")
 ok(any(grepl("dims_biology_length", lines) &

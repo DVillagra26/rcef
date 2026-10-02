@@ -23,7 +23,7 @@ if (!requireNamespace("shiny", quietly = TRUE)) {
   if (!nzchar(ap)) stop("rcef is not installed; R CMD INSTALL first")
   data("anchoveta_catch", package = "rcef", envir = environment())
   data("anchoveta_dist",  package = "rcef", envir = environment())
-  DEF <- c("Country", "fleetValue", "areaValue", "Season")
+  DEF <- c("vesselFlagCountry", "fleetValue", "areaValue", "seasonValue")
   `%||%` <- function(a, b) if (is.null(a)) b else a
   html_of <- function(o) as.character(o$html %||% o)
   opts <- function(o) {

@@ -87,7 +87,7 @@ ok(identical(fmt_cc_spec(list(Lan = c(50, 40), Dis = c(30, 20))),
 ## unallocated - and "unallocated" is not neutral downstream: the weight
 ## never reaches the numbers at length and the totals quietly stop adding
 ## up. The ladder therefore ends with one rung that has no bar.
-lt <- alloc_steps("Country", thresholds = list(Lan = 60, Dis = 30),
+lt <- alloc_steps("vesselFlagCountry", thresholds = list(Lan = 60, Dis = 30),
                   keep_cc = TRUE)
 ok(identical(lt[[length(lt)]]$id, "last"), "the ladder ends with a last rung")
 ok(all(is.infinite(lt[[length(lt)]]$threshold)),
@@ -96,7 +96,7 @@ ok(all(lt[[length(lt)]]$min_meas == 0), "and no measurement bar")
 ok(!isTRUE(lt[[length(lt)]]$drop_cc),
    "with keep_cc it pools within the category - discards never take landings")
 
-lf <- alloc_steps("Country", thresholds = list(Lan = 60, Dis = 30),
+lf <- alloc_steps("vesselFlagCountry", thresholds = list(Lan = 60, Dis = 30),
                   keep_cc = FALSE)
 ok(isTRUE(lf[[length(lf)]]$drop_cc),
    "without keep_cc the last rung pools both categories")
@@ -105,22 +105,22 @@ ok(sum(vapply(lf, function(x) identical(x$id, "last"), logical(1))) == 1,
 
 bl2 <- data.frame(
   catchCategory   = c("Lan", "Dis", "Dis"),
-  Country         = c("BE", "BE", "NL"),
+  vesselFlagCountry = c("BE", "BE", "NL"),
   weight          = c(100, 50, 40),
   weight_measured = c(90, 2, 1),
   n_measurements  = c(900, 12, 6),
   stringsAsFactors = FALSE)
-a2 <- assign_alloc_cascade(bl2, "Country", lt)
+a2 <- assign_alloc_cascade(bl2, "vesselFlagCountry", lt)
 ok(a2$alloc_step[1] == 1, "well-sampled landings still resolve on their own data")
 ok(all(!is.na(a2$alloc_step)), "nothing is left unallocated")
 ok(all(a2$alloc_level[2:3] == lt[[length(lt)]]$label),
    "the thin discard strata fall to the last rung, not off the end")
 
 ## "no threshold" is not "no data"
-bl3 <- data.frame(catchCategory = "Dis", Country = "BE",
+bl3 <- data.frame(catchCategory = "Dis", vesselFlagCountry = "BE",
                   weight = 10, weight_measured = 0, n_measurements = 0,
                   stringsAsFactors = FALSE)
-a3 <- assign_alloc_cascade(bl3, "Country", lt)
+a3 <- assign_alloc_cascade(bl3, "vesselFlagCountry", lt)
 ok(is.na(a3$alloc_step[1]),
    "a pool with nothing measured in it does NOT pass the last rung")
 
@@ -132,7 +132,7 @@ ok(is.na(a3$alloc_step[1]),
 ## whenever the two differed, so every rung silently stayed at full
 ## precision - and a last rung with no threshold could still leave
 ## strata unresolved, which is what gave it away.
-roles <- c("Fleet", "Country"); cols <- c("metier4", "Country")
+roles <- c("Fleet", "vesselFlagCountry"); cols <- c("metier4", "vesselFlagCountry")
 sp <- alloc_steps(roles, thresholds = list(Lan = 50, Dis = 20), keep_cc = TRUE)
 ok(isTRUE(sp[[length(sp)]]$drop_all),
    "the last rung is flagged drop_all, not given a list of names")
@@ -141,7 +141,7 @@ ok(sp[[2]]$drop_n == 1, "each rung records HOW MANY keys it drops")
 set.seed(2)
 b <- expand.grid(catchCategory = c("Lan", "Dis"),
                  metier4 = c("TBB", "OTB", "GNS"),
-                 Country = c("BE", "NL", "DE"), stringsAsFactors = FALSE)
+                 vesselFlagCountry = c("BE", "NL", "DE"), stringsAsFactors = FALSE)
 b$weight <- runif(nrow(b), 5, 200)
 b$weight_measured <- ifelse(b$catchCategory == "Lan", b$weight * .8,
                             b$weight * .02)
@@ -177,7 +177,7 @@ ok(all(c("donor_cov_min", "donor_meas_min") %in% names(tbl)),
 ## opposite of "read top to bottom, widen top to bottom" - so a
 ## threshold set on the box the reader read as "last, coarsest" was
 ## actually driving the FIRST widening step, and vice versa.
-kk <- c("Fleet", "Country", "Season", "Area")   # picked in this order
+kk <- c("Fleet", "vesselFlagCountry", "seasonValue", "Area")   # picked in this order
 st <- alloc_steps(kk, thresholds = list(Lan = c(50, 60, 70, 80),
                                         Dis = c(50, 60, 70, 80)),
                   keep_cc = TRUE)
@@ -187,10 +187,11 @@ own <- which(vapply(st, function(x) identical(x$id, "own"), logical(1)))
 ok(thr[own] == 80,
    "own stratum (every key kept) takes the last key's (Area's) bar")
 ## Fleet, picked first, is dropped first: the next rung keeps
-## Country+Season+Area and takes Country's bar (the new finest key)
-w1 <- which(grepl("Country \\+ Season \\+ Area", lbl))[1]
+## vesselFlagCountry+seasonValue+Area and takes vesselFlagCountry's bar
+## (the new finest key)
+w1 <- which(grepl("vesselFlagCountry \\+ seasonValue \\+ Area", lbl))[1]
 ok(!is.na(w1) && thr[w1] == 60,
-   "dropping Fleet first, the pool down to Country+Season+Area takes Country's bar")
+   "dropping Fleet first, the pool down to vesselFlagCountry+seasonValue+Area takes vesselFlagCountry's bar")
 ## Area, picked last, is kept until only it remains, and takes its own bar
 w_area <- which(lbl == "catchCategory + Area")
 ok(length(w_area) == 1 && thr[w_area] == 80,
@@ -208,8 +209,8 @@ ok(unname(st2[[own]]$threshold["Lan"]) == 55,
 ## "same X, Y - pooled across all Z" prose the discard cascade uses -
 ## not the "X + Y" join the pool LABEL uses, which is a different column
 ## with a different job (naming the pool, not describing it)
-bl <- data.frame(catchCategory = "Lan", Fleet = "TBB", Country = "BE",
-                 Season = 1, Area = "27.4", weight = 100,
+bl <- data.frame(catchCategory = "Lan", Fleet = "TBB", vesselFlagCountry = "BE",
+                 seasonValue = 1, Area = "27.4", weight = 100,
                  weight_measured = 90, n_measurements = 500,
                  stringsAsFactors = FALSE)
 a <- assign_alloc_cascade(bl, kk, st)
@@ -217,13 +218,14 @@ tb <- alloc_cascade_table(a, st, keys = kk)
 ok("grouping" %in% names(tb), "the cascade table has a grouping column")
 ok(tb$grouping[tb$step == 1] == "the stratum itself",
    "the own rung groups by the stratum itself")
-ok(any(grepl("same Country, Season and Area", tb$grouping, fixed = TRUE)),
+ok(any(grepl("same vesselFlagCountry, seasonValue and Area", tb$grouping, fixed = TRUE)),
    "a widened rung names the keys it still distinguishes")
 
 ## keys and dims are NOT the same thing, and conflating them was the bug:
 ## a column in dims but not in keys (never chosen as a cascade key) has
 ## to show up as "pooled across", or the summary understates how much a
-## rung actually collapses. Fleet/Country/Season/Area are the cascade's
+## rung actually collapses. Fleet/vesselFlagCountry/seasonValue/Area are
+## the cascade's
 ## own keys; Stratum is part of the strata definition but was never
 ## offered as a key.
 tb2 <- alloc_cascade_table(a, st, keys = kk, dims = c("Stratum", kk))

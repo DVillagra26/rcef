@@ -258,7 +258,7 @@ coverage_ui <- function() tagList(
     options = tagList(uiOutput("cov_type_bar")),
     settings = tagList(
       role_chips("cov", c(y = "Y axis", fill = "X / Fill", facet = "Facet"),
-                 c("metier4", "Season", "Country"), stacked = TRUE),
+                 c("metier4", "seasonValue", "vesselFlagCountry"), stacked = TRUE),
       # The threshold belongs with the axis pickers because it is what the
       # colours in the heatmap and bubbles MEAN. The bars view splits
       # weight into sampled and unsampled and never consults a threshold,
@@ -297,7 +297,7 @@ drates_ui <- function() tagList(
     settings = tagList(
       role_chips("dr", c(x = "X axis", fill = "Colour", shape = "Shape",
                          facet = "Facet"),
-                 c("metier4", "ICESDivision", "Season", "Country"),
+                 c("metier4", "ICESDivision", "seasonValue", "vesselFlagCountry"),
                  stacked = TRUE),
       checkboxInput("dr_jitter", "Jitter", TRUE)),
     ),
@@ -418,7 +418,7 @@ len_coverage_ui <- function(p, type = "LengthTotal") {
                  "heatmap")),
       settings = tagList(
         role_chips(ns("r"), c(y = "Y axis", fill = "X / Fill", facet = "Facet"),
-                   c("metier4", "Country", "ICESDivision"), stacked = TRUE),
+                   c("metier4", "vesselFlagCountry", "ICESDivision"), stacked = TRUE),
         # same reasoning as the discard coverage tab: the two thresholds
         # are what the heatmap and bubble colours mean, nothing to bars
         conditionalPanel(sprintf("input.%s != 'bars'", ns("type")),
@@ -452,7 +452,7 @@ len_numbers_ui <- function(p, type = "LengthTotal") {
       settings = tagList(
         role_chips(ns("r"), c(fill = "Stack / colour", facet = "Facet",
                               shape = "Facet 2"),
-                   c("Country", "metier4", ""), stacked = TRUE),
+                   c("vesselFlagCountry", "metier4", ""), stacked = TRUE),
         free_scale_ticks(ns),
         checkboxInput(ns("stack"), "Stack the bars", TRUE)),
       ),
@@ -482,7 +482,7 @@ len_meanw_ui <- function(p, type = "LengthTotal") {
       settings = tagList(
         role_chips(ns("r"), c(fill = "Colour", facet = "Facet",
                               shape = "Facet 2"),
-                   c("metier4", "Country", ""), stacked = TRUE),
+                   c("metier4", "vesselFlagCountry", ""), stacked = TRUE),
         free_scale_ticks(ns),
         selectInput(ns("pt"), "Shape",
                     c("-- none (average the rest) --" = ""), "")),
@@ -1051,8 +1051,9 @@ deck_box <- function(title, ..., cls = "") div(class = paste("deckbox", cls),
 #  The strata are the strata as reported
 # ------------------------------------------------------------
 #
-# A stratum here is the resolution the data was SUBMITTED at - Country +
-# fleetValue + areaValue + Season, the four native CEF keys - for every
+# A stratum here is the resolution the data was SUBMITTED at -
+# vesselFlagCountry + fleetValue + areaValue + seasonValue, the four
+# native CEF keys - for every
 # builder, discard or length/age, hierarchical or manual. There used to be
 # a "Definition of the strata" box that let it be regrouped; it is gone,
 # because a stratum that changes under the reader's feet made every
@@ -1060,7 +1061,7 @@ deck_box <- function(title, ..., cls = "") div(class = paste("deckbox", cls),
 # screen to the next. Columns a group's clause or a cascade key names are
 # still added to the table (metier4 is read off fleetValue, so that never
 # splits a stratum), but what a stratum IS does not move.
-DEFAULT_STRATA_VARS <- c("Country", "fleetValue", "areaValue", "Season")
+DEFAULT_STRATA_VARS <- c("vesselFlagCountry", "fleetValue", "areaValue", "seasonValue")
 
 
 builder_deck <- function(id, label, boxes, actions, cols = NULL,
@@ -1184,7 +1185,7 @@ deck_page <- function(picker = NULL, ...) {
 # so these are real columns rather than the old abstract dimension
 # labels - a control still emitting "Fleet" would name a column that
 # does not exist.
-DIMS <- c("metier4", "Country", "ICESDivision", "Season")
+DIMS <- c("metier4", "vesselFlagCountry", "ICESDivision", "seasonValue")
 # catchCategory is a stratum key in the length/age sections
 LEN_DIMS <- c("catchCategory", DIMS)
 # The empty option every role chip carries. It used to be blank, so
@@ -2583,8 +2584,8 @@ server <- function(input, output, session) {
   # The variables offered first, in the order a fisheries scientist
   # reaches for them. Everything else is behind "more variables", the same
   # split the clause builder uses.
-  FLT_CORE <- c("metier4", "metier5", "metier6", "Country",
-                "ICESDivision", "ICESSubArea", "Season", "FleetType")
+  FLT_CORE <- c("metier4", "metier5", "metier6", "vesselFlagCountry",
+                "ICESDivision", "ICESSubArea", "seasonValue", "FleetType")
 
   filter_server <- function(p) {
     id <- function(x) paste0(p, "_flt_", x)
@@ -3393,9 +3394,9 @@ server <- function(input, output, session) {
     # "-- none --" and nothing else - so no variable could be chosen at
     # all.
     local({
-      spec <- list(cov = c(y = "metier4", fill = "Country", facet = "ICESDivision"),
-                   n   = c(fill = "Country", facet = "metier4", shape = ""),
-                   w   = c(fill = "metier4", facet = "Country", shape = ""))
+      spec <- list(cov = c(y = "metier4", fill = "vesselFlagCountry", facet = "ICESDivision"),
+                   n   = c(fill = "vesselFlagCountry", facet = "metier4", shape = ""),
+                   w   = c(fill = "metier4", facet = "vesselFlagCountry", shape = ""))
       for (.v in names(spec)) local({
         v <- .v; d <- spec[[v]]
         observe({
@@ -3764,8 +3765,9 @@ server <- function(input, output, session) {
     # Every column a saved group's clause names has to be on the strata
     # table the groups are evaluated against, or the clause errors
     # inside assign_alloc_groups() and the group silently takes nothing:
-    # a group "metier4 == TBB" on the default strata (Country, fleetValue,
-    # areaValue, Season) has no metier4 column to test. Adding it does not
+    # a group "metier4 == TBB" on the default strata (vesselFlagCountry,
+    # fleetValue, areaValue, seasonValue) has no metier4 column to test.
+    # Adding it does not
     # split the strata - metier4 is read off fleetValue - it just puts the
     # column there. The stratum metrics are computed, not dimensions.
     group_vars <- function() {
@@ -3921,7 +3923,7 @@ server <- function(input, output, session) {
                        character(1))
       fl <- which(nzchar(picked))
       last <- if (length(fl)) max(fl) else 4
-      dflt <- c("Season", "areaValue", "Country", "fleetValue", "")
+      dflt <- c("seasonValue", "areaValue", "vesselFlagCountry", "fleetValue", "")
       rows <- lapply(seq_len(min(N_ALLOC_KEYS, last + 1)), function(i)
         key_row(i + 1,
                 selectInput(ns(paste0("k", i)), paste("Key", i + 2), ch,
@@ -5291,7 +5293,7 @@ server <- function(input, output, session) {
 
   # Used only until data lands, so the controls have something sensible
   # to show rather than an empty dropdown.
-  DEF_DIMS <- c("metier4", "Country", "ICESDivision", "Season")
+  DEF_DIMS <- c("metier4", "vesselFlagCountry", "ICESDivision", "seasonValue")
   avail <- function(x) {
     d <- tryCatch(dat(), error = function(e) NULL)
     if (is.null(d)) x else intersect(x, names(d))
@@ -5395,8 +5397,8 @@ server <- function(input, output, session) {
   # Up to eight widening keys now, not four: the extras the user added are
   # only useful if they can actually be placed in the cascade.
   # Key 1 is the stratum's own data, so Key 6 is the sixth rung: the
-  # cascade in the spec - Stratum, metier4, Country, areaValue,
-  # ICESSubArea, Season - is exactly six.
+  # cascade in the spec - Stratum, metier4, vesselFlagCountry, areaValue,
+  # ICESSubArea, seasonValue - is exactly six.
   N_KEYS <- 6
   hier <- reactive({
     h <- vapply(2:N_KEYS, function(i) input[[paste0("hier_", i)]] %||% "",
@@ -5465,7 +5467,7 @@ server <- function(input, output, session) {
     # area, then country, then fleet, with the last slot left empty.
     # Indexed [i - 1] for Key 2 onward, because Key 1 is fixed as the
     # stratum's own data.
-    dflts <- c("Season", "areaValue", "Country", "fleetValue",
+    dflts <- c("seasonValue", "areaValue", "vesselFlagCountry", "fleetValue",
               "")[seq_len(N_KEYS - 1)]
     filled <- which(nzchar(picked))
     last <- if (length(filled)) max(filled) else 4
@@ -5752,11 +5754,11 @@ server <- function(input, output, session) {
     })
   }
   role_choices_server("cov", c("y", "fill", "facet"),
-                      c("metier4", "Season", "Country"))
+                      c("metier4", "seasonValue", "vesselFlagCountry"))
   role_choices_server("dr", c("x", "fill", "shape", "facet"),
-                      c("metier4", "ICESDivision", "Season", "Country"))
+                      c("metier4", "ICESDivision", "seasonValue", "vesselFlagCountry"))
   role_choices_server("box", c("x", "fill", "facet"),
-                      c("Country", "ICESDivision", ""))
+                      c("vesselFlagCountry", "ICESDivision", ""))
   # The compare-allocation tabs' Facet / Facet 2 (or X axis / Facet)
   # pickers never had this wired up. role_chips() renders them with
   # NONE (just "-- none --") as a placeholder until something calls
@@ -5844,11 +5846,11 @@ server <- function(input, output, session) {
     d <- tryCatch(dat(), error = function(e) NULL)
     shown <- intersect(FILTER_VARS, names(d %||% list()))
     if (!length(shown)) shown <- FILTER_VARS
-    core <- intersect(c("metier4","metier5","metier6","Country",
-                        "ICESDivision","Season","FleetType"), shown)
+    core <- intersect(c("metier4","metier5","metier6","vesselFlagCountry",
+                        "ICESDivision","seasonValue","FleetType"), shown)
     var_chips("clause_var", core, setdiff(c(shown,
       setdiff(names(d %||% list()), c("total","stratum_id"))), core),
-      input$clause_var %||% "Country") })
+      input$clause_var %||% "vesselFlagCountry") })
 
   observe({ req(dat(), input$clause_var, input$clause_var %in% names(dat()))
     updateSelectizeInput(session, "clause_vals",
@@ -6008,15 +6010,15 @@ server <- function(input, output, session) {
   # panel_dims() reads y/x/fill/shape/facet role inputs, and the manual
   # builder has none of those; it is not a plot. Every one of those
   # lookups came back empty and panel_dims() fell through to its
-  # generic fallback (metier4/Country/ICESDivision/Season), a default
-  # that has nothing to do with what the manual groups are actually
-  # defined on. Downstream, man_raise_tbl/man_donor_tbl already computed
-  # dd <- mg_dims() and did intersect(dd, names(a)) to select their
-  # columns - correctly asking for the full strata definition - but
+  # generic fallback (metier4/vesselFlagCountry/ICESDivision/seasonValue),
+  # a default that has nothing to do with what the manual groups are
+  # actually defined on. Downstream, man_raise_tbl/man_donor_tbl already
+  # computed dd <- mg_dims() and did intersect(dd, names(a)) to select
+  # their columns - correctly asking for the full strata definition - but
   # `a` only ever HAD the fallback's 2-4 columns, so the intersect
-  # silently kept only whatever happened to overlap (Country and Season,
-  # if the real keys were metier4/areaValue/fleetValue - exactly what
-  # was reported missing).
+  # silently kept only whatever happened to overlap (vesselFlagCountry
+  # and seasonValue, if the real keys were metier4/areaValue/fleetValue -
+  # exactly what was reported missing).
   man_strata <- reactive(build_strata(dat(), mg_dims()))
 
   # ---------------------------------------------------------
@@ -6231,8 +6233,8 @@ server <- function(input, output, session) {
 
   cmp_keys <- reactive({
     k <- common_keys(runs())
-    intersect(k, c("fleetValue","metier4","metier5","metier6","Country",
-                   "areaValue","Season")) })
+    intersect(k, c("fleetValue","metier4","metier5","metier6","vesselFlagCountry",
+                   "areaValue","seasonValue")) })
 
   output$cmp_note <- renderUI({
     validate(need(length(rv$scenarios) >= 1,
@@ -6556,7 +6558,7 @@ server <- function(input, output, session) {
     # saved script would reproduce a coarser (and so different) set of
     # points than the one on screen.
     prep = function() {
-      base <- intersect(c("fleetValue", "areaValue", "Country", "Season"),
+      base <- intersect(c("fleetValue", "areaValue", "vesselFlagCountry", "seasonValue"),
                         names(explore_dat("dr")))
       sprintf("strata_dr <- build_coverage_strata(catch_data, %s)",
               fmt_vals(unique(c(base, panel_dims("dr")))))

@@ -180,9 +180,8 @@ taf_sources <- function(external_dir = NULL) c(
 taf_derive <- function() c(
   "## ---- Derived fields ---------------------------------------",
   "## derive_fields() adds, from fleetValue and areaValue:",
-  "##   metier4 / metier5 / metier6, gear, target, mesh, FleetType",
+  "##   metier4 / metier5 / metier6, target, mesh, Stratum",
   "##   ICESSubArea (27.X), ICESDivision (27.X.X), ICESSubdivision",
-  "##   Country, Season",
   "## The ICES area split is ices_area_levels(); a code already coarser",
   "## than the level asked for repeats rather than becoming NA, because",
   "## 27.4 IS its own division as far as the data goes.",
@@ -328,7 +327,8 @@ taf_data <- function(ctx) {
 #' @return A character vector of R code.
 #' @export
 taf_model_explore_discards <- function(ctx, kept = list()) {
-  dims <- ctx$dims_disc %||% c("metier4", "Country", "ICESDivision", "Season")
+  dims <- ctx$dims_disc %||%
+    c("metier4", "vesselFlagCountry", "ICESDivision", "seasonValue")
   thr  <- ctx$threshold %||% 50
   c(taf_header("model_explore_discards",
       "Discard sampling coverage and discard rates, at the chosen resolution",
@@ -476,8 +476,9 @@ taf_model_allocate_raise_discards <- function(ctx) {
 #' @return A character vector of R code.
 #' @export
 taf_model_explore_length_age <- function(ctx, kept = list()) {
-  dims_length <- ctx$dims_len %||% c("catchCategory", "metier4", "Country",
-                                     "ICESDivision", "Season")
+  dims_length <- ctx$dims_len %||% c("catchCategory", "metier4",
+                                     "vesselFlagCountry", "ICESDivision",
+                                     "seasonValue")
   # Length and age can have DIFFERENT strata definitions in the app -
   # own_key_strata_server() runs independently for "len" and "age", and
   # customizing one never touches the other. Falling back to dims_length

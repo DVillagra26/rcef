@@ -8,7 +8,7 @@ raising_steps(hierarchy, thresholds, dims = NULL)
 }
 \arguments{
 \item{hierarchy}{Key columns, finest first (e.g. `c("metier4",
-"Country", "Season")`).}
+"vesselFlagCountry", "seasonValue")`).}
 
 \item{thresholds}{The own-stratum threshold, followed by one per hierarchy
 level - length `length(hierarchy) + 1` - or a single value recycled to

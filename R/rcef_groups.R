@@ -262,7 +262,7 @@ donor_exclusion_expr <- function(excluded, dims) {
 #' [decision_tree()] so the explanation can never drift from the algorithm.
 #'
 #' @param hierarchy Key columns, finest first (e.g. `c("metier4",
-#'   "Country", "Season")`).
+#'   "vesselFlagCountry", "seasonValue")`).
 #' @param thresholds The own-stratum threshold, followed by one per hierarchy
 #'   level - length `length(hierarchy) + 1` - or a single value recycled to
 #'   that length. `NA` in the first slot omits the own-stratum step.
@@ -972,7 +972,7 @@ combine_thresholds <- function(self_threshold, thresholds, hierarchy) {
 #' @examples
 #' \dontrun{
 #' sc <- classify_strata(build_strata(catch, dims), 50)
-#' g  <- define_raising_groups_auto(sc, c("metier4", "Country"), 50)
+#' g  <- define_raising_groups_auto(sc, c("metier4", "vesselFlagCountry"), 50)
 #' # g$strataCond / g$matchedDataCond -> catchRaising()
 #' }
 #' @export

@@ -143,25 +143,25 @@ data(anchoveta_dist)
 
 # mean weight at length of the landings, one line per country
 plot_MWaLoA(anchoveta_catch, anchoveta_dist,
-           catchCategory = "Lan", colour = "Country")
+           catchCategory = "Lan", colour = "vesselFlagCountry")
 
 # at age, one panel per quarter
 plot_MWaLoA(anchoveta_catch, anchoveta_dist,
            distributionType = "Age",
-           colour = "Country", facet = "Season")
+           colour = "vesselFlagCountry", facet = "seasonValue")
 
 # what a plus group does: every age from 3 upward pooled into "3+"
 plot_MWaLoA(anchoveta_catch, anchoveta_dist,
-           distributionType = "Age", colour = "Country",
+           distributionType = "Age", colour = "vesselFlagCountry",
            plus_group = 3)
 
 # length classes pooled into 2cm bins
-plot_MWaLoA(anchoveta_catch, anchoveta_dist, colour = "Country",
+plot_MWaLoA(anchoveta_catch, anchoveta_dist, colour = "vesselFlagCountry",
            bin_width = 2)
 
 # the fish measured at each age, as bars behind the lines
 plot_MWaLoA(anchoveta_catch, anchoveta_dist,
-           distributionType = "Age", colour = "Country",
+           distributionType = "Age", colour = "vesselFlagCountry",
            show_samples = TRUE)
 }
 \seealso{

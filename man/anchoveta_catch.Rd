@@ -10,9 +10,9 @@ A data frame of catch records, one row per stock / catch category
 \describe{
 \item{catchCategory}{\code{"Lan"}, \code{"Dis"} or \code{"BMS"}.}
 \item{year}{2020--2023. The raising engine takes one at a time.}
-\item{vesselFlagCountry, Country}{Flag state: \code{"Peru"}, \code{"Chile"},
+\item{vesselFlagCountry}{Flag state: \code{"Peru"}, \code{"Chile"},
 \code{"Ecuador"}, \code{"China"}, \code{"South Korea"}, \code{"Russia"}, \code{"Vanuatu"}.}
-\item{seasonValue, Season}{Quarter, \code{"1"}--\code{"4"}.}
+\item{seasonValue}{Quarter, \code{"1"}--\code{"4"}.}
 \item{areaValue, ICESDivision, ...}{FAO Area 87 (Pacific, Southeast)
 division code and its parsed parts.}
 \item{fleetValue, metier4, ...}{The metier6 string (\code{derive_fields()}
@@ -40,8 +40,8 @@ allocation. The tests and the README examples use it.
 }
 \details{
 Already through \code{\link[=derive_fields]{derive_fields()}}, so it drops straight into any table or
-plot: the derived columns (\code{Country}, \code{Season}, \code{metier4}, the parsed area
-parts, ...) are present and consistent. Pair it with \link{anchoveta_dist} for
+plot: the derived columns (\code{metier4}, the parsed area parts, ...) are
+present and consistent. Pair it with \link{anchoveta_dist} for
 the \code{what = "length"} / \code{what = "age"} coverage views and for
 \code{\link[=plot_NaLoA]{plot_NaLoA()}} and \code{\link[=plot_MWaLoA]{plot_MWaLoA()}}.
 \subsection{Raising the discards}{
@@ -74,7 +74,8 @@ and Russia and Vanuatu run almost no discard observers (their cells read
 
 Not every fleet works every metier: several (country, metier)
 combinations have no rows at all - so a coverage grid grouped by \code{metier4}
-x \code{Country} has genuine holes - and a few strata carry a zero-weight \code{Lan}
+x \code{vesselFlagCountry} has genuine holes - and a few strata carry a
+zero-weight \code{Lan}
 row (the fleet was there but landed nothing), which classifies as "no
 landings / no discards".
 }
@@ -83,14 +84,14 @@ landings / no discards".
 data(anchoveta_catch)
 
 # discard rate and sampling coverage per stratum ...
-head(build_coverage_strata(anchoveta_catch, c("metier4", "Country")))
+head(build_coverage_strata(anchoveta_catch, c("metier4", "vesselFlagCountry")))
 
 # ... and as a figure
-plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country")
+plot_coverage_heat(anchoveta_catch, y = "metier4", x = "vesselFlagCountry")
 
 # raise the discards of one year: define the groups, then raise
 cef    <- subset(anchoveta_catch, year == 2023)
-dims   <- c("metier4", "ICESDivision", "Season")
+dims   <- c("metier4", "ICESDivision", "seasonValue")
 groups <- define_raising_groups_auto(cef, hierarchy = dims,
                                      thresholds = c(50, 40, 30))
 raised <- run_native_raising(cef, dims, groups, type = "discards",

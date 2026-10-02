@@ -105,7 +105,7 @@ for (p in names(b0)) {
 ok(identical(taf_q(NULL), "NULL"), "taf_q(NULL)")
 ok(identical(taf_q(""), "NULL"), "taf_q('')")
 ok(identical(taf_q(NA), "NULL"), "taf_q(NA)")
-ok(identical(taf_q("Season"), '"Season"'), "taf_q('Season')")
+ok(identical(taf_q("seasonValue"), '"seasonValue"'), "taf_q('seasonValue')")
 ok(identical(taf_call("f", list()), "f()"), "taf_call with no args")
 ok(identical(taf_call("f", list(x = 1)), "f(x = 1)"), "taf_call one arg")
 ok(parses(paste(taf_call("f", list("d", a = 1, b = 2)), collapse = "\n")),

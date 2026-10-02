@@ -5,7 +5,7 @@
 \alias{PALETTE_VARS}
 \title{Variables whose colours should be seeded from the whole data set}
 \format{
-An object of class \code{character} of length 16.
+An object of class \code{character} of length 14.
 }
 \usage{
 PALETTE_VARS

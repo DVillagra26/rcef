@@ -80,9 +80,9 @@
 #' loss - coverage and rate are re-derived from the summed weights, never
 #' averaged. Leave `dims` out and nothing is pooled at all: the table is
 #' built at the finest a stratum naturally gets - `fleetValue`, `areaValue`,
-#' `Country`, `Season`, whichever of those [derive_fields()] added are
-#' actually present in `catch` - so a stratum here is as fine as the data
-#' itself, and only naming `dims` yourself asks for anything coarser.
+#' `vesselFlagCountry`, `seasonValue`, whichever are actually present in
+#' `catch` - so a stratum here is as fine as the data itself, and only
+#' naming `dims` yourself asks for anything coarser.
 #'
 #' ## The other derived columns are not lost
 #'
@@ -102,16 +102,16 @@
 #'
 #' @param catch CEF catch data (long format) carrying `catchCategory`,
 #'   `total` and, for discards, `domainCatchDis`, plus every column named in
-#'   `dims`. [derive_fields()] adds `Country`, `Season`, `metier4`, `mesh`
-#'   and the ICES area levels.
+#'   `dims`. [derive_fields()] adds `metier4`, `mesh` and the ICES area
+#'   levels.
 #' @param dims Character vector of the columns that define a stratum, for
-#'   example `c("metier4", "Country")`, or the finer
-#'   `c("fleetValue", "areaValue", "Season")`. Default `NULL`: nothing is
-#'   pooled, and the table is built at the finest a stratum naturally gets
-#'   (`fleetValue`, `areaValue`, `Country`, `Season` - whichever of those
-#'   are present in `catch`). For length and age `catchCategory` is never a
-#'   stratum column (it is a column of the result, one row per catch part)
-#'   and is ignored if named.
+#'   example `c("metier4", "vesselFlagCountry")`, or the finer
+#'   `c("fleetValue", "areaValue", "seasonValue")`. Default `NULL`: nothing
+#'   is pooled, and the table is built at the finest a stratum naturally
+#'   gets (`fleetValue`, `areaValue`, `vesselFlagCountry`, `seasonValue` -
+#'   whichever are present in `catch`). For length and age `catchCategory`
+#'   is never a stratum column (it is a column of the result, one row per
+#'   catch part) and is ignored if named.
 #' @param distributions A CEF distributions table. Required for
 #'   `what = "length"` and `what = "age"`, ignored for discards.
 #' @param what `"discard"` (default), `"length"` or `"age"`. The plural and
@@ -133,28 +133,28 @@
 #' data(anchoveta_dist)
 #'
 #' # discard rate and coverage per metier x country
-#' cov <- build_coverage_strata(anchoveta_catch, c("metier4", "Country"))
+#' cov <- build_coverage_strata(anchoveta_catch, c("metier4", "vesselFlagCountry"))
 #' head(cov[order(-cov$landings), ])
 #'
 #' # the same table, coarser or finer
-#' build_coverage_strata(anchoveta_catch, "Season")
+#' build_coverage_strata(anchoveta_catch, "seasonValue")
 #' nrow(build_coverage_strata(anchoveta_catch,
-#'                            c("fleetValue", "areaValue", "Season")))
+#'                            c("fleetValue", "areaValue", "seasonValue")))
 #'
 #' # dims left out: nothing pooled - one row per fleetValue x areaValue x
-#' # Country x Season combination the catch actually has
+#' # vesselFlagCountry x seasonValue combination the catch actually has
 #' nrow(build_coverage_strata(anchoveta_catch))
 #'
 #' # length coverage of the landings: weight, share with a distribution,
 #' # and the measurements behind it
-#' len <- build_coverage_strata(anchoveta_catch, c("metier4", "Country"),
+#' len <- build_coverage_strata(anchoveta_catch, c("metier4", "vesselFlagCountry"),
 #'                              anchoveta_dist, what = "length",
 #'                              catchCategory = "Lan")
 #' head(len[order(-len$total), ])
 #'
 #' # the plots draw the same table, from the raw catch or from the table
-#' plot_coverage_heat(cov, y = "metier4", x = "Country", min_cov = 50)
-#' plot_DR(cov, x = "metier4", colour = "Country")
+#' plot_coverage_heat(cov, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
+#' plot_DR(cov, x = "metier4", colour = "vesselFlagCountry")
 #' @export
 build_coverage_strata <- function(catch, dims = NULL, distributions = NULL,
                                   what = "discard", catchCategory = NULL) {
@@ -166,13 +166,13 @@ build_coverage_strata <- function(catch, dims = NULL, distributions = NULL,
     # not some column the caller never named. Only the ones the data
     # actually carries - a table filtered before derive_fields() may lack
     # one of them.
-    dims <- intersect(c("fleetValue", "areaValue", "Country", "Season"),
-                      names(catch))
+    dims <- intersect(c("fleetValue", "areaValue", "vesselFlagCountry",
+                        "seasonValue"), names(catch))
     if (!length(dims))
       stop(fn, "(): `dims` was not given and none of the default stratum ",
-           "columns (fleetValue, areaValue, Country, Season) are in ",
-           "`catch` - name `dims` yourself, or run derive_fields() first",
-           call. = FALSE)
+           "columns (fleetValue, areaValue, vesselFlagCountry, seasonValue) ",
+           "are in `catch` - name `dims` yourself, or run derive_fields() ",
+           "first", call. = FALSE)
   } else {
     dims <- unique(as.character(dims))
     dims <- dims[!is.na(dims) & nzchar(dims)]

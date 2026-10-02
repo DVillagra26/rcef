@@ -236,7 +236,7 @@ if (length(fx)) {
     shiny::testServer(d, {
       rv$cef_catches <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
       session$flushReact()
-      session$setInputs(hier_2 = "Country", hier_3 = "Season", threshold = 50,
+      session$setInputs(hier_2 = "vesselFlagCountry", hier_3 = "seasonValue", threshold = 50,
                         ar_sd_sdmode = "custom", ar_sd_sd1 = "metier4",
                         ar_sd_sd2 = "", ar_sd_sd3 = "", ar_sd_sd4 = "",
                         ar_sd_sd5 = "")
@@ -292,7 +292,7 @@ if (length(fx)) {
         ggplot_build(p)$layout$panel_params[[1]]$x$get_labels()
 
       ## ---- discard rate ----
-      session$setInputs(dr_x = "metier4", dr_fill = "Country", dr_shape = "",
+      session$setInputs(dr_x = "metier4", dr_fill = "vesselFlagCountry", dr_shape = "",
                         dr_facet = "", dr_jitter = TRUE, dr_rate = "ratio",
                         dr_ref = NA)
       session$setInputs(dr_apply = 1); session$flushReact()
@@ -336,7 +336,7 @@ if (length(fx)) {
       ## for length / age - min_fish = 0 (its old default) is active per
       ## thr_active(), which plot_coverage_heat()/_bubble() now refuse for
       ## what = "discard", and this tab never sets `what` at all.
-      session$setInputs(cov_y = "metier4", cov_fill = "Country", cov_facet = "",
+      session$setInputs(cov_y = "metier4", cov_fill = "vesselFlagCountry", cov_facet = "",
                         threshold = 50, cov_trips = 2, cov_apply = 1)
       session$flushReact()
       session$setInputs(cov_type = "heatmap"); session$flushReact()
@@ -352,7 +352,7 @@ if (length(fx)) {
       for (pf in c("len", "age")) {
         ty <- if (identical(pf, "age")) "Age" else "LengthTotal"
         base <- stats::setNames(
-          list("catlan", "Country", "", "", "", FALSE, FALSE, 3),
+          list("catlan", "vesselFlagCountry", "", "", "", FALSE, FALSE, 3),
           paste0(pf, "_w_", c("cc", "r_fill", "r_facet", "r_shape", "pt",
                               "samples", "plus", "plus_from")))
         do.call(session$setInputs, base)

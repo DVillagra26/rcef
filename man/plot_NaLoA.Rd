@@ -80,19 +80,19 @@ data(anchoveta_dist)
 
 # numbers at length of the landings, stacked by country
 plot_NaLoA(anchoveta_catch, anchoveta_dist,
-          catchCategory = "Lan", fill = "Country")
+          catchCategory = "Lan", fill = "vesselFlagCountry")
 
 # numbers at age, one panel per quarter, dodged
 plot_NaLoA(anchoveta_catch, anchoveta_dist,
-          distributionType = "Age", fill = "Country",
-          facet = "Season", stacked = FALSE)
+          distributionType = "Age", fill = "vesselFlagCountry",
+          facet = "seasonValue", stacked = FALSE)
 
 # every age from 3 upward pooled into "3+"
 plot_NaLoA(anchoveta_catch, anchoveta_dist,
-          distributionType = "Age", fill = "Country", plus_group = 3)
+          distributionType = "Age", fill = "vesselFlagCountry", plus_group = 3)
 
 # length classes pooled into 2cm bins
-plot_NaLoA(anchoveta_catch, anchoveta_dist, fill = "Country", bin_width = 2)
+plot_NaLoA(anchoveta_catch, anchoveta_dist, fill = "vesselFlagCountry", bin_width = 2)
 }
 \seealso{
 \code{\link[=plot_MWaLoA]{plot_MWaLoA()}} for the mean weight in the same classes;

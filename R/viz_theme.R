@@ -202,7 +202,7 @@ seed_palettes <- function(data, vars = PALETTE_VARS) {
 #' have to look the same in all of them.
 #'
 #' @export
-PALETTE_VARS <- c("Country", "vesselFlagCountry", "Season", "seasonValue",
+PALETTE_VARS <- c("vesselFlagCountry", "seasonValue",
                   "metier4", "metier5", "metier6", "gear", "target", "mesh",
                   "FleetType", "catchCategory",
                   "ICESSubArea", "ICESDivision", "ICESSubdivision", "areaValue")

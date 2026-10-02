@@ -41,7 +41,7 @@ dist_rows <- function(country, domain, classes, numbers, weights, nmeas,
         cbind(base, variableType = "WeightLive", variableUnit = "g",
               valueType = "Mean", value = weights))
 }
-dims_c <- c("catchCategory", "Country")
+dims_c <- c("catchCategory", "vesselFlagCountry")
 
 ## ---- 1. pool_length_bins(), on a hand-made fixture -----------------------
 ## classes 10..19 (cm), bin_width = 5 -> bins at 10 and 15
@@ -80,8 +80,8 @@ cap  <- function(p) gsub("\n", " ", p$labels$caption, fixed = TRUE)
 says_cap <- function(p, s) grepl(s, cap(p), fixed = TRUE)
 xlab <- function(p) ggplot_build(p)$layout$panel_params[[1]]$x$get_labels()
 
-p0  <- plot_MWaLoA(cd, dd, catchCategory = "Lan", colour = "Country")
-pbw <- plot_MWaLoA(cd, dd, catchCategory = "Lan", colour = "Country", bin_width = 2)
+p0  <- plot_MWaLoA(cd, dd, catchCategory = "Lan", colour = "vesselFlagCountry")
+pbw <- plot_MWaLoA(cd, dd, catchCategory = "Lan", colour = "vesselFlagCountry", bin_width = 2)
 ok(drawable(pbw) && length(unique(pbw$data$.class)) < length(unique(p0$data$.class)),
    "bin_width = 2 draws, with fewer distinct classes than the unbinned plot")
 ok(all(diff(sort(unique(pbw$data$.class))) == 2),
@@ -94,29 +94,29 @@ ok(says_cap(pbw, "length classes pooled into 2cm bins") && !says_cap(p0, "pooled
 
 ## a bin width on ages is an error: it is for lengths
 ok(grepl("only applies to lengths", err(plot_MWaLoA(
-     cd, dd, distributionType = "Age", colour = "Country", bin_width = 1))),
+     cd, dd, distributionType = "Age", colour = "vesselFlagCountry", bin_width = 1))),
    "bin_width on ages is an error: it is for lengths")
 ok(grepl("bin_width", err(plot_MWaLoA(cd, dd, bin_width = 0))),
    "bin_width = 0 is not a single positive number")
 ok(grepl("bin_width", err(plot_MWaLoA(cd, dd, bin_width = "5"))),
    "... and a width that is not numeric is one too")
 tab_len <- length_meanweight(link_dist_to_strata(cd, dd, dims_c, "Lan", "LengthTotal"),
-                             "Country")
+                             "vesselFlagCountry")
 ok(grepl("only applies when `distributions`", warn(plot_MWaLoA(
-     tab_len, colour = "Country", bin_width = 2))),
+     tab_len, colour = "vesselFlagCountry", bin_width = 2))),
    "bin_width on an already-summarised table warns: it cannot be pooled again")
 
 ## a summary built from a binned link says so in its `bin_width` column
 tab_bin <- length_meanweight(pool_length_bins(
-  link_dist_to_strata(cd, dd, dims_c, "Lan", "LengthTotal"), 2, dims_c), "Country")
-pt_bin <- plot_MWaLoA(tab_bin, colour = "Country")
+  link_dist_to_strata(cd, dd, dims_c, "Lan", "LengthTotal"), 2, dims_c), "vesselFlagCountry")
+pt_bin <- plot_MWaLoA(tab_bin, colour = "vesselFlagCountry")
 ok(all(diff(sort(unique(pt_bin$data$.class))) == 2) &&
      says_cap(pt_bin, "length classes pooled into 2cm bins"),
    "a pooled summary is labelled from its `bin_width` column, with no bin_width argument")
 
 ## ---- 3. plot_NaLoA(): plus_group (new) and bin_width (new) ----------------
-n0  <- plot_NaLoA(cd, dd, distributionType = "Age", fill = "Country")
-np3 <- plot_NaLoA(cd, dd, distributionType = "Age", fill = "Country",
+n0  <- plot_NaLoA(cd, dd, distributionType = "Age", fill = "vesselFlagCountry")
+np3 <- plot_NaLoA(cd, dd, distributionType = "Age", fill = "vesselFlagCountry",
                   plus_group = 3)
 ok(drawable(np3) && max(np3$data$.class) == 3 && max(n0$data$.class) > 3,
    "plot_NaLoA(): plus_group = 3 stops the age axis at the plus class")
@@ -124,10 +124,10 @@ ok("3+" %in% xlab(np3) && !any(grepl("+", xlab(n0), fixed = TRUE)),
    "plot_NaLoA(): the pooled class is labelled 3+; no plus without the option")
 ok(says_cap(np3, "3+ = ages 3+ pooled") && !says_cap(n0, "pooled"),
    "plot_NaLoA(): the caption says which ages are pooled")
-ok(grepl("only applies to ages", err(plot_NaLoA(cd, dd, fill = "Country", plus_group = 3))),
+ok(grepl("only applies to ages", err(plot_NaLoA(cd, dd, fill = "vesselFlagCountry", plus_group = 3))),
    "plot_NaLoA(): a plus group on lengths is an error")
 
-nbw <- plot_NaLoA(cd, dd, fill = "Country", bin_width = 2)
+nbw <- plot_NaLoA(cd, dd, fill = "vesselFlagCountry", bin_width = 2)
 ok(drawable(nbw) && all(diff(sort(unique(nbw$data$.class))) == 2),
    "plot_NaLoA(): bin_width = 2 pools the length classes into 2cm bins")
 ok(all(grepl("^[0-9]+-[0-9]+$", xlab(nbw))),
@@ -135,32 +135,32 @@ ok(all(grepl("^[0-9]+-[0-9]+$", xlab(nbw))),
 ok(says_cap(nbw, "length classes pooled into 2cm bins"),
    "plot_NaLoA(): the caption says the bin width")
 ok(grepl("only applies to lengths", err(plot_NaLoA(
-     cd, dd, distributionType = "Age", fill = "Country", bin_width = 1))),
+     cd, dd, distributionType = "Age", fill = "vesselFlagCountry", bin_width = 1))),
    "plot_NaLoA(): a bin width on ages is an error")
-ok(near(sum(plot_NaLoA(cd, dd, fill = "Country")$data$number),
+ok(near(sum(plot_NaLoA(cd, dd, fill = "vesselFlagCountry")$data$number),
         sum(nbw$data$number), tol = 1e-6),
    "plot_NaLoA(): binning conserves the total numbers")
 
 ## ---- 4. title wording: "<CatchCategory> - <Metric> at <Length|Age>" ------
 ok(identical(plot_MWaLoA(cd, dd, catchCategory = "Lan",
-                         colour = "Country")$labels$title,
+                         colour = "vesselFlagCountry")$labels$title,
              "Landings - Mean Weight at Length") &&
      identical(plot_MWaLoA(cd, dd, catchCategory = "Dis", distributionType = "Age",
-                           colour = "Country")$labels$title,
+                           colour = "vesselFlagCountry")$labels$title,
                "Discards - Mean Weight at Age"),
    "plot_MWaLoA(): title is '<CatchCategory> - Mean Weight at <Length|Age>'")
 ok(identical(plot_NaLoA(cd, dd, catchCategory = "Lan",
-                        fill = "Country")$labels$title,
+                        fill = "vesselFlagCountry")$labels$title,
              "Landings - Numbers at Length") &&
      identical(plot_NaLoA(cd, dd, catchCategory = "Dis", distributionType = "Age",
-                          fill = "Country")$labels$title,
+                          fill = "vesselFlagCountry")$labels$title,
                "Discards - Numbers at Age"),
    "plot_NaLoA(): title is '<CatchCategory> - Numbers at <Length|Age>'")
-ok(identical(plot_MWaLoA(tab_len, colour = "Country")$labels$title,
+ok(identical(plot_MWaLoA(tab_len, colour = "vesselFlagCountry")$labels$title,
              "Mean Weight at Length") &&
      identical(plot_NaLoA(length_numbers(
-       link_dist_to_strata(cd, dd, dims_c, "Lan", "LengthTotal"), "Country"),
-       fill = "Country")$labels$title,
+       link_dist_to_strata(cd, dd, dims_c, "Lan", "LengthTotal"), "vesselFlagCountry"),
+       fill = "vesselFlagCountry")$labels$title,
        "Numbers at Length"),
    "an already-summarised table (no distributions) drops the leading category")
 ok(identical(p0$theme$plot.title$size, 11) && identical(n0$theme$plot.title$size, 11),

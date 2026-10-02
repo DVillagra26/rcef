@@ -24,14 +24,14 @@ suppressPackageStartupMessages(library(dplyr))
 cd <- data.frame(
   catchCategory  = c("Lan", "Lan", "Dis", "Lan", "Lan", "Dis", "Lan", "BMS"),
   metier4        = c("OTB", "OTB", "OTB", "TBB", "TBB", "TBB", "SSC", "OTB"),
-  Country        = "BE",
+  vesselFlagCountry = "BE",
   total          = c(1000, 3000, 200, 2000, 2000, 100, 500, 50),
   domainCatchDis = c("d1", NA, "d1", "d2", "d2", "d2", NA, NA),
   numTrips       = c(2, 2, 2, 5, 5, 5, NA, NA),
   variableUnit   = "kg",
   stringsAsFactors = FALSE)
 
-t1 <- build_coverage_strata(cd, c("metier4", "Country"))
+t1 <- build_coverage_strata(cd, c("metier4", "vesselFlagCountry"))
 o <- t1[t1$metier4 == "OTB", ]; b <- t1[t1$metier4 == "TBB", ]
 s <- t1[t1$metier4 == "SSC", ]
 ok(nrow(t1) == 3, "one row per stratum")
@@ -55,7 +55,7 @@ want <- c("catchCategory", "variableUnit", "total", "weightingCategory",
           "weightingTotal", "rate", "discardRate", "landings", "coverage",
           "numTrips")
 ok(all(want %in% names(t1)), "the CAR / CAS-style value columns are all there")
-ok(identical(names(t1), c("metier4", "Country", want)),
+ok(identical(names(t1), c("metier4", "vesselFlagCountry", want)),
    "the stratum columns first, then the value columns in a fixed order")
 ok(all(t1$catchCategory == "Dis") && all(t1$weightingCategory == "Lan") &&
      all(t1$variableUnit == "t"),
@@ -65,15 +65,15 @@ ok(!any(c("cat_key", "Status", "status", "Raising_Decision",
    "no status, category, decision or bespoke helper columns")
 
 ## ---- 2. the aggregation level is whatever dims names ------------------
-t2 <- build_coverage_strata(cd, "Country")
+t2 <- build_coverage_strata(cd, "vesselFlagCountry")
 ok(nrow(t2) == 1 && near(t2$total, 0.3) && near(t2$weightingTotal, 5) &&
      near(t2$landings, 8.5) && near(t2$rate, 0.06),
-   "dims = 'Country' pools the three strata: 0.3 t / 5 t = 0.06")
+   "dims = 'vesselFlagCountry' pools the three strata: 0.3 t / 5 t = 0.06")
 ok(near(t2$discardRate, 0.3 / 5.3),
    "and D/(L+D) is re-derived from the summed weights too: 0.3 / 5.3")
 ok(near(t2$coverage, 5 / 8.5 * 100) && t2$numTrips == 5,
    "pooled coverage is re-derived from the summed weights; trips = the largest")
-t3 <- build_coverage_strata(cd, c("metier4", "Country", "domainCatchDis"))
+t3 <- build_coverage_strata(cd, c("metier4", "vesselFlagCountry", "domainCatchDis"))
 ok(nrow(t3) > nrow(t1), "a finer dims gives more, smaller strata")
 
 ## ---- 3. arguments -----------------------------------------------------
@@ -81,23 +81,24 @@ err <- function(expr) tryCatch({ force(expr); "no error" },
                                error = function(e) conditionMessage(e))
 
 ## ---- 3a. dims left out: nothing pooled, the finest the data has -------
-## `cd` only carries "Country" of the four default columns (fleetValue,
-## areaValue, Country, Season) - metier4 is not one of them, so leaving dims
-## out must NOT default to metier4 x Country; it collapses to Country alone,
-## exactly like naming it (t2, above).
+## `cd` only carries "vesselFlagCountry" of the four default columns
+## (fleetValue, areaValue, vesselFlagCountry, seasonValue) - metier4 is
+## not one of them, so leaving dims out must NOT default to metier4 x
+## vesselFlagCountry; it collapses to vesselFlagCountry alone, exactly
+## like naming it (t2, above).
 ok(identical(build_coverage_strata(cd), t2),
-   "no dims given: defaults to whichever of fleetValue/areaValue/Country/Season the catch has (just Country here)")
-cd_nocty <- cd; cd_nocty$Country <- NULL
+   "no dims given: defaults to whichever of fleetValue/areaValue/vesselFlagCountry/seasonValue the catch has (just vesselFlagCountry here)")
+cd_nocty <- cd; cd_nocty$vesselFlagCountry <- NULL
 ok(grepl("none of the default stratum", err(build_coverage_strata(cd_nocty))),
    "no dims, and none of the four default columns present -> a clear error")
 ## on real, derive_fields()-ed catch all four are present, so the default is
 ## genuinely the finest: as many rows as naming them all explicitly
 ac0 <- { data("anchoveta_catch", package = "rcef", envir = environment())
   anchoveta_catch }
-finest <- c("fleetValue", "areaValue", "Country", "Season")
+finest <- c("fleetValue", "areaValue", "vesselFlagCountry", "seasonValue")
 ok(identical(build_coverage_strata(ac0), build_coverage_strata(ac0, finest)),
    "on real catch (all four default columns present), no dims matches naming them all")
-ok(nrow(build_coverage_strata(ac0)) >= nrow(build_coverage_strata(ac0, c("metier4", "Country"))),
+ok(nrow(build_coverage_strata(ac0)) >= nrow(build_coverage_strata(ac0, c("metier4", "vesselFlagCountry"))),
    "... which is at least as fine as a named, coarser table")
 ad0 <- { data("anchoveta_dist", package = "rcef", envir = environment())
   anchoveta_dist }
@@ -114,14 +115,14 @@ ok(grepl("cannot be a stratum column", err(
      build_coverage_strata(cd, c("catchCategory", "metier4")))),
    "catchCategory as a stratum column is an error for discards")
 ok(grepl("needs the CEF catch columns", err(
-     build_coverage_strata(build_strata(cd, c("metier4", "Country")), "metier4"))),
+     build_coverage_strata(build_strata(cd, c("metier4", "vesselFlagCountry")), "metier4"))),
    "an already-aggregated build_strata() table is refused, not silently 'nothing to describe'")
 ok(grepl("needs `distributions`", err(
      build_coverage_strata(cd, "metier4", what = "length"))),
    "length without distributions says what is missing")
 ok(grepl("must be", err(build_coverage_strata(cd, "metier4", what = "nonsense"))),
    "an unknown `what` is an error naming the valid ones")
-ok(near(build_coverage_strata(cd, c("metier4", "Country"), what = "Discards")$total,
+ok(near(build_coverage_strata(cd, c("metier4", "vesselFlagCountry"), what = "Discards")$total,
         t1$total),
    "what accepts the plural and mixed case")
 ok(is.null(build_coverage_strata(cd[cd$catchCategory == "BMS", ], "metier4")),
@@ -131,7 +132,7 @@ ok(is.null(build_coverage_strata(cd[cd$catchCategory == "BMS", ], "metier4")),
 data("anchoveta_catch", package = "rcef", envir = environment())
 data("anchoveta_dist",  package = "rcef", envir = environment())
 ac <- anchoveta_catch; ad <- anchoveta_dist
-dm <- c("metier4", "Country")
+dm <- c("metier4", "vesselFlagCountry")
 
 l_all <- build_coverage_strata(ac, dm, ad, what = "length")
 ok(setequal(unique(l_all$catchCategory), c("Lan", "Dis")),
@@ -178,7 +179,7 @@ ok(identical(coverage_table_what(t1), "discard") &&
    "coverage_table_what() tells the three kinds apart")
 ok(is.na(coverage_table_what(cd)) && is.na(coverage_table_what(ac)),
    "raw catch is not mistaken for a coverage table")
-withcov <- add_stratum_metrics(ac, c("metier4", "Country"))
+withcov <- add_stratum_metrics(ac, c("metier4", "vesselFlagCountry"))
 ok("coverage" %in% names(withcov) && is.na(coverage_table_what(withcov)),
    "even raw catch that carries a row-level coverage column (add_stratum_metrics)")
 

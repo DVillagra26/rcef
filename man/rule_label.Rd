@@ -20,7 +20,7 @@ A character vector of labels.
 }
 \description{
 Turns a group id into the condition that defines it, so a reader sees
-`metier4 %in% "SSC" & Country %in% "Denmark"` rather than `G23`, with a
+`metier4 %in% "SSC" & vesselFlagCountry %in% "Denmark"` rather than `G23`, with a
 plain phrase for the special cases (not raised, raised on its own data,
 raised from ALL) and the group id kept in brackets for cross-reference.
 }

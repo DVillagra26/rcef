@@ -24,12 +24,12 @@ ok <- function(cond, what) {
 
 ## ---- 1. roll_up_excluded_keys() ---------------------------------------
 fine <- data.frame(
-  Country = c("BE", "BE", "BE"),
+  vesselFlagCountry = c("BE", "BE", "BE"),
   fleetValue = c("TBB_DEF_120-219", "TBB_DEF_70-99", "OTB_DEF_100"),
-  areaValue = "27.4.c", Season = "1",
+  areaValue = "27.4.c", seasonValue = "1",
   metier4 = c("TBB", "TBB", "OTB"),
   weight = c(10, 20, 30), stringsAsFactors = FALSE)
-from_dims <- c("Country", "fleetValue", "areaValue", "Season")
+from_dims <- c("vesselFlagCountry", "fleetValue", "areaValue", "seasonValue")
 
 sub_key <- stratum_keys(fine, from_dims)[1]
 agg <- roll_up_excluded_keys(fine, sub_key, from_dims, "metier4")

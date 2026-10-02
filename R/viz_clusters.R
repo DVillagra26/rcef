@@ -10,9 +10,10 @@
 #  Discard-rate clusters: build the table, then two plots of it
 # ------------------------------------------------------------
 # Most of the columns a discard rate could depend on - metier4, mesh,
-# Country, Season, areaValue - are categorical, so an ordinary PCA (which
-# needs numeric input) does not apply. MCA (Multiple Correspondence
-# Analysis) is the categorical equivalent: it places every stratum on a map
+# vesselFlagCountry, seasonValue, areaValue - are categorical, so an
+# ordinary PCA (which needs numeric input) does not apply. MCA (Multiple
+# Correspondence Analysis) is the categorical equivalent: it places every
+# stratum on a map
 # from how its categories co-occur, without needing the discard rate itself
 # to build that map. Clustering is a separate, second step, done directly on
 # the discard rate (not on the MCA coordinates) - the map is only where the
@@ -49,7 +50,7 @@
 #' Groups sampled strata into `k` clusters of similar discard rate (k-means),
 #' places every stratum on a map of `dims` built by MCA (Multiple
 #' Correspondence Analysis - the categorical equivalent of PCA, since `dims`
-#' is ordinarily categorical: metier4, mesh, Country...), and scores how
+#' is ordinarily categorical: metier4, mesh, vesselFlagCountry...), and scores how
 #' strongly each of `dims` lines up with the resulting clusters. The table
 #' this returns is what [plot_discard_clusters()] and
 #' [plot_cluster_variables()] draw; nothing here needs a distribution or a
@@ -73,7 +74,7 @@
 #' @param catch Raw CEF catch data.
 #' @param dims Categorical columns to place on the map and to score for
 #'   importance - typically fleet/area/country/season columns
-#'   (`derive_fields()` output), e.g. `c("metier4", "mesh", "Country")`.
+#'   (`derive_fields()` output), e.g. `c("metier4", "mesh", "vesselFlagCountry")`.
 #' @param k Number of discard-rate clusters.
 #' @param seed Seed for the (otherwise global-state-free) k-means run, so
 #'   the same data and `k` always cluster the same way.

@@ -32,26 +32,26 @@ library(rcef)
 data(anchoveta_catch); data(anchoveta_dist)     # the bundled example stock
 
 # discard rate and coverage per stratum, at the aggregation you choose
-tab <- build_coverage_strata(anchoveta_catch, c("metier4", "Country"))
+tab <- build_coverage_strata(anchoveta_catch, c("metier4", "vesselFlagCountry"))
 tab
 
 # the same numbers as figures (raw catch or the table both work)
-plot_coverage_heat(tab, y = "metier4", x = "Country", min_cov = 50)
-plot_DR(tab, x = "metier4", colour = "Country")
+plot_coverage_heat(tab, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
+plot_DR(tab, x = "metier4", colour = "vesselFlagCountry")
 
 # the discard rate (discards as a share of the catch) instead of the ratio,
 # and a dashed reference line that names the strata above 30%
-plot_DR(tab, x = "metier4", colour = "Country",
+plot_DR(tab, x = "metier4", colour = "vesselFlagCountry",
        rate = "rate", reference = 0.3)
 
 # length and age: add the distributions
-build_coverage_strata(anchoveta_catch, c("metier4", "Country"),
+build_coverage_strata(anchoveta_catch, c("metier4", "vesselFlagCountry"),
                       distributions = anchoveta_dist, what = "length")
 
 # mean weight at age, the ages from 3 upward pooled into a "3+" plus group, and
 # the fish measured at each age as bars behind the lines
 plot_MWaLoA(anchoveta_catch, anchoveta_dist,
-           distributionType = "Age", colour = "Country",
+           distributionType = "Age", colour = "vesselFlagCountry",
            plus_group = 3, show_samples = TRUE)
 ```
 
@@ -72,7 +72,7 @@ library(rcef)
 data(anchoveta_catch)
 cef <- subset(anchoveta_catch, year == 2023)     # one stock and year at a time
 
-dims   <- c("metier4", "ICESDivision", "Season")          # what a stratum is
+dims   <- c("metier4", "ICESDivision", "seasonValue")          # what a stratum is
 st     <- classify_strata(build_strata(cef, dims), threshold = 50)  # covered enough?
 groups <- define_raising_groups_auto(cef, hierarchy = dims,         # who borrows from whom
                                      thresholds = c(50, 40, 30))

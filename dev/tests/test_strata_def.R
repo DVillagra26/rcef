@@ -5,8 +5,8 @@
 ## inside Key 1 of the three hierarchical builders - that let a builder
 ## regroup them. It is gone: a stratum that changes with a screen's
 ## settings made every coverage bar, exclusion and group mean something
-## different from one screen to the next. A stratum is Country + fleetValue
-## + areaValue + Season, everywhere, discard or length/age.
+## different from one screen to the next. A stratum is vesselFlagCountry +
+## fleetValue + areaValue + seasonValue, everywhere, discard or length/age.
 ##
 ## Exercised through the live server, not just a UI render - a wiring gap
 ## here is invisible to parse() and to a plain render.
@@ -65,13 +65,13 @@ if (!requireNamespace("shiny", quietly = TRUE)) {
 
   data("anchoveta_catch", package = "rcef", envir = environment())
   data("anchoveta_dist",  package = "rcef", envir = environment())
-  DEF <- c("Country", "fleetValue", "areaValue", "Season")
+  DEF <- c("vesselFlagCountry", "fleetValue", "areaValue", "seasonValue")
 
   shiny::testServer(app, {
     rv$cef_catches <- anchoveta_catch; rv$dist <- anchoveta_dist
     rv$load_method <- "cef"
     session$setInputs(sep = ",", stock = "", year = "", threshold = 50,
-                      hier_2 = "Season")
+                      hier_2 = "seasonValue")
 
     ## ---- 4. Key 1 says what it is, with nothing to change ----------
     hk <- output$hier_keys$html %||% ""
@@ -91,7 +91,7 @@ if (!requireNamespace("shiny", quietly = TRUE)) {
 
     ## ---- 5. every builder's strata ARE the reported ones -----------
     ok(identical(as_reported_strata(), DEF),
-       "the strata resolve to Country + fleetValue + areaValue + Season")
+       "the strata resolve to vesselFlagCountry + fleetValue + areaValue + seasonValue")
     ok(identical(ar_strata_dims(), DEF) && identical(mg_strata_dims(), DEF),
        "the discard cascade and the discard manual builder use them")
     ## a cascade key or a clause column is ADDED to the table, it does not

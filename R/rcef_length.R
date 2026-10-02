@@ -772,7 +772,7 @@ alloc_steps <- function(keys, thresholds, keep_cc = TRUE, min_meas = 0,
   # The threshold and the measurement bar belong to the FINEST KEY STILL
   # IN THE POOL at a rung, not to the rung's position in the ladder. This
   # was the bug: rung w1 drops the coarsest key (Area) and keeps
-  # metier4..Season, so its threshold is Season's - thr(n) - but the old
+  # metier4..seasonValue, so its threshold is seasonValue's - thr(n) - but the old
   # code read thr(2), which is the SECOND key's. The mapping ran backwards,
   # so the Area box drove the catchCategory rung and vice versa. `tk()`
   # and `tm()` take a KEY INDEX and are the single place that mapping lives.
@@ -1513,9 +1513,10 @@ assign_alloc_cascade <- function(bl, keys, steps, bms_as_dis = TRUE) {
 #' bug this fixes. `keys` is the cascade's OWN widening order - the
 #' columns a rung can drop as it widens. `dims` is the full set of
 #' columns the strata table was built on, which is usually broader: the
-#' raw uploaded stratum carries columns (Country, Season, ...) nobody
-#' chose as a cascade key, and those still need to show up as "pooled
-#' across" or the summary understates how much is being collapsed.
+#' raw uploaded stratum carries columns (vesselFlagCountry, seasonValue,
+#' ...) nobody chose as a cascade key, and those still need to show up
+#' as "pooled across" or the summary understates how much is being
+#' collapsed.
 #' Reading `dims` where `keys` belongs did the opposite - it retained
 #' columns the cascade never touches, so every rung looked like it kept
 #' more than it actually did.

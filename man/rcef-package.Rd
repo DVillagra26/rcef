@@ -17,7 +17,7 @@ script or an ICES TAF script set. A shiny application, started with
 \subsection{Where to start}{\tabular{ll}{
    To ... \tab Use \cr
    read InterCatch files into CEF \tab \code{\link[=funICoutCEF]{funICoutCEF()}} \cr
-   add the strata-ready columns (\code{Country}, \code{Season}, \code{metier4}, ...) \tab \code{\link[=derive_fields]{derive_fields()}} \cr
+   add the strata-ready columns (\code{metier4}, \code{mesh}, ICES area levels, ...) \tab \code{\link[=derive_fields]{derive_fields()}} \cr
    see discard rates and sampling coverage per stratum, as a table \tab \code{\link[=build_coverage_strata]{build_coverage_strata()}} \cr
    look at them \tab \link{coverage-plots} (heatmap, bubbles, bars), \code{\link[=plot_coverage_map]{plot_coverage_map()}}, \code{\link[=plot_DR]{plot_DR()}} \cr
    look at numbers and mean weight at length or age \tab \code{\link[=plot_NaLoA]{plot_NaLoA()}}, \code{\link[=plot_MWaLoA]{plot_MWaLoA()}} \cr

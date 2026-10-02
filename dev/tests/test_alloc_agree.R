@@ -19,7 +19,7 @@ if (exists("catchAllocationAoL")) {
   data("anchoveta_catch", package = "rcef", envir = environment())
   data("anchoveta_dist",  package = "rcef", envir = environment())
   cd <- anchoveta_catch; dist <- anchoveta_dist
-  dims <- c("catchCategory", "metier4", "Country", "ICESDivision", "Season")
+  dims <- c("catchCategory", "metier4", "vesselFlagCountry", "ICESDivision", "seasonValue")
   groups <- list(GA1 = list(alloc = "TRUE", matched = "TRUE"))
 
   single <- rcef:::run_allocation(cd, dist, groups, alloc_dims = dims,

@@ -69,7 +69,7 @@ status_legend_plot(50, "discard", min_trips = NULL)
 
 # the legend of a figure that is on screen
 data(anchoveta_catch)
-p <- plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
+p <- plot_coverage_heat(anchoveta_catch, y = "metier4", x = "vesselFlagCountry",
                         min_cov = 50, min_trip = 2)
 do.call(status_legend_plot, attr(p, "status_legend"))
 }

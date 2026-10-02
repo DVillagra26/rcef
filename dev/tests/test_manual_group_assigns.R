@@ -1,5 +1,5 @@
 ## A manual group defined on a column that is not one of the reported strata
-## keys (Country / fleetValue / areaValue / Season) - metier4 == TBB, say -
+## keys (vesselFlagCountry / fleetValue / areaValue / seasonValue) - metier4 == TBB, say -
 ## must actually take its strata.
 ##
 ## Seen in the app as "the TBB group takes nothing; every stratum is STILL
@@ -24,7 +24,7 @@ if (!requireNamespace("shiny", quietly = TRUE)) {
   if (!nzchar(ap)) stop("rcef is not installed; R CMD INSTALL first")
   data("anchoveta_catch", package = "rcef", envir = environment())
   data("anchoveta_dist",  package = "rcef", envir = environment())
-  DEF <- c("Country", "fleetValue", "areaValue", "Season")
+  DEF <- c("vesselFlagCountry", "fleetValue", "areaValue", "seasonValue")
   `%||%` <- function(a, b) if (is.null(a)) b else a
 
   cd <- derive_fields(as.data.frame(anchoveta_catch))

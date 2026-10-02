@@ -26,8 +26,8 @@
 #'
 #' @details
 #' Already through [derive_fields()], so it drops straight into any table or
-#' plot: the derived columns (`Country`, `Season`, `metier4`, the parsed area
-#' parts, ...) are present and consistent. Pair it with [anchoveta_dist] for
+#' plot: the derived columns (`metier4`, the parsed area parts, ...) are
+#' present and consistent. Pair it with [anchoveta_dist] for
 #' the `what = "length"` / `what = "age"` coverage views and for
 #' [plot_NaLoA()] and [plot_MWaLoA()].
 #'
@@ -59,7 +59,8 @@
 #'
 #' Not every fleet works every metier: several (country, metier)
 #' combinations have no rows at all - so a coverage grid grouped by `metier4`
-#' x `Country` has genuine holes - and a few strata carry a zero-weight `Lan`
+#' x `vesselFlagCountry` has genuine holes - and a few strata carry a
+#' zero-weight `Lan`
 #' row (the fleet was there but landed nothing), which classifies as "no
 #' landings / no discards".
 #'
@@ -68,9 +69,9 @@
 #' \describe{
 #'   \item{catchCategory}{`"Lan"`, `"Dis"` or `"BMS"`.}
 #'   \item{year}{2020--2023. The raising engine takes one at a time.}
-#'   \item{vesselFlagCountry, Country}{Flag state: `"Peru"`, `"Chile"`,
+#'   \item{vesselFlagCountry}{Flag state: `"Peru"`, `"Chile"`,
 #'     `"Ecuador"`, `"China"`, `"South Korea"`, `"Russia"`, `"Vanuatu"`.}
-#'   \item{seasonValue, Season}{Quarter, `"1"`--`"4"`.}
+#'   \item{seasonValue}{Quarter, `"1"`--`"4"`.}
 #'   \item{areaValue, ICESDivision, ...}{FAO Area 87 (Pacific, Southeast)
 #'     division code and its parsed parts.}
 #'   \item{fleetValue, metier4, ...}{The metier6 string (`derive_fields()`
@@ -95,14 +96,14 @@
 #' data(anchoveta_catch)
 #'
 #' # discard rate and sampling coverage per stratum ...
-#' head(build_coverage_strata(anchoveta_catch, c("metier4", "Country")))
+#' head(build_coverage_strata(anchoveta_catch, c("metier4", "vesselFlagCountry")))
 #'
 #' # ... and as a figure
-#' plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country")
+#' plot_coverage_heat(anchoveta_catch, y = "metier4", x = "vesselFlagCountry")
 #'
 #' # raise the discards of one year: define the groups, then raise
 #' cef    <- subset(anchoveta_catch, year == 2023)
-#' dims   <- c("metier4", "ICESDivision", "Season")
+#' dims   <- c("metier4", "ICESDivision", "seasonValue")
 #' groups <- define_raising_groups_auto(cef, hierarchy = dims,
 #'                                      thresholds = c(50, 40, 30))
 #' raised <- run_native_raising(cef, dims, groups, type = "discards",
@@ -166,12 +167,12 @@
 #' data(anchoveta_dist)
 #'
 #' # how much of the catch has a length distribution linked
-#' head(build_coverage_strata(anchoveta_catch, c("metier4", "Country"),
+#' head(build_coverage_strata(anchoveta_catch, c("metier4", "vesselFlagCountry"),
 #'                            distributions = anchoveta_dist, what = "length"))
 #'
-#' plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
+#' plot_coverage_heat(anchoveta_catch, y = "metier4", x = "vesselFlagCountry",
 #'                    what = "length", distributions = anchoveta_dist,
 #'                    min_fish = 50)
 #' plot_NaLoA(anchoveta_catch, anchoveta_dist,
-#'           distributionType = "Age", fill = "Country")
+#'           distributionType = "Age", fill = "vesselFlagCountry")
 "anchoveta_dist"

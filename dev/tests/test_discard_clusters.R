@@ -16,7 +16,7 @@ drawable <- function(p)
 
 data(anchoveta_catch)
 c23 <- subset(anchoveta_catch, year == 2023)
-dims <- c("metier4", "ICESDivision", "Season")
+dims <- c("metier4", "ICESDivision", "seasonValue")
 
 ## ---- reproducible, and does not touch the caller's random state ---------
 seed_before <- if (exists(".Random.seed", envir = .GlobalEnv))

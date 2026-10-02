@@ -27,8 +27,8 @@ if (!requireNamespace("shiny", quietly = TRUE) || !length(fx)) {
 } else {
   ## ---- 1. the pure function is fine on matching dims ----------------
   cd <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
-  keys <- c("Stratum", "metier4", "Country", "areaValue",
-            "ICESSubArea", "Season")
+  keys <- c("Stratum", "metier4", "vesselFlagCountry", "areaValue",
+            "ICESSubArea", "seasonValue")
   st <- classify_strata(build_strata(cd, keys), 50)
   ok(length(exclusion_choices(st, keys, order_by = "weight")) == nrow(st),
      "one choice per stratum when the table carries the dims")
@@ -38,7 +38,7 @@ if (!requireNamespace("shiny", quietly = TRUE) || !length(fx)) {
   ## a table built on the wrong columns still yields a plausible-looking
   ## list, just of the wrong strata at the wrong resolution, and picking
   ## one excludes something the engine never sees.
-  st2 <- classify_strata(build_strata(cd, c("metier4", "Country")), 50)
+  st2 <- classify_strata(build_strata(cd, c("metier4", "vesselFlagCountry")), 50)
   wrong <- exclusion_choices(st2, keys, order_by = "weight")
   ok(length(wrong) != nrow(st),
      "a mismatched table gives a different list, not an error")
@@ -62,9 +62,9 @@ if (!requireNamespace("shiny", quietly = TRUE) || !length(fx)) {
   shiny::testServer(app, {
     rv$cef_catches <- cef_raw; rv$load_method <- "cef"
     session$setInputs(sep = ",", stock = "", year = "", threshold = 50,
-                      hier_2 = "metier4", hier_3 = "Country",
+                      hier_2 = "metier4", hier_3 = "vesselFlagCountry",
                       hier_4 = "areaValue", hier_5 = "ICESSubArea",
-                      hier_6 = "Season", thr_1 = c(50, 100),
+                      hier_6 = "seasonValue", thr_1 = c(50, 100),
                       ar_xsort = "weight", mg_xsort = "weight",
                       ca_xsort = "weight")
 

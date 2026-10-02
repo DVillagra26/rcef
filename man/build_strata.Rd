@@ -12,7 +12,7 @@ build_strata(catch_data, dims, dist = NULL)
 \code{variableUnit} column is used for unit conversion when present.}
 
 \item{dims}{Character vector of the columns that define a stratum (for
-example \code{c("metier4", "Country", "Season")}).}
+example \code{c("metier4", "vesselFlagCountry", "seasonValue")}).}
 
 \item{dist}{Optional CEF distributions table, used only to fill
 \code{n_measurements}.}
@@ -59,9 +59,9 @@ coincide whenever a stratum is either fully covered or not covered at all.\tabul
 }
 \examples{
 data(anchoveta_catch)
-st <- build_strata(anchoveta_catch, c("metier4", "Country"))
-head(st[, c("metier4", "Country", "landings", "discards", "coverage",
-            "discard_rate")])
+st <- build_strata(anchoveta_catch, c("metier4", "vesselFlagCountry"))
+head(st[, c("metier4", "vesselFlagCountry", "landings", "discards",
+            "coverage", "discard_rate")])
 }
 \seealso{
 \code{\link[=build_coverage_strata]{build_coverage_strata()}} for exploring discard rates and

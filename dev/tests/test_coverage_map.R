@@ -21,8 +21,8 @@ raw <- data.frame(
   domainCatchDis = rep(c("d", "", "d"), 6),
   areaValue = rep(c("27.4.a", "27.4.b", "27.7.d", "27.7.e", "27.3.a.20",
                     "99.9.z"), each = 3),
-  Country   = rep(c("BE", "FR"), 9),
-  Season    = rep(1:3, 6),
+  vesselFlagCountry = rep(c("BE", "FR"), 9),
+  seasonValue       = rep(1:3, 6),
   metier4   = rep(c("OTB", "TBB", "GNS"), 6),
   stringsAsFactors = FALSE)
 
@@ -48,17 +48,17 @@ ok(!"engine" %in% names(formals(plot_coverage_map)),
    "there is no engine to choose")
 
 ## ---- 3. group = several pies per area -----------------------------
-ok(isTRUE(is_gg(plot_coverage_map(raw, group = "Season"))), "group = Season")
-ok(isTRUE(is_gg(plot_coverage_map(raw, group = "Country"))), "group = Country")
+ok(isTRUE(is_gg(plot_coverage_map(raw, group = "seasonValue"))), "group = Season")
+ok(isTRUE(is_gg(plot_coverage_map(raw, group = "vesselFlagCountry"))), "group = Country")
 ok(isTRUE(is_gg(plot_coverage_map(raw, group = "metier4"))), "group = metier4")
 
 ## ---- 4. from a coverage table ------------------------------------
-sc <- build_coverage_strata(raw, c("areaValue", "Season"))
-ok(isTRUE(is_gg(plot_coverage_map(sc, group = "Season"))),
+sc <- build_coverage_strata(raw, c("areaValue", "seasonValue"))
+ok(isTRUE(is_gg(plot_coverage_map(sc, group = "seasonValue"))),
    "a build_coverage_strata() table is used as it stands")
 ok(isTRUE(all.equal(
-     ggplot2::ggplot_build(suppressWarnings(plot_coverage_map(raw, group = "Season")))$data,
-     ggplot2::ggplot_build(suppressWarnings(plot_coverage_map(sc, group = "Season")))$data)),
+     ggplot2::ggplot_build(suppressWarnings(plot_coverage_map(raw, group = "seasonValue")))$data,
+     ggplot2::ggplot_build(suppressWarnings(plot_coverage_map(sc, group = "seasonValue")))$data)),
    "and draws the same map as the raw catch it came from")
 
 ## ---- 5. bogus-only areas -> nothing to map ------------------

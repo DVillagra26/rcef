@@ -2,8 +2,8 @@
 ## does not carry used to take NOTHING, silently: assign_alloc_groups()
 ## turns the "object not found" into an all-FALSE, so the only symptom was
 ## an empty assignment (seen as "I picked the TBB group and nothing was
-## assigned" - the default strata were Country / fleetValue / areaValue /
-## Season, none of which is metier4). It must now say so, and must still
+## assigned" - the default strata were vesselFlagCountry / fleetValue /
+## areaValue / seasonValue, none of which is metier4). It must now say so, and must still
 ## assign normally once the column is there.
 
 FAIL <- 0L
@@ -21,7 +21,7 @@ g <- list(GA1 = mk(list(metier4 = "PS")))
 
 ## strata that DO carry the column: assigned, and no complaint
 with_col <- suppressWarnings(biology_link(anchoveta_catch, anchoveta_dist,
-  c("catchCategory", "metier4", "Country"), NULL, "LengthTotal"))
+  c("catchCategory", "metier4", "vesselFlagCountry"), NULL, "LengthTotal"))
 w1 <- NULL
 a1 <- withCallingHandlers(assign_alloc_groups(with_col, g, TRUE),
   warning = function(w) { w1 <<- conditionMessage(w); invokeRestart("muffleWarning") })
@@ -33,7 +33,7 @@ ok(!length(attr(a1, "missing_clause_cols")), "... and records no missing columns
 
 ## strata WITHOUT it (the default app strata): nothing assigned - but loudly
 without_col <- suppressWarnings(biology_link(anchoveta_catch, anchoveta_dist,
-  c("catchCategory", "Country", "fleetValue"), NULL, "LengthTotal"))
+  c("catchCategory", "vesselFlagCountry", "fleetValue"), NULL, "LengthTotal"))
 ok(!"metier4" %in% names(without_col), "(fixture: the strata really lack metier4)")
 w2 <- NULL
 a2 <- withCallingHandlers(assign_alloc_groups(without_col, g, TRUE),

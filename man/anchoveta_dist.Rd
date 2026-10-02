@@ -56,14 +56,14 @@ data(anchoveta_catch)
 data(anchoveta_dist)
 
 # how much of the catch has a length distribution linked
-head(build_coverage_strata(anchoveta_catch, c("metier4", "Country"),
+head(build_coverage_strata(anchoveta_catch, c("metier4", "vesselFlagCountry"),
                            distributions = anchoveta_dist, what = "length"))
 
-plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
+plot_coverage_heat(anchoveta_catch, y = "metier4", x = "vesselFlagCountry",
                    what = "length", distributions = anchoveta_dist,
                    min_fish = 50)
 plot_NaLoA(anchoveta_catch, anchoveta_dist,
-          distributionType = "Age", fill = "Country")
+          distributionType = "Age", fill = "vesselFlagCountry")
 }
 \seealso{
 \link{anchoveta_catch}, \link{coverage-plots},

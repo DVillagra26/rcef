@@ -7,12 +7,12 @@ ok <- function(cond, what) {
 suppressPackageStartupMessages(library(ggplot2))
 
 set.seed(1)
-d <- expand.grid(.class = c(20, 22, 24), Country = c("BE", "DE"),
-                 Season = 1:4, stringsAsFactors = FALSE)
+d <- expand.grid(.class = c(20, 22, 24), vesselFlagCountry = c("BE", "DE"),
+                 seasonValue = 1:4, stringsAsFactors = FALSE)
 d$mean_weight <- 100 + d$.class * 8 + rnorm(nrow(d), 0, 25)
 d$sd_weight <- 12
 
-p <- plot_MWaLoA(d, colour = "Country", facet = "Season")
+p <- plot_MWaLoA(d, colour = "vesselFlagCountry", facet = "seasonValue")
 ok(inherits(p, "ggplot"), "the mean-weight line plot builds")
 ok(!inherits(try(ggplot_build(p), silent = TRUE), "try-error"), "and renders")
 

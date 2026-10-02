@@ -10,7 +10,7 @@ stratum_axis_label(dims)
 \item{dims}{The key columns.}
 }
 \value{
-A single string, e.g. `"Stratum (metier4 + Country)"`.
+A single string, e.g. `"Stratum (metier4 + vesselFlagCountry)"`.
 }
 \description{
 Axis title naming the dimensions a stratum is made of

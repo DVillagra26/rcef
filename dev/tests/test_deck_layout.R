@@ -27,15 +27,15 @@ e <- new.env(); suppressWarnings(suppressMessages(source(hlp, local = e)))
 
 ## ---- 1. height follows the y categories ------------------------------
 d4 <- data.frame(fleet = rep(paste0("m4_", 1:8), 3),
-                 Country = rep(c("BE", "NL", "FR"), each = 8))
+                 vesselFlagCountry = rep(c("BE", "NL", "FR"), each = 8))
 d6 <- data.frame(fleet = rep(paste0("m6_", 1:110), 3),
-                 Country = rep(c("BE", "NL", "FR"), each = 110))
+                 vesselFlagCountry = rep(c("BE", "NL", "FR"), each = 110))
 h4 <- e$plot_height(d4, NULL, y_var = "fleet")
 h6 <- e$plot_height(d6, NULL, y_var = "fleet")
 ok(h6 > h4 * 2,
    "a metier6 axis gets far more height than a metier4 one")
 ok(h6 > 110 * 8, "roughly a label's worth of height per category")
-ok(e$plot_height(d6, "Country", y_var = "fleet") > h6,
+ok(e$plot_height(d6, "vesselFlagCountry", y_var = "fleet") > h6,
    "faceting on top of many categories adds height again")
 ok(e$plot_height(d6, NULL, y_var = "fleet") <= 6000,
    "but the height is capped so the page stays scrollable")

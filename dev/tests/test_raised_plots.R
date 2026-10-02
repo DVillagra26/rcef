@@ -29,7 +29,7 @@ has_geom <- function(p, cls)
 
 data(anchoveta_catch)
 c23 <- subset(anchoveta_catch, year == 2023)
-dims <- c("metier4", "ICESDivision", "Season")
+dims <- c("metier4", "ICESDivision", "seasonValue")
 grp <- quiet(define_raising_groups_auto(c23, hierarchy = dims, thresholds = c(50, 40, 30)))
 raised <- quiet(run_native_raising(c23, dims, grp, type = "discards", log_file = lf))
 

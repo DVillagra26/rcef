@@ -352,7 +352,7 @@ status_abbr <- function(threshold, what = "discard", min_meas = 0,
 #'   `total`, `domainCatchDis` and every column named in `dims`; a
 #'   `variableUnit` column is used for unit conversion when present.
 #' @param dims Character vector of the columns that define a stratum (for
-#'   example `c("metier4", "Country", "Season")`).
+#'   example `c("metier4", "vesselFlagCountry", "seasonValue")`).
 #' @param dist Optional CEF distributions table, used only to fill
 #'   `n_measurements`.
 #' @return A data frame, one row per stratum, with the columns above.
@@ -361,9 +361,9 @@ status_abbr <- function(threshold, what = "discard", min_meas = 0,
 #' @md
 #' @examples
 #' data(anchoveta_catch)
-#' st <- build_strata(anchoveta_catch, c("metier4", "Country"))
-#' head(st[, c("metier4", "Country", "landings", "discards", "coverage",
-#'             "discard_rate")])
+#' st <- build_strata(anchoveta_catch, c("metier4", "vesselFlagCountry"))
+#' head(st[, c("metier4", "vesselFlagCountry", "landings", "discards",
+#'             "coverage", "discard_rate")])
 #' @export
 build_strata <- function(catch_data, dims, dist = NULL) {
   stopifnot(length(dims) >= 1, all(dims %in% names(catch_data)))
@@ -521,10 +521,10 @@ count_measurements_by_stratum <- function(catch_data, dist, dims) {
 #' @examples
 #' data(anchoveta_catch)
 #' st <- classify_strata(build_strata(anchoveta_catch,
-#'                                    c("metier4", "Country")),
+#'                                    c("metier4", "vesselFlagCountry")),
 #'                       threshold = 50)
 #' table(st$cat_key)
-#' head(st[, c("metier4", "Country", "coverage", "cat_key")])
+#' head(st[, c("metier4", "vesselFlagCountry", "coverage", "cat_key")])
 #'
 #' # coverage only: trips dropped from the verdict
 #' table(classify_strata(build_strata(anchoveta_catch, "metier4"), 50,

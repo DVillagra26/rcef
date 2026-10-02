@@ -15,17 +15,17 @@ build_coverage_strata(
 \arguments{
 \item{catch}{CEF catch data (long format) carrying \code{catchCategory},
 \code{total} and, for discards, \code{domainCatchDis}, plus every column named in
-\code{dims}. \code{\link[=derive_fields]{derive_fields()}} adds \code{Country}, \code{Season}, \code{metier4}, \code{mesh}
-and the ICES area levels.}
+\code{dims}. \code{\link[=derive_fields]{derive_fields()}} adds \code{metier4}, \code{mesh} and the ICES area
+levels.}
 
 \item{dims}{Character vector of the columns that define a stratum, for
-example \code{c("metier4", "Country")}, or the finer
-\code{c("fleetValue", "areaValue", "Season")}. Default \code{NULL}: nothing is
-pooled, and the table is built at the finest a stratum naturally gets
-(\code{fleetValue}, \code{areaValue}, \code{Country}, \code{Season} - whichever of those
-are present in \code{catch}). For length and age \code{catchCategory} is never a
-stratum column (it is a column of the result, one row per catch part)
-and is ignored if named.}
+example \code{c("metier4", "vesselFlagCountry")}, or the finer
+\code{c("fleetValue", "areaValue", "seasonValue")}. Default \code{NULL}: nothing
+is pooled, and the table is built at the finest a stratum naturally
+gets (\code{fleetValue}, \code{areaValue}, \code{vesselFlagCountry}, \code{seasonValue} -
+whichever are present in \code{catch}). For length and age \code{catchCategory}
+is never a stratum column (it is a column of the result, one row per
+catch part) and is ignored if named.}
 
 \item{distributions}{A CEF distributions table. Required for
 \code{what = "length"} and \code{what = "age"}, ignored for discards.}
@@ -120,9 +120,9 @@ table built finer can be pooled to coarser plotted columns later without
 loss - coverage and rate are re-derived from the summed weights, never
 averaged. Leave \code{dims} out and nothing is pooled at all: the table is
 built at the finest a stratum naturally gets - \code{fleetValue}, \code{areaValue},
-\code{Country}, \code{Season}, whichever of those \code{\link[=derive_fields]{derive_fields()}} added are
-actually present in \code{catch} - so a stratum here is as fine as the data
-itself, and only naming \code{dims} yourself asks for anything coarser.
+\code{vesselFlagCountry}, \code{seasonValue}, whichever are actually present in
+\code{catch} - so a stratum here is as fine as the data itself, and only
+naming \code{dims} yourself asks for anything coarser.
 }
 
 \subsection{The other derived columns are not lost}{
@@ -148,28 +148,28 @@ data(anchoveta_catch)
 data(anchoveta_dist)
 
 # discard rate and coverage per metier x country
-cov <- build_coverage_strata(anchoveta_catch, c("metier4", "Country"))
+cov <- build_coverage_strata(anchoveta_catch, c("metier4", "vesselFlagCountry"))
 head(cov[order(-cov$landings), ])
 
 # the same table, coarser or finer
-build_coverage_strata(anchoveta_catch, "Season")
+build_coverage_strata(anchoveta_catch, "seasonValue")
 nrow(build_coverage_strata(anchoveta_catch,
-                           c("fleetValue", "areaValue", "Season")))
+                           c("fleetValue", "areaValue", "seasonValue")))
 
 # dims left out: nothing pooled - one row per fleetValue x areaValue x
-# Country x Season combination the catch actually has
+# vesselFlagCountry x seasonValue combination the catch actually has
 nrow(build_coverage_strata(anchoveta_catch))
 
 # length coverage of the landings: weight, share with a distribution,
 # and the measurements behind it
-len <- build_coverage_strata(anchoveta_catch, c("metier4", "Country"),
+len <- build_coverage_strata(anchoveta_catch, c("metier4", "vesselFlagCountry"),
                              anchoveta_dist, what = "length",
                              catchCategory = "Lan")
 head(len[order(-len$total), ])
 
 # the plots draw the same table, from the raw catch or from the table
-plot_coverage_heat(cov, y = "metier4", x = "Country", min_cov = 50)
-plot_DR(cov, x = "metier4", colour = "Country")
+plot_coverage_heat(cov, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
+plot_DR(cov, x = "metier4", colour = "vesselFlagCountry")
 }
 \seealso{
 \link{coverage-plots} and \code{\link[=plot_DR]{plot_DR()}}, which draw this

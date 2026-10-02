@@ -39,7 +39,7 @@ catchRaising() (discards) or catchAllocationAoL() (lengths and ages).
 \examples{
 \dontrun{
 sc <- classify_strata(build_strata(catch, dims), 50)
-g  <- define_raising_groups_auto(sc, c("metier4", "Country"), 50)
+g  <- define_raising_groups_auto(sc, c("metier4", "vesselFlagCountry"), 50)
 # g$strataCond / g$matchedDataCond -> catchRaising()
 }
 }

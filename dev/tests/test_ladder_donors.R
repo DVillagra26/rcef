@@ -9,7 +9,7 @@ ok <- function(cond, what) {
 ## Only one stratum in the whole table has measurements. Everything else
 ## has catch and nothing measured, so nothing can resolve on its own.
 mk <- function() {
-  bl <- expand.grid(metier4 = c("TBB", "OTB", "GNS"), Season = 1:4,
+  bl <- expand.grid(metier4 = c("TBB", "OTB", "GNS"), seasonValue = 1:4,
                     catchCategory = "Dis", stringsAsFactors = FALSE)
   bl$weight <- 10; bl$weight_measured <- 0; bl$n_measurements <- 0
   bl$weight_measured[1] <- 9; bl$n_measurements[1] <- 500   # TBB | 1
@@ -18,7 +18,7 @@ mk <- function() {
 }
 bl <- mk()
 th <- list(Lan = 50, Dis = 50)
-cols <- c("metier4", "Season")
+cols <- c("metier4", "seasonValue")
 
 ## --- the rungs must actually widen ------------------------------------
 ##
@@ -27,7 +27,7 @@ cols <- c("metier4", "Season")
 ## Dropping keys by NAME therefore dropped nothing whenever the two
 ## differed, every rung silently stayed at full precision, and a rung
 ## with no threshold at all could still leave strata unresolved.
-a <- assign_alloc_cascade(bl, cols, alloc_steps(c("Fleet", "Season"), th))
+a <- assign_alloc_cascade(bl, cols, alloc_steps(c("Fleet", "seasonValue"), th))
 ok(sum(is.na(a$alloc_step) & !a$alloc_empty) == 0,
    "role names differing from column names still widens the ladder")
 ok(identical(a$alloc_step[1], 1L), "the measured stratum resolves on its own data")
@@ -42,7 +42,7 @@ ok(all(!is.na(a$alloc_step[3:12])),
    "a stratum with no coverage of its own is still allocated to")
 
 ## --- the last rung has no bar, so nothing is left behind --------------
-last <- alloc_steps(c("Fleet", "Season"), th)
+last <- alloc_steps(c("Fleet", "seasonValue"), th)
 last <- last[[length(last)]]
 ok(all(is.infinite(last$threshold)), "the last rung has no rung threshold")
 ok(isTRUE(last$drop_all) || last$drop_n >= 2,
@@ -52,7 +52,7 @@ ok(isTRUE(last$drop_all) || last$drop_n >= 2,
 ##
 ## They say who may DONATE. A stratum failing them is dropped from the
 ## pool sums; it is still allocated to from whatever is left.
-st_b <- alloc_steps(c("Fleet", "Season"), th,
+st_b <- alloc_steps(c("Fleet", "seasonValue"), th,
                     donor_cov_min = 50, donor_meas_min = 100)
 ab <- assign_alloc_cascade(bl, cols, st_b)
 ok(sum(is.na(ab$alloc_step) & !ab$alloc_empty) == 0,
@@ -66,17 +66,17 @@ ok(any(grepl("donor-pool bars", na.omit(a3$alloc_reason))),
    "and the reason says it was the bars, not missing data")
 
 bl4 <- bl; bl4$weight_measured <- 0; bl4$n_measurements <- 0
-a4 <- assign_alloc_cascade(bl4, cols, alloc_steps(c("Fleet", "Season"), th))
+a4 <- assign_alloc_cascade(bl4, cols, alloc_steps(c("Fleet", "seasonValue"), th))
 ok(any(grepl("no measured data", na.omit(a4$alloc_reason))),
    "with nothing measured anywhere the reason says so instead")
 
 ## --- naming donors out by hand, like the discard catch-all ------------
-st_x <- alloc_steps(c("Fleet", "Season"), th, donor_excluded = "TBB | 1")
+st_x <- alloc_steps(c("Fleet", "seasonValue"), th, donor_excluded = "TBB | 1")
 ax <- assign_alloc_cascade(bl, cols, st_x)
 ok(sum(is.na(ax$alloc_step) & !ax$alloc_empty) == 0,
    "excluding one donor by name still leaves the other to draw on")
 
-st_x2 <- alloc_steps(c("Fleet", "Season"), th,
+st_x2 <- alloc_steps(c("Fleet", "seasonValue"), th,
                      donor_excluded = c("TBB | 1", "OTB | 1"))
 ax2 <- assign_alloc_cascade(bl, cols, st_x2)
 ok(sum(is.na(ax2$alloc_step) & !ax2$alloc_empty) == nrow(bl),
@@ -91,13 +91,13 @@ ok(any(grepl("donor-pool bars", na.omit(ax2$alloc_reason))),
 ## nothing, and the last rung must pick up everything that is left.
 ## Before this existed, that weight simply never reached the numbers at
 ## length and the totals quietly stopped adding up.
-b2 <- expand.grid(metier4 = c("TBB", "OTB", "GNS"), Country = c("BE", "NL"),
-                  Season = 1:4, catchCategory = "Dis", stringsAsFactors = FALSE)
+b2 <- expand.grid(metier4 = c("TBB", "OTB", "GNS"), vesselFlagCountry = c("BE", "NL"),
+                  seasonValue = 1:4, catchCategory = "Dis", stringsAsFactors = FALSE)
 b2$weight <- 100; b2$weight_measured <- 0; b2$n_measurements <- 0
 b2$weight_measured[1:3] <- c(60, 50, 40)
 b2$n_measurements[1:3]  <- c(300, 250, 200)
-c2 <- c("metier4", "Country", "Season")
-s2 <- alloc_steps(c("Fleet", "Country", "Season"),
+c2 <- c("metier4", "vesselFlagCountry", "seasonValue")
+s2 <- alloc_steps(c("Fleet", "vesselFlagCountry", "seasonValue"),
                   list(Lan = 50, Dis = 20), keep_cc = TRUE)
 a2 <- assign_alloc_cascade(b2, c2, s2)
 tb <- alloc_cascade_table(a2, s2)
@@ -113,8 +113,8 @@ ok(all(a2$alloc_step[1:3] == 1L),
    "and the strata that DID meet the bar still resolved on their own data")
 
 ## --- keep_cc decides what the last rung is allowed to pool ------------
-b3 <- expand.grid(metier4 = c("TBB", "OTB", "GNS"), Country = c("BE", "NL"),
-                  Season = 1:4, catchCategory = c("Lan", "Dis"),
+b3 <- expand.grid(metier4 = c("TBB", "OTB", "GNS"), vesselFlagCountry = c("BE", "NL"),
+                  seasonValue = 1:4, catchCategory = c("Lan", "Dis"),
                   stringsAsFactors = FALSE)
 b3$weight <- 100; b3$weight_measured <- 0; b3$n_measurements <- 0
 lan <- b3$catchCategory == "Lan"
@@ -122,7 +122,7 @@ b3$weight_measured[lan] <- 80; b3$n_measurements[lan] <- 900
 dis3 <- which(!lan)[1:3]
 b3$weight_measured[dis3] <- c(60, 50, 40); b3$n_measurements[dis3] <- c(300, 250, 200)
 
-sk <- alloc_steps(c("Fleet", "Country", "Season"), list(Lan = 50, Dis = 20),
+sk <- alloc_steps(c("Fleet", "vesselFlagCountry", "seasonValue"), list(Lan = 50, Dis = 20),
                   keep_cc = TRUE)
 ak <- assign_alloc_cascade(b3, c2, sk)
 on_last <- !is.na(ak$alloc_step) & ak$alloc_step == length(sk)
@@ -136,7 +136,7 @@ ok(all(ak$alloc_step[lan] < length(sk)),
 ## With the category droppable the joined rungs resolve the discards
 ## first, so the last resort is never needed. That is the point: it is
 ## the last resort, not the first thing tried after the category goes.
-sf <- alloc_steps(c("Fleet", "Country", "Season"), list(Lan = 50, Dis = 20),
+sf <- alloc_steps(c("Fleet", "vesselFlagCountry", "seasonValue"), list(Lan = 50, Dis = 20),
                   keep_cc = FALSE)
 af <- assign_alloc_cascade(b3, c2, sf)
 ok(sum(is.na(af$alloc_step) & !af$alloc_empty) == 0,

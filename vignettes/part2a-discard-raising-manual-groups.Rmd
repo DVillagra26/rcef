@@ -77,7 +77,9 @@ catch_data <- catch_data %>%
 
 `derive_fields()` is what turns raw CEF into strata-ready data: it parses
 `metier4` (and `target`, `mesh`) out of `fleetValue` and the ICES area
-levels out of `areaValue`, plus `Country` and `Season`.
+levels out of `areaValue`. Country and season are already their own
+columns - `vesselFlagCountry` and `seasonValue` - so there is nothing to
+derive for those two.
 
 ```{r derive}
 catch_data <- derive_fields(x = catch_data)
@@ -251,7 +253,7 @@ By metier, faceted by country - a finer aggregation than the group
 definitions themselves ever used:
 
 ```{r overview-country, fig.height = 6.5, fig.alt = "Imported and raised weight by metier, one panel per country"}
-plot_raised_catches(raised_catch = raised_manual, x = "metier4", facet = "Country")
+plot_raised_catches(raised_catch = raised_manual, x = "metier4", facet = "vesselFlagCountry")
 ```
 
 # Discard rate across the raising groups

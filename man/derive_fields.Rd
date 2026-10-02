@@ -16,13 +16,15 @@ derive_fields(x)
 Adds the columns an assessment groups by, none of which the CEF format
 carries directly: the nested metier levels (`metier4` to `metier6`) plus
 gear, target and mesh from `fleetValue`; the three ICES area levels from
-`areaValue`; `Country` and `Season`; and a `stratum_id`. Existing columns
-are left untouched, so it is safe to call more than once.
+`areaValue`; and a `stratum_id`. Country and season are not among them -
+`vesselFlagCountry` and `seasonValue` already name them, so a `Country` /
+`Season` alias would only be a second name for the same column. Existing
+columns are left untouched, so it is safe to call more than once.
 }
 \examples{
 \dontrun{
 catch <- derive_fields(catch)
-strata <- build_strata(catch, c("metier4", "Country"))
+strata <- build_strata(catch, c("metier4", "vesselFlagCountry"))
 }
 }
 \seealso{

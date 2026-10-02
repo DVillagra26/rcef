@@ -20,7 +20,7 @@ if (!length(fx)) {
   cat("no CEF fixture available - skipping\n")
 } else {
   cd <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
-  dm <- c("metier4", "Country", "ICESDivision", "Season")
+  dm <- c("metier4", "vesselFlagCountry", "ICESDivision", "seasonValue")
   st <- classify_strata(build_strata(cd, dm), 50)
   rec <- recommend_raising(st, dm, rep(50, 5), "Catch All by All", dm)
 

@@ -166,8 +166,9 @@ that weight would only repeat itself.
 
 The caption's first line says what a stratum is here: the plotted
 columns, grouped over every other stratum column ("grouping = metier4 x
-Country x Season, grouped over finer fleet levels (fleetValue) and area
-(areaValue)"), so the same figure drawn at other columns has other strata
+vesselFlagCountry x seasonValue, grouped over finer fleet levels
+(fleetValue) and area (areaValue)"), so the same figure drawn at other
+columns has other strata
 behind it. The rest of the caption spells out how the numbers on the
 figure are worked out - the value in a tile, what a bubble's size or a
 bar means - leaving out anything a legend already shows. On the heatmap
@@ -196,19 +197,19 @@ data(anchoveta_catch)
 data(anchoveta_dist)
 
 # discard coverage: which metier x country strata carry a discard estimate?
-plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country")
-plot_coverage_bubble(anchoveta_catch, y = "metier4", x = "Country",
+plot_coverage_heat(anchoveta_catch, y = "metier4", x = "vesselFlagCountry")
+plot_coverage_bubble(anchoveta_catch, y = "metier4", x = "vesselFlagCountry",
                      min_cov = 50, min_trip = 2)
-plot_coverage_bar(anchoveta_catch, y = "metier4", fill = "Country")
+plot_coverage_bar(anchoveta_catch, y = "metier4", fill = "vesselFlagCountry")
 
 # length coverage of the landings, with a floor on the measurements
 plot_coverage_heat(anchoveta_catch, anchoveta_dist, y = "metier4",
-                   x = "Country", what = "length", catchCategory = "Lan",
+                   x = "vesselFlagCountry", what = "length", catchCategory = "Lan",
                    min_cov = 50, min_fish = 100)
 
 # the same figure from the table behind it
-cov <- build_coverage_strata(anchoveta_catch, c("metier4", "Country"))
-plot_coverage_heat(cov, y = "metier4", x = "Country", min_cov = 50)
+cov <- build_coverage_strata(anchoveta_catch, c("metier4", "vesselFlagCountry"))
+plot_coverage_heat(cov, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
 }
 \seealso{
 \code{\link[=build_coverage_strata]{build_coverage_strata()}} for the table, \code{\link[=plot_coverage_map]{plot_coverage_map()}},

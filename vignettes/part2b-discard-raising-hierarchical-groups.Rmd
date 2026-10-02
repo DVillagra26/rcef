@@ -61,8 +61,10 @@ catch_data <- read.csv(file.path(cef_dir, "bll", "bll_2025_catches_CEF_v17.1.csv
 ```
 
 `derive_fields()` is what turns raw CEF into strata-ready data: `metier4`,
-`mesh` and friends out of `fleetValue`, the ICES area levels out of
-`areaValue`, plus `Country` and `Season`.
+`mesh` and friends out of `fleetValue`, and the ICES area levels out of
+`areaValue`. Country and season are already their own columns -
+`vesselFlagCountry` and `seasonValue` - so there is nothing to derive for
+those two.
 
 ```{r derive}
 catch_data <- derive_fields(x = catch_data)
@@ -82,7 +84,7 @@ for the same stratum, and every `stratum_id %in% c(...)` condition downstream
 would silently match nothing. Keep them in sync whenever either one changes.
 
 ```{r dims}
-dims <- c("Country", "Season", "mesh", "metier4")
+dims <- c("vesselFlagCountry", "seasonValue", "mesh", "metier4")
 strata0 <- build_strata(catch_data = catch_data, dims = dims)
 cat(sprintf("%d strata at %s, %s t landed\n",
             nrow(strata0), paste(dims, collapse = " + "),
@@ -117,7 +119,7 @@ to `hierarchy` - the same columns `dims` above already used to stamp
 it is.
 
 ```{r recommend}
-hierarchy  <- c("Country", "Season", "mesh", "metier4")
+hierarchy  <- c("vesselFlagCountry", "seasonValue", "mesh", "metier4")
 thresholds <- 50
 
 rec <- recommend_raising(strata = catch_data, hierarchy = hierarchy,
@@ -337,7 +339,7 @@ By country, faceted by season - a finer aggregation than the group
 definitions themselves ever used:
 
 ```{r overview-country, fig.height = 6.5, fig.alt = "Imported and raised weight by country, one panel per season"}
-plot_raised_catches(raised_catch = raised_hier, x = "Country", facet = "Season")
+plot_raised_catches(raised_catch = raised_hier, x = "vesselFlagCountry", facet = "seasonValue")
 ```
 
 # Discard rate across the raising groups

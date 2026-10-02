@@ -58,7 +58,7 @@ A stratum is one row of the discard coverage table
 (\code{\link[=build_coverage_strata]{build_coverage_strata()}}). Given a discard coverage table, its rows are
 drawn exactly as they are - one point per row. Given raw catch, the table
 is built at the finest resolution the catch carries (\code{fleetValue},
-\code{areaValue}, \code{Country}, \code{Season}, whichever are present) \emph{together with}
+\code{areaValue}, \code{vesselFlagCountry}, \code{seasonValue}, whichever are present) \emph{together with}
 \code{x} / \code{colour} / \code{shape} / \code{facet}, so a point is always an individual,
 un-pooled stratum: several points can share one \code{x} level. \code{strata_vars}
 (the columns behind a point's label, see below) is exactly this set.
@@ -117,18 +117,18 @@ ordinary one. \code{"rate"} is bounded, so its axis is an ordinary 0-100\% one.
 \examples{
 data(anchoveta_catch)
 
-plot_DR(anchoveta_catch, x = "metier4", colour = "Country")
-plot_DR(anchoveta_catch, x = "Country", colour = "metier4",
-       facet = "Season")
+plot_DR(anchoveta_catch, x = "metier4", colour = "vesselFlagCountry")
+plot_DR(anchoveta_catch, x = "vesselFlagCountry", colour = "metier4",
+       facet = "seasonValue")
 
 # discards as a share of the catch, with a reference line: the strata
 # above 20\% are named, in full
-plot_DR(anchoveta_catch, x = "metier4", colour = "Country",
+plot_DR(anchoveta_catch, x = "metier4", colour = "vesselFlagCountry",
        rate = "rate", reference = 0.2)
 
 # the table behind the points
-cov <- build_coverage_strata(anchoveta_catch, c("metier4", "Country"))
-head(cov[!is.na(cov$rate), c("metier4", "Country", "total", "rate",
+cov <- build_coverage_strata(anchoveta_catch, c("metier4", "vesselFlagCountry"))
+head(cov[!is.na(cov$rate), c("metier4", "vesselFlagCountry", "total", "rate",
                              "discardRate")])
 }
 \seealso{

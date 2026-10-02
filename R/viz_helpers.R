@@ -80,6 +80,33 @@ reorder_mesh <- function(d, vars) {
   d
 }
 
+#' Make a plot's numeric category columns discrete
+#'
+#' `seasonValue` is an integer quarter code in the CEF data, not a character
+#' column. Mapped straight onto a fill, a shape or an axis it is read as a
+#' continuous variable: a fill or shape scale then errors outright, and an
+#' axis grows breaks at 1.5 and 2.5. Every column a plot is about to use as
+#' a category is a category, whatever type the file stored it as, so this
+#' turns the numeric ones into factors - in numeric order, `2` before `10` -
+#' once, on the plot's own data, before any aesthetic is built from it. A
+#' no-op for a column that is already character or factor.
+#'
+#' @param d A data frame.
+#' @param vars Column names the plot is about to use as categories (`x`,
+#'   `y`, `fill`, `colour`, `shape`, `facet`, ... - `NULL` entries and names
+#'   `d` does not carry are fine).
+#' @return `d`, with each numeric column named in `vars` as a factor.
+#' @seealso [reorder_mesh()]
+#' @keywords internal
+#' @noRd
+#' @export
+discrete_cols <- function(d, vars) {
+  vars <- vars[!is.na(vars) & nzchar(vars)]
+  for (v in intersect(vars, names(d)))
+    if (is.numeric(d[[v]])) d[[v]] <- factor(d[[v]])
+  d
+}
+
 #' Facet layer for the coverage and discard-rate plots
 #'
 #' Builds a single-variable [ggplot2::facet_wrap()], or `NULL` when no facet
@@ -182,8 +209,8 @@ cov_title <- function(what, weight_label, by = NULL) {
 #' Shared by [strata_sentence()] and [finest_per_family()]: fleet
 #' (`fleetValue` > `metier6` > `metier5` > `metier4`/`gear`/`target`/`mesh` >
 #' `FleetType`), area (`areaValue` > `ICESSubdivision` > `ICESDivision` >
-#' `ICESSubArea`), country and season (`Country`/`vesselFlagCountry`,
-#' `Season`/`seasonValue` - a single level each, unlike fleet/area).
+#' `ICESSubArea`), country and season (`vesselFlagCountry`, `seasonValue` -
+#' a single level each, unlike fleet/area).
 #'
 #' @return A named list of named integer vectors (column name -> level,
 #'   1 = finest).
@@ -195,8 +222,8 @@ strata_families <- function() list(
               gear = 4, target = 4, mesh = 4, FleetType = 5),
   area    = c(areaValue = 1, ICESSubdivision = 2, ICESDivision = 3,
               ICESSubArea = 4),
-  country = c(Country = 1, vesselFlagCountry = 1),
-  season  = c(Season = 1, seasonValue = 1))
+  country = c(vesselFlagCountry = 1),
+  season  = c(seasonValue = 1))
 
 #' Join strings with a trailing "and", Oxford comma for three or more
 #'
@@ -254,10 +281,11 @@ share_phrase <- function(what, weight_label)
 
 #' The caption sentence naming the strata and what they group over
 #'
-#' A stratum is fleet x area x country x season. A figure that shows only some
-#' of those - metier4 by Country, say - groups everything else into each
-#' mark: every area and season, and every fleet finer than metier4. This
-#' names what is shown and what is grouped over, so a caption can say it.
+#' A stratum is fleet x area x country x season. A figure that shows only
+#' some of those - metier4 by vesselFlagCountry, say - groups everything
+#' else into each mark: every area and season, and every fleet finer than
+#' metier4. This names what is shown and what is grouped over, so a caption
+#' can say it.
 #'
 #' The variables are grouped into the four families [strata_families()]
 #' defines. A family with no variable shown is grouped over entirely; one
@@ -273,10 +301,10 @@ share_phrase <- function(what, weight_label)
 #'   columns exist, so only variables it really has are named; a coverage
 #'   table no longer has them and `NULL` has nothing to say, so both assume
 #'   the finest of each family.
-#' @return e.g. `"grouping = metier4 x Country x Season, grouped over finer
-#'   fleet levels (fleetValue) and area (areaValue)."`; `"grouping = no
-#'   grouping, raw data as in CEF (CN) data."` when nothing is grouped over;
-#'   `""` when `vars` names no column.
+#' @return e.g. `"grouping = metier4 x vesselFlagCountry x seasonValue,
+#'   grouped over finer fleet levels (fleetValue) and area (areaValue)."`;
+#'   `"grouping = no grouping, raw data as in CEF (CN) data."` when nothing
+#'   is grouped over; `""` when `vars` names no column.
 #' @keywords internal
 #' @noRd
 #' @export
@@ -285,8 +313,8 @@ strata_sentence <- function(vars, data = NULL) {
   if (!length(vars)) return("")
   have <- if (is.data.frame(data) && is.na(coverage_table_what(data))) names(data)
   fam <- strata_families()
-  canonical <- c(fleet = "fleetValue", area = "areaValue", country = "Country",
-                 season = "Season")
+  canonical <- c(fleet = "fleetValue", area = "areaValue",
+                 country = "vesselFlagCountry", season = "seasonValue")
   grouped <- character(0)
   if (!any(c("Stratum", "domainCatchDis", "domainBiology") %in% vars)) {
     for (f in names(fam)) {
@@ -489,7 +517,7 @@ normalize_what <- function(what) {
 #'
 #' # the legend of a figure that is on screen
 #' data(anchoveta_catch)
-#' p <- plot_coverage_heat(anchoveta_catch, y = "metier4", x = "Country",
+#' p <- plot_coverage_heat(anchoveta_catch, y = "metier4", x = "vesselFlagCountry",
 #'                         min_cov = 50, min_trip = 2)
 #' do.call(status_legend_plot, attr(p, "status_legend"))
 #' @export
@@ -746,7 +774,8 @@ biology_dist_prep <- function(data, distributions, distributionType,
   lab <- biology_axis_labels(distributionType, quantity)
   if (!is.null(distributions)) {
     if (is.null(dims))
-      dims <- unique(c("catchCategory", "fleetValue", "Country", "Season", grp))
+      dims <- unique(c("catchCategory", "fleetValue", "vesselFlagCountry",
+                       "seasonValue", grp))
     dims <- intersect(dims, names(as.data.frame(data)))
     linked <- link_dist_to_strata(data, distributions, dims, catchCategory,
                                   type = distributionType)

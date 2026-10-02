@@ -5,7 +5,7 @@ ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
   else { FAIL <<- FAIL + 1L; cat("FAIL  ", what, "\n") }
 }
-dims <- c("metier4", "Country", "ICESDivision", "Season")
+dims <- c("metier4", "vesselFlagCountry", "ICESDivision", "seasonValue")
 
 ## --- discards ---------------------------------------------------------
 r <- new_rule("G1", "beam", list(list(var = "metier4", values = "TBB")),
@@ -85,7 +85,7 @@ ok(!any(grepl("add_stratum_metrics", em2)),
 fx <- "anchoveta"
 if (length(fx)) {
   cd <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
-  prep <- rcef:::cef_prepare(cd, c("metier4", "Country", "ICESDivision", "Season"))
+  prep <- rcef:::cef_prepare(cd, c("metier4", "vesselFlagCountry", "ICESDivision", "seasonValue"))
   ok("coverage" %in% names(prep), "cef_prepare keeps a plain coverage column")
   ok("n_measurements" %in% names(prep), "and a plain n_measurements column")
   ok(!any(grepl("coverage\\.|discard_rate\\.", names(prep))),
