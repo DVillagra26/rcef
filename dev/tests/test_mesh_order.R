@@ -96,18 +96,15 @@ grp <- quiet(define_raising_groups_auto(c23, hierarchy = dims,
                                         thresholds = c(50, 40, 30)))
 raised <- quiet(run_native_raising(c23, dims, grp, type = "discards",
                                    log_file = tempfile(fileext = ".txt")))
-raised$mesh <- mesh_of(raised$metier4)
-matched_data_cond <- list(PS = rlang::quo(metier4 == "PS"),
-                          MPT = rlang::quo(metier4 == "MPT"),
-                          REST = rlang::quo(TRUE))
-p6 <- plot_raised_DR(raised_catch = raised, catch_data = c23,
-                     matched_data_cond = matched_data_cond, x = "mesh")
+# per (fleet, area) rather than per metier4: three metiers give three meshes
+# whose natural and alphabetical order agree, which would prove nothing
+raised$mesh <- mesh_of(paste(raised$fleetValue, raised$areaValue))
+p6 <- plot_raised_DR(raised_catch = raised, x = "mesh")
 ok(drawable(p6), "plot_raised_DR(): draws with x = mesh")
-ok(identical(levels(p6$data$mesh), mesh_levels(p6$data$mesh)),
-  "plot_raised_DR(): x = mesh orders the raised layer by size")
-donor_layer <- p6$layers[[1]]$data
-ok(identical(levels(donor_layer$mesh), mesh_levels(donor_layer$mesh)),
-  "plot_raised_DR(): x = mesh also orders the donor layer by size")
+ok(length(levels(p6$data$mesh)) > 3 &&
+     identical(levels(p6$data$mesh), mesh_levels(p6$data$mesh)) &&
+     !identical(levels(p6$data$mesh), sort(levels(p6$data$mesh))),
+  "plot_raised_DR(): x = mesh orders the points by size, not alphabetically")
 
 ## ---- plot_NaLoA(): fill = \"mesh\" -------------------------------------------
 p7 <- plot_NaLoA(c23, anchoveta_dist, fill = "mesh")

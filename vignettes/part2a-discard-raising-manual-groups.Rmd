@@ -260,25 +260,24 @@ plot_raised_catches(raised_catch = raised_manual, x = "metier4", facet = "vessel
 
 Not how much weight moved, but whether the *strata a group draws its rate
 from* agree with each other. `plot_raised_DR()` is `plot_DR()` for
-after raising: one point per stratum of the raised catch (shaded by how much
-of its own discard weight was raised rather than sampled), plus - underneath,
-muted - one point per donor stratum actually behind each group's rate,
-re-testing `matched_data_cond` against `catch_data` internally. Put the
-raising **group** on `x` (`"DrGroup"`) and a group whose donor cloud is tight
-is a real group; one scattered from 2% to 40% is a guess dressed up as a
-group, no matter how plausible its own raised rate looks on top.
+after raising, from the raised catch alone: one point per raw stratum,
+**solid** where its discards came with the data (imported, i.e. sampled) and
+**transparent** where the raising added them. Put the raising **group** on
+`x` (`"DrGroup"`): a group's transparent points all sit on one line, the rate
+it was raised at, and its solid points show how far the strata it was built
+from scatter around that line - a group whose solid points run from 2% to
+40% is a guess dressed up as a group, no matter how plausible its raised
+rate looks.
 
-Unlike the pre-raising plot there is no weighted-mean line (the raised points
-are the reference here) and no per-point labels - and unlike the old
-hand-built `donor_detail_manual` table this replaces, changing `x`, `colour`
-or `facet` below needs no re-derivation: `plot_raised_DR()` re-runs the same
-donor-pool lookup internally, from `matchedDataCond_manual` and `catch_data`,
-every time.
+Unlike the pre-raising plot there is no weighted-mean line (the transparent
+points are the reference here) and no per-point labels. Only the strata of
+the raised catch are drawn, so a group raised from a pool wider than its own
+strata - G4, the rest of the gears - shows its donors under the groups they
+belong to rather than under G4.
 
-```{r donors-plot, fig.height = 5, fig.alt = "Discard rate of the raised catch and its donor strata, by raising group, coloured by metier"}
-plot_raised_DR(raised_catch = raised_manual, catch_data = catch_data,
-              matched_data_cond = matchedDataCond_manual,
-              x = "DrGroup", colour = "metier4", rate = "rate")
+```{r donors-plot, fig.height = 5, fig.alt = "Discard rate of every stratum of the raised catch by raising group, solid where imported and transparent where raised, coloured by metier"}
+plot_raised_DR(raised_catch = raised_manual,
+               x = "DrGroup", colour = "metier4", rate = "rate")
 ```
 
 # Output: CC (Catch Combined)

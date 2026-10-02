@@ -2,12 +2,10 @@
 % Please edit documentation in R/viz_plots.R
 \name{plot_raised_DR}
 \alias{plot_raised_DR}
-\title{Discard rate after raising: the raised catch, and the donor strata behind it}
+\title{Discard rate after raising: every stratum of the raised catch}
 \usage{
 plot_raised_DR(
   raised_catch,
-  catch_data,
-  matched_data_cond,
   x,
   colour = NULL,
   shape = NULL,
@@ -21,19 +19,12 @@ plot_raised_DR(
 \arguments{
 \item{raised_catch}{Output of \code{\link[=catchRaising]{catchRaising()}}.}
 
-\item{catch_data}{The original catch \code{\link[=derive_fields]{derive_fields()}} was run on - what
-\code{matched_data_cond} is re-tested against for the donor layer.}
-
-\item{matched_data_cond}{Named list of donor-pool quosures, one per raising
-group (as passed to \code{\link[=catchRaising]{catchRaising()}}'s
-\code{condition_matched_data_list}).}
-
 \item{x}{Column on the x axis: one point per level (times \code{colour},
 \code{shape} and \code{facet}). Can be \code{"DrGroup"}. Required.}
 
-\item{colour}{Column mapped to the point fill (raised layer only).}
+\item{colour}{Column mapped to the point fill.}
 
-\item{shape}{Column mapped to the point shape (raised layer only).}
+\item{shape}{Column mapped to the point shape.}
 
 \item{facet}{Optional facet column.}
 
@@ -46,35 +37,37 @@ scale of \code{rate}. Draws a dashed line.}
 
 \item{jitter}{Jitter the points horizontally. Cosmetic only.}
 
-\item{palette}{\code{"default"}, \code{"colorblind"} or \code{"gradual"}: the
-raised-layer point colours (see \code{\link[=var_palette]{var_palette()}}).}
+\item{palette}{\code{"default"}, \code{"colorblind"} or \code{"gradual"}: the point
+colours (see \code{\link[=var_palette]{var_palette()}}).}
 }
 \value{
 A ggplot object, or \code{NULL} when no stratum has a discard rate.
 }
 \description{
-\code{\link[=plot_DR]{plot_DR()}} for after raising: one point per stratum from the
-raised catch, shaded by how much of its discard weight was raised rather
-than sampled (as in \code{\link[=plot_raised_catches]{plot_raised_catches()}}'s imported/raised shading, but
-as a share rather than a strict either/or - a point can blend both when the
-chosen \code{x}/\code{colour}/\code{facet} groups several finer strata together), plus -
-underneath, muted - one point per donor stratum actually behind each
-group's rate. Put the raising group on \code{x} (\code{"DrGroup"}) and a group whose
-donor cloud is tight is a real group; one whose cloud is scattered is a
-guess dressed up as a group, no matter how plausible its own raised rate
-looks on top.
+\code{\link[=plot_DR]{plot_DR()}} for after raising, from the raised catch alone: one point per
+raw stratum - its discards over its landings (or over its catch). A stratum
+whose discards came with the data (imported, i.e. sampled) is drawn solid; a
+stratum whose discards were added by the raising is drawn transparent, the
+same imported / raised shading as in \code{\link[=plot_raised_catches]{plot_raised_catches()}}. Put the
+raising group on \code{x} (\code{"DrGroup"}): a group's transparent points all sit on
+one line, the rate it was raised at, and its solid points show how far the
+strata it was built from scatter around that line - a group whose solid
+points are spread far from it is a guess dressed up as a group.
 }
 \details{
-\subsection{Why two layers, not one}{
+\subsection{Raw strata}{
 
-A raised stratum's own \code{DrGroup} names only the group \emph{that stratum}
-belongs to - never every group whose rate it helped compute. A REST-style
-group that draws on strata far outside its own (see the donor-pool section
-of the raising vignettes) looks deceptively tight if only \code{raised_catch} is
-plotted: its own few strata may agree, while the much wider pool that
-actually set its rate does not. Re-testing \code{matched_data_cond} against
-\code{catch_data} - done here internally, so it re-runs correctly whatever \code{x},
-\code{colour} or \code{facet} is set to - is the only way to see that wider pool.
+A stratum here is one fleet x area x country x season of the raised catch
+(plus whatever else \code{x}, \code{colour}, \code{shape} and \code{facet} name), never an
+average of several, so it is either imported or raised - there is no
+in-between to show. If a stratum does carry both kinds of discard row it is
+drawn as raised. A raised stratum whose group had no donor to draw a rate
+from comes out of the raising as \code{NaN}; it has no rate to plot and is left
+out, with a message saying how many.
+
+Only the raised catch is needed, so only the strata in it are drawn: the
+donors of a group wider than its own strata (a REST group raised from
+every gear, say) appear under the groups they themselves belong to.
 }
 
 \subsection{The rate, and the reference line}{
@@ -82,7 +75,7 @@ actually set its rate does not. Re-testing \code{matched_data_cond} against
 Both work exactly as in \code{\link[=plot_DR]{plot_DR()}}: \code{rate} chooses \code{"ratio"}
 (discards / landings, the default) or \code{"rate"} (discards / catch), and
 \code{reference} draws a dashed line at a fixed threshold. Unlike
-\code{\link[=plot_DR]{plot_DR()}}, there is no weighted-mean line - the raised points
+\code{\link[=plot_DR]{plot_DR()}}, there is no weighted-mean line - the transparent points
 themselves are the reference here - and no per-point labels.
 }
 }

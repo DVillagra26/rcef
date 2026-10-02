@@ -268,38 +268,27 @@ plot_raised_catches(raised_catch = raised_hier, x = "vesselFlagCountry", facet =
 # Do the groups agree with themselves?
 
 A different question from how much weight moved: whether the *strata a group
-draws its rate from* agree with each other. `plot_raised_DR()` puts the
-raising **group** on `x` and shows one point per donor stratum, muted,
-underneath the raised catch's own points - a group whose donor cloud is
-scattered from 2% to 40% is not a group, it is a guess, no matter how
-plausible its own raised rate looks on top.
+draws its rate from* agree with each other. `plot_raised_DR()` takes the
+raised catch alone and puts the raising **group** on `x`: one point per raw
+stratum, **solid** where its discards were imported (sampled) and
+**transparent** where the raising added them. A group's transparent points
+all sit on one line - the rate it was raised at - and its solid points show
+how far the strata it was built from scatter around that line; a group whose
+solid points run from 2% to 40% is not a group, it is a guess, no matter how
+plausible its raised rate looks. Only the strata of the raised catch are
+drawn, so a group raised from a pool wider than its own strata shows that
+pool's donors under the groups they belong to.
 
 ## Manual
 
-`plot_raised_DR()` re-tests `matchedDataCond_manual` against `catch_data`
-internally (the same "per-stratum spread behind each group average" check the
-source example runs before raising) and plots one point per donor stratum,
-muted, underneath the raised catch's own points. The table's `rate` is
-discards / covered landings - the source example's `dis_ratio` and the CAS
-output's `rate`.
-
-```{r donors-manual-plot, fig.height = 5, fig.alt = "Discard rate of the manual scheme's raised catch and its donor strata, coloured by metier"}
-plot_raised_DR(raised_catch = raised_manual, catch_data = catch_data,
-              matched_data_cond = matchedDataCond_manual,
-              x = "DrGroup", colour = "metier4")
+```{r donors-manual-plot, fig.height = 5, fig.alt = "Discard rate of every stratum of the manual scheme's raised catch by raising group, solid where imported and transparent where raised, coloured by metier"}
+plot_raised_DR(raised_catch = raised_manual, x = "DrGroup", colour = "metier4")
 ```
 
 ## Hierarchical
 
-Here too the donors of a group are *not* the strata it raises: a stratum
-raised from a wide pool often has no discard data of its own, and the pool a
-group draws on is every stratum sharing its key values - `auto_conds$matchedDataCond`,
-not `auto_conds$strataCond`.
-
-```{r donors-hier-plot, fig.width = 9, fig.height = 5.5, fig.alt = "Discard rate of the hierarchical scheme's raised catch and its donor strata, coloured by metier"}
-plot_raised_DR(raised_catch = raised_hier, catch_data = catch_data,
-              matched_data_cond = auto_conds$matchedDataCond,
-              x = "DrGroup", colour = "metier4")
+```{r donors-hier-plot, fig.width = 9, fig.height = 5.5, fig.alt = "Discard rate of every stratum of the hierarchical scheme's raised catch by raising group, solid where imported and transparent where raised, coloured by metier"}
+plot_raised_DR(raised_catch = raised_hier, x = "DrGroup", colour = "metier4")
 ```
 
 # Scenarios: what the hierarchy's shape changes

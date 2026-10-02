@@ -1067,50 +1067,47 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL,
   p
 }
 
-#' Discard rate after raising: the raised catch, and the donor strata behind it
+#' Discard rate after raising: every stratum of the raised catch
 #'
 #' @description
-#' [plot_DR()] for after raising: one point per stratum from the
-#' raised catch, shaded by how much of its discard weight was raised rather
-#' than sampled (as in [plot_raised_catches()]'s imported/raised shading, but
-#' as a share rather than a strict either/or - a point can blend both when the
-#' chosen `x`/`colour`/`facet` groups several finer strata together), plus -
-#' underneath, muted - one point per donor stratum actually behind each
-#' group's rate. Put the raising group on `x` (`"DrGroup"`) and a group whose
-#' donor cloud is tight is a real group; one whose cloud is scattered is a
-#' guess dressed up as a group, no matter how plausible its own raised rate
-#' looks on top.
+#' [plot_DR()] for after raising, from the raised catch alone: one point per
+#' raw stratum - its discards over its landings (or over its catch). A stratum
+#' whose discards came with the data (imported, i.e. sampled) is drawn solid; a
+#' stratum whose discards were added by the raising is drawn transparent, the
+#' same imported / raised shading as in [plot_raised_catches()]. Put the
+#' raising group on `x` (`"DrGroup"`): a group's transparent points all sit on
+#' one line, the rate it was raised at, and its solid points show how far the
+#' strata it was built from scatter around that line - a group whose solid
+#' points are spread far from it is a guess dressed up as a group.
 #'
 #' @details
-#' ## Why two layers, not one
+#' ## Raw strata
 #'
-#' A raised stratum's own `DrGroup` names only the group *that stratum*
-#' belongs to - never every group whose rate it helped compute. A REST-style
-#' group that draws on strata far outside its own (see the donor-pool section
-#' of the raising vignettes) looks deceptively tight if only `raised_catch` is
-#' plotted: its own few strata may agree, while the much wider pool that
-#' actually set its rate does not. Re-testing `matched_data_cond` against
-#' `catch_data` - done here internally, so it re-runs correctly whatever `x`,
-#' `colour` or `facet` is set to - is the only way to see that wider pool.
+#' A stratum here is one fleet x area x country x season of the raised catch
+#' (plus whatever else `x`, `colour`, `shape` and `facet` name), never an
+#' average of several, so it is either imported or raised - there is no
+#' in-between to show. If a stratum does carry both kinds of discard row it is
+#' drawn as raised. A raised stratum whose group had no donor to draw a rate
+#' from comes out of the raising as `NaN`; it has no rate to plot and is left
+#' out, with a message saying how many.
+#'
+#' Only the raised catch is needed, so only the strata in it are drawn: the
+#' donors of a group wider than its own strata (a REST group raised from
+#' every gear, say) appear under the groups they themselves belong to.
 #'
 #' ## The rate, and the reference line
 #'
 #' Both work exactly as in [plot_DR()]: `rate` chooses `"ratio"`
 #' (discards / landings, the default) or `"rate"` (discards / catch), and
 #' `reference` draws a dashed line at a fixed threshold. Unlike
-#' [plot_DR()], there is no weighted-mean line - the raised points
+#' [plot_DR()], there is no weighted-mean line - the transparent points
 #' themselves are the reference here - and no per-point labels.
 #'
 #' @param raised_catch Output of [catchRaising()].
-#' @param catch_data The original catch [derive_fields()] was run on - what
-#'   `matched_data_cond` is re-tested against for the donor layer.
-#' @param matched_data_cond Named list of donor-pool quosures, one per raising
-#'   group (as passed to [catchRaising()]'s
-#'   `condition_matched_data_list`).
 #' @param x Column on the x axis: one point per level (times `colour`,
 #'   `shape` and `facet`). Can be `"DrGroup"`. Required.
-#' @param colour Column mapped to the point fill (raised layer only).
-#' @param shape Column mapped to the point shape (raised layer only).
+#' @param colour Column mapped to the point fill.
+#' @param shape Column mapped to the point shape.
 #' @param facet Optional facet column.
 #' @param rate `"ratio"` (default, discards / landings) or `"rate"` (discards
 #'   / catch): which discard rate is the y variable. See
@@ -1118,8 +1115,8 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL,
 #' @param reference Optional single rate, as a fraction (`0.3` = 30%), on the
 #'   scale of `rate`. Draws a dashed line.
 #' @param jitter Jitter the points horizontally. Cosmetic only.
-#' @param palette `"default"`, `"colorblind"` or `"gradual"`: the
-#'   raised-layer point colours (see [var_palette()]).
+#' @param palette `"default"`, `"colorblind"` or `"gradual"`: the point
+#'   colours (see [var_palette()]).
 #' @return A ggplot object, or `NULL` when no stratum has a discard rate.
 #' @seealso [plot_DR()] for the pre-raising counterpart;
 #'   [plot_raised_catches()] for the raised weight itself.
@@ -1127,10 +1124,9 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL,
 #' @family raising plots
 #' @md
 #' @export
-plot_raised_DR <- function(raised_catch, catch_data, matched_data_cond, x,
-                           colour = NULL, shape = NULL, facet = NULL,
-                           rate = c("ratio", "rate"), reference = NULL,
-                           jitter = TRUE,
+plot_raised_DR <- function(raised_catch, x, colour = NULL, shape = NULL,
+                           facet = NULL, rate = c("ratio", "rate"),
+                           reference = NULL, jitter = TRUE,
                            palette = c("default", "colorblind", "gradual")) {
   palette <- match.arg(palette)
   rate_type <- match.arg(rate)
@@ -1143,81 +1139,70 @@ plot_raised_DR <- function(raised_catch, catch_data, matched_data_cond, x,
          "fraction between 0 and 1 (0.3 = 30%), not a percent", call. = FALSE)
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
   if (!has(x)) stop("plot_raised_DR(): `x` is required", call. = FALSE)
-  if (!is.list(matched_data_cond) || is.null(names(matched_data_cond)) ||
-      any(!nzchar(names(matched_data_cond))))
-    stop("plot_raised_DR(): `matched_data_cond` must be a named list of ",
-         "quosures, one per raising group", call. = FALSE)
   x_var <- x; colour_var <- colour; shape_var <- shape; facet_var <- facet
-  struct_keys <- unique(c(x_var, if (has(facet_var)) facet_var))
-  keys <- unique(c(struct_keys, if (has(colour_var)) colour_var,
+  keys <- unique(c(x_var, if (has(facet_var)) facet_var,
+                   if (has(colour_var)) colour_var,
                    if (has(shape_var)) shape_var))
+  need <- c("catchCategory", "total", "importedOrRaised")
+  miss <- setdiff(c(need, keys), names(raised_catch))
+  if (length(miss))
+    stop("plot_raised_DR(): `raised_catch` has no column ",
+         paste0("'", miss, "'", collapse = ", "),
+         if (any(miss %in% need)) " - it takes the output of catchRaising()",
+         call. = FALSE)
 
-  # y for a coverage-strata table, whichever rate is asked for - shared by
-  # both layers so a point means the same thing in each
-  y_of <- function(d) if (identical(rate_type, "ratio")) d$rate
-                      else if ("discardRate" %in% names(d)) d$discardRate
-                      else d$total / (d$weightingTotal + d$total)
-
-  # ---- raised layer: raised_catch, at the finest dims it carries ----------
+  # ---- one point per raw stratum ------------------------------------------
   # Not build_coverage_strata(): its rate needs a Dis row's domainCatchDis to
   # link to the Lan row it belongs to, and a raised Dis row's domain key is a
   # synthetic one nothing else shares (RDBESStockCoord's own convention, and
   # rcef's native engine follows the same one) - so a raised stratum's rate
-  # never links and always comes back NA. Landings, discards and the raised
-  # share are instead summed directly off the rows in each group, which needs
-  # no linking and treats a sampled stratum and a raised one the same way.
+  # never links and always comes back NA. Landings and discards are instead
+  # summed directly off the rows of each stratum, which needs no linking and
+  # treats a sampled stratum and a raised one the same way. Rows of another
+  # origin or variable type (an "Official" 0 passed through, say) are not the
+  # discards that were raised and are left out.
+  rc <- raised_catch
+  if ("originType" %in% names(rc))
+    rc <- rc[rc$originType %in% "WGEstimate", , drop = FALSE]
+  if ("variableType" %in% names(rc))
+    rc <- rc[rc$variableType %in% "WeightLive", , drop = FALSE]
+  rc$.t <- to_tonnes(rc$total, if ("variableUnit" %in% names(rc)) rc$variableUnit)
+  rc$.lan <- rc$catchCategory %in% "Lan"
+  rc$.dis <- rc$catchCategory %in% "Dis"
   base_dims <- intersect(c("fleetValue", "areaValue", "vesselFlagCountry", "seasonValue"),
-                        names(raised_catch))
-  rc <- raised_catch[raised_catch$originType %in% "WGEstimate" &
-                       raised_catch$variableType %in% "WeightLive", , drop = FALSE]
-  rd_dims <- unique(c(base_dims, keys))
+                         names(rc))
   rd <- rc %>%
-    group_by(across(all_of(rd_dims))) %>%
-    summarise(landings = sum(total[catchCategory %in% "Lan"], na.rm = TRUE),
-              .discards = sum(total[catchCategory %in% "Dis"], na.rm = TRUE),
-              .raised = sum(total[catchCategory %in% "Dis" &
-                                    importedOrRaised %in% "raised"], na.rm = TRUE),
+    group_by(across(all_of(unique(c(base_dims, keys))))) %>%
+    summarise(landings  = sum(.t[.lan], na.rm = TRUE),
+              .discards = sum(.t[.dis], na.rm = TRUE),
+              .raised   = any(importedOrRaised[.dis] %in% "raised"),
+              .no_rate  = any(is.nan(.t[.dis])),
               .groups = "drop")
   rd <- rd[rd$landings > 0, , drop = FALSE]
+  n_none <- sum(rd$.no_rate)
+  if (n_none) {
+    message("plot_raised_DR(): ", n_none, " raised ",
+            if (n_none == 1) "stratum has" else "strata have",
+            " no rate (their group had no donor to draw one from) and ",
+            if (n_none == 1) "is" else "are", " left out.")
+    rd <- rd[!rd$.no_rate, , drop = FALSE]
+  }
   if (!nrow(rd)) return(NULL)
   rd <- reorder_mesh(rd, c(x_var, colour_var, shape_var, facet_var))
   rd <- discrete_cols(rd, c(x_var, colour_var, shape_var, facet_var))
-  rd$.raised_share <- ifelse(rd$.discards > 0, rd$.raised / rd$.discards, 0)
+  rd$.status <- factor(ifelse(rd$.raised, "Raised", "Imported"),
+                       levels = c("Imported", "Raised"))
   rd$.y <- (if (identical(rate_type, "ratio")) rd$.discards / rd$landings
            else rd$.discards / (rd$landings + rd$.discards)) * 100
-  rd$landings <- rd$landings / 1000   # kg -> tonnes, for bubble size and labels only
   has_landings <- any(is.finite(rd$landings) & rd$landings > 0)
   # Shifted up by 10% of the largest landings in THIS plot, as in plot_DR():
   # an additive shift, not a floor that clamps every small stratum to the
   # same number and so to the same, indistinguishable bubble.
   if (has_landings)
     rd$landings <- rd$landings + max(rd$landings, na.rm = TRUE) * 0.1
-
-  # ---- donor layer: matched_data_cond re-tested against catch_data --------
-  # "DrGroup" names the group *this loop* is testing donors for - it is not a
-  # real catch_data column (that only exists after raising), so it is never
-  # asked of build_coverage_strata() here; every other key is a real column.
-  donor_dims <- unique(c(intersect(c("fleetValue", "areaValue", "vesselFlagCountry",
-                                     "seasonValue", "domainCatchDis"),
-                                   names(catch_data)),
-                        setdiff(struct_keys, "DrGroup")))
-  donor <- bind_rows(lapply(names(matched_data_cond), function(g) {
-    dd <- catch_data %>%
-      filter(!!matched_data_cond[[g]], !is.na(domainCatchDis),
-             originType == "WGEstimate", variableType == "WeightLive") %>%
-      build_coverage_strata(dims = donor_dims)
-    if (!is.null(dd)) mutate(dd, DrGroup = g, .before = 1)
-  }))
-  has_donor <- !is.null(donor) && nrow(donor) > 0
-  if (has_donor) {
-    donor$.y <- y_of(donor) * 100
-    donor <- donor[!is.na(donor$.y), , drop = FALSE]
-    has_donor <- nrow(donor) > 0
-  }
-  if (has_donor) {
-    donor <- reorder_mesh(donor, c(x_var, facet_var))
-    donor <- discrete_cols(donor, c(x_var, facet_var))
-  }
+  # Raised points go down first and the big bubbles before the small ones, so
+  # a solid point is never buried under a transparent bubble.
+  rd <- rd[order(rd$.status == "Imported", -rd$landings), , drop = FALSE]
 
   pos <- if (jitter) position_jitter(width = 0.18, height = 0, seed = 1) else "identity"
   ref_y <- if (is.null(reference)) NULL else reference * 100
@@ -1226,12 +1211,8 @@ plot_raised_DR <- function(raised_catch, catch_data, matched_data_cond, x,
   if (!is.null(ref_y))
     p <- p + geom_hline(yintercept = ref_y, linetype = "dashed",
                         colour = "red3", linewidth = 0.5)
-  if (has_donor)
-    p <- p + geom_point(data = donor, aes(x = .data[[x_var]], y = .y),
-                        inherit.aes = FALSE, colour = "grey55", alpha = 0.5,
-                        size = 1.8, position = pos)
 
-  ae <- aes(x = .data[[x_var]], y = .y, alpha = .raised_share)
+  ae <- aes(x = .data[[x_var]], y = .y, alpha = .status)
   if (has(colour_var)) ae <- modifyList(ae, aes(fill = .data[[colour_var]]))
   if (has(shape_var))  ae <- modifyList(ae, aes(shape = .data[[shape_var]]))
   if (has_landings)    ae <- modifyList(ae, aes(size = landings))
@@ -1240,9 +1221,9 @@ plot_raised_DR <- function(raised_catch, catch_data, matched_data_cond, x,
   if (!has(shape_var))  pt_args$shape <- 21
   if (!has_landings)    pt_args$size  <- 3
   p <- p + do.call(geom_point, pt_args) +
-    scale_alpha_continuous(range = c(1, 0.3), limits = c(0, 1),
-                           labels = scales::percent, name = "Share raised",
-                           guide = guide_legend(override.aes = list(fill = "grey30")))
+    scale_alpha_manual(values = c(Imported = 1, Raised = 0.45), name = NULL,
+                       guide = guide_legend(override.aes = list(
+                         fill = "grey30", shape = 21, size = 3.5)))
 
   if (has(shape_var))
     p <- p + scale_shape_manual(values = c(21, 22, 23, 24, 25, 8, 3, 4))
@@ -1274,11 +1255,9 @@ plot_raised_DR <- function(raised_catch, catch_data, matched_data_cond, x,
            "grouping = no grouping, raw data per strata including imported and raised.",
            if (identical(rate_type, "ratio")) "Discard ratio = discard/landings weight."
            else "Discard rate = discard/catch weight.",
-           sprintf("bubbles = estimated discard %s, blending imported and raised.", rate_type),
+           sprintf("bubbles = estimated discard %s, imported and raised.", rate_type),
            if (has_landings) "bubble size = landings weight (t).",
-           "shade = share of this point's discards that was raised rather than sampled.",
-           if (has_donor)
-             "small grey points = individual donor strata behind each group's rate.",
+           "solid = imported from the data, transparent = added by raising.",
            if (!is.null(ref_y))
              "dashed line = reference arbitrary threshold in the same units as y axis.",
            width = 110),

@@ -82,13 +82,11 @@ dims <- c("metier4", "ICESDivision", "seasonValue")
 grp <- quiet(define_raising_groups_auto(c23, hierarchy = dims, thresholds = c(50, 40, 30)))
 raised <- quiet(run_native_raising(c23, dims, grp, type = "discards",
                                    log_file = tempfile(fileext = ".txt")))
-mdc <- list(PS = rlang::quo(metier4 == "PS"), MPT = rlang::quo(metier4 == "MPT"),
-            REST = rlang::quo(TRUE))
 ok(drawable(plot_raised_catches(raised, x = "seasonValue")),
    "plot_raised_catches(): x = seasonValue")
-ok(drawable(plot_raised_DR(raised, c23, mdc, x = "metier4", colour = "seasonValue")),
-   "plot_raised_DR(): colour = seasonValue (raised and donor layers agree)")
-ok(drawable(plot_raised_DR(raised, c23, mdc, x = "seasonValue")),
+ok(drawable(plot_raised_DR(raised, x = "metier4", colour = "seasonValue")),
+   "plot_raised_DR(): colour = seasonValue")
+ok(drawable(plot_raised_DR(raised, x = "seasonValue")),
    "plot_raised_DR(): x = seasonValue")
 
 cat(sprintf("\nDONE  %d failure(s)\n", FAIL))
