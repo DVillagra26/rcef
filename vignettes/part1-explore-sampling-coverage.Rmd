@@ -83,7 +83,8 @@ age_dist  <- read.csv(file.path(cef_dir, "pok", "pok_2022_distributions_CEF_v17.
 
 `derive_fields()` is what turns raw CEF into strata-ready data: it parses
 `metier4` / `metier5` / `metier6` and `target` / `mesh` out of
-`fleetValue`, and the ICES area levels (subarea, division, subdivision) out
+`fleetValue` (and joins gear and mesh as `metier4_mesh`, e.g. `TBB_70-99`),
+and the ICES area levels (subarea, division, subdivision) out
 of `areaValue`, plus `Stratum` - the same columns every plot function below
 reads on `y` / `x` / `fill` / `facet`, alongside the native
 `vesselFlagCountry` and `seasonValue`. The distributions need nothing of

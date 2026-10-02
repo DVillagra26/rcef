@@ -135,8 +135,8 @@ grouping_vars <- function(d, max_levels = 400, extra_drop = character(0)) {
   # Preferred order: the native stratum, then each family finest-last so
   # a cascade reads naturally when the keys are picked top to bottom.
   pref <- c("Stratum",
-            "fleetValue", "metier6", "metier5", "metier4", "gear",
-            "target", "mesh", "FleetType",
+            "fleetValue", "metier6", "metier5", "metier4_mesh", "metier4",
+            "gear", "target", "mesh", "FleetType",
             "vesselFlagCountry",
             "areaValue", "ICESSubdivision", "ICESDivision", "ICESSubArea",
             "seasonValue", "PSU")
@@ -146,6 +146,7 @@ grouping_vars <- function(d, max_levels = 400, extra_drop = character(0)) {
            fleetValue = "fleetValue (full)",
            metier6 = "metier6 (gear_tgt_mesh)",
            metier5 = "metier5 (gear_target)",
+           metier4_mesh = "metier4_mesh (gear_mesh)",
            metier4 = "metier4 (gear)",
            areaValue = "areaValue (full)",
            ICESSubdivision = "ICES subdivision (27.X.X.X)",
@@ -325,7 +326,8 @@ and_list <- function(v) {
 #' @keywords internal
 #' @export
 FILTER_VARS <- c("metier4", "metier5", "metier6", "fleetValue",
-                 "target", "mesh", "FleetType", "vesselFlagCountry",
+                 "target", "mesh", "metier4_mesh", "FleetType",
+                 "vesselFlagCountry",
                  "ICESSubArea", "ICESDivision", "ICESSubdivision",
                  "areaValue", "seasonValue")
 
@@ -363,9 +365,11 @@ ices_area_levels <- function(area) {
 #' Derive the grouping columns from a CEF catch table
 #'
 #' Adds the columns an assessment groups by, none of which the CEF format
-#' carries directly: the nested metier levels (`metier4` to `metier6`) plus
-#' gear, target and mesh from `fleetValue`; the three ICES area levels from
-#' `areaValue`; and a `stratum_id`. Country and season are not among them -
+#' carries directly: the nested metier levels (`metier4` to `metier6`),
+#' `target` and `mesh` from `fleetValue`; `metier4_mesh`, the gear and the
+#' mesh joined (`"TBB_70-99"`; just the gear when the fleet code has no mesh
+#' part); the three ICES area levels from `areaValue`; and `Stratum`, the four
+#' native keys joined. Country and season are not among them -
 #' `vesselFlagCountry` and `seasonValue` already name them, so a `Country` /
 #' `Season` alias would only be a second name for the same column. Existing
 #' columns are left untouched, so it is safe to call more than once.
@@ -399,6 +403,14 @@ derive_fields <- function(x) {
       metier6 = tok_join(3),                 # GNS_DEF_120-219
       target  = tok_at(2),
       mesh    = tok_at(3),
+      # Gear and mesh together, e.g. TBB_70-99. A mesh size only means
+      # something within its gear, so this is the level a fleet is usually
+      # read at - and as one label it can sit on a single axis, fill or
+      # filter. A fleet code with no mesh part ("All", "OTB_DEF") is just
+      # its gear, the way metier5 / metier6 stop at the last part there
+      # is, rather than becoming "TBB_NA" or dropping out as NA.
+      metier4_mesh = ifelse(is.na(mesh) | !nzchar(mesh), metier4,
+                            paste(metier4, mesh, sep = "_")),
       ICESSubArea     = ices_area_levels(areaValue)$ICESSubArea,
       ICESDivision    = ices_area_levels(areaValue)$ICESDivision,
       ICESSubdivision = ices_area_levels(areaValue)$ICESSubdivision,
@@ -527,4 +539,5 @@ class_axis_label <- function(type = "LengthTotal")
 #' @export
 DIMS_ALL_CANDIDATES <- c("metier4", "metier5", "metier6", "vesselFlagCountry",
                          "ICESSubArea", "ICESDivision", "ICESSubdivision",
-                         "seasonValue", "FleetType", "target", "mesh")
+                         "seasonValue", "FleetType", "target", "mesh",
+                         "metier4_mesh")

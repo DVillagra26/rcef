@@ -102,8 +102,8 @@
 #'
 #' @param catch CEF catch data (long format) carrying `catchCategory`,
 #'   `total` and, for discards, `domainCatchDis`, plus every column named in
-#'   `dims`. [derive_fields()] adds `metier4`, `mesh` and the ICES area
-#'   levels.
+#'   `dims`. [derive_fields()] adds `metier4`, `mesh`, `metier4_mesh` and the
+#'   ICES area levels.
 #' @param dims Character vector of the columns that define a stratum, for
 #'   example `c("metier4", "vesselFlagCountry")`, or the finer
 #'   `c("fleetValue", "areaValue", "seasonValue")`. Default `NULL`: nothing
@@ -274,7 +274,8 @@ build_coverage_strata <- function(catch, dims = NULL, distributions = NULL,
 #' The other `derive_fields()` columns, kept where a stratum pins them
 #'
 #' The columns a stratum (`dims`) does not already name - `mesh`, `metier5`,
-#' `Stratum`, the ICES area levels, and so on ([DIMS_ALL_CANDIDATES], plus
+#' `metier4_mesh`, `Stratum`, the ICES area levels, and so on
+#' ([DIMS_ALL_CANDIDATES], plus
 #' `Stratum` itself - the one [derive_fields()] column that constant leaves
 #' out, being the finest of all of them rather than a nested level of one) -
 #' computed as the single value they share, or `NA` where the stratum spans

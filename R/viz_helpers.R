@@ -58,25 +58,75 @@ mesh_levels <- function(x) {
   u[order(lo, hi, u)]
 }
 
-#' Relevel a plot's `mesh` column into size order, if it carries one
+#' Natural order for `metier4_mesh` values: gear first, then mesh size
 #'
-#' Every rcef plot that can take `mesh` on an axis, a fill, a colour or a
-#' facet calls this once its data frame is final, so `mesh` reads in the
-#' same size order ([mesh_levels()]) wherever it turns up - a no-op unless
-#' one of `vars` is literally `"mesh"` and `d` actually carries that column.
+#' `metier4_mesh` values are a gear and a mesh range joined by an underscore
+#' (`"TBB_70-99"`, `"OTB_>=120"`), or a bare gear when the fleet code had no
+#' mesh part. Sorted as plain text they interleave the sizes the same way raw
+#' `mesh` does (`"TBB_100-119"` before `"TBB_70-99"`), so this keeps each
+#' gear together, in alphabetical order, and puts its meshes in the size
+#' order [mesh_levels()] gives - a bare gear after all of its own meshes.
+#'
+#' @param x A character (or factor) vector of `metier4_mesh` values.
+#' @return The distinct, non-`NA` values of `x`, gear by gear in natural
+#'   mesh order.
+#' @seealso [mesh_levels()], [reorder_mesh()]
+#' @keywords internal
+#' @noRd
+#' @export
+metier4_mesh_levels <- function(x) {
+  u <- unique(as.character(x))
+  u <- u[!is.na(u)]
+  if (!length(u)) return(u)
+  # metier4 is the first fleet part and never holds an underscore, so the
+  # first underscore is the seam between gear and mesh
+  gear <- sub("_.*$", "", u)
+  mesh <- ifelse(grepl("_", u, fixed = TRUE), sub("^[^_]*_", "", u), "")
+  # the mesh part of a bare gear is "": rank it after every real mesh, "all"
+  # included, instead of wherever "" happens to sort alphabetically
+  rank <- match(mesh, c(setdiff(mesh_levels(mesh), ""), ""))
+  u[order(gear, rank, u)]
+}
+
+#' The natural level order for a column that carries mesh sizes
+#'
+#' One place that knows which columns have a size order - `mesh` and
+#' `metier4_mesh` - so the plots do not each repeat the test.
+#'
+#' @param var A column name (or `NULL`).
+#' @param x The column's values.
+#' @return The levels in natural order, or `NULL` when `var` is neither.
+#' @seealso [mesh_levels()], [metier4_mesh_levels()]
+#' @keywords internal
+#' @noRd
+#' @export
+mesh_var_levels <- function(var, x) {
+  if (identical(var, "mesh")) mesh_levels(x)
+  else if (identical(var, "metier4_mesh")) metier4_mesh_levels(x)
+  else NULL
+}
+
+#' Relevel a plot's mesh columns into size order, if it carries them
+#'
+#' Every rcef plot that can take `mesh` or `metier4_mesh` on an axis, a fill,
+#' a colour or a facet calls this once its data frame is final, so they read
+#' in the same size order ([mesh_levels()], [metier4_mesh_levels()]) wherever
+#' they turn up - a no-op unless one of `vars` is literally one of those two
+#' names and `d` actually carries that column.
 #'
 #' @param d A data frame.
 #' @param vars Column names the plot is about to use (`x`, `y`, `fill`,
 #'   `colour`, `shape`, `facet`, ... - `NULL` entries are fine).
-#' @return `d`, with `d$mesh` releveled when `"mesh" %in% vars`.
-#' @seealso [mesh_levels()]
+#' @return `d`, with `d$mesh` and `d$metier4_mesh` releveled when named in
+#'   `vars`.
+#' @seealso [mesh_levels()], [metier4_mesh_levels()]
 #' @keywords internal
 #' @noRd
 #' @export
 reorder_mesh <- function(d, vars) {
   vars <- vars[!is.na(vars) & nzchar(vars)]
-  if (!"mesh" %in% vars || !"mesh" %in% names(d)) return(d)
-  d$mesh <- factor(d$mesh, levels = mesh_levels(d$mesh))
+  for (v in intersect(c("mesh", "metier4_mesh"), intersect(vars, names(d))))
+    d[[v]] <- factor(d[[v]], levels = mesh_var_levels(v, d[[v]]))
   d
 }
 
@@ -207,10 +257,14 @@ cov_title <- function(what, weight_label, by = NULL) {
 #' The four stratum families and their column levels, finest first
 #'
 #' Shared by [strata_sentence()] and [finest_per_family()]: fleet
-#' (`fleetValue` > `metier6` > `metier5` > `metier4`/`gear`/`target`/`mesh` >
-#' `FleetType`), area (`areaValue` > `ICESSubdivision` > `ICESDivision` >
-#' `ICESSubArea`), country and season (`vesselFlagCountry`, `seasonValue` -
-#' a single level each, unlike fleet/area).
+#' (`fleetValue` > `metier6` > `metier5`/`metier4_mesh` >
+#' `metier4`/`gear`/`target`/`mesh` > `FleetType`), area (`areaValue` >
+#' `ICESSubdivision` > `ICESDivision` > `ICESSubArea`), country and season
+#' (`vesselFlagCountry`, `seasonValue` - a single level each, unlike
+#' fleet/area). `metier4_mesh` (gear and mesh) sits at level 3 beside
+#' `metier5` (gear and target): `metier6` determines both and both determine
+#' `metier4`, but neither determines the other - which is why a tie keeps
+#' both.
 #'
 #' @return A named list of named integer vectors (column name -> level,
 #'   1 = finest).
@@ -218,8 +272,8 @@ cov_title <- function(what, weight_label, by = NULL) {
 #' @noRd
 #' @export
 strata_families <- function() list(
-  fleet   = c(fleetValue = 1, metier6 = 2, metier5 = 3, metier4 = 4,
-              gear = 4, target = 4, mesh = 4, FleetType = 5),
+  fleet   = c(fleetValue = 1, metier6 = 2, metier5 = 3, metier4_mesh = 3,
+              metier4 = 4, gear = 4, target = 4, mesh = 4, FleetType = 5),
   area    = c(areaValue = 1, ICESSubdivision = 2, ICESDivision = 3,
               ICESSubArea = 4),
   country = c(vesselFlagCountry = 1),

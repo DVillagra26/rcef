@@ -141,8 +141,8 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 
   lev <- NULL; ngrp <- 1L
   if (has(group_var)) {
-    lev  <- if (identical(group_var, "mesh")) mesh_levels(agg[[group_var]])
-            else sort(unique(as.character(agg[[group_var]])))
+    lev  <- mesh_var_levels(group_var, agg[[group_var]]) %||%
+            sort(unique(as.character(agg[[group_var]])))
     ngrp <- length(lev)
     if (ngrp <= 1)
       warning("plot_coverage_map(): group_var = \"", group_var,
@@ -642,12 +642,13 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
   d$.facet <- if (has(facet_var)) as.character(d[[facet_var]]) else ""
   d$.fill  <- if (has(fill_var))  as.character(d[[fill_var]])  else d$.lab
   # .fill / .facet are built as plain character above (the row order itself
-  # is by landings, not by category - see below), so mesh's size order has
-  # to be reapplied here rather than carried through from d$mesh directly
-  if (identical(if (has(fill_var)) fill_var else y_var, "mesh"))
-    d$.fill <- factor(d$.fill, levels = mesh_levels(d$.fill))
-  if (identical(facet_var, "mesh"))
-    d$.facet <- factor(d$.facet, levels = mesh_levels(d$.facet))
+  # is by landings, not by category - see below), so the size order of mesh
+  # (and metier4_mesh) has to be reapplied here rather than carried through
+  # from the column itself
+  fill_lev <- mesh_var_levels(if (has(fill_var)) fill_var else y_var, d$.fill)
+  if (!is.null(fill_lev)) d$.fill <- factor(d$.fill, levels = fill_lev)
+  facet_lev <- mesh_var_levels(facet_var, d$.facet)
+  if (!is.null(facet_lev)) d$.facet <- factor(d$.facet, levels = facet_lev)
 
   wi <- paste("With", samp_word(what), "sampling")
   wo <- paste("Without", samp_word(what), "sampling")

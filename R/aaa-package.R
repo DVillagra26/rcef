@@ -119,7 +119,7 @@ utils::globalVariables(c(
   ".", ".data", "SpeciesName", "StockCode", "ICESArea", "Species",
   "recordType", "vesselFlagCountry", "year", "workingGroup", "stock",
   "catchCategory", "WeightLive", "Number", "dataType", "distributionType",
-  "metier4", "metier5", "metier6", "fleetValue", "seasonValue",
+  "metier4", "metier5", "metier6", "mesh", "fleetValue", "seasonValue",
   "ICESSubArea", "ICESDivision", "ICESSubdivision", "sampledOrEstimated",
   "importedOrRaised", "originType", "variableType", "groupName",
   # build_coverage_strata() / coverage_cells() column names

@@ -76,7 +76,7 @@ catch_data <- catch_data %>%
 ```
 
 `derive_fields()` is what turns raw CEF into strata-ready data: it parses
-`metier4` (and `target`, `mesh`) out of `fleetValue` and the ICES area
+`metier4` (and `target`, `mesh`, `metier4_mesh`) out of `fleetValue` and the ICES area
 levels out of `areaValue`. Country and season are already their own
 columns - `vesselFlagCountry` and `seasonValue` - so there is nothing to
 derive for those two.

@@ -14,9 +14,11 @@ derive_fields(x)
 }
 \description{
 Adds the columns an assessment groups by, none of which the CEF format
-carries directly: the nested metier levels (`metier4` to `metier6`) plus
-gear, target and mesh from `fleetValue`; the three ICES area levels from
-`areaValue`; and a `stratum_id`. Country and season are not among them -
+carries directly: the nested metier levels (`metier4` to `metier6`),
+`target` and `mesh` from `fleetValue`; `metier4_mesh`, the gear and the
+mesh joined (`"TBB_70-99"`; just the gear when the fleet code has no mesh
+part); the three ICES area levels from `areaValue`; and `Stratum`, the four
+native keys joined. Country and season are not among them -
 `vesselFlagCountry` and `seasonValue` already name them, so a `Country` /
 `Season` alias would only be a second name for the same column. Existing
 columns are left untouched, so it is safe to call more than once.

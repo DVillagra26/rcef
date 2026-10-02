@@ -204,7 +204,7 @@ seed_palettes <- function(data, vars = PALETTE_VARS) {
 #' @export
 PALETTE_VARS <- c("vesselFlagCountry", "seasonValue",
                   "metier4", "metier5", "metier6", "gear", "target", "mesh",
-                  "FleetType", "catchCategory",
+                  "metier4_mesh", "FleetType", "catchCategory",
                   "ICESSubArea", "ICESDivision", "ICESSubdivision", "areaValue")
 
 #' Forget every colour assignment

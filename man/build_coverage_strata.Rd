@@ -15,8 +15,8 @@ build_coverage_strata(
 \arguments{
 \item{catch}{CEF catch data (long format) carrying \code{catchCategory},
 \code{total} and, for discards, \code{domainCatchDis}, plus every column named in
-\code{dims}. \code{\link[=derive_fields]{derive_fields()}} adds \code{metier4}, \code{mesh} and the ICES area
-levels.}
+\code{dims}. \code{\link[=derive_fields]{derive_fields()}} adds \code{metier4}, \code{mesh}, \code{metier4_mesh} and the
+ICES area levels.}
 
 \item{dims}{Character vector of the columns that define a stratum, for
 example \code{c("metier4", "vesselFlagCountry")}, or the finer

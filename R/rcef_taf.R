@@ -180,7 +180,7 @@ taf_sources <- function(external_dir = NULL) c(
 taf_derive <- function() c(
   "## ---- Derived fields ---------------------------------------",
   "## derive_fields() adds, from fleetValue and areaValue:",
-  "##   metier4 / metier5 / metier6, target, mesh, Stratum",
+  "##   metier4 / metier5 / metier6, target, mesh, metier4_mesh, Stratum",
   "##   ICESSubArea (27.X), ICESDivision (27.X.X), ICESSubdivision",
   "## The ICES area split is ices_area_levels(); a code already coarser",
   "## than the level asked for repeats rather than becoming NA, because",

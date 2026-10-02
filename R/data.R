@@ -76,7 +76,8 @@
 #'     division code and its parsed parts.}
 #'   \item{fleetValue, metier4, ...}{The metier6 string (`derive_fields()`
 #'     parses `metier4` - `"PS"` / `"MPT"` / `"LHP"` - and the gear /
-#'     target / mesh parts out of it).}
+#'     target / mesh parts out of it, and joins gear and mesh as
+#'     `metier4_mesh`, e.g. `"PS_16-31"`).}
 #'   \item{originType}{`"WGEstimate"` on every row.}
 #'   \item{total}{Weight (kg) for the row's `variableType`; `0` for a
 #'     reported-nothing stratum.}

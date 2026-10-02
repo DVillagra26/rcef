@@ -5,7 +5,7 @@
 \alias{FILTER_VARS}
 \title{Columns that may be filtered on}
 \format{
-An object of class \code{character} of length 13.
+An object of class \code{character} of length 14.
 }
 \usage{
 FILTER_VARS

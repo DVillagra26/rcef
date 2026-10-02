@@ -17,7 +17,8 @@ A data frame of catch records, one row per stock / catch category
 division code and its parsed parts.}
 \item{fleetValue, metier4, ...}{The metier6 string (\code{derive_fields()}
 parses \code{metier4} - \code{"PS"} / \code{"MPT"} / \code{"LHP"} - and the gear /
-target / mesh parts out of it).}
+target / mesh parts out of it, and joins gear and mesh as
+\code{metier4_mesh}, e.g. \code{"PS_16-31"}).}
 \item{originType}{\code{"WGEstimate"} on every row.}
 \item{total}{Weight (kg) for the row's \code{variableType}; \code{0} for a
 reported-nothing stratum.}
