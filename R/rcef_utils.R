@@ -362,7 +362,7 @@ ices_area_levels <- function(area) {
   out
 }
 
-#' Derive the grouping columns from a CEF catch table
+#' Derive the grouping columns from a CEF catch table - or from its distributions
 #'
 #' Adds the columns an assessment groups by, none of which the CEF format
 #' carries directly: the nested metier levels (`metier4` to `metier6`),
@@ -374,29 +374,93 @@ ices_area_levels <- function(area) {
 #' `Season` alias would only be a second name for the same column. Existing
 #' columns are left untouched, so it is safe to call more than once.
 #'
-#' @param x A CEF catch table (data frame).
-#' @return `x` with the derived columns added.
+#' With `what = "distribution"` the same fields come back on the distributions
+#' table instead: `derive_fields(catch_data, distribution_data, what =
+#' "distribution")`. `derive_fields(catch_data)` is the catch, as it always was.
+#'
+#' @details
+#' A distribution carries none of the stratum columns - the fleet, the area
+#' and the season belong to the catch - so deriving its fields needs both
+#' tables. Each distribution row is linked to the catch rows it describes
+#' through `domainBiology`, together with the catch category and every other
+#' column both tables carry among the ones the allocation itself matches on
+#' (`vesselFlagCountry`, `year`, `workingGroup`, `stock`, `speciesCode`: a
+#' `domainBiology` names no country, so two countries can use the same one).
+#' The row takes the `fleetValue`, `areaValue` and `seasonValue` of those
+#' catch rows and every field derived from them. The derivation is the one
+#' described above, run once on the catch: the distributions only look its
+#' results up, so the two tables can never disagree about what a field means.
+#'
+#' A `domainBiology` can be used by catch rows of several strata (a
+#' distribution covers every catch row that names it). The fields those rows
+#' share are kept and the ones they differ on are `NA`, with a message, rather
+#' than one of them being picked at random. A distribution row with no catch
+#' row behind it gets `NA` throughout, with a warning: the two files disagree.
+#' The rows of `distribution_data` come back exactly as they went in, same
+#' number and same order; columns of the same name already on it (an earlier
+#' call, say) are replaced.
+#'
+#' @param catch_data A CEF catch table (data frame).
+#' @param distribution_data A CEF distributions table. Only with
+#'   `what = "distribution"`, which needs it.
+#' @param what `"catch"` (default): `catch_data` with the derived columns.
+#'   `"distribution"`: `distribution_data` with them.
+#' @return With `what = "catch"`, `catch_data` with the derived columns added.
+#'   With `what = "distribution"`, `distribution_data` with `fleetValue`,
+#'   `areaValue`, `seasonValue` (and `vesselFlagCountry`, when the
+#'   distributions have none of their own) and the derived columns added.
 #' @seealso [ices_area_levels()], [build_strata()]
 #' @examples
-#' \dontrun{
-#' catch <- derive_fields(catch)
-#' strata <- build_strata(catch, c("metier4", "vesselFlagCountry"))
-#' }
+#' data(anchoveta_catch)
+#' data(anchoveta_dist)
+#'
+#' catch <- derive_fields(anchoveta_catch)
+#' head(catch[, c("fleetValue", "metier4", "metier4_mesh", "ICESDivision")], 3)
+#'
+#' # the distributions get the same fields, read off the catch on domainBiology
+#' dist <- derive_fields(anchoveta_catch, anchoveta_dist, what = "distribution")
+#' head(dist[, c("domainBiology", "fleetValue", "metier4_mesh", "ICESDivision")], 3)
 #' @export
-derive_fields <- function(x) {
-  stopifnot(is.data.frame(x))
+derive_fields <- function(catch_data, distribution_data = NULL,
+                          what = c("catch", "distribution")) {
+  what <- match.arg(what)
+  stopifnot(is.data.frame(catch_data))
+  if (identical(what, "catch") && !is.null(distribution_data))
+    stop("derive_fields(): `distribution_data` is only read with what = ",
+         "\"distribution\", which hands the distributions back with the ",
+         "derived fields", call. = FALSE)
+  if (identical(what, "distribution")) {
+    if (!is.data.frame(distribution_data))
+      stop("derive_fields(): what = \"distribution\" needs `distribution_data`, ",
+           "the distributions table", call. = FALSE)
+    link_on <- c("domainBiology", "catchCategory")
+    tables  <- list(catch_data = catch_data, distribution_data = distribution_data)
+    for (nm in names(tables)) {
+      miss <- setdiff(link_on, names(tables[[nm]]))
+      if (length(miss))
+        stop("derive_fields(): `", nm, "` has no ",
+             paste0("'", miss, "'", collapse = " or "),
+             " column, which the two tables are linked on", call. = FALSE)
+    }
+  }
   need <- c("fleetValue", "areaValue", "vesselFlagCountry", "seasonValue")
-  miss <- setdiff(need, names(x))
-  if (length(miss))
+  miss <- setdiff(need, names(catch_data))
+  if (length(miss)) {
+    if ("distributionType" %in% names(catch_data))
+      stop("derive_fields(): `catch_data` is a distributions table - it has no ",
+           paste(miss, collapse = ", "), ", which belong to the catch. To ",
+           "derive the distributions give both: derive_fields(catch_data, ",
+           "distribution_data, what = \"distribution\")", call. = FALSE)
     stop("Missing expected column(s): ", paste(miss, collapse = ", "))
+  }
 
-  tok <- strsplit(as.character(x$fleetValue), "_", fixed = TRUE)
+  tok <- strsplit(as.character(catch_data$fleetValue), "_", fixed = TRUE)
   tok_at <- function(i) vapply(tok, function(z)
     if (length(z) >= i) z[i] else NA_character_, character(1))
   tok_join <- function(n) vapply(tok, function(z)
     paste(z[seq_len(min(n, length(z)))], collapse = "_"), character(1))
 
-  x %>%
+  d <- catch_data %>%
     mutate(
       metier4 = tok_join(1),                 # GNS
       metier5 = tok_join(2),                 # GNS_DEF
@@ -424,6 +488,67 @@ derive_fields <- function(x) {
       Stratum = paste(vesselFlagCountry, fleetValue, areaValue,
                       seasonValue, sep = " | "),
     )
+  if (identical(what, "catch")) return(d)
+
+  # ---- what = "distribution": the same fields, read off the catch ------------
+  # Derived once, above, on the table that has the columns; each distribution
+  # row then takes the values of the catch rows its key points at. The key is
+  # what catchAllocationAoL() joins the two tables on (whichever of those
+  # columns both carry), so a distribution gets the stratum the allocation
+  # will pair it with.
+  link_cols <- c("vesselFlagCountry", "year", "workingGroup", "stock",
+                 "speciesCode", "catchCategory", "domainBiology")
+  by <- link_cols[link_cols %in% names(d) & link_cols %in% names(distribution_data)]
+  carry <- distribution_fields(distribution_data)
+
+  has_domain <- !is.na(d$domainBiology) & nzchar(as.character(d$domainBiology))
+  d   <- d[has_domain, , drop = FALSE]
+  k_c <- biology_key(d, by)
+  k_d <- biology_key(distribution_data, by)
+  # one value per key, or NA when the catch rows of the key disagree on it
+  one <- function(v) {
+    u <- unique(v[!is.na(v)])
+    if (length(u) == 1L) u else v[NA_integer_]
+  }
+  lk <- d %>%
+    mutate(.key = k_c, .stratum = Stratum, .domain = as.character(domainBiology)) %>%
+    group_by(.key) %>%
+    summarise(.n_strata = dplyr::n_distinct(.stratum),
+              .domain   = dplyr::first(.domain),
+              across(all_of(carry), one),
+              .groups = "drop")
+  i <- match(k_d, lk$.key)
+
+  shared <- lk$.domain[lk$.n_strata > 1L & lk$.key %in% k_d]
+  if (length(shared))
+    message("derive_fields(): ", length(shared), " distribution key(s) are used ",
+            "by catch rows of more than one stratum (e.g. ",
+            paste(utils::head(unique(shared), 3), collapse = ", "),
+            "); the fields those rows differ on are NA for them")
+  if (anyNA(i))
+    warning("derive_fields(): ", sum(is.na(i)), " of ", length(i),
+            " distribution row(s) have no catch row with the same ",
+            paste(by, collapse = " + "), " - their derived fields are NA",
+            call. = FALSE)
+
+  out <- distribution_data
+  for (col in carry) out[[col]] <- lk[[col]][i]
+  out
+}
+
+# The columns derive_fields(.., what = "distribution") puts on a distributions
+# table: everything it puts on a catch - the stratum keys and what is derived
+# from them - less the country, where the distributions have their own. Asked
+# of derive_fields() itself, so a field added there is listed here without a
+# second edit. run_allocation() uses it to keep them out of the engine.
+#' @noRd
+#' @export
+distribution_fields <- function(distribution_data = NULL) {
+  proto <- data.frame(fleetValue = "A_B_C", areaValue = "27.4",
+                      vesselFlagCountry = "X", seasonValue = 1L,
+                      stringsAsFactors = FALSE)
+  setdiff(names(derive_fields(proto)),
+          intersect("vesselFlagCountry", names(distribution_data)))
 }
 
 # ----------------------------------------------------------

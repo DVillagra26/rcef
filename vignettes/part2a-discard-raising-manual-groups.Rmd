@@ -82,7 +82,7 @@ columns - `vesselFlagCountry` and `seasonValue` - so there is nothing to
 derive for those two.
 
 ```{r derive}
-catch_data <- derive_fields(x = catch_data)
+catch_data <- derive_fields(catch_data)
 nrow(catch_data)
 ```
 

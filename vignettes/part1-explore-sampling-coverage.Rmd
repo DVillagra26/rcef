@@ -87,12 +87,19 @@ age_dist  <- read.csv(file.path(cef_dir, "pok", "pok_2022_distributions_CEF_v17.
 and the ICES area levels (subarea, division, subdivision) out
 of `areaValue`, plus `Stratum` - the same columns every plot function below
 reads on `y` / `x` / `fill` / `facet`, alongside the native
-`vesselFlagCountry` and `seasonValue`. The distributions need nothing of
-the kind.
+`vesselFlagCountry` and `seasonValue`. The distributions carry none of the
+stratum columns - the fleet, area and season belong to the catch - so given
+both tables, `what = "distribution"` links each distribution to its catch
+rows through `domainBiology` and hands the distributions back with the same
+added columns (the plots below link the two themselves; this is for grouping
+or filtering a distributions table directly).
 
 ```{r derive}
-catch_data <- derive_fields(x = catch_data)
-age_catch  <- derive_fields(x = age_catch)
+catch_data <- derive_fields(catch_data)
+age_catch  <- derive_fields(age_catch)
+
+distribution_data <- derive_fields(catch_data, distribution_data, what = "distribution")
+age_dist          <- derive_fields(age_catch, age_dist, what = "distribution")
 
 c(brill_catch = nrow(catch_data), brill_lengths = nrow(distribution_data),
   saithe_catch = nrow(age_catch), saithe_ages = nrow(age_dist))

@@ -277,6 +277,12 @@ link_dist_to_strata <- function(catches, dist, dims, catch_category = NULL,
     distinct()
   if (!nrow(keymap)) return(NULL)
 
+  # Distributions that went through derive_fields(.., what = "distribution")
+  # carry these columns already. The ones taken from the catch here are the
+  # ones used, so the distributions' copies go rather than being joined to a
+  # .x / .y pair that no `dims` name would find.
+  pd <- pd[, setdiff(names(pd), setdiff(dims, by)), drop = FALSE]
+
   pd %>%
     inner_join(keymap, by = by, relationship = "many-to-many")
 }

@@ -67,7 +67,7 @@ catch_data <- read.csv(file.path(cef_dir, "bll", "bll_2025_catches_CEF_v17.1.csv
 those two.
 
 ```{r derive}
-catch_data <- derive_fields(x = catch_data)
+catch_data <- derive_fields(catch_data)
 nrow(catch_data)
 ```
 

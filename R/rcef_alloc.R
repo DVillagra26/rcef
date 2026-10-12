@@ -72,6 +72,15 @@ run_allocation <- function(catch_raised, dist, groups,
   # instead of only working from the one place that happened to derive
   # first.
   catch_raised <- derive_fields(as.data.frame(catch_raised))
+  # Distributions that went through derive_fields(.., what = "distribution")
+  # carry the catch's stratum fields as well. The engine joins the two tables
+  # by column name and takes those fields from the catch, so a second copy -
+  # typed differently, perhaps, by a csv round trip that read "27.4" back as a
+  # number - has nothing to add and a chance to make the two fail to combine.
+  # They stay out of the call, which therefore returns exactly what it returns
+  # without them.
+  dist <- as.data.frame(dist, stringsAsFactors = FALSE)
+  dist <- dist[, setdiff(names(dist), distribution_fields(dist)), drop = FALSE]
   # bioMatchedCond may say `coverage >= 50 & n_measurements >= 100`. Those
   # columns have to be present on the RAISED catch table or the condition
   # errors with "object 'coverage' not found" rather than filtering. The

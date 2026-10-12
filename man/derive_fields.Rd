@@ -2,15 +2,28 @@
 % Please edit documentation in R/rcef_utils.R
 \name{derive_fields}
 \alias{derive_fields}
-\title{Derive the grouping columns from a CEF catch table}
+\title{Derive the grouping columns from a CEF catch table - or from its distributions}
 \usage{
-derive_fields(x)
+derive_fields(
+  catch_data,
+  distribution_data = NULL,
+  what = c("catch", "distribution")
+)
 }
 \arguments{
-\item{x}{A CEF catch table (data frame).}
+\item{catch_data}{A CEF catch table (data frame).}
+
+\item{distribution_data}{A CEF distributions table. Only with
+`what = "distribution"`, which needs it.}
+
+\item{what}{`"catch"` (default): `catch_data` with the derived columns.
+`"distribution"`: `distribution_data` with them.}
 }
 \value{
-`x` with the derived columns added.
+With `what = "catch"`, `catch_data` with the derived columns added.
+  With `what = "distribution"`, `distribution_data` with `fleetValue`,
+  `areaValue`, `seasonValue` (and `vesselFlagCountry`, when the
+  distributions have none of their own) and the derived columns added.
 }
 \description{
 Adds the columns an assessment groups by, none of which the CEF format
@@ -23,11 +36,43 @@ native keys joined. Country and season are not among them -
 `Season` alias would only be a second name for the same column. Existing
 columns are left untouched, so it is safe to call more than once.
 }
-\examples{
-\dontrun{
-catch <- derive_fields(catch)
-strata <- build_strata(catch, c("metier4", "vesselFlagCountry"))
+\details{
+With `what = "distribution"` the same fields come back on the distributions
+table instead: `derive_fields(catch_data, distribution_data, what =
+"distribution")`. `derive_fields(catch_data)` is the catch, as it always was.
+
+
+A distribution carries none of the stratum columns - the fleet, the area
+and the season belong to the catch - so deriving its fields needs both
+tables. Each distribution row is linked to the catch rows it describes
+through `domainBiology`, together with the catch category and every other
+column both tables carry among the ones the allocation itself matches on
+(`vesselFlagCountry`, `year`, `workingGroup`, `stock`, `speciesCode`: a
+`domainBiology` names no country, so two countries can use the same one).
+The row takes the `fleetValue`, `areaValue` and `seasonValue` of those
+catch rows and every field derived from them. The derivation is the one
+described above, run once on the catch: the distributions only look its
+results up, so the two tables can never disagree about what a field means.
+
+A `domainBiology` can be used by catch rows of several strata (a
+distribution covers every catch row that names it). The fields those rows
+share are kept and the ones they differ on are `NA`, with a message, rather
+than one of them being picked at random. A distribution row with no catch
+row behind it gets `NA` throughout, with a warning: the two files disagree.
+The rows of `distribution_data` come back exactly as they went in, same
+number and same order; columns of the same name already on it (an earlier
+call, say) are replaced.
 }
+\examples{
+data(anchoveta_catch)
+data(anchoveta_dist)
+
+catch <- derive_fields(anchoveta_catch)
+head(catch[, c("fleetValue", "metier4", "metier4_mesh", "ICESDivision")], 3)
+
+# the distributions get the same fields, read off the catch on domainBiology
+dist <- derive_fields(anchoveta_catch, anchoveta_dist, what = "distribution")
+head(dist[, c("domainBiology", "fleetValue", "metier4_mesh", "ICESDivision")], 3)
 }
 \seealso{
 [ices_area_levels()], [build_strata()]
