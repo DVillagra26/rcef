@@ -99,6 +99,8 @@ plot_NaLoA(anchoveta_catch, anchoveta_dist, fill = "vesselFlagCountry", bin_widt
 \link{coverage-plots} for whether the strata have a distribution at all.
 
 Other distribution plots: 
-\code{\link{plot_MWaLoA}()}
+\code{\link{plot_MWaLoA}()},
+\code{\link{plot_allocated_MWaLoA}()},
+\code{\link{plot_allocated_NaLoA}()}
 }
 \concept{distribution plots}

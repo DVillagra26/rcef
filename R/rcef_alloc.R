@@ -348,6 +348,206 @@ alloc_overview <- function(alloc) {
     as.data.frame()
 }
 
+# The allocated numbers or mean weights per class, for
+# plot_allocated_NaLoA() / plot_allocated_MWaLoA(): the framework's own
+# aggregations - catchAtAoLAggregation() for numbers, meanWoLatAoLAggregation()
+# for mean weights - run on the allocation result with the grouping columns
+# the plot asks for (sampledOrEstimated among them when the plot shows it - as
+# a fill, a facet or the shade - and pooled away when it does not), then read
+# back long. So a plot shows what the aggregated tables of the allocation say,
+# and the classes come out in cm (lengths) or years (ages), numbers in
+# thousands and mean weights in g, like every other distribution plot. One row
+# per class and per combination of the grouping columns; sampledOrEstimated
+# comes back as a factor, sampled first.
+#
+# The catch is the allocation's own $catch, not the one that went in: a
+# stratum with no biological domain gets a domainBiology made up by the
+# allocation ("[alloc]_..."), and its estimated distributions carry it, so it
+# exists only there. The origin and variable type are the ones the allocation
+# ran on (the catch rows it gave a group), which is what the aggregation has
+# to filter on or it would join the distributions to rows of another kind too.
+# The plus group is the framework's (maxAoL / plusGroup); length bins are not
+# in the framework, so they are pooled here, numbers added and mean weights
+# averaged weighted by the numbers - the rule the aggregation itself uses.
+#' @noRd
+#' @export
+alloc_class_table <- function(allocated, quantity = c("numbers", "meanweight"),
+                              distributionType = "LengthTotal",
+                              catchCategory = "All", grouping = character(0),
+                              plus_group = NULL, bin_width = NULL,
+                              fn = "alloc_class_table(): ") {
+  quantity <- match.arg(quantity)
+  # a plus group pools ages, length bins pool lengths: each needs its own type
+  plus_from <- NULL
+  if (!is.null(plus_group)) {
+    if (!(is.numeric(plus_group) && length(plus_group) == 1 &&
+          is.finite(plus_group) && plus_group >= 0))
+      stop(fn, "`plus_group` is the first age of the plus group - a single ",
+           "number (plus_group = 7 pools ages 7 and older) - or NULL for ",
+           "none", call. = FALSE)
+    if (!identical(distributionType, "Age"))
+      stop(fn, "plus_group only applies to ages (distributionType = ",
+           "\"Age\"): lengths have no plus group", call. = FALSE)
+    plus_from <- plus_group
+  }
+  bin_from <- NULL
+  if (!is.null(bin_width)) {
+    if (!(is.numeric(bin_width) && length(bin_width) == 1 &&
+          is.finite(bin_width) && bin_width > 0))
+      stop(fn, "`bin_width` is a single positive number - a bin width in cm ",
+           "(bin_width = 5 groups length into 5cm bins) - or NULL for none",
+           call. = FALSE)
+    if (!identical(distributionType, "LengthTotal"))
+      stop(fn, "bin_width only applies to lengths (distributionType = ",
+           "\"LengthTotal\"): ages use plus_group instead", call. = FALSE)
+    bin_from <- bin_width
+  }
+  if (inherits(allocated, "alloc_error"))
+    stop(fn, "the allocation failed: ", allocated$message, call. = FALSE)
+  if (!is.list(allocated) || !is.data.frame(allocated$distribution) ||
+      !is.data.frame(allocated$catch))
+    stop(fn, "`allocated` is the result of the allocation: the list with ",
+         "$distribution and $catch that catchAllocationAoL() returns",
+         call. = FALSE)
+  dist  <- as.data.frame(allocated$distribution, stringsAsFactors = FALSE)
+  catch <- as.data.frame(allocated$catch, stringsAsFactors = FALSE)
+  miss <- setdiff(c("sampledOrEstimated", "distributionType", "distributionClass",
+                    "variableType", "value", "catchCategory", "domainBiology"),
+                  names(dist))
+  if (length(miss))
+    stop(fn, "`allocated$distribution` has no ",
+         paste0("'", miss, "'", collapse = ", "),
+         if ("sampledOrEstimated" %in% miss)
+           " - the allocation adds sampledOrEstimated, so this is not its result",
+         call. = FALSE)
+  miss <- setdiff(c("catchCategory", "domainBiology", "originType", "variableType"),
+                  names(catch))
+  if (length(miss))
+    stop(fn, "`allocated$catch` has no ", paste0("'", miss, "'", collapse = ", "),
+         call. = FALSE)
+
+  # what the allocation ran on
+  used <- if ("allocGroup" %in% names(catch))
+    catch[!is.na(catch$allocGroup), , drop = FALSE] else catch[0, , drop = FALSE]
+  origin   <- unique(as.character(used$originType))
+  variable <- unique(as.character(used$variableType))
+  if (!length(origin)) { origin <- "WGEstimate"; variable <- "WeightLive" }
+  if (length(origin) > 1L || length(variable) > 1L)
+    stop(fn, "the allocation ran on more than one originType / variableType (",
+         paste(c(origin, variable), collapse = ", "),
+         ") - a plot takes one", call. = FALSE)
+
+  parts <- catch_category_parts(catchCategory)
+  have_types <- unique(as.character(dist$distributionType))
+  dist  <- dist[dist$catchCategory %in% parts &
+                  dist$distributionType %in% distributionType, , drop = FALSE]
+  catch <- catch[catch$catchCategory %in% parts, , drop = FALSE]
+  if (!nrow(dist)) {
+    message(fn, "no ", distributionType, " distributions for ",
+            paste(parts, collapse = " + "), " in the allocation result",
+            if (!distributionType %in% have_types)
+              paste0(" (it has ", paste(have_types, collapse = ", "), ")"))
+    return(NULL)
+  }
+  # a distribution the allocation left as it was is a sampled one
+  dist$sampledOrEstimated[is.na(dist$sampledOrEstimated)] <- "sampled"
+
+  grp <- unique(grouping)
+  if (!all(grp %in% union(names(catch), names(dist))))
+    catch <- tryCatch(derive_fields(catch), error = function(e) catch)
+  absent <- setdiff(grp, union(names(catch), names(dist)))
+  if (length(absent))
+    stop(fn, "the allocation result has no column ",
+         paste0("'", absent, "'", collapse = ", "), call. = FALSE)
+
+  # the classes are on the file's own scale; the plots read cm
+  to_cls <- 1
+  if (!identical(distributionType, "Age")) {
+    cu <- if ("distributionUnit" %in% names(dist))
+      unique(as.character(dist$distributionUnit)) else "mm"
+    cu <- cu[!is.na(cu)]
+    if (!length(cu)) cu <- "mm"
+    if (length(cu) > 1L)
+      stop(fn, "the length classes are in more than one unit (",
+           paste(cu, collapse = ", "), ") - convert them first", call. = FALSE)
+    to_cls <- unit_factor(cu, LEN_CLASS_TO_MM, "distributionClass") / 10
+  }
+
+  plus_on <- !is.null(plus_from)
+  max_aol <- if (plus_on) plus_from else NA
+  numbers_wide <- function()
+    catchAtAoLAggregation(distribution_data = dist, catch_data = catch,
+                          grouping = grp, originType_catch = origin,
+                          variableType_catch = variable,
+                          distributionType = distributionType, unit = "N",
+                          round = NULL, minAoL = 0, maxAoL = max_aol,
+                          plusGroup = plus_on)
+  weights_wide <- function()
+    meanWoLatAoLAggregation(distribution_data = dist, catch_data = catch,
+                            grouping = grp, weighting = "NumberAtAoL",
+                            originType_catch = origin,
+                            variableType_catch = variable,
+                            variableType_dist = "WeightLive",
+                            distributionType = distributionType, unit = "g",
+                            round = NULL, minAoL = 0, maxAoL = max_aol,
+                            plusGroup = plus_on)
+  # wide (one column per class, the class in the name) -> one row per class
+  long <- function(w, kind, value_name) {
+    pref <- paste0(kind, "_", distributionType, "_")
+    cols <- names(w)[startsWith(names(w), pref)]
+    if (!length(cols)) return(NULL)
+    out <- tidyr::pivot_longer(as.data.frame(w)[c(setdiff(names(w), c(cols, "unit")), cols)],
+                               all_of(cols), names_to = ".col",
+                               values_to = value_name)
+    txt <- substring(out$.col, nchar(pref) + 1L)
+    out$.plus  <- endsWith(txt, "+")
+    out$.class <- suppressWarnings(as.numeric(sub("+", "", txt, fixed = TRUE))) * to_cls
+    out$.col <- NULL
+    out[is.finite(out[[value_name]]) & is.finite(out$.class), , drop = FALSE]
+  }
+  bin_of <- function(cl) floor(round(cl, 6) / bin_from) * bin_from
+
+  if (identical(quantity, "numbers")) {
+    d <- long(numbers_wide(), "N", "number")
+    if (is.null(d)) return(NULL)
+    d$number <- d$number * biology_axis_labels(distributionType, "numbers")$value_scale
+    d <- d[d$number > 0, , drop = FALSE]
+    if (!is.null(bin_from)) {
+      d$.class <- bin_of(d$.class)
+      d <- d %>% group_by(across(all_of(c(grp, ".class")))) %>%
+        summarise(number = sum(number), .plus = any(.plus), .groups = "drop")
+    }
+  } else {
+    d <- long(weights_wide(), "W", "mean_weight")
+    if (is.null(d)) return(NULL)
+    if (!is.null(bin_from)) {
+      # a bin's mean weight is weighted by the numbers at the classes in it
+      dn <- long(numbers_wide(), "N", ".n")
+      d <- inner_join(d, dn, by = c(grp, ".class", ".plus"))
+      d$.class <- bin_of(d$.class)
+      d <- d %>% group_by(across(all_of(c(grp, ".class")))) %>%
+        summarise(mean_weight = sum(mean_weight * .n) / sum(.n),
+                  .plus = any(.plus), .groups = "drop") %>%
+        filter(is.finite(mean_weight))
+    }
+  }
+  if (!nrow(d)) return(NULL)
+  d <- as.data.frame(d)
+  if ("sampledOrEstimated" %in% names(d)) {
+    lv <- unique(as.character(d$sampledOrEstimated))
+    d$sampledOrEstimated <- factor(as.character(d$sampledOrEstimated),
+                                   levels = c(intersect(c("sampled", "estimated"), lv),
+                                              setdiff(lv, c("sampled", "estimated"))))
+  }
+  # the plus class only exists when some age reached it
+  if (plus_on && !any(d$.plus %in% TRUE)) {
+    warning(fn, "no age reaches plus_group = ", plus_from,
+            ", so there is no plus group", call. = FALSE)
+    plus_from <- NULL
+  }
+  list(data = d, plus_from = plus_from, bin_from = bin_from)
+}
+
 
 # The aggregation and comparison calls that follow an allocation, so the
 # script reproduces the tables and plots the app showed.

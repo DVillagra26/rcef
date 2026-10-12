@@ -56,7 +56,7 @@ every return shape, every algorithm.
 | `rcef_raising.R` | `R_development/0_Functions_raising.R` | `apply_raising()`, scenarios, comparison |
 | `rcef_raise_native.R` | `R_development/mod_native_raising.R` | CEF prepare/check + `run_native_raising()` |
 | `rcef_length.R` | `R_development/mod_length.R` | distributions prep, biology link, allocation steps/cascades |
-| `rcef_alloc.R` | `R_development/mod_alloc_raising.R` | `run_allocation()` + aggregation wrappers |
+| `rcef_alloc.R` | `R_development/mod_alloc_raising.R` | `run_allocation()` + aggregation wrappers + `alloc_class_table()` (what the allocated plots draw) |
 | `rcef_intercatch.R` | `R_development/mod_intercatch.R` **minus `ic_ui()`** | IC staging, mapping, year detection, code emission |
 | `rcef_summaries.R` | `R_development/summaries.R` | catch / biology / effort summary tables |
 | `rcef_session.R` | `R_development/session_log.R` **minus `state_capture()`** | session log + code fragment builders |

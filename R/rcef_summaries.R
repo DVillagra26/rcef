@@ -425,13 +425,29 @@ raised_overview_table <- function(raised_catch_scenarios, scenarios_names = NULL
 #' Raised catch composition: landings and discards, imported and raised
 #'
 #' A stacked bar of catch weight after raising, at any aggregation: bars are
-#' landings/discards (or just the one, via `catchCategory`), shading is
-#' imported from the data versus added by raising.
+#' landings/discards (or just the one, via `catchCategory`). What raising added
+#' - `importedOrRaised`, imported from the data versus added by raising - is
+#' drawn as the shade, as the `fill` or as a `facet`, as you choose.
+#'
+#' `importedOrRaised` is a variable like any other. By default it is the shade
+#' (`alpha = "importedOrRaised"`): solid for what was imported, transparent for
+#' what raising added. Name it in `fill` to give the two a colour each (the bars
+#' are then no longer coloured landings / discards: say which they are with
+#' `catchCategory`, or with `facet = "catchCategory"`), in `facet` to give each
+#' its own panel, or in `x` for a bar each; it is then not drawn as a shade as
+#' well. `alpha = NULL` draws no shade, and unless it is named elsewhere the
+#' imported and the raised weights are added together.
 #'
 #' @param raised_catch Output of [catchRaising()]: `raised` with
 #'   `importedOrRaised` and `DrGroup` columns.
-#' @param x Column on the x axis: one bar (or bar segment) per level.
-#' @param facet Optional facet column.
+#' @param x Column on the x axis: one bar (or bar segment) per level;
+#'   `"importedOrRaised"` included.
+#' @param facet Optional facet column; `"importedOrRaised"` included.
+#' @param fill Column mapped to the bar fill. `NULL` (default) colours the bars
+#'   landings / discards; `"importedOrRaised"` is allowed.
+#' @param alpha `"importedOrRaised"` (default) draws the shade: solid for
+#'   imported, transparent for raised. `NULL` draws none. Left out when
+#'   `importedOrRaised` is the `x`, the `fill` or the `facet`.
 #' @param catchCategory Optional filter to just `"Lan"` or `"Dis"` (matched
 #'   case-insensitively), so discards are readable on their own when landings
 #'   would otherwise dominate the scale. `NULL` (default) keeps both, stacked.
@@ -442,13 +458,31 @@ raised_overview_table <- function(raised_catch_scenarios, scenarios_names = NULL
 #' @md
 #' @export
 plot_raised_catches <- function(raised_catch, x = NULL, facet = NULL,
+                                fill = NULL, alpha = "importedOrRaised",
                                 catchCategory = NULL, ncol = 2) {
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+  S <- "importedOrRaised"
+  if (!is.null(alpha) && !identical(alpha, S))
+    stop("plot_raised_catches(): `alpha` is \"", S, "\" (solid = imported, ",
+         "transparent = raised) or NULL for no shade", call. = FALSE)
+  miss <- setdiff(c(S, "catchCategory", "total", if (has(x)) x,
+                    if (has(facet)) facet, if (has(fill)) fill),
+                  names(raised_catch))
+  if (length(miss))
+    stop("plot_raised_catches(): `raised_catch` has no column ",
+         paste0("'", miss, "'", collapse = ", "), call. = FALSE)
+  # imported / raised is drawn once: as the shade, unless it is already the
+  # x, the fill or the facet
+  shown    <- S %in% c(x, fill, facet)
+  alpha_on <- !is.null(alpha) && !shown
   u <- if ("variableUnit" %in% names(raised_catch)) raised_catch$variableUnit else NULL
   d <- raised_catch %>%
     mutate(.t = to_tonnes(total, u),
            src = factor(ifelse(importedOrRaised %in% "raised", "Raised", "Imported"),
                         levels = c("Imported", "Raised")),
+           importedOrRaised = factor(ifelse(importedOrRaised %in% "raised",
+                                            "raised", "imported"),
+                                     levels = c("imported", "raised")),
            .cat = ifelse(toupper(catchCategory) %in% c("LAN", "LANDINGS"),
                          "Landings", "Discards"),
            .x = if (has(x)) as.character(.data[[x]]) else "All")
@@ -459,17 +493,29 @@ plot_raised_catches <- function(raised_catch, x = NULL, facet = NULL,
   cc_label <- if (!has(catchCategory)) "Catch"
              else if (toupper(catchCategory) %in% c("LAN", "LANDINGS")) "Landings"
              else "Discards"
-  keys <- c(".x", ".cat", "src", if (has(facet)) facet)
+  fill_col <- if (has(fill)) fill else ".cat"
+  keys <- unique(c(".x", fill_col, if (has(facet)) facet, if (alpha_on) "src"))
   d <- d %>% group_by(across(all_of(keys))) %>%
     summarise(t = sum(.t, na.rm = TRUE), .groups = "drop")
+  d <- reorder_mesh(d, c(fill, facet))
+  d <- discrete_cols(d, c(fill, facet))
 
-  ggplot(d, aes(x = .x, y = t, fill = .cat, alpha = src)) +
+  ae <- aes(x = .x, y = t, fill = .data[[fill_col]])
+  if (alpha_on) ae <- modifyList(ae, aes(alpha = src))
+  p <- ggplot(d, ae) +
     geom_col(position = position_stack(reverse = TRUE), width = 0.72,
-             colour = "grey25", linewidth = 0.25) +
+             colour = "grey25", linewidth = 0.25)
+  p <- p + if (!has(fill))
     scale_fill_manual(values = c(Landings = "#59A14F", Discards = "#E15759"),
-                      name = NULL) +
-    scale_alpha_manual(values = c(Imported = 1, Raised = 0.45), name = NULL,
-                       guide = guide_legend(override.aes = list(fill = "grey30"))) +
+                      name = NULL)
+  else if (identical(fill, S))
+    scale_fill_manual(values = c(imported = PAL_BASE[1], raised = PAL_BASE[2]),
+                      name = S)
+  else scale_fill_var(fill, d[[fill]], name = fill)
+  if (alpha_on)
+    p <- p + scale_alpha_manual(values = c(Imported = 1, Raised = 0.45), name = NULL,
+                                guide = guide_legend(override.aes = list(fill = "grey30")))
+  p +
     scale_y_continuous(labels = scales::comma) +
     (if (has(facet)) facet_wrap(vars(.data[[facet]]), ncol = ncol,
                                 scales = "free_y") else NULL) +
@@ -477,9 +523,13 @@ plot_raised_catches <- function(raised_catch, x = NULL, facet = NULL,
          caption = sub_wrap(
            "grouping = no grouping, raw data per stratum.",
            sprintf("bars = %s weight (t), summed per stratum.", tolower(cc_label)),
-           if (!has(catchCategory))
+           if (!has(fill) && !has(catchCategory))
              "color = landings or discards.",
-           "shade = imported from the data, or added by raising.",
+           if (has(fill)) sprintf("color = %s.", fill),
+           if (alpha_on)
+             "shade = imported from the data, or added by raising.",
+           if (!alpha_on && !shown)
+             "imported and raised weights added together.",
            width = 110),
          x = if (has(x)) x else NULL, y = sprintf("%s (t)", cc_label)) +
     app_theme() +

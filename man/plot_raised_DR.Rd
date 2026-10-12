@@ -10,6 +10,7 @@ plot_raised_DR(
   colour = NULL,
   shape = NULL,
   facet = NULL,
+  alpha = "importedOrRaised",
   rate = c("ratio", "rate"),
   reference = NULL,
   jitter = TRUE,
@@ -20,13 +21,20 @@ plot_raised_DR(
 \item{raised_catch}{Output of \code{\link[=catchRaising]{catchRaising()}}.}
 
 \item{x}{Column on the x axis: one point per level (times \code{colour},
-\code{shape} and \code{facet}). Can be \code{"DrGroup"}. Required.}
+\code{shape} and \code{facet}). Can be \code{"DrGroup"} or \code{"importedOrRaised"}.
+Required.}
 
-\item{colour}{Column mapped to the point fill.}
+\item{colour}{Column mapped to the point fill; \code{"importedOrRaised"}
+included.}
 
-\item{shape}{Column mapped to the point shape.}
+\item{shape}{Column mapped to the point shape; \code{"importedOrRaised"}
+included.}
 
-\item{facet}{Optional facet column.}
+\item{facet}{Optional facet column; \code{"importedOrRaised"} included.}
+
+\item{alpha}{\code{"importedOrRaised"} (default) draws the shade: solid for
+imported, transparent for raised. \code{NULL} draws none. Left out when
+\code{importedOrRaised} is the \code{x}, \code{colour}, \code{shape} or \code{facet}.}
 
 \item{rate}{\code{"ratio"} (default, discards / landings) or \code{"rate"} (discards
 / catch): which discard rate is the y variable. See
@@ -68,6 +76,18 @@ out, with a message saying how many.
 Only the raised catch is needed, so only the strata in it are drawn: the
 donors of a group wider than its own strata (a REST group raised from
 every gear, say) appear under the groups they themselves belong to.
+}
+
+\subsection{Where imported / raised goes}{
+
+\code{importedOrRaised} is a variable like any other. By default it is the shade
+(\code{alpha = "importedOrRaised"}): solid for imported strata, transparent for
+raised ones. Name it in \code{x}, \code{colour}, \code{shape} or \code{facet} to draw it there
+instead - a colour each, a panel each, two columns of points - and it is
+then not drawn as a shade as well. \code{alpha = NULL} draws no shade, and
+unless it is named elsewhere imported and raised strata are drawn alike.
+Whichever way, it is worked out per stratum (a stratum is raised when its
+discard rows were), never from the landings rows next to them.
 }
 
 \subsection{The rate, and the reference line}{

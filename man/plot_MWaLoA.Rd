@@ -169,6 +169,8 @@ plot_MWaLoA(anchoveta_catch, anchoveta_dist,
 \link{coverage-plots} for whether the strata have a distribution at all.
 
 Other distribution plots: 
-\code{\link{plot_NaLoA}()}
+\code{\link{plot_NaLoA}()},
+\code{\link{plot_allocated_MWaLoA}()},
+\code{\link{plot_allocated_NaLoA}()}
 }
 \concept{distribution plots}

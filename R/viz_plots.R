@@ -1095,6 +1095,17 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL,
 #' donors of a group wider than its own strata (a REST group raised from
 #' every gear, say) appear under the groups they themselves belong to.
 #'
+#' ## Where imported / raised goes
+#'
+#' `importedOrRaised` is a variable like any other. By default it is the shade
+#' (`alpha = "importedOrRaised"`): solid for imported strata, transparent for
+#' raised ones. Name it in `x`, `colour`, `shape` or `facet` to draw it there
+#' instead - a colour each, a panel each, two columns of points - and it is
+#' then not drawn as a shade as well. `alpha = NULL` draws no shade, and
+#' unless it is named elsewhere imported and raised strata are drawn alike.
+#' Whichever way, it is worked out per stratum (a stratum is raised when its
+#' discard rows were), never from the landings rows next to them.
+#'
 #' ## The rate, and the reference line
 #'
 #' Both work exactly as in [plot_DR()]: `rate` chooses `"ratio"`
@@ -1105,10 +1116,16 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL,
 #'
 #' @param raised_catch Output of [catchRaising()].
 #' @param x Column on the x axis: one point per level (times `colour`,
-#'   `shape` and `facet`). Can be `"DrGroup"`. Required.
-#' @param colour Column mapped to the point fill.
-#' @param shape Column mapped to the point shape.
-#' @param facet Optional facet column.
+#'   `shape` and `facet`). Can be `"DrGroup"` or `"importedOrRaised"`.
+#'   Required.
+#' @param colour Column mapped to the point fill; `"importedOrRaised"`
+#'   included.
+#' @param shape Column mapped to the point shape; `"importedOrRaised"`
+#'   included.
+#' @param facet Optional facet column; `"importedOrRaised"` included.
+#' @param alpha `"importedOrRaised"` (default) draws the shade: solid for
+#'   imported, transparent for raised. `NULL` draws none. Left out when
+#'   `importedOrRaised` is the `x`, `colour`, `shape` or `facet`.
 #' @param rate `"ratio"` (default, discards / landings) or `"rate"` (discards
 #'   / catch): which discard rate is the y variable. See
 #'   [plot_DR()].
@@ -1125,11 +1142,16 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL,
 #' @md
 #' @export
 plot_raised_DR <- function(raised_catch, x, colour = NULL, shape = NULL,
-                           facet = NULL, rate = c("ratio", "rate"),
+                           facet = NULL, alpha = "importedOrRaised",
+                           rate = c("ratio", "rate"),
                            reference = NULL, jitter = TRUE,
                            palette = c("default", "colorblind", "gradual")) {
   palette <- match.arg(palette)
   rate_type <- match.arg(rate)
+  S <- "importedOrRaised"
+  if (!is.null(alpha) && !identical(alpha, S))
+    stop("plot_raised_DR(): `alpha` is \"", S, "\" (solid = imported, ",
+         "transparent = raised) or NULL for no shade", call. = FALSE)
   if (!is.null(reference) && !(is.numeric(reference) && length(reference) == 1 &&
                                is.finite(reference) && reference >= 0))
     stop("plot_raised_DR(): `reference` must be a single number, a rate ",
@@ -1140,9 +1162,16 @@ plot_raised_DR <- function(raised_catch, x, colour = NULL, shape = NULL,
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
   if (!has(x)) stop("plot_raised_DR(): `x` is required", call. = FALSE)
   x_var <- x; colour_var <- colour; shape_var <- shape; facet_var <- facet
-  keys <- unique(c(x_var, if (has(facet_var)) facet_var,
-                   if (has(colour_var)) colour_var,
-                   if (has(shape_var)) shape_var))
+  # imported / raised is drawn once: as the shade, unless it is already the x,
+  # the colour, the shape or a facet
+  shown    <- S %in% c(x_var, colour_var, shape_var, facet_var)
+  alpha_on <- !is.null(alpha) && !shown
+  # The strata are grouped by what the plot shows - but not by importedOrRaised:
+  # it belongs to the discard rows of a stratum, which sit next to landings
+  # rows that are always imported, so it is worked out per stratum below.
+  keys <- setdiff(unique(c(x_var, if (has(facet_var)) facet_var,
+                           if (has(colour_var)) colour_var,
+                           if (has(shape_var)) shape_var)), S)
   need <- c("catchCategory", "total", "importedOrRaised")
   miss <- setdiff(c(need, keys), names(raised_catch))
   if (length(miss))
@@ -1188,6 +1217,9 @@ plot_raised_DR <- function(raised_catch, x, colour = NULL, shape = NULL,
     rd <- rd[!rd$.no_rate, , drop = FALSE]
   }
   if (!nrow(rd)) return(NULL)
+  if (shown)
+    rd[[S]] <- factor(ifelse(rd$.raised, "raised", "imported"),
+                      levels = c("imported", "raised"))
   rd <- reorder_mesh(rd, c(x_var, colour_var, shape_var, facet_var))
   rd <- discrete_cols(rd, c(x_var, colour_var, shape_var, facet_var))
   rd$.status <- factor(ifelse(rd$.raised, "Raised", "Imported"),
@@ -1212,7 +1244,8 @@ plot_raised_DR <- function(raised_catch, x, colour = NULL, shape = NULL,
     p <- p + geom_hline(yintercept = ref_y, linetype = "dashed",
                         colour = "red3", linewidth = 0.5)
 
-  ae <- aes(x = .data[[x_var]], y = .y, alpha = .status)
+  ae <- aes(x = .data[[x_var]], y = .y)
+  if (alpha_on)        ae <- modifyList(ae, aes(alpha = .status))
   if (has(colour_var)) ae <- modifyList(ae, aes(fill = .data[[colour_var]]))
   if (has(shape_var))  ae <- modifyList(ae, aes(shape = .data[[shape_var]]))
   if (has_landings)    ae <- modifyList(ae, aes(size = landings))
@@ -1220,10 +1253,11 @@ plot_raised_DR <- function(raised_catch, x, colour = NULL, shape = NULL,
                   position = pos)
   if (!has(shape_var))  pt_args$shape <- 21
   if (!has_landings)    pt_args$size  <- 3
-  p <- p + do.call(geom_point, pt_args) +
-    scale_alpha_manual(values = c(Imported = 1, Raised = 0.45), name = NULL,
-                       guide = guide_legend(override.aes = list(
-                         fill = "grey30", shape = 21, size = 3.5)))
+  p <- p + do.call(geom_point, pt_args)
+  if (alpha_on)
+    p <- p + scale_alpha_manual(values = c(Imported = 1, Raised = 0.45), name = NULL,
+                                guide = guide_legend(override.aes = list(
+                                  fill = "grey30", shape = 21, size = 3.5)))
 
   if (has(shape_var))
     p <- p + scale_shape_manual(values = c(21, 22, 23, 24, 25, 8, 3, 4))
@@ -1234,8 +1268,11 @@ plot_raised_DR <- function(raised_catch, x, colour = NULL, shape = NULL,
     p <- p + guides(shape = guide_legend(
       override.aes = list(fill = "grey45", size = 3.5, alpha = 1)))
   if (has(colour_var))
-    p <- p + scale_fill_var(colour_var, rd[[colour_var]], name = colour_var,
-                            palette = palette)
+    p <- p + if (identical(colour_var, S))
+      scale_fill_manual(values = c(imported = PAL_BASE[1], raised = PAL_BASE[2]),
+                        name = S)
+    else scale_fill_var(colour_var, rd[[colour_var]], name = colour_var,
+                        palette = palette)
   if (has_landings)
     p <- p + scale_size_area(max_size = 10, labels = scales::comma,
                              name = "Landings (t)")
@@ -1257,7 +1294,10 @@ plot_raised_DR <- function(raised_catch, x, colour = NULL, shape = NULL,
            else "Discard rate = discard/catch weight.",
            sprintf("bubbles = estimated discard %s, imported and raised.", rate_type),
            if (has_landings) "bubble size = landings weight (t).",
-           "solid = imported from the data, transparent = added by raising.",
+           if (alpha_on)
+             "solid = imported from the data, transparent = added by raising.",
+           if (!alpha_on && !shown)
+             "imported and raised strata are drawn alike.",
            if (!is.null(ref_y))
              "dashed line = reference arbitrary threshold in the same units as y axis.",
            width = 110),
@@ -1875,4 +1915,392 @@ plot_MWaLoA <- function(data, distributions = NULL,
       p
   }
   p
+}
+
+
+# ----------------------------------------------------------
+#  Length / age distribution plots after the allocation
+# ----------------------------------------------------------
+
+#' Numbers at length or age after the allocation
+#'
+#' @description
+#' [plot_NaLoA()] for the result of the allocation: the catch numbers spread
+#' over the length (or age) classes, as a stacked or dodged histogram. What the
+#' allocation added is one column away: `sampledOrEstimated` says whether a
+#' number was sampled or estimated by the allocation, and it is drawn as the
+#' shade (solid = sampled, transparent = estimated), as the `fill` or as a
+#' `facet`, as you choose. Numbers are in thousands, length in cm and age in
+#' years.
+#'
+#' @details
+#' `allocated` is the allocation result and nothing else is needed: the list
+#' with `$distribution` and `$catch` that `catchAllocationAoL()` returns
+#' (`run_allocation()` returns the same). Both are taken from the result rather
+#' than from the data that went into the allocation, because the distributions
+#' it estimates for a stratum with no biological domain carry a domain the
+#' allocation made up, and only its own `$catch` knows it. The numbers are the
+#' framework's own aggregation of the result, `catchAtAoLAggregation()`,
+#' grouped by the columns the plot shows, so the plot and the aggregated tables
+#' cannot disagree. The catch rows it joins are the ones the allocation ran on
+#' (their origin and variable type).
+#'
+#' Like that aggregation, it counts a distribution once for every catch row
+#' that names its `domainBiology`, so it assumes one catch row per domain,
+#' catch category and country - which CEF files built from InterCatch have, and
+#' the bundled anchoveta example does not (its allocated numbers come out
+#' inflated for that reason, though the shapes and the sampled / estimated
+#' contrast still read).
+#'
+#' ## Where sampled / estimated goes
+#'
+#' `sampledOrEstimated` is a variable like any other. By default it is the
+#' shade (`alpha = "sampledOrEstimated"`): solid where the numbers were
+#' sampled, transparent where the allocation estimated them. Name it in `fill`
+#' to give the two a colour each, or in `facet` to give each its own panel; it
+#' is then not drawn as a shade as well. `alpha = NULL` draws no shade, and
+#' unless it is also the fill or a facet the sampled and the estimated numbers
+#' are added together - the numbers the allocation finally reports.
+#'
+#' `fill` colours (and stacks) the bars by a column of the catch. `facet` takes
+#' one column (a wrapped set of panels) or two (`c("row", "col")`, a grid).
+#' `plus_group` (ages) pools the oldest ages into one class, shown as `7+`;
+#' `bin_width` (lengths) pools the length classes into bins of that width, as
+#' in [plot_NaLoA()].
+#'
+#' @param allocated The result of the allocation: a list with `$distribution`
+#'   and `$catch`.
+#' @param distributionType `"LengthTotal"` (default) or `"Age"`.
+#' @param catchCategory `"All"` (default: landings and discards together,
+#'   titled "catch"), `"Lan"`, `"Dis"` or `"BMS"`.
+#' @param fill Column mapped to the bar fill, `"sampledOrEstimated"` included.
+#' @param facet Up to two facet columns: `"col"` or `c("row", "col")`;
+#'   `"sampledOrEstimated"` included.
+#' @param alpha `"sampledOrEstimated"` (default) draws the shade: solid for
+#'   sampled, transparent for estimated. `NULL` draws none. Left out when
+#'   `sampledOrEstimated` is the `fill` or a `facet`.
+#' @param stacked Stack the bars on `fill` (default) rather than dodge them.
+#' @param plus_group The first age of the plus group: `7` pools ages 7 and
+#'   older into one class, shown as `7+`. `NULL` (default): no plus group.
+#'   Ages only.
+#' @param bin_width Width, in cm, of the length bins every class is pooled
+#'   into. `NULL` (default): no binning. Lengths only.
+#' @param scales Facet scales: `"fixed"` (default), `"free_x"`, `"free_y"` or
+#'   `"free"`.
+#' @param palette `"default"`, `"colorblind"` or `"gradual"` (see
+#'   [var_palette()]).
+#' @return A ggplot object, or `NULL` when there is nothing to draw.
+#' @seealso [plot_NaLoA()] for the numbers before the allocation;
+#'   [plot_allocated_MWaLoA()] for the mean weight in the same classes;
+#'   [plot_raised_catches()] for the same sampled / raised contrast on the
+#'   discard weights.
+#' @family distribution plots
+#' @md
+#' @examples
+#' \donttest{
+#' data(anchoveta_catch)
+#' data(anchoveta_dist)
+#' cef  <- subset(anchoveta_catch, year == 2023)
+#' dist <- subset(anchoveta_dist, year == 2023)
+#' dims <- c("metier4", "ICESDivision", "seasonValue")
+#' groups <- define_raising_groups_auto(cef, hierarchy = dims,
+#'                                      thresholds = c(50, 40, 30))
+#' raised <- run_native_raising(cef, dims, groups, type = "discards",
+#'                              log_file = tempfile(fileext = ".txt"))
+#' alloc  <- run_allocation(raised, dist,
+#'                          list(ALL = list(alloc = "TRUE", matched = "TRUE")),
+#'                          log_file = tempfile(fileext = ".txt"))
+#'
+#' # landings numbers at length by country: solid = sampled, transparent = estimated
+#' plot_allocated_NaLoA(alloc, catchCategory = "Lan", fill = "vesselFlagCountry")
+#'
+#' # sampled and estimated as the fill instead, and the countries as panels
+#' plot_allocated_NaLoA(alloc, catchCategory = "Lan", fill = "sampledOrEstimated",
+#'                      facet = "vesselFlagCountry")
+#'
+#' # one panel each for sampled and estimated
+#' plot_allocated_NaLoA(alloc, catchCategory = "Lan", fill = "vesselFlagCountry",
+#'                      facet = "sampledOrEstimated")
+#' }
+#' @export
+plot_allocated_NaLoA <- function(allocated,
+                                 distributionType = c("LengthTotal", "Age"),
+                                 catchCategory = "All",
+                                 fill = NULL, facet = NULL,
+                                 alpha = "sampledOrEstimated",
+                                 stacked = TRUE,
+                                 plus_group = NULL, bin_width = NULL,
+                                 scales = "fixed",
+                                 palette = c("default", "colorblind", "gradual")) {
+  fn <- "plot_allocated_NaLoA(): "
+  distributionType <- match.arg(distributionType)
+  palette <- match.arg(palette)
+  catchCategory <- match.arg(catchCategory, c("Lan", "Dis", "BMS", "All"))
+  if (length(facet) > 2)
+    stop(fn, "`facet` takes at most two columns", call. = FALSE)
+  facet1 <- if (length(facet) >= 1) facet[1] else NULL
+  facet2 <- if (length(facet) >= 2) facet[2] else NULL
+  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+  S <- "sampledOrEstimated"
+  if (!is.null(alpha) && !identical(alpha, S))
+    stop(fn, "`alpha` is \"", S, "\" (solid = sampled, transparent = ",
+         "estimated) or NULL for no shade", call. = FALSE)
+  # sampled / estimated is drawn once: as the shade, unless it is already
+  # the fill or a facet
+  shown    <- S %in% c(fill, facet1, facet2)
+  alpha_on <- !is.null(alpha) && !shown
+  grp <- unique(c(if (has(fill)) fill, if (has(facet1)) facet1,
+                  if (has(facet2)) facet2, if (alpha_on) S))
+  tab <- alloc_class_table(allocated, "numbers", distributionType, catchCategory,
+                           grp, plus_group, bin_width, fn)
+  if (is.null(tab)) return(NULL)
+  d <- tab$data; plus_from <- tab$plus_from; bin_from <- tab$bin_from
+  lab <- biology_axis_labels(distributionType, "numbers")
+  if (alpha_on)
+    d$.status <- factor(ifelse(d[[S]] == "estimated", "Estimated", "Sampled"),
+                        levels = c("Sampled", "Estimated"))
+  d <- reorder_mesh(d, c(fill, facet1, facet2))
+  d <- discrete_cols(d, c(fill, facet1, facet2))
+  fill_var <- fill
+  bw <- { u <- sort(unique(d$.class)); if (length(u) > 1) min(diff(u)) else 1 }
+  pos <- if (stacked) position_stack(reverse = TRUE) else position_dodge(width = bw)
+
+  p <- if (alpha_on) ggplot(d, aes(x = .class, y = number, alpha = .status))
+       else ggplot(d, aes(x = .class, y = number))
+  p <- p + if (has(fill_var))
+    geom_col(aes(fill = factor(.data[[fill_var]])), width = bw * 0.95,
+             position = pos, colour = OUTLINE, linewidth = OUTLINE_LW)
+  else geom_col(width = bw * 0.95, position = pos, fill = PAL_BASE[1],
+                colour = OUTLINE, linewidth = OUTLINE_LW)
+  if (has(fill_var))
+    p <- p + if (identical(fill_var, S))
+      scale_fill_manual(values = c(sampled = PAL_BASE[1], estimated = PAL_BASE[2]),
+                        name = S)
+    else scale_fill_var(fill_var, d[[fill_var]], name = fill_var,
+                        palette = palette)
+  if (alpha_on)
+    p <- p + scale_alpha_manual(
+      values = c(Sampled = 1, Estimated = 0.45), name = NULL,
+      guide = guide_legend(override.aes = list(fill = "grey30")))
+
+  cc_word <- switch(catchCategory, Lan = "Landings", Dis = "Discards",
+                    BMS = "BMS Catch", All = "Catch")
+  cc_lead <- switch(catchCategory, Lan = "Landings ", Dis = "Discards ",
+                    BMS = "BMS catch ", All = "Catch ")
+  cls_word <- if (identical(distributionType, "Age")) "NaA" else "NaL"
+  plus_on <- !is.null(plus_from)
+  bin_on  <- !is.null(bin_from)
+  cap <- sub_wrap(
+    strata_sentence(setdiff(grp, if (alpha_on) S), allocated$catch),
+    sprintf("bars = %s%s summed over strata.", cc_lead, cls_word),
+    if (has(fill_var))
+      sprintf("%s by %s.", if (stacked) "stacked" else "dodged", fill_var),
+    if (alpha_on)
+      "shade = sampled (solid), or estimated by the allocation (transparent).",
+    if (!alpha_on && !shown)
+      "sampled and estimated numbers added together.",
+    if (plus_on) sprintf("%s+ = ages %s+ pooled.", format(plus_from), format(plus_from)),
+    if (bin_on) sprintf("length classes pooled into %scm bins.",
+                        format(bin_from, trim = TRUE)),
+    width = 110)
+  p +
+    class_axis_scale(d$.class, plus_from = plus_from, bin_from = bin_from) +
+    scale_y_continuous(labels = scales::comma) +
+    facet_two(facet1, facet2, ncol = 2, scales = scales) +
+    labs(title = sprintf("%s - Numbers at %s, after the allocation", cc_word,
+                         sub(" .*", "", lab$class_label)),
+         caption = cap, x = lab$class_label, y = lab$value_label,
+         fill = fill_var) +
+    app_theme() + theme(plot.title = element_text(size = 11),
+                        # the shade legend and the fill legend are tall: outside
+                        # the panel, where they cannot sit on the bars
+                        legend.position = "right", legend.justification = "center")
+}
+
+
+#' Mean weight at length or age after the allocation
+#'
+#' @description
+#' [plot_MWaLoA()] for the result of the allocation: the number-weighted mean
+#' weight in each length (or age) class, as a line with points. What the
+#' allocation added is one column away: `sampledOrEstimated` says whether a mean
+#' weight was sampled or estimated by the allocation, and it is drawn as the
+#' shade (solid = sampled, transparent = estimated), as the `colour` or as a
+#' `facet`, as you choose. Weight is in grams, length in cm and age in years.
+#'
+#' @details
+#' `allocated` is the allocation result and nothing else is needed - see
+#' [plot_allocated_NaLoA()] for what is taken from it and why. The mean weights
+#' are the framework's own aggregation of it, `meanWoLatAoLAggregation()`,
+#' weighted by the numbers at each class and grouped by the columns the plot
+#' shows. With the shade, every combination of those columns is one line per
+#' sampled / estimated, so the sampled curve and the curve the allocation
+#' estimated for the unsampled strata sit side by side.
+#'
+#' `sampledOrEstimated` is a variable like any other, as in
+#' [plot_allocated_NaLoA()]: the shade by default
+#' (`alpha = "sampledOrEstimated"`), or named in `colour` (a colour each) or in
+#' `facet` (a panel each), where it is not drawn as a shade as well.
+#' `alpha = NULL` draws no shade, and unless it is also the colour or a facet
+#' the sampled and the estimated weights are averaged together, weighted by
+#' their numbers.
+#'
+#' Unlike [plot_MWaLoA()] there is no +/- 1 sd band and no sample-size bars:
+#' the aggregation returns one weighted mean per group, not the strata behind
+#' it, and a distribution the allocation estimated has no measured fish to
+#' count.
+#'
+#' `colour` groups the lines. `facet` takes one column (a wrapped set of
+#' panels) or two (`c("row", "col")`, a grid). `plus_group` (ages) and
+#' `bin_width` (lengths) pool the classes as in [plot_allocated_NaLoA()], the
+#' mean weight of a pooled class weighted by the numbers in it.
+#'
+#' @param allocated The result of the allocation: a list with `$distribution`
+#'   and `$catch`.
+#' @param distributionType `"LengthTotal"` (default) or `"Age"`.
+#' @param catchCategory `"All"` (default: landings and discards together,
+#'   titled "catch"), `"Lan"`, `"Dis"` or `"BMS"`.
+#' @param colour Column mapped to the line colour, `"sampledOrEstimated"`
+#'   included.
+#' @param facet Up to two facet columns: `"col"` or `c("row", "col")`;
+#'   `"sampledOrEstimated"` included.
+#' @param alpha `"sampledOrEstimated"` (default) draws the shade: solid for
+#'   sampled, transparent for estimated. `NULL` draws none. Left out when
+#'   `sampledOrEstimated` is the `colour` or a `facet`.
+#' @param plus_group The first age of the plus group: `7` pools ages 7 and
+#'   older into one class, shown as `7+`. `NULL` (default): no plus group.
+#'   Ages only.
+#' @param bin_width Width, in cm, of the length bins every class is pooled
+#'   into. `NULL` (default): no binning. Lengths only.
+#' @param scales Facet scales: `"fixed"` (default), `"free_x"`, `"free_y"` or
+#'   `"free"`.
+#' @param palette `"default"`, `"colorblind"` or `"gradual"` (see
+#'   [var_palette()]).
+#' @return A ggplot object, or `NULL` when there is nothing to draw.
+#' @seealso [plot_MWaLoA()] for the mean weight before the allocation;
+#'   [plot_allocated_NaLoA()] for the numbers in the same classes.
+#' @family distribution plots
+#' @md
+#' @examples
+#' \donttest{
+#' data(anchoveta_catch)
+#' data(anchoveta_dist)
+#' cef  <- subset(anchoveta_catch, year == 2023)
+#' dist <- subset(anchoveta_dist, year == 2023)
+#' dims <- c("metier4", "ICESDivision", "seasonValue")
+#' groups <- define_raising_groups_auto(cef, hierarchy = dims,
+#'                                      thresholds = c(50, 40, 30))
+#' raised <- run_native_raising(cef, dims, groups, type = "discards",
+#'                              log_file = tempfile(fileext = ".txt"))
+#' alloc  <- run_allocation(raised, dist,
+#'                          list(ALL = list(alloc = "TRUE", matched = "TRUE")),
+#'                          log_file = tempfile(fileext = ".txt"))
+#'
+#' # landings mean weight at length by country: solid = sampled, transparent = estimated
+#' plot_allocated_MWaLoA(alloc, catchCategory = "Lan", colour = "vesselFlagCountry")
+#'
+#' # sampled and estimated as the colour instead
+#' plot_allocated_MWaLoA(alloc, catchCategory = "Lan", colour = "sampledOrEstimated")
+#' }
+#' @export
+plot_allocated_MWaLoA <- function(allocated,
+                                  distributionType = c("LengthTotal", "Age"),
+                                  catchCategory = "All",
+                                  colour = NULL, facet = NULL,
+                                  alpha = "sampledOrEstimated",
+                                  plus_group = NULL, bin_width = NULL,
+                                  scales = "fixed",
+                                  palette = c("default", "colorblind", "gradual")) {
+  fn <- "plot_allocated_MWaLoA(): "
+  distributionType <- match.arg(distributionType)
+  palette <- match.arg(palette)
+  catchCategory <- match.arg(catchCategory, c("Lan", "Dis", "BMS", "All"))
+  if (length(facet) > 2)
+    stop(fn, "`facet` takes at most two columns", call. = FALSE)
+  facet1 <- if (length(facet) >= 1) facet[1] else NULL
+  facet2 <- if (length(facet) >= 2) facet[2] else NULL
+  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+  S <- "sampledOrEstimated"
+  if (!is.null(alpha) && !identical(alpha, S))
+    stop(fn, "`alpha` is \"", S, "\" (solid = sampled, transparent = ",
+         "estimated) or NULL for no shade", call. = FALSE)
+  shown    <- S %in% c(colour, facet1, facet2)
+  alpha_on <- !is.null(alpha) && !shown
+  grp <- unique(c(if (has(colour)) colour, if (has(facet1)) facet1,
+                  if (has(facet2)) facet2, if (alpha_on) S))
+  tab <- alloc_class_table(allocated, "meanweight", distributionType,
+                           catchCategory, grp, plus_group, bin_width, fn)
+  if (is.null(tab)) return(NULL)
+  d <- tab$data; plus_from <- tab$plus_from; bin_from <- tab$bin_from
+  lab <- biology_axis_labels(distributionType, "meanweight")
+  if (alpha_on)
+    d$.status <- factor(ifelse(d[[S]] == "estimated", "Estimated", "Sampled"),
+                        levels = c("Sampled", "Estimated"))
+  d <- reorder_mesh(d, c(colour, facet1, facet2))
+  d <- discrete_cols(d, c(colour, facet1, facet2))
+  colour_var <- colour
+  # one line per colour level, and per sampled / estimated when that is the shade
+  d$.line <- if (has(colour_var) && alpha_on)
+               interaction(d[[colour_var]], d$.status, drop = TRUE)
+             else if (has(colour_var)) d[[colour_var]]
+             else if (alpha_on) d$.status
+             else 1L
+
+  ae <- aes(x = .class, y = mean_weight, group = .line)
+  if (has(colour_var)) ae <- modifyList(ae, aes(colour = factor(.data[[colour_var]])))
+  if (alpha_on)        ae <- modifyList(ae, aes(alpha = .status))
+  p <- ggplot(d, ae)
+  p <- p + if (has(colour_var)) geom_line(linewidth = 0.65)
+           else geom_line(linewidth = 0.65, colour = PAL_BASE[1])
+  p <- p + if (has(colour_var))
+    geom_point(aes(fill = factor(.data[[colour_var]])), shape = 21, size = 2.2,
+               colour = OUTLINE, stroke = 0.4)
+  else geom_point(shape = 21, size = 2.2, fill = PAL_BASE[1], colour = OUTLINE,
+                  stroke = 0.4)
+  if (has(colour_var)) {
+    if (identical(colour_var, S)) {
+      cols <- c(sampled = PAL_BASE[1], estimated = PAL_BASE[2])
+      p <- p + scale_colour_manual(values = cols, name = S) +
+        scale_fill_manual(values = cols, name = S)
+    } else
+      p <- p + scale_colour_var(colour_var, d[[colour_var]], name = colour_var,
+                                palette = palette) +
+        scale_fill_var(colour_var, d[[colour_var]], name = colour_var,
+                       palette = palette)
+  }
+  if (alpha_on)
+    p <- p + scale_alpha_manual(
+      values = c(Sampled = 1, Estimated = 0.45), name = NULL,
+      guide = guide_legend(override.aes = list(colour = "grey30", fill = "grey30")))
+
+  cc_word <- switch(catchCategory, Lan = "Landings", Dis = "Discards",
+                    BMS = "BMS Catch", All = "Catch")
+  cc_lead <- switch(catchCategory, Lan = "Landings ", Dis = "Discards ",
+                    BMS = "BMS catch ", All = "Catch ")
+  is_age  <- identical(distributionType, "Age")
+  plus_on <- !is.null(plus_from)
+  bin_on  <- !is.null(bin_from)
+  cap <- sub_wrap(
+    strata_sentence(setdiff(grp, if (alpha_on) S), allocated$catch),
+    sprintf("dots and lines = %s%s weight averaged by %s.", cc_lead,
+            if (is_age) "MWaA" else "MWaL", if (is_age) "NaA" else "NaL"),
+    if (alpha_on)
+      "shade = sampled (solid), or estimated by the allocation (transparent).",
+    if (!alpha_on && !shown)
+      "sampled and estimated weights averaged together (weighted by numbers).",
+    if (plus_on) sprintf("%s+ = ages %s+ pooled (weighted by numbers).",
+                         format(plus_from), format(plus_from)),
+    if (bin_on) sprintf("length classes pooled into %scm bins (weighted by numbers).",
+                        format(bin_from, trim = TRUE)),
+    width = 110)
+  p +
+    class_axis_scale(d$.class, plus_from = plus_from, bin_from = bin_from) +
+    scale_y_continuous(labels = scales::comma) +
+    facet_two(facet1, facet2, ncol = 2, scales = scales) +
+    labs(title = sprintf("%s - Mean Weight at %s, after the allocation", cc_word,
+                         sub(" .*", "", lab$class_label)),
+         caption = cap, x = lab$class_label, y = lab$value_label,
+         colour = colour_var, fill = colour_var) +
+    app_theme() + theme(plot.title = element_text(size = 11),
+                        legend.position = "right", legend.justification = "center")
 }

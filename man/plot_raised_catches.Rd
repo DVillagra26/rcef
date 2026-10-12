@@ -8,6 +8,8 @@ plot_raised_catches(
   raised_catch,
   x = NULL,
   facet = NULL,
+  fill = NULL,
+  alpha = "importedOrRaised",
   catchCategory = NULL,
   ncol = 2
 )
@@ -16,9 +18,17 @@ plot_raised_catches(
 \item{raised_catch}{Output of \code{\link[=catchRaising]{catchRaising()}}: \code{raised} with
 \code{importedOrRaised} and \code{DrGroup} columns.}
 
-\item{x}{Column on the x axis: one bar (or bar segment) per level.}
+\item{x}{Column on the x axis: one bar (or bar segment) per level;
+\code{"importedOrRaised"} included.}
 
-\item{facet}{Optional facet column.}
+\item{facet}{Optional facet column; \code{"importedOrRaised"} included.}
+
+\item{fill}{Column mapped to the bar fill. \code{NULL} (default) colours the bars
+landings / discards; \code{"importedOrRaised"} is allowed.}
+
+\item{alpha}{\code{"importedOrRaised"} (default) draws the shade: solid for
+imported, transparent for raised. \code{NULL} draws none. Left out when
+\code{importedOrRaised} is the \code{x}, the \code{fill} or the \code{facet}.}
 
 \item{catchCategory}{Optional filter to just \code{"Lan"} or \code{"Dis"} (matched
 case-insensitively), so discards are readable on their own when landings
@@ -31,8 +41,21 @@ A ggplot object.
 }
 \description{
 A stacked bar of catch weight after raising, at any aggregation: bars are
-landings/discards (or just the one, via \code{catchCategory}), shading is
-imported from the data versus added by raising.
+landings/discards (or just the one, via \code{catchCategory}). What raising added
+\itemize{
+\item \code{importedOrRaised}, imported from the data versus added by raising - is
+drawn as the shade, as the \code{fill} or as a \code{facet}, as you choose.
+}
+}
+\details{
+\code{importedOrRaised} is a variable like any other. By default it is the shade
+(\code{alpha = "importedOrRaised"}): solid for what was imported, transparent for
+what raising added. Name it in \code{fill} to give the two a colour each (the bars
+are then no longer coloured landings / discards: say which they are with
+\code{catchCategory}, or with \code{facet = "catchCategory"}), in \code{facet} to give each
+its own panel, or in \code{x} for a bar each; it is then not drawn as a shade as
+well. \code{alpha = NULL} draws no shade, and unless it is named elsewhere the
+imported and the raised weights are added together.
 }
 \seealso{
 \code{\link[=plot_raised_DR]{plot_raised_DR()}} for the discard rate of the same raised catch.

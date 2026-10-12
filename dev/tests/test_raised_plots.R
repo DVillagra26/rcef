@@ -148,5 +148,71 @@ ok(drawable(p_nan) && nrow(p_nan$data) == nrow(p2$data) - 1 &&
 ok(any(grepl("no rate", msgs)),
    "plot_raised_DR(): and says so")
 
+## ---- importedOrRaised: the shade by default, or the fill, the facet, the x ----
+## It is a variable like any other: drawn once - as the shade unless it is named
+## in fill / colour / shape / facet / x - and alpha = NULL draws no shade.
+S <- "importedOrRaised"
+near <- function(a, b) isTRUE(all.equal(as.numeric(a), as.numeric(b), tolerance = 1e-9))
+shaded <- function(p) !is.null(p$scales$get_scales("alpha"))
+n_panels <- function(p) nrow(ggplot_build(p)$layout$layout)
+
+# plot_raised_catches()
+pc0 <- plot_raised_catches(raised, x = "metier4")
+by_src <- tapply(pc0$data$t, pc0$data$src, sum)
+ok(shaded(pc0), "plot_raised_catches(): by default imported / raised is the shade")
+ok(inherits(plot_raised_catches(raised, "metier4", "vesselFlagCountry")$facet, "FacetWrap"),
+   "plot_raised_catches(): x and facet are still the first two arguments (the app calls it that way)")
+pcf <- plot_raised_catches(raised, x = "metier4", fill = S)
+ok(drawable(pcf) && !shaded(pcf) && is.factor(pcf$data[[S]]) &&
+     identical(levels(pcf$data[[S]]), c("imported", "raised")) &&
+     near(tapply(pcf$data$t, pcf$data[[S]], sum), by_src),
+   "plot_raised_catches(): fill = importedOrRaised - a colour each, no shade, the same weights")
+ok(grepl("color = importedOrRaised", pcf$labels$caption, fixed = TRUE) &&
+     !grepl("shade =", pcf$labels$caption, fixed = TRUE),
+   "plot_raised_catches(): ... and the caption says what the colour is")
+pcx <- plot_raised_catches(raised, x = "metier4", facet = S)
+ok(drawable(pcx) && !shaded(pcx) && inherits(pcx$facet, "FacetWrap") && n_panels(pcx) == 2 &&
+     near(tapply(pcx$data$t, pcx$data[[S]], sum), by_src),
+   "plot_raised_catches(): facet = importedOrRaised - a panel each, no shade, the same weights")
+pcb <- plot_raised_catches(raised, x = S)
+ok(drawable(pcb) && !shaded(pcb) && setequal(unique(pcb$data$.x), c("imported", "raised")) &&
+     near(tapply(pcb$data$t, pcb$data$.x, sum), by_src),
+   "plot_raised_catches(): x = importedOrRaised - a bar each, no shade, the same weights")
+pcn <- plot_raised_catches(raised, x = "metier4", alpha = NULL)
+ok(drawable(pcn) && !shaded(pcn) && near(sum(pcn$data$t), sum(by_src)) &&
+     grepl("added together", pcn$labels$caption, fixed = TRUE),
+   "plot_raised_catches(): alpha = NULL - no shade, imported and raised added together")
+pcm <- plot_raised_catches(raised, x = "metier4", fill = "vesselFlagCountry", catchCategory = "Dis")
+ok(drawable(pcm) && shaded(pcm) && near(sum(pcm$data$t), sum(p1_dis$data$t)) &&
+     identical(pcm$scales$get_scales("fill")$name, "vesselFlagCountry"),
+   "plot_raised_catches(): another fill column keeps the shade, and the weights")
+ok(inherits(try(plot_raised_catches(raised, alpha = "metier4"), silent = TRUE), "try-error") &&
+     inherits(try(plot_raised_catches(raised, fill = "nope"), silent = TRUE), "try-error"),
+   "plot_raised_catches(): an alpha that is not importedOrRaised, or a column it lacks, is refused")
+
+# plot_raised_DR()
+pd0 <- plot_raised_DR(raised, x = "metier4")
+ok(shaded(pd0), "plot_raised_DR(): by default imported / raised is the shade")
+same_strata <- function(p) nrow(p$data) == nrow(pd0$data) && near(sort(p$data$.y), sort(pd0$data$.y))
+pdc <- plot_raised_DR(raised, x = "metier4", colour = S)
+ok(drawable(pdc) && !shaded(pdc) && is.factor(pdc$data[[S]]) &&
+     identical(levels(pdc$data[[S]]), c("imported", "raised")) && same_strata(pdc) &&
+     identical(pdc$data[[S]] == "raised", pdc$data$.status == "Raised"),
+   "plot_raised_DR(): colour = importedOrRaised - a colour each, no shade, the same strata and rates")
+pds <- plot_raised_DR(raised, x = "metier4", shape = S)
+pdf_ <- plot_raised_DR(raised, x = "metier4", facet = S)
+pdx <- plot_raised_DR(raised, x = S)
+ok(drawable(pds) && !shaded(pds) && same_strata(pds) &&
+     drawable(pdf_) && !shaded(pdf_) && same_strata(pdf_) && n_panels(pdf_) == 2 &&
+     drawable(pdx) && !shaded(pdx) && setequal(as.character(pdx$data[[S]]), c("imported", "raised")),
+   "plot_raised_DR(): shape, facet and x = importedOrRaised work the same way")
+pdn <- plot_raised_DR(raised, x = "metier4", alpha = NULL)
+ok(drawable(pdn) && !shaded(pdn) && same_strata(pdn) &&
+     grepl("drawn alike", pdn$labels$caption, fixed = TRUE) &&
+     !grepl("transparent", pdn$labels$caption, fixed = TRUE),
+   "plot_raised_DR(): alpha = NULL - no shade, imported and raised drawn alike")
+ok(inherits(try(plot_raised_DR(raised, x = "metier4", alpha = "metier4"), silent = TRUE), "try-error"),
+   "plot_raised_DR(): an alpha that is not importedOrRaised is refused")
+
 cat(sprintf("\nDONE  %d failure(s)\n", FAIL))
 if (FAIL) quit(status = 1L)
