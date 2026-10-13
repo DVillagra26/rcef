@@ -14,19 +14,20 @@
 ## Nothing about that is visible in the source, so this is checked by
 ## running the server.
 
+source("dev/tests/fixture.R")
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
   else { FAIL <<- FAIL + 1L; cat("FAIL  ", what, "\n") }
 }
 
-fx <- "anchoveta"
+fx <- "fixture"
 
 if (!requireNamespace("shiny", quietly = TRUE) || !length(fx)) {
   cat("shiny or the CEF fixture unavailable - skipping\n")
 } else {
   ## ---- 1. the pure function is fine on matching dims ----------------
-  cd <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
+  cd <- fx_catch()
   keys <- c("Stratum", "metier4", "vesselFlagCountry", "areaValue",
             "ICESSubArea", "seasonValue")
   st <- classify_strata(build_strata(cd, keys), 50)
@@ -57,7 +58,7 @@ if (!requireNamespace("shiny", quietly = TRUE) || !length(fx)) {
   ## Assigning rv$cef_catches <- raw there stores the FUNCTION, derived()
   ## then fails its column check, and every output comes back empty -
   ## which looks exactly like the bug under test.
-  cef_raw <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
+  cef_raw <- fx_catch()
 
   shiny::testServer(app, {
     rv$cef_catches <- cef_raw; rv$load_method <- "cef"

@@ -11,7 +11,8 @@ plot_coverage_map(
   group = NULL,
   what = "discard",
   catchCategory = NULL,
-  scale = 1
+  scale = 1,
+  save = NULL
 )
 }
 \arguments{
@@ -31,6 +32,10 @@ title comes from \code{what} and \code{catchCategory}.}
 
 \item{scale}{Multiplies every pie radius (and, when grouped, the size of
 the box's grid cell).}
+
+\item{save}{Where to write the plot as well, or \code{NULL} (default) to only
+return it: a folder, a file name, or a list of options - see
+\link{saving-plots}.}
 }
 \value{
 A ggplot object, or \code{NULL} (with a message) when nothing can be
@@ -52,15 +57,16 @@ raw catch (plus \code{distributions} for length and age) or a
 \code{\link[=build_coverage_strata]{build_coverage_strata()}} table that has the \code{area} column (and the
 \code{group} column) among its \code{dims}.
 
-Areas are placed at approximate centroids (\code{\link[=ices_area_centroid]{ices_area_centroid()}}); an area
+Areas are placed at approximate centroids; an area
 with no known centroid is warned about by name and left off the map. The
 map needs the suggested \code{maps} package.
 }
 \examples{
+\dontrun{
 if (requireNamespace("maps", quietly = TRUE)) {
-  data(anchoveta_catch)
-  plot_coverage_map(anchoveta_catch)
-  plot_coverage_map(anchoveta_catch, group = "seasonValue")
+  plot_coverage_map(catch)
+  plot_coverage_map(catch, group = "seasonValue")
+}
 }
 }
 \seealso{
@@ -69,7 +75,6 @@ if (requireNamespace("maps", quietly = TRUE)) {
 
 Other coverage plots: 
 \code{\link{build_coverage_strata}()},
-\code{\link{coverage-plots}},
-\code{\link{status_legend_plot}()}
+\code{\link{coverage-plots}}
 }
 \concept{coverage plots}

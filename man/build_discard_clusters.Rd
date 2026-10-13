@@ -36,7 +36,7 @@ Correspondence Analysis - the categorical equivalent of PCA, since \code{dims}
 is ordinarily categorical: metier4, mesh, vesselFlagCountry...), and scores how
 strongly each of \code{dims} lines up with the resulting clusters. The table
 this returns is what \code{\link[=plot_discard_clusters]{plot_discard_clusters()}} and
-\code{\link[=plot_cluster_variables]{plot_cluster_variables()}} draw; nothing here needs a distribution or a
+\code{\link[=plot_discard_cluster_variables]{plot_discard_cluster_variables()}} draw; nothing here needs a distribution or a
 raised catch.
 }
 \details{
@@ -56,5 +56,5 @@ would otherwise dominate the clustering on its own.
 }
 \seealso{
 \code{\link[=build_coverage_strata]{build_coverage_strata()}} for the table this clusters;
-\code{\link[=plot_discard_clusters]{plot_discard_clusters()}}, \code{\link[=plot_cluster_variables]{plot_cluster_variables()}}.
+\code{\link[=plot_discard_clusters]{plot_discard_clusters()}}, \code{\link[=plot_discard_cluster_variables]{plot_discard_cluster_variables()}}.
 }

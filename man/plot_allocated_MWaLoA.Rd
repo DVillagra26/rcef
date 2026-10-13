@@ -14,7 +14,8 @@ plot_allocated_MWaLoA(
   plus_group = NULL,
   bin_width = NULL,
   scales = "fixed",
-  palette = c("default", "colorblind", "gradual")
+  palette = c("default", "colorblind", "gradual"),
+  save = NULL
 )
 }
 \arguments{
@@ -46,8 +47,11 @@ into. \code{NULL} (default): no binning. Lengths only.}
 \item{scales}{Facet scales: \code{"fixed"} (default), \code{"free_x"}, \code{"free_y"} or
 \code{"free"}.}
 
-\item{palette}{\code{"default"}, \code{"colorblind"} or \code{"gradual"} (see
-\code{\link[=var_palette]{var_palette()}}).}
+\item{palette}{\code{"default"}, \code{"colorblind"} or \code{"gradual"}.}
+
+\item{save}{Where to write the plot as well, or \code{NULL} (default) to only
+return it: a folder, a file name, or a list of options - see
+\link{saving-plots}.}
 }
 \value{
 A ggplot object, or \code{NULL} when there is nothing to draw.
@@ -88,19 +92,18 @@ panels) or two (\code{c("row", "col")}, a grid). \code{plus_group} (ages) and
 mean weight of a pooled class weighted by the numbers in it.
 }
 \examples{
-\donttest{
-data(anchoveta_catch)
-data(anchoveta_dist)
-cef  <- subset(anchoveta_catch, year == 2023)
-dist <- subset(anchoveta_dist, year == 2023)
+\dontrun{
+cef  <- subset(catch, year == 2023)
+dist <- subset(distributions, year == 2023)
 dims <- c("metier4", "ICESDivision", "seasonValue")
 groups <- define_raising_groups_auto(cef, hierarchy = dims,
                                      thresholds = c(50, 40, 30))
 raised <- run_native_raising(cef, dims, groups, type = "discards",
                              log_file = tempfile(fileext = ".txt"))
-alloc  <- run_allocation(raised, dist,
-                         list(ALL = list(alloc = "TRUE", matched = "TRUE")),
-                         log_file = tempfile(fileext = ".txt"))
+alloc  <- catchAllocationAoL(raised, dist,
+                             condition_alloc_st_list = list(ALL = rlang::quo(TRUE)),
+                             distributionType = "LengthTotal", verbose = FALSE,
+                             logFile = tempfile(fileext = ".txt"))
 
 # landings mean weight at length by country: solid = sampled, transparent = estimated
 plot_allocated_MWaLoA(alloc, catchCategory = "Lan", colour = "vesselFlagCountry")

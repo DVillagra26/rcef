@@ -4,6 +4,7 @@
 ## test_mesh_order.R) and where that order is worth keeping visible in the
 ## colour, rather than just telling levels apart.
 
+source("dev/tests/fixture.R")
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
@@ -52,8 +53,8 @@ p_sc <- ggplot(d_sc, aes(g, v, colour = g)) + geom_point() +
 ok(drawable(p_sc), "scale_colour_var(): palette = \"gradual\" builds a working scale")
 
 ## ---- a real plot: plot_coverage_bar(fill = mesh, palette = "gradual") --
-data(anchoveta_catch)
-c23 <- subset(anchoveta_catch, year == 2023)
+test_catch <- fx_catch()
+c23 <- subset(test_catch, year == 2023)
 mesh_vals <- c("0", "16-31", "32-69", "70-99", "90-99", "100-119", ">=120")
 c23$mesh <- mesh_vals[(as.integer(factor(c23$fleetValue)) - 1) %%
                         length(mesh_vals) + 1]

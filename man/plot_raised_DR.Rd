@@ -14,7 +14,8 @@ plot_raised_DR(
   rate = c("ratio", "rate"),
   reference = NULL,
   jitter = TRUE,
-  palette = c("default", "colorblind", "gradual")
+  palette = c("default", "colorblind", "gradual"),
+  save = NULL
 )
 }
 \arguments{
@@ -46,7 +47,11 @@ scale of \code{rate}. Draws a dashed line.}
 \item{jitter}{Jitter the points horizontally. Cosmetic only.}
 
 \item{palette}{\code{"default"}, \code{"colorblind"} or \code{"gradual"}: the point
-colours (see \code{\link[=var_palette]{var_palette()}}).}
+colours.}
+
+\item{save}{Where to write the plot as well, or \code{NULL} (default) to only
+return it: a folder, a file name, or a list of options - see
+\link{saving-plots}.}
 }
 \value{
 A ggplot object, or \code{NULL} when no stratum has a discard rate.
@@ -107,11 +112,9 @@ Other discard-rate plots:
 \code{\link{plot_DR}()}
 
 Other raising plots: 
-\code{\link{plot_comparison}()},
+\code{\link{plot_compare_raised}()},
 \code{\link{plot_raised_catches}()},
-\code{\link{plot_river}()},
-\code{\link{plot_river_level}()},
-\code{\link{plot_scenario_comparison}()}
+\code{\link{plot_river}()}
 }
 \concept{discard-rate plots}
 \concept{raising plots}

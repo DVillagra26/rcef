@@ -13,12 +13,11 @@
 | | Also: filter Apply round-trips every plot panel; per-tab level of detail is independent; the code/status outputs render without error (the class of bug the `mg_excl` typo was) |
 | `check_sections.R` | the discard and biology manual builders must present the same 8 numbered steps |
 | `check_parity.R` | lists the panels and controls of the two manual builders side by side, so a drift is visible rather than found by a user. Informational — it reports, it does not fail |
-| `DOC_BACKLOG.txt` | the functions exported with `@noRd` that still have no man page |
 | `deploy_shinyapps.R` | shinyapps.io, with the GitHub-remote caveat spelled out |
 | `check_all.sh` | every check above, with real exit-code handling |
-| `tests/` | `test_cc_thresholds.R` (Lan/Dis split, zero-weight strata), `test_exclusion.R` (donor exclusion), `test_anchoveta_example.R` (the bundled example through raising, allocation and aggregation, with only rcef attached) |
+| `tests/` | `test_cc_thresholds.R` (Lan/Dis split, zero-weight strata), `test_exclusion.R` (donor exclusion), `test_workflow_example.R` (the test fixture through raising, allocation and aggregation, with only rcef attached) |
 | `tests/legacy/` | the 10 remaining pre-package suites. **All currently error** on paths that no longer exist; quarantined so they cannot hide a real failure. See the README there. |
-| `testdata/` | `make_test_data_anchoveta.R` — synthetic CEF fixtures |
+| `testdata/` | `cef_fixture.rds` — the synthetic CEF data the tests share, read through `tests/fixture.R` (see its README) |
 
 ## Running the tests
 

@@ -15,7 +15,8 @@ plot_allocated_NaLoA(
   plus_group = NULL,
   bin_width = NULL,
   scales = "fixed",
-  palette = c("default", "colorblind", "gradual")
+  palette = c("default", "colorblind", "gradual"),
+  save = NULL
 )
 }
 \arguments{
@@ -48,8 +49,11 @@ into. \code{NULL} (default): no binning. Lengths only.}
 \item{scales}{Facet scales: \code{"fixed"} (default), \code{"free_x"}, \code{"free_y"} or
 \code{"free"}.}
 
-\item{palette}{\code{"default"}, \code{"colorblind"} or \code{"gradual"} (see
-\code{\link[=var_palette]{var_palette()}}).}
+\item{palette}{\code{"default"}, \code{"colorblind"} or \code{"gradual"}.}
+
+\item{save}{Where to write the plot as well, or \code{NULL} (default) to only
+return it: a folder, a file name, or a list of options - see
+\link{saving-plots}.}
 }
 \value{
 A ggplot object, or \code{NULL} when there is nothing to draw.
@@ -65,8 +69,8 @@ years.
 }
 \details{
 \code{allocated} is the allocation result and nothing else is needed: the list
-with \verb{$distribution} and \verb{$catch} that \code{catchAllocationAoL()} returns
-(\code{run_allocation()} returns the same). Both are taken from the result rather
+with \verb{$distribution} and \verb{$catch} that \code{catchAllocationAoL()} returns. Both
+are taken from the result rather
 than from the data that went into the allocation, because the distributions
 it estimates for a stratum with no biological domain carry a domain the
 allocation made up, and only its own \verb{$catch} knows it. The numbers are the
@@ -77,10 +81,9 @@ cannot disagree. The catch rows it joins are the ones the allocation ran on
 
 Like that aggregation, it counts a distribution once for every catch row
 that names its \code{domainBiology}, so it assumes one catch row per domain,
-catch category and country - which CEF files built from InterCatch have, and
-the bundled anchoveta example does not (its allocated numbers come out
-inflated for that reason, though the shapes and the sampled / estimated
-contrast still read).
+catch category and country - which CEF files built from InterCatch have.
+Where there are several, the allocated numbers come out inflated, though
+the shapes and the sampled / estimated contrast still read.
 \subsection{Where sampled / estimated goes}{
 
 \code{sampledOrEstimated} is a variable like any other. By default it is the
@@ -99,19 +102,18 @@ in \code{\link[=plot_NaLoA]{plot_NaLoA()}}.
 }
 }
 \examples{
-\donttest{
-data(anchoveta_catch)
-data(anchoveta_dist)
-cef  <- subset(anchoveta_catch, year == 2023)
-dist <- subset(anchoveta_dist, year == 2023)
+\dontrun{
+cef  <- subset(catch, year == 2023)
+dist <- subset(distributions, year == 2023)
 dims <- c("metier4", "ICESDivision", "seasonValue")
 groups <- define_raising_groups_auto(cef, hierarchy = dims,
                                      thresholds = c(50, 40, 30))
 raised <- run_native_raising(cef, dims, groups, type = "discards",
                              log_file = tempfile(fileext = ".txt"))
-alloc  <- run_allocation(raised, dist,
-                         list(ALL = list(alloc = "TRUE", matched = "TRUE")),
-                         log_file = tempfile(fileext = ".txt"))
+alloc  <- catchAllocationAoL(raised, dist,
+                             condition_alloc_st_list = list(ALL = rlang::quo(TRUE)),
+                             distributionType = "LengthTotal", verbose = FALSE,
+                             logFile = tempfile(fileext = ".txt"))
 
 # landings numbers at length by country: solid = sampled, transparent = estimated
 plot_allocated_NaLoA(alloc, catchCategory = "Lan", fill = "vesselFlagCountry")

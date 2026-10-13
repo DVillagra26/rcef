@@ -1,6 +1,7 @@
 ## The hierarchical cascade's methodological correction: key vocabulary,
 ## grouped and curated, plus the two warning checks.
 
+source("dev/tests/fixture.R")
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
@@ -8,9 +9,9 @@ ok <- function(cond, what) {
 }
 
 ## ---- key_vocab_grouped(): structure and curation -----------------------
-fx <- "anchoveta"
+fx <- "fixture"
 if (length(fx)) {
-  cd <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
+  cd <- fx_catch()
   kv <- key_vocab_grouped(cd)
   ok(identical(names(kv), c("Fleet", "Country", "Area", "Season")),
      "four families, in this order")

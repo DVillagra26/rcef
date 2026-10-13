@@ -1,15 +1,16 @@
-## plot_comparison() and raised_overview_table() on two or more raised catches.
+## plot_compare_raised() and raised_overview_table() on two or more raised catches.
 ##
 ## Both take the raised catches themselves - nothing else - written list(a, b)
 ## or c(a, b), name the scenarios after the objects unless told otherwise, and
 ## sum each raised catch at whatever x / facet / by the caller names. The
 ## stratum-level pair the application uses (compare_scenarios() +
-## plot_scenario_comparison()) is the old plot_comparison(), renamed; its
+## plot_scenario_comparison()) is the former plot_comparison(), renamed; its
 ## drawing is pinned at the end.
 ##
-## Uses the bundled anchoveta example and run_native_raising(), as the other
+## Uses the synthetic test fixture and run_native_raising(), as the other
 ## after-raising tests do, so it runs anywhere.
 
+source("dev/tests/fixture.R")
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
@@ -28,8 +29,8 @@ drawable <- function(p)
   !is.null(p) && inherits(p, "ggplot") &&
   !inherits(try(ggplot_build(p), silent = TRUE), "try-error")
 
-data(anchoveta_catch)
-c23  <- subset(anchoveta_catch, year == 2023)
+test_catch <- fx_catch()
+c23  <- subset(test_catch, year == 2023)
 dims <- c("metier4", "ICESDivision", "seasonValue")
 lf   <- tempfile(fileext = ".txt")
 raise_with <- function(th) {
@@ -45,62 +46,62 @@ ok(abs(dis_t(raised_strict) - dis_t(raised_relaxed)) > 1e-6,
    "fixture: the two ways of raising give different discards")
 
 ## ---- the scenarios: how they are read and named --------------------------
-p <- plot_comparison(c(raised_strict, raised_relaxed), x = "metier4")
-ok(drawable(p), "plot_comparison(): draws with c(a, b)")
+p <- plot_compare_raised(c(raised_strict, raised_relaxed), x = "metier4")
+ok(drawable(p), "plot_compare_raised(): draws with c(a, b)")
 ok(identical(levels(p$data$scenario), c("raised_strict", "raised_relaxed")),
    "c(a, b): the scenarios are named after the objects, in the order given")
-p <- plot_comparison(list(raised_strict, raised_relaxed), x = "metier4")
+p <- plot_compare_raised(list(raised_strict, raised_relaxed), x = "metier4")
 ok(identical(levels(p$data$scenario), c("raised_strict", "raised_relaxed")),
    "list(a, b): the same")
-p <- plot_comparison(c(usual = raised_strict, `usual with 3a` = raised_relaxed),
+p <- plot_compare_raised(c(usual = raised_strict, `usual with 3a` = raised_relaxed),
                      x = "metier4")
 ok(identical(levels(p$data$scenario), c("usual", "usual with 3a")),
    "names given inside c() / list() are used")
-p <- plot_comparison(c(usual = raised_strict, raised_relaxed), x = "metier4")
+p <- plot_compare_raised(c(usual = raised_strict, raised_relaxed), x = "metier4")
 ok(identical(levels(p$data$scenario), c("usual", "raised_relaxed")),
    "one name given, one left to the object")
-p <- plot_comparison(c(raised_strict, raised_relaxed),
+p <- plot_compare_raised(c(raised_strict, raised_relaxed),
                      scenarios_names = c("Usual method", "Usual method with 3.a.21"),
                      x = "metier4")
 ok(identical(levels(p$data$scenario), c("Usual method", "Usual method with 3.a.21")),
    "scenarios_names sets them, whatever the objects are called")
 both <- list(first = raised_strict, second = raised_relaxed)
-p <- plot_comparison(both, x = "metier4")
+p <- plot_compare_raised(both, x = "metier4")
 ok(identical(levels(p$data$scenario), c("first", "second")),
    "a list built beforehand keeps its own names")
-p <- plot_comparison(unname(both), x = "metier4")
+p <- plot_compare_raised(unname(both), x = "metier4")
 ok(identical(levels(p$data$scenario), c("scenario 1", "scenario 2")),
    "an unnamed list built beforehand gets scenario 1, scenario 2")
-p3 <- plot_comparison(c(raised_strict, raised_relaxed, raised_third), x = "metier4")
+p3 <- plot_compare_raised(c(raised_strict, raised_relaxed, raised_third), x = "metier4")
 ok(drawable(p3) && nlevels(p3$data$scenario) == 3,
    "three scenarios draw")
 
-ok(fails(plot_comparison(raised_strict, x = "metier4"), "two or more"),
+ok(fails(plot_compare_raised(raised_strict, x = "metier4"), "two or more"),
    "a single raised catch is refused: there is nothing to compare")
-ok(fails(plot_comparison(c(raised_strict, raised_relaxed),
+ok(fails(plot_compare_raised(c(raised_strict, raised_relaxed),
                          scenarios_names = "only one", x = "metier4"),
          "`scenarios_names` has 1"),
    "scenarios_names of the wrong length is refused")
-ok(fails(plot_comparison(c(raised_strict, raised_relaxed),
+ok(fails(plot_compare_raised(c(raised_strict, raised_relaxed),
                          scenarios_names = c("same", "same"), x = "metier4"),
          "must all be different"),
    "duplicate scenarios_names are refused")
 stored <- c(raised_strict, raised_relaxed)
-ok(fails(plot_comparison(stored, x = "metier4"), "not a raised catch"),
+ok(fails(plot_compare_raised(stored, x = "metier4"), "not a raised catch"),
    "a c() of data frames stored beforehand (a flat list of columns) is refused, and says why")
-ok(fails(plot_comparison(c(raised_strict, c23), x = "metier4"), "'c23' is not a raised catch"),
+ok(fails(plot_compare_raised(c(raised_strict, c23), x = "metier4"), "'c23' is not a raised catch"),
    "a catch that was never raised is refused by name")
-ok(fails(plot_comparison(c(raised_strict, raised_relaxed), x = "nope"), "has no column 'nope'"),
+ok(fails(plot_compare_raised(c(raised_strict, raised_relaxed), x = "nope"), "has no column 'nope'"),
    "an x column the raised catches lack is refused by name")
 broken <- raised_relaxed; broken$metier4 <- NULL
-ok(fails(plot_comparison(c(raised_strict, broken), x = "metier4"), "'broken' has no column"),
+ok(fails(plot_compare_raised(c(raised_strict, broken), x = "metier4"), "'broken' has no column"),
    "and it names the raised catch that lacks it")
-ok(fails(plot_comparison(c(raised_strict, raised_relaxed), x = "metier4", catchCategory = "BMS"),
+ok(fails(plot_compare_raised(c(raised_strict, raised_relaxed), x = "metier4", catchCategory = "BMS"),
          "`catchCategory` must be"),
    "an unknown catchCategory is refused")
 
-## ---- plot_comparison(): what is drawn ------------------------------------
-p <- plot_comparison(c(raised_strict, raised_relaxed), x = "metier4")
+## ---- plot_compare_raised(): what is drawn ------------------------------------
+p <- plot_compare_raised(c(raised_strict, raised_relaxed), x = "metier4")
 ok(identical(p$labels$title, "Raised catch per stratum, by scenario") &&
      identical(p$labels$y, "Catch (t)"),
    "catch weight by default: title and y axis say Catch")
@@ -120,8 +121,8 @@ ok(isTRUE(all.equal(sum(p$data$t[p$data$scenario == "raised_strict"]), rc(raised
      isTRUE(all.equal(sum(p$data$t[p$data$scenario == "raised_relaxed"]), rc(raised_relaxed))),
    "a scenario's bars add up to the weight plot_raised_catches() draws for it")
 
-pd <- plot_comparison(c(raised_strict, raised_relaxed), x = "metier4", catchCategory = "Dis")
-pl <- plot_comparison(c(raised_strict, raised_relaxed), x = "metier4", catchCategory = "lan")
+pd <- plot_compare_raised(c(raised_strict, raised_relaxed), x = "metier4", catchCategory = "Dis")
+pl <- plot_compare_raised(c(raised_strict, raised_relaxed), x = "metier4", catchCategory = "lan")
 ok(identical(pd$labels$title, "Raised discards per stratum, by scenario") &&
      identical(pd$labels$y, "Discards (t)") &&
      identical(pl$labels$y, "Landings (t)"),
@@ -140,23 +141,23 @@ ok(t_of(raised_strict, "BMS") > 0 &&
                       t_of(raised_strict, "Lan"))),
    "the catch is every category (BMS included); landings are only the landings")
 
-pf <- plot_comparison(c(raised_strict, raised_relaxed), x = "metier4", facet = "ICESDivision")
+pf <- plot_compare_raised(c(raised_strict, raised_relaxed), x = "metier4", facet = "ICESDivision")
 ok(drawable(pf) && ".f" %in% names(pf$data) && nlevels(pf$data$.f) > 1,
    "facet = ICESDivision: one panel per level")
-pn <- plot_comparison(c(raised_strict, raised_relaxed))
+pn <- plot_compare_raised(c(raised_strict, raised_relaxed))
 ok(drawable(pn) && identical(levels(pn$data$.x), "All"),
    "no x: one group of bars for everything")
-ok(drawable(plot_comparison(c(raised_strict, raised_relaxed), x = "metier4",
+ok(drawable(plot_compare_raised(c(raised_strict, raised_relaxed), x = "metier4",
                             palette = "colorblind")),
    "palette = colorblind draws")
 
 # seasonValue is an integer: its levels read 1, 2, 3, 4 - and 2 before 10
-ps <- plot_comparison(c(raised_strict, raised_relaxed), x = "seasonValue")
+ps <- plot_compare_raised(c(raised_strict, raised_relaxed), x = "seasonValue")
 ok(drawable(ps) && identical(levels(ps$data$.x), as.character(sort(unique(c23$seasonValue)))),
    "an integer x (seasonValue) is a discrete axis in numeric order")
 bump_a <- raised_strict;  bump_a$seasonValue <- ifelse(bump_a$seasonValue == 4, 10L, bump_a$seasonValue)
 bump_b <- raised_relaxed; bump_b$seasonValue <- ifelse(bump_b$seasonValue == 4, 10L, bump_b$seasonValue)
-pb <- plot_comparison(c(bump_a, bump_b), x = "seasonValue")
+pb <- plot_compare_raised(c(bump_a, bump_b), x = "seasonValue")
 ok(tail(levels(pb$data$.x), 1) == "10" && which(levels(pb$data$.x) == "2") <
      which(levels(pb$data$.x) == "10"),
    "numeric order, not text order: 2 comes before 10")
@@ -168,7 +169,7 @@ with_mesh <- function(r) {
                         length(mesh_vals) + 1]
   r
 }
-pm <- plot_comparison(c(with_mesh(raised_strict), with_mesh(raised_relaxed)), x = "mesh")
+pm <- plot_compare_raised(c(with_mesh(raised_strict), with_mesh(raised_relaxed)), x = "mesh")
 ok(length(levels(pm$data$.x)) > 3 &&
      identical(levels(pm$data$.x), mesh_levels(levels(pm$data$.x))),
    "x = mesh: the groups run by mesh size")
@@ -264,9 +265,9 @@ ok(all(tg$`No donor (rows)`[tg$Scenario == "nan_a" & tg$DrGroup %in% grp_hit &
                               tg$`Raised/Imported` == "Raised"] > 0) &&
      sum(tg$`No donor (rows)`[tg$Scenario == "nan_a" & tg$`Raised/Imported` == "Raised"]) == 2,
    "by = DrGroup says which groups had no donor")
-pn2 <- plot_comparison(c(nan_a, raised_relaxed), x = "metier4")
+pn2 <- plot_compare_raised(c(nan_a, raised_relaxed), x = "metier4")
 ok(drawable(pn2) && all(is.finite(pn2$data$t)),
-   "plot_comparison(): NaN rows count as no weight and do not break it")
+   "plot_compare_raised(): NaN rows count as no weight and do not break it")
 
 ## ---- the stratum-level pair the application uses ---------------------------
 sca <- scenario_auto("A", c("metier4", "vesselFlagCountry"),

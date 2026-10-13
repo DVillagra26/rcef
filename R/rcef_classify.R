@@ -61,6 +61,7 @@ NULL
 #' @return `TRUE` if `v` is a real, active threshold.
 #' @keywords internal
 #' @export
+#' @noRd
 thr_active <- function(v) !is.null(v) && !(length(v) == 1 && is.na(v))
 
 #' Per-row "warn_..." key from which active thresholds a stratum missed
@@ -79,6 +80,7 @@ thr_active <- function(v) !is.null(v) && !(length(v) == 1 && is.na(v))
 #' @return A character vector, one `"warn_<names>"` key per row.
 #' @keywords internal
 #' @export
+#' @noRd
 combo_key <- function(...) {
   bad <- list(...)
   nm  <- names(bad)
@@ -159,6 +161,7 @@ combo_key <- function(...) {
 #' # the wording and colour behind each category
 #' cat_lookup(50, "discard")[, c("cat_key", "status", "colour")]
 #' @export
+#' @noRd
 cat_lookup <- function(threshold, what = "discard", min_meas = 0,
                        min_trips = 2) {
   # Shared palette: dark green -> green -> yellow -> orange -> dark
@@ -281,6 +284,7 @@ cat_lookup <- function(threshold, what = "discard", min_meas = 0,
 #' @examples
 #' status_palette(50, "discard", min_trips = NULL)
 #' @export
+#' @noRd
 status_palette <- function(threshold, what = "discard", min_meas = 0,
                            min_trips = 2) {
   lk <- cat_lookup(threshold, what, min_meas, min_trips)
@@ -302,6 +306,7 @@ status_palette <- function(threshold, what = "discard", min_meas = 0,
 #' @examples
 #' status_abbr(50, "discard")
 #' @export
+#' @noRd
 status_abbr <- function(threshold, what = "discard", min_meas = 0,
                         min_trips = 2) {
   lk <- cat_lookup(threshold, what, min_meas, min_trips)
@@ -360,11 +365,13 @@ status_abbr <- function(threshold, what = "discard", min_meas = 0,
 #'   coverage; [classify_strata()] for the sampling verdict.
 #' @md
 #' @examples
-#' data(anchoveta_catch)
-#' st <- build_strata(anchoveta_catch, c("metier4", "vesselFlagCountry"))
+#' \dontrun{
+#' st <- build_strata(catch, c("metier4", "vesselFlagCountry"))
 #' head(st[, c("metier4", "vesselFlagCountry", "landings", "discards",
 #'             "coverage", "discard_rate")])
+#' }
 #' @export
+#' @noRd
 build_strata <- function(catch_data, dims, dist = NULL) {
   stopifnot(length(dims) >= 1, all(dims %in% names(catch_data)))
 
@@ -519,17 +526,19 @@ count_measurements_by_stratum <- function(catch_data, dist, dims) {
 #' @seealso [build_strata()], [cat_lookup()], [build_coverage_strata()]
 #' @md
 #' @examples
-#' data(anchoveta_catch)
-#' st <- classify_strata(build_strata(anchoveta_catch,
+#' \dontrun{
+#' st <- classify_strata(build_strata(catch,
 #'                                    c("metier4", "vesselFlagCountry")),
 #'                       threshold = 50)
 #' table(st$cat_key)
 #' head(st[, c("metier4", "vesselFlagCountry", "coverage", "cat_key")])
 #'
 #' # coverage only: trips dropped from the verdict
-#' table(classify_strata(build_strata(anchoveta_catch, "metier4"), 50,
+#' table(classify_strata(build_strata(catch, "metier4"), 50,
 #'                       min_trips = NULL)$cat_key)
+#' }
 #' @export
+#' @noRd
 classify_strata <- function(s, threshold, what = "discard", min_meas = 0,
                             min_trips = 2) {
   lk <- cat_lookup(threshold, what, min_meas, min_trips)

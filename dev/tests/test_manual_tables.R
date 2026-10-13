@@ -1,5 +1,6 @@
 ## The four tables both manual builders now show, and the donor tagging
 ## behind two of them.
+source("dev/tests/fixture.R")
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
@@ -57,21 +58,6 @@ ok(identical(a$usedToAllocGroups_txt[1], "GA1, GA2"),
    "a stratum can lend to several groups")
 ok(identical(a$usedToAllocGroups_txt[2], "GA1"),
    "a discard stratum is not in a landings-only pool")
-
-ov <- alloc_overview(a, g)
-ok(nrow(ov) == 2, "one row per group")
-ok(ov$n_strata_allocated[1] == 2, "GA1 allocates two strata")
-ok(ov$n_strata_in_pool[1] == 4,
-   "GA1 draws on all four - the pool may be wider than what it allocates")
-ok(ov$n_strata_in_pool[1] > ov$n_strata_allocated[1],
-   "donated exceeds allocated, which is the normal case")
-
-## an unassigned stratum shows up as its own row
-g1 <- list(GA1 = mk("beam", list(metier4 = "TBB"), list()))
-ov1 <- alloc_overview(assign_alloc_groups(st, g1), g1)
-ok(any(ov1$group == "(unassigned)"), "unallocated strata get their own row")
-ok(ov1$n_strata_allocated[ov1$group == "(unassigned)"] == 2,
-   "and the count is right")
 
 ## ---- the conditions the ENGINE receives -----------------------------
 ##
@@ -157,21 +143,15 @@ mtxt <- vapply(cc$matchedDataCond,
 ok(identical(mtxt[["G3"]], "TRUE"),
    "matchedDataCond keeps its TRUE - donors may be reused")
 
-## complement_conds still turns overlapping clauses into a partition
-part <- complement_conds(cc$strataCond_simple)
-hits <- vapply(part, function(q) sum(rlang::eval_tidy(q, data = d)), numeric(1))
-ok(sum(hits) == nrow(d), "the complemented clauses claim every row exactly once")
-ok(hits[["G3"]] == 1, "complement_conds agrees on the unclaimed GNS row")
-
 ## --- the two focused strata tables -----------------------------------
 ##
 ## The old single diagnosis table answered two questions at once - what
 ## is being raised, and what raises it - so it did neither cleanly. These
 ## split them, and a TRUE / fallback level reads as "Catch All by All",
 ## never the bare word TRUE.
-fx <- "anchoveta"
+fx <- "fixture"
 if (length(fx)) {
-  cd <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
+  cd <- fx_catch()
   dm <- c("metier4", "vesselFlagCountry", "ICESDivision", "seasonValue")
   st <- classify_strata(build_strata(cd, dm), 50)
   rec <- recommend_raising(st, dm, rep(50, 5), "Catch All by All", dm)

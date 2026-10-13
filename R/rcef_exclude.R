@@ -37,6 +37,7 @@
 #' @export
 #' @examples
 #' stratum_keys(data.frame(a = c("x", "y"), b = 1:2), c("a", "b"))
+#' @noRd
 stratum_keys <- function(strata, dims) {
   d <- as.data.frame(strata)
   present <- intersect(dims, names(d))
@@ -59,8 +60,9 @@ stratum_keys <- function(strata, dims) {
 #' @return A data frame with `key`, and whichever of `weight`,
 #'   `coverage`, `discard_rate`, `dl_ratio` (discards / landings) and
 #'   `n_measurements` could be computed.
-#' @seealso [exclusion_choices()], [excluded_keys()]
+#' @seealso [exclusion_choices()]
 #' @export
+#' @noRd
 stratum_metrics <- function(strata, dims) {
   d <- as.data.frame(strata)
   if (!nrow(d)) return(NULL)
@@ -142,8 +144,9 @@ stratum_metrics <- function(strata, dims) {
 #'   are present.
 #' @return A named character vector: values are the keys, names are the
 #'   labels. Suitable for `selectizeInput(choices = )`.
-#' @seealso [excluded_keys()], [exclusion_overview()]
+#' @seealso [exclusion_overview()]
 #' @export
+#' @noRd
 exclusion_choices <- function(strata, dims,
                               order_by = c("weight", "coverage", "rate", "dl",
                                            "measurements", "trips"),
@@ -207,14 +210,13 @@ exclusion_choices <- function(strata, dims,
 #'   (the default) computes it here, as before.
 #' @return A data frame with one row per excluded stratum: `key`, the
 #'   metrics, and a `reason` naming every test it failed.
-#' @seealso [excluded_keys()]
 #' @export
+#' @noRd
 exclusion_overview <- function(strata, dims, named = character(0),
                                cov_min = NA, meas_min = NA,
                                dr_min = NA, dr_max = NA, wt_min = NA,
                                trips_min = NA, m = NULL) {
-  # m lets a caller that already has stratum_metrics(strata, dims) - like
-  # donor_pool_summary(), which needs its own copy regardless - pass it
+  # m lets a caller that already has stratum_metrics(strata, dims) pass it
   # straight through instead of this walking the strata table a second
   # time. Every existing caller still just gets `strata`/`dims` computed
   # for it, unchanged.
@@ -251,55 +253,6 @@ exclusion_overview <- function(strata, dims, named = character(0),
   out <- out[order(-out$weight), , drop = FALSE]
   rownames(out) <- NULL
   out
-}
-
-#' The keys to drop from a donor pool
-#'
-#' The single answer the app and the emitted script both use, so the
-#' table on screen and the condition in the script can never disagree.
-#'
-#' @inheritParams exclusion_overview
-#' @return A character vector of stratum keys; empty if nothing is out.
-#' @seealso [exclusion_overview()], [donor_exclusion_expr()]
-#' @export
-#' @examples
-#' s <- data.frame(a = c("x", "y"), landings = c(10, 10),
-#'                 coverage = c(80, 10))
-#' excluded_keys(s, "a", cov_min = 50)
-excluded_keys <- function(strata, dims, named = character(0),
-                          cov_min = NA, meas_min = NA,
-                          dr_min = NA, dr_max = NA, wt_min = NA) {
-  ov <- exclusion_overview(strata, dims, named, cov_min, meas_min,
-                           dr_min, dr_max, wt_min)
-  if (is.null(ov) || !nrow(ov)) return(character(0))
-  ov$key
-}
-
-#' A human sentence describing an exclusion setting
-#'
-#' Used in the note under the control and as a comment in the emitted
-#' script, so both say the same thing.
-#'
-#' @inheritParams exclusion_overview
-#' @param n_named How many strata were picked by hand.
-#' @return A length-one character vector.
-#' @export
-#' @examples
-#' exclusion_label(cov_min = 40, meas_min = 25, n_named = 3)
-exclusion_label <- function(cov_min = NA, meas_min = NA, dr_min = NA,
-                            dr_max = NA, wt_min = NA, n_named = 0) {
-  bits <- character(0)
-  if (!is.na(cov_min))  bits <- c(bits, sprintf("coverage below %s%%", cov_min))
-  if (!is.na(meas_min)) bits <- c(bits, sprintf("fewer than %s measurements",
-                                                meas_min))
-  if (!is.na(dr_min) || !is.na(dr_max))
-    bits <- c(bits, sprintf("discard rate outside %s-%s",
-                            if (is.na(dr_min)) "0" else dr_min,
-                            if (is.na(dr_max)) "1" else dr_max))
-  if (!is.na(wt_min))   bits <- c(bits, sprintf("weight below %s t", wt_min))
-  if (n_named > 0)      bits <- c(bits, sprintf("%d named stratum/strata",
-                                                n_named))
-  if (!length(bits)) "nothing excluded" else paste(bits, collapse = "; ")
 }
 
 # ---------------------------------------------------------------------
@@ -342,6 +295,7 @@ exclusion_label <- function(cov_min = NA, meas_min = NA, dr_min = NA,
 #' @return `data` with the metric columns added, plus `stratum_id`.
 #' @seealso [exclusion_expr()], [build_strata()]
 #' @export
+#' @noRd
 add_stratum_metrics <- function(data, dims, strata = NULL, dist = NULL) {
   if (is.null(data) || !nrow(data)) return(data)
   if (is.null(strata)) strata <- build_strata(data, dims, dist = dist)
@@ -381,11 +335,12 @@ add_stratum_metrics <- function(data, dims, strata = NULL, dist = NULL) {
 #' @param named Stratum keys picked out by hand.
 #' @param dims Key columns, needed only if `named` is non-empty.
 #' @return A length-one character vector, or `NULL` if nothing is set.
-#' @seealso [add_stratum_metrics()], [excluded_keys()]
+#' @seealso [add_stratum_metrics()]
 #' @export
 #' @examples
 #' exclusion_expr(cov_min = 50, dr_max = 0.9)
 #' exclusion_expr(named = "TBB | 27.4.b", dims = c("metier4", "ICESDivision"))
+#' @noRd
 exclusion_expr <- function(cov_min = NA, meas_min = NA, dr_min = NA,
                            dr_max = NA, named = character(0), dims = NULL,
                            trips_min = NA) {
@@ -398,20 +353,6 @@ exclusion_expr <- function(cov_min = NA, meas_min = NA, dr_min = NA,
   if (length(named) && !is.null(dims))
     bits <- c(bits, donor_exclusion_expr(named, dims))
   if (!length(bits)) NULL else paste(bits, collapse = " & ")
-}
-
-#' Combine a clause with a donor-exclusion condition
-#'
-#' @param base The clause condition, or `"TRUE"`.
-#' @param excl An exclusion condition from [exclusion_expr()], or `NULL`.
-#' @return A length-one character vector.
-#' @export
-#' @examples
-#' and_condition('metier4 %in% "TBB"', "coverage >= 50")
-and_condition <- function(base, excl) {
-  if (is.null(excl) || !nzchar(excl)) return(base)
-  if (is.null(base) || !nzchar(base) || identical(base, "TRUE")) return(excl)
-  paste0(base, " & ", excl)
 }
 
 #' Strata a rule would actually drop, within its own scope
@@ -434,6 +375,7 @@ and_condition <- function(base, excl) {
 #'   not worth listing.
 #' @return A data frame as [exclusion_overview()], scoped and pruned.
 #' @export
+#' @noRd
 exclusion_report <- function(strata, dims, named = character(0),
                              cov_min = NA, meas_min = NA, dr_min = NA,
                              dr_max = NA, scope = NULL,
@@ -456,79 +398,4 @@ exclusion_report <- function(strata, dims, named = character(0),
   if (!nrow(ov)) return(NULL)
   rownames(ov) <- NULL
   ov
-}
-
-#' The donor pool's own combined metrics, after every bar and named pick
-#'
-#' Every bar in an exclusion box is a per-stratum test - a stratum below
-#' the coverage floor is dropped whole. What is left after every test is
-#' the pool a group would actually borrow from, and that pool can still
-#' look thin even when no individual stratum was thin enough to trip a
-#' bar: three strata at 20%, 10% and 5% coverage clear a 0% (off) floor
-#' individually and still combine to an 12% pool - exactly the "OTB + SDN
-#' + SSC together only reach 25%" case a per-stratum bar cannot catch by
-#' construction, because it is never asked the question.
-#'
-#' `warn_cov_min` / `warn_meas_min` are that question, and deliberately
-#' separate from `cov_min` / `meas_min` (the per-stratum floor that built
-#' the pool in the first place): a pool built with no per-stratum bar at
-#' all can still be checked against "is this enough to call adequately
-#' sampled", using the same reference the workbench's sampling-status
-#' colours use elsewhere.
-#'
-#' @param strata A stratum table.
-#' @param dims The key columns.
-#' @param named,cov_min,meas_min,dr_min,dr_max,trips_min The per-stratum
-#'   bars, as in [exclusion_overview()] - what built the pool.
-#' @param warn_cov_min,warn_meas_min,warn_trips_min The pool-level sanity
-#'   thresholds - what decides `ok`. `NA` switches that check off.
-#'   Coverage defaults to 50%, the same "adequately sampled" reference
-#'   used throughout the workbench; measurements and trips have no such
-#'   universal reference (a discard pool has nothing to measure, and
-#'   "enough trips" is stock-specific), so both default off.
-#' @return A list: `n_strata`, `weight`, `coverage`, `discard_rate`,
-#'   `dl_ratio`, `n_measurements`, and `ok` (does the POOL clear the sanity bars).
-#'   `NULL` if there is nothing to summarise.
-#' @seealso [exclusion_overview()], [stratum_metrics()]
-#' @export
-donor_pool_summary <- function(strata, dims, named = character(0),
-                               cov_min = NA, meas_min = NA,
-                               dr_min = NA, dr_max = NA,
-                               warn_cov_min = 50, warn_meas_min = NA,
-                               trips_min = NA, warn_trips_min = NA) {
-  m <- stratum_metrics(strata, dims)
-  if (is.null(m) || !nrow(m)) return(NULL)
-  excl <- exclusion_overview(strata, dims, named, cov_min, meas_min,
-                             dr_min, dr_max, trips_min = trips_min, m = m)
-  kept <- if (is.null(excl)) m else m[!m$key %in% excl$key, , drop = FALSE]
-  if (!nrow(kept))
-    return(list(n_strata = 0L, weight = 0, coverage = NA_real_,
-               discard_rate = NA_real_, dl_ratio = NA_real_,
-               n_measurements = 0, numTrips = 0, ok = FALSE))
-
-  w <- kept$weight; w[is.na(w)] <- 0
-  wmean <- function(x) {
-    ok <- !is.na(x)
-    if (!any(ok)) return(NA_real_)
-    if (sum(w[ok]) > 0) sum(x[ok] * w[ok]) / sum(w[ok]) else mean(x[ok])
-  }
-  cov <- wmean(kept$coverage)
-  dr  <- wmean(kept$discard_rate)
-  # pooled D/L: every stratum's weight IS its landings, so weighting the
-  # per-stratum ratios by it gives sum(discards) / sum(landings) exactly
-  dl  <- if ("dl_ratio" %in% names(kept)) wmean(kept$dl_ratio) else NA_real_
-  nmeas <- sum(kept$n_measurements, na.rm = TRUE)
-  # Summed, not weight-weighted: numTrips is an EFFORT count (how many
-  # trips back the pool), not a rate, so the pool's total is the sum of
-  # what each surviving stratum brought - the same convention
-  # stratum_metrics() uses when pooling across different strata.
-  ntrips <- if (!"numTrips" %in% names(kept) || !any(!is.na(kept$numTrips)))
-    NA_real_ else sum(kept$numTrips, na.rm = TRUE)
-
-  ok <- (is.na(warn_cov_min)   || is.na(cov)    || cov    >= warn_cov_min)   &&
-        (is.na(warn_meas_min)  || is.na(nmeas)  || nmeas  >= warn_meas_min)  &&
-        (is.na(warn_trips_min) || is.na(ntrips) || ntrips >= warn_trips_min)
-  list(n_strata = nrow(kept), weight = sum(kept$weight, na.rm = TRUE),
-       coverage = cov, discard_rate = dr, dl_ratio = dl,
-       n_measurements = nmeas, numTrips = ntrips, ok = ok)
 }

@@ -23,6 +23,7 @@
 #'
 #' @format A length-one character vector.
 #' @export
+#' @noRd
 FILTER_ANY <- "(any)"
 
 #' Values available for filtering, per column
@@ -44,6 +45,7 @@ FILTER_ANY <- "(any)"
 #' d <- data.frame(metier4 = c("TBB", "OTB", "TBB"),
 #'                 ICESDivision = c("27.4.b", "27.4.b", "27.4.c"))
 #' explore_filter_levels(d, vars = c("metier4", "ICESDivision"))
+#' @noRd
 explore_filter_levels <- function(data, vars = FILTER_VARS, max_levels = 200) {
   if (is.null(data) || !nrow(data)) return(list())
   vars <- intersect(vars, names(data))
@@ -67,6 +69,7 @@ explore_filter_levels <- function(data, vars = FILTER_VARS, max_levels = 200) {
 #' @export
 #' @examples
 #' clean_filters(list(metier4 = "TBB", ICESDivision = FILTER_ANY, mesh = NULL))
+#' @noRd
 clean_filters <- function(filters) {
   if (!length(filters)) return(list())
   keep <- vapply(filters, function(v) {
@@ -75,16 +78,6 @@ clean_filters <- function(filters) {
   }, logical(1))
   lapply(filters[keep], function(v) setdiff(as.character(v), c(NA, "", FILTER_ANY)))
 }
-
-#' Is any filter actually restricting the data?
-#'
-#' @param filters A named list of character vectors.
-#' @return `TRUE` if at least one column is restricted.
-#' @export
-#' @examples
-#' filters_active(list(metier4 = FILTER_ANY))
-#' filters_active(list(metier4 = "TBB"))
-filters_active <- function(filters) length(clean_filters(filters)) > 0
 
 #' Apply an exploration filter to a CEF table
 #'
@@ -109,6 +102,7 @@ filters_active <- function(filters) length(clean_filters(filters)) > 0
 #' @examples
 #' d <- data.frame(metier4 = c("TBB", "OTB", "TBB"), total = 1:3)
 #' apply_filters(d, list(metier4 = "TBB"))
+#' @noRd
 apply_filters <- function(data, filters, drop_empty = TRUE) {
   f <- clean_filters(filters)
   if (!length(f)) return(data)
@@ -137,6 +131,7 @@ apply_filters <- function(data, filters, drop_empty = TRUE) {
 #' @examples
 #' filter_label(list(metier4 = "TBB", ICESDivision = c("27.4.b", "27.4.c")))
 #' filter_label(list())
+#' @noRd
 filter_label <- function(filters, none = "no filter", max_values = 4) {
   f <- clean_filters(filters)
   if (!length(f)) return(none)
@@ -163,6 +158,7 @@ filter_label <- function(filters, none = "no filter", max_values = 4) {
 #' @examples
 #' d <- data.frame(metier4 = c("TBB", "OTB", "TBB"), total = c(1, 100, 1))
 #' filter_coverage(d, list(metier4 = "TBB"), weight = "total")
+#' @noRd
 filter_coverage <- function(data, filters, weight = "total") {
   sub <- apply_filters(data, filters)
   out <- list(n_all = nrow(data), n_kept = nrow(sub),

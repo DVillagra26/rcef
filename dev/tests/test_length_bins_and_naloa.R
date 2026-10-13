@@ -9,6 +9,7 @@
 ## test_meanweight_plus_samples.R's own plus-group section 3/4/5 closely, so
 ## a reader already familiar with those can see the two are siblings.
 
+source("dev/tests/fixture.R")
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
@@ -73,9 +74,9 @@ ok(near(sum(length_numbers(pb5, character(0))$number),
    "binning conserves the numbers")
 
 ## ---- 2. plot_MWaLoA(bin_width = ...) --------------------------------------
-data("anchoveta_catch", package = "rcef", envir = environment())
-data("anchoveta_dist",  package = "rcef", envir = environment())
-cd <- anchoveta_catch; dd <- anchoveta_dist
+test_catch <- fx_catch()
+test_dist <- fx_dist()
+cd <- test_catch; dd <- test_dist
 cap  <- function(p) gsub("\n", " ", p$labels$caption, fixed = TRUE)
 says_cap <- function(p, s) grepl(s, cap(p), fixed = TRUE)
 xlab <- function(p) ggplot_build(p)$layout$panel_params[[1]]$x$get_labels()

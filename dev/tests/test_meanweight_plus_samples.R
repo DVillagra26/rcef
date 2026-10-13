@@ -11,6 +11,7 @@
 ##    distribution (numbers add, mean weights are number-weighted), labelled
 ##    "7+", and the plot says so.
 
+source("dev/tests/fixture.R")
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
@@ -78,9 +79,9 @@ ok(!is.null(link_dist_to_strata(cA, nocty, dims_c, "Lan", "Age")),
 
 ## the bundled example shares domain names across countries (Chile and China
 ## are both "chi"): each country's numbers must be its own distributions'
-data("anchoveta_catch", package = "rcef", envir = environment())
-data("anchoveta_dist",  package = "rcef", envir = environment())
-cd <- anchoveta_catch; dd <- anchoveta_dist
+test_catch <- fx_catch()
+test_dist <- fx_dist()
+cd <- test_catch; dd <- test_dist
 lkx <- link_dist_to_strata(cd, dd, dims_c, "Lan", "LengthTotal")
 own_keys <- unique(paste(cd$vesselFlagCountry, cd$domainBiology)[
   cd$catchCategory == "Lan" & !is.na(cd$domainBiology) & nzchar(cd$domainBiology)])

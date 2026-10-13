@@ -6,6 +6,7 @@
 ## much a part of the contract as what it must: no status, category or
 ## raising decision - thresholds are a plotting choice.
 
+source("dev/tests/fixture.R")
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
@@ -93,15 +94,13 @@ ok(grepl("none of the default stratum", err(build_coverage_strata(cd_nocty))),
    "no dims, and none of the four default columns present -> a clear error")
 ## on real, derive_fields()-ed catch all four are present, so the default is
 ## genuinely the finest: as many rows as naming them all explicitly
-ac0 <- { data("anchoveta_catch", package = "rcef", envir = environment())
-  anchoveta_catch }
+ac0 <- fx_catch()
 finest <- c("fleetValue", "areaValue", "vesselFlagCountry", "seasonValue")
 ok(identical(build_coverage_strata(ac0), build_coverage_strata(ac0, finest)),
    "on real catch (all four default columns present), no dims matches naming them all")
 ok(nrow(build_coverage_strata(ac0)) >= nrow(build_coverage_strata(ac0, c("metier4", "vesselFlagCountry"))),
    "... which is at least as fine as a named, coarser table")
-ad0 <- { data("anchoveta_dist", package = "rcef", envir = environment())
-  anchoveta_dist }
+ad0 <- fx_dist()
 ok(identical(build_coverage_strata(ac0, distributions = ad0, what = "length"),
              build_coverage_strata(ac0, finest, ad0, what = "length")),
    "the default applies to length / age too")
@@ -129,9 +128,9 @@ ok(is.null(build_coverage_strata(cd[cd$catchCategory == "BMS", ], "metier4")),
    "nothing but BMS -> NULL, not an error")
 
 ## ---- 4. length / age on the bundled example data ----------------------
-data("anchoveta_catch", package = "rcef", envir = environment())
-data("anchoveta_dist",  package = "rcef", envir = environment())
-ac <- anchoveta_catch; ad <- anchoveta_dist
+test_catch <- fx_catch()
+test_dist <- fx_dist()
+ac <- test_catch; ad <- test_dist
 dm <- c("metier4", "vesselFlagCountry")
 
 l_all <- build_coverage_strata(ac, dm, ad, what = "length")

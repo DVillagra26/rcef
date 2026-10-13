@@ -16,14 +16,15 @@ plot_MWaLoA(
   bin_width = NULL,
   show_samples = FALSE,
   scales = "fixed",
-  palette = c("default", "colorblind", "gradual")
+  palette = c("default", "colorblind", "gradual"),
+  save = NULL
 )
 }
 \arguments{
-\item{data}{Raw CEF catch data, or a \code{length_meanweight()} table.}
+\item{data}{Raw CEF catch data.}
 
-\item{distributions}{A CEF distributions table. Needed with raw catch;
-leave it out when \code{data} is already a \code{length_meanweight()} table.}
+\item{distributions}{A CEF distributions table, linked to the catch through
+\code{domainBiology}.}
 
 \item{distributionType}{\code{"LengthTotal"} (default) or \code{"Age"}.}
 
@@ -52,8 +53,11 @@ each point}.}
 \item{scales}{Facet scales: \code{"fixed"} (default), \code{"free_x"}, \code{"free_y"} or
 \code{"free"}.}
 
-\item{palette}{\code{"default"}, \code{"colorblind"} or \code{"gradual"} (see
-\code{\link[=var_palette]{var_palette()}}).}
+\item{palette}{\code{"default"}, \code{"colorblind"} or \code{"gradual"}.}
+
+\item{save}{Where to write the plot as well, or \code{NULL} (default) to only
+return it: a folder, a file name, or a list of options - see
+\link{saving-plots}.}
 }
 \value{
 A ggplot object, or \code{NULL} when there is nothing to draw.
@@ -68,11 +72,10 @@ semi-transparent bars behind the lines show how many fish stand behind
 each point.
 }
 \details{
-\code{data} is either raw CEF catch together with \code{distributions} - linked
-through \code{domainBiology} and the country and summarised inside, with
+\code{data} is raw CEF catch and \code{distributions} the CEF distributions: they are
+linked through \code{domainBiology} and the country and summarised inside, with
 \code{catchCategory} choosing the landings, the discards, BMS or the catch as a
-whole - or a table already summarised by \code{length_meanweight()}. When
-\code{distributions} is given the catch part goes in the plot title. A
+whole. The catch part goes in the plot title. A
 distributions row that repeats another exactly is dropped, with a warning:
 a repeat is not a second sample.
 
@@ -98,11 +101,7 @@ averaged, weighted by those numbers; the pooled classes are then averaged
 over strata like any other point, so the band is still a spread across
 strata, not across ages. It shows what a plus group does to the curve: the
 ragged tail of old ages, each on a handful of fish, becomes one point
-with many. It applies to ages only, and needs raw catch with
-\code{distributions} - a table that is already summarised cannot be pooled
-again. A table built from a link that \code{pool_plus_group()} pooled carries a
-\code{plus} column instead, and the plot labels the class from it: that is how
-the app draws a plus group.
+with many. It applies to ages only.
 }
 
 \subsection{Length bins}{
@@ -111,9 +110,7 @@ the app draws a plus group.
 into 5cm bins (\code{10}-\code{14} becomes one class labelled \code{10-15}), pooled the
 same way a plus group is - numbers added, mean weights averaged weighted
 by those numbers, inside each distribution first, then strata averaged as
-usual. It applies to lengths only (\code{distributionType = "LengthTotal"}),
-and needs raw catch with \code{distributions}, same restriction and the same
-\code{bin_width} column fallback as the plus group.
+usual. It applies to lengths only (\code{distributionType = "LengthTotal"}).
 }
 
 \subsection{The fish behind each point}{
@@ -132,37 +129,35 @@ for a length distribution raised from a length sample by one factor, and an
 estimate for ages read off an age-length key. A distribution counts once
 however many strata it is linked to, and one that reports no count
 (\code{numMeasurements} 0) adds none - a point with no bar is a point whose
-sample size is unknown, not zero, and the caption says so. Needs raw catch
-with \code{distributions}, or a \code{length_meanweight()} table (which carries the
-count as \code{n_fish}).
+sample size is unknown, not zero, and the caption says so.
 }
 }
 \examples{
-data(anchoveta_catch)
-data(anchoveta_dist)
+\dontrun{
 
 # mean weight at length of the landings, one line per country
-plot_MWaLoA(anchoveta_catch, anchoveta_dist,
+plot_MWaLoA(catch, distributions,
            catchCategory = "Lan", colour = "vesselFlagCountry")
 
 # at age, one panel per quarter
-plot_MWaLoA(anchoveta_catch, anchoveta_dist,
+plot_MWaLoA(catch, distributions,
            distributionType = "Age",
            colour = "vesselFlagCountry", facet = "seasonValue")
 
 # what a plus group does: every age from 3 upward pooled into "3+"
-plot_MWaLoA(anchoveta_catch, anchoveta_dist,
+plot_MWaLoA(catch, distributions,
            distributionType = "Age", colour = "vesselFlagCountry",
            plus_group = 3)
 
 # length classes pooled into 2cm bins
-plot_MWaLoA(anchoveta_catch, anchoveta_dist, colour = "vesselFlagCountry",
+plot_MWaLoA(catch, distributions, colour = "vesselFlagCountry",
            bin_width = 2)
 
 # the fish measured at each age, as bars behind the lines
-plot_MWaLoA(anchoveta_catch, anchoveta_dist,
+plot_MWaLoA(catch, distributions,
            distributionType = "Age", colour = "vesselFlagCountry",
            show_samples = TRUE)
+}
 }
 \seealso{
 \code{\link[=plot_NaLoA]{plot_NaLoA()}} for the numbers in the same classes;

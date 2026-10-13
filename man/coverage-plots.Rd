@@ -18,7 +18,8 @@ plot_coverage_heat(
   min_cov = 50,
   min_trip = NULL,
   min_fish = NULL,
-  palette = c("default", "colorblind", "gradual")
+  palette = c("default", "colorblind", "gradual"),
+  save = NULL
 )
 
 plot_coverage_bubble(
@@ -32,7 +33,8 @@ plot_coverage_bubble(
   min_cov = 50,
   min_trip = NULL,
   min_fish = NULL,
-  palette = c("default", "colorblind", "gradual")
+  palette = c("default", "colorblind", "gradual"),
+  save = NULL
 )
 
 plot_coverage_bar(
@@ -43,7 +45,8 @@ plot_coverage_bar(
   facet = NULL,
   what = "discard",
   catchCategory = NULL,
-  palette = c("default", "colorblind", "gradual")
+  palette = c("default", "colorblind", "gradual"),
+  save = NULL
 )
 }
 \arguments{
@@ -82,16 +85,18 @@ no reported trip count still fails that check.}
 An error with \code{what = "discard"} (no fish are measured for a discard
 estimate).}
 
-\item{palette}{\code{"default"}, \code{"colorblind"} or \code{"gradual"} (see
-\code{\link[=var_palette]{var_palette()}}). Recolours the bar fill; on the heatmap and bubbles the
-status colours are fixed, and asking for anything but \code{"default"} warns.}
+\item{palette}{\code{"default"}, \code{"colorblind"} or \code{"gradual"}. Recolours the bar
+fill; on the heatmap and bubbles the status colours are fixed, and asking
+for anything but \code{"default"} warns.}
+
+\item{save}{Where to write the plot as well, or \code{NULL} (default) to only
+return it: a folder, a file name, or a list of options - see
+\link{saving-plots}.}
 
 \item{fill}{Bar fill category (bars only). \code{NULL} uses \code{y}.}
 }
 \value{
-A ggplot object, or \code{NULL} when there is nothing to draw. The
-heatmap and bubbles also carry a \code{"status_legend"} attribute: the
-specification \code{\link[=status_legend_plot]{status_legend_plot()}} rebuilds a complete legend from.
+A ggplot object, or \code{NULL} when there is nothing to draw.
 }
 \description{
 Four views of how well a set of strata is sampled: a heatmap
@@ -152,7 +157,7 @@ read differently.
 threshold, and a stratum with no reported trip count fails an active trips
 test however low it is set - unknown is not treated as adequate. A fully
 covered stratum with no trip count reads "safe" at \code{min_trip = NULL} but
-stays a warning at \code{min_trip = 0} (see \code{\link[=classify_strata]{classify_strata()}}).
+stays a warning at \code{min_trip = 0}.
 }
 
 \subsection{What the title and caption say}{
@@ -193,32 +198,30 @@ columns are the strata (\code{y}, \code{x} or \code{fill}, \code{facet}), then t
 }
 }
 \examples{
-data(anchoveta_catch)
-data(anchoveta_dist)
+\dontrun{
 
 # discard coverage: which metier x country strata carry a discard estimate?
-plot_coverage_heat(anchoveta_catch, y = "metier4", x = "vesselFlagCountry")
-plot_coverage_bubble(anchoveta_catch, y = "metier4", x = "vesselFlagCountry",
+plot_coverage_heat(catch, y = "metier4", x = "vesselFlagCountry")
+plot_coverage_bubble(catch, y = "metier4", x = "vesselFlagCountry",
                      min_cov = 50, min_trip = 2)
-plot_coverage_bar(anchoveta_catch, y = "metier4", fill = "vesselFlagCountry")
+plot_coverage_bar(catch, y = "metier4", fill = "vesselFlagCountry")
 
 # length coverage of the landings, with a floor on the measurements
-plot_coverage_heat(anchoveta_catch, anchoveta_dist, y = "metier4",
+plot_coverage_heat(catch, distributions, y = "metier4",
                    x = "vesselFlagCountry", what = "length", catchCategory = "Lan",
                    min_cov = 50, min_fish = 100)
 
 # the same figure from the table behind it
-cov <- build_coverage_strata(anchoveta_catch, c("metier4", "vesselFlagCountry"))
+cov <- build_coverage_strata(catch, c("metier4", "vesselFlagCountry"))
 plot_coverage_heat(cov, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
+}
 }
 \seealso{
 \code{\link[=build_coverage_strata]{build_coverage_strata()}} for the table, \code{\link[=plot_coverage_map]{plot_coverage_map()}},
-\code{\link[=plot_DR]{plot_DR()}}; \code{\link[=classify_strata]{classify_strata()}} and \code{\link[=cat_lookup]{cat_lookup()}} for the
-classification behind the colours.
+\code{\link[=plot_DR]{plot_DR()}}.
 
 Other coverage plots: 
 \code{\link{build_coverage_strata}()},
-\code{\link{plot_coverage_map}()},
-\code{\link{status_legend_plot}()}
+\code{\link{plot_coverage_map}()}
 }
 \concept{coverage plots}

@@ -56,14 +56,4 @@ ok(!"D/L" %in% names(exclusion_choices(s, "metier4", show = c("coverage", "rate"
    !any(grepl("D/L", names(exclusion_choices(s, "metier4", show = c("coverage", "rate"))))),
    "show = can leave D/L out")
 
-## ---- the pool summary --------------------------------------------------
-ps <- donor_pool_summary(s, "metier4")
-ok(isTRUE(all.equal(ps$dl_ratio, sum(s$discards) / sum(s$landings))),
-   "the pooled D/L is total discards over total landings")
-ok(is.na(donor_pool_summary(bio, "metier4")$dl_ratio),
-   "... and missing where there are no discards")
-ok(is.na(donor_pool_summary(s, "metier4", cov_min = 200)$dl_ratio) &&
-   donor_pool_summary(s, "metier4", cov_min = 200)$n_strata == 0L,
-   "an emptied pool reports no D/L")
-
 cat("\nDONE ", FAIL, "failure(s)", "\n")

@@ -1,18 +1,12 @@
-## Items 5/6: the two-resolution exclusion dropdown and the "data that
-## will be used to raise" summary.
+## Items 5/6: the two-resolution exclusion dropdown and the sort option.
 ##
-## Three pieces, tested at the level where each can be checked precisely:
+## Two pieces, tested at the level where each can be checked precisely:
 ##
 ##  1. roll_up_excluded_keys() - a stratum picked out at one resolution
 ##     (as submitted) has to translate to the resolution the donor pool
 ##     actually runs at (as aggregated), by lookup against a table that
 ##     carries both, not by guessing.
-##  2. donor_pool_summary() - the exact scenario the request was written
-##     around: three strata that each individually clear an (absent)
-##     per-stratum bar, but whose COMBINED pool does not reach a sensible
-##     coverage bar. A per-stratum bar cannot catch this by construction;
-##     this is the thing that catches it.
-##  3. The "Discard rate" sort option, which existed in code but was
+##  2. The "Discard rate" sort option, which existed in code but was
 ##     gated behind a flag no caller ever set - present in every
 ##     exclude_box() that has a rate control, unreachable from any screen.
 
@@ -51,60 +45,7 @@ ok(length(roll_up_excluded_keys(fine, sub_key, character(0), "metier4")) == 0,
 ok(length(roll_up_excluded_keys(NULL, sub_key, from_dims, "metier4")) == 0,
    "a NULL strata table does not error")
 
-## ---- 2. donor_pool_summary(): the OTB + SDN + SSC scenario ------------
-##
-## Three strata, no per-stratum floor set (cov_min = NA/off), so all
-## three individually pass and enter the pool - and the pool itself is
-## still thin. This is not a hypothetical: it is the exact case in the
-## request that a per-stratum bar structurally cannot catch, because it
-## is never asked the pool-level question.
-thin <- data.frame(
-  metier4 = c("OTB", "SDN", "SSC"),
-  landings = c(100, 100, 100),
-  landings_with_discards = c(20, 10, 5),
-  discards = c(2, 1, 0.5),
-  coverage = c(20, 10, 5),
-  discard_rate = c(0.02, 0.01, 0.005),
-  n_measurements = c(0, 0, 0), stringsAsFactors = FALSE)
-
-s <- donor_pool_summary(thin, "metier4")
-ok(s$n_strata == 3, "no per-stratum floor set - all three strata enter the pool")
-ok(abs(s$coverage - (20 + 10 + 5) / 3) < 0.05,
-   "the pool coverage is the landings-weighted mean, all landings equal here")
-ok(!isTRUE(s$ok), "and the pool itself is flagged, even though nothing was excluded")
-
-## the SAME pool, warning switched off, is not flagged
-s_off <- donor_pool_summary(thin, "metier4", warn_cov_min = NA)
-ok(isTRUE(s_off$ok), "switching the sanity threshold off stops the warning")
-
-## a healthy pool is not flagged
-healthy <- data.frame(
-  metier4 = c("OTB", "SDN"), landings = c(100, 100),
-  landings_with_discards = c(80, 70), discards = c(8, 7),
-  coverage = c(80, 70), discard_rate = c(0.08, 0.07),
-  n_measurements = c(0, 0), stringsAsFactors = FALSE)
-s_h <- donor_pool_summary(healthy, "metier4")
-ok(abs(s_h$coverage - 75) < 0.05, "a healthy pool's coverage is computed correctly")
-ok(isTRUE(s_h$ok), "and it is not flagged")
-
-## a per-stratum floor that empties the pool is reported, not errored
-s_empty <- donor_pool_summary(thin, "metier4", cov_min = 50)
-ok(s_empty$n_strata == 0,
-   "a per-stratum floor that excludes everything leaves an empty pool")
-ok(!isTRUE(s_empty$ok), "and an empty pool is always flagged")
-
-## the two thresholds are genuinely independent: a per-stratum floor of
-## 0 (off) still lets the pool-level check fire
-s_mixed <- donor_pool_summary(thin, "metier4", cov_min = NA, warn_cov_min = 15)
-ok(s_mixed$n_strata == 3, "an off per-stratum floor excludes nothing")
-ok(!isTRUE(s_mixed$ok),
-   "but the pool (11.7%) still fails a 15% sanity threshold independently")
-
-## NULL / empty strata do not error
-ok(is.null(donor_pool_summary(NULL, "metier4")), "NULL strata gives NULL")
-ok(is.null(donor_pool_summary(thin[0, ], "metier4")), "empty strata gives NULL")
-
-## ---- 3. the sort-by-rate gate --------------------------------------
+## ---- 2. the sort-by-rate gate --------------------------------------
 app <- system.file("app/app.R", package = "rcef")
 if (nzchar(app)) {
   txt <- paste(readLines(app, warn = FALSE), collapse = "\n")
@@ -122,8 +63,7 @@ if (nzchar(app)) {
               "fine_tbl <- reactive", "named_resolved <- reactive"))
     ok(grepl(k, txt, fixed = TRUE), paste("exclusion_server defines:", k))
   ## ...and no longer the aggregated twin or the always-recomputing
-  ## "used to raise" summary (donor_pool_summary() itself stays: it is
-  ## exported and tested above, just not rendered in the exclusion box)
+  ## "used to raise" summary
   for (k in c('_xui_sub', '_used_warn', '_used_tbl', 'pool_d <- debounce'))
     ok(!grepl(k, txt, fixed = TRUE), paste("exclusion_server no longer has:", k))
 }

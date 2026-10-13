@@ -9,6 +9,7 @@
 ## from panel_dims("mg"), a mechanism for reading y/x/fill/shape/facet
 ## plot-axis inputs the manual builder never had.
 
+source("dev/tests/fixture.R")
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
@@ -41,9 +42,9 @@ if (nzchar(app)) {
 ## and that build_strata()/mg_dims() compose correctly in isolation -
 ## the same two pieces man_strata() is built from, exercised the way
 ## every other function-level test in this suite is.
-fx <- "anchoveta"
+fx <- "fixture"
 if (length(fx)) {
-  cd <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
+  cd <- fx_catch()
   dims <- c("vesselFlagCountry", "fleetValue", "areaValue", "seasonValue", "metier4")
   st <- build_strata(cd, dims)
   ok(setequal(intersect(dims, names(st)), dims),

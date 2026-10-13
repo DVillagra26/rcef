@@ -53,7 +53,7 @@
 #' is ordinarily categorical: metier4, mesh, vesselFlagCountry...), and scores how
 #' strongly each of `dims` lines up with the resulting clusters. The table
 #' this returns is what [plot_discard_clusters()] and
-#' [plot_cluster_variables()] draw; nothing here needs a distribution or a
+#' [plot_discard_cluster_variables()] draw; nothing here needs a distribution or a
 #' raised catch.
 #'
 #' @details
@@ -86,7 +86,7 @@
 #'     `cluster`, sorted strongest first.
 #'   * `eig` - percent of variance the MCA's first dimensions explain.
 #' @seealso [build_coverage_strata()] for the table this clusters;
-#'   [plot_discard_clusters()], [plot_cluster_variables()].
+#'   [plot_discard_clusters()], [plot_discard_cluster_variables()].
 #' @md
 #' @export
 build_discard_clusters <- function(catch, dims, k = 3, seed = 1) {
@@ -130,15 +130,17 @@ build_discard_clusters <- function(catch, dims, k = 3, seed = 1) {
 #' of the map or overlaps the rest.
 #'
 #' @param x Output of [build_discard_clusters()].
-#' @param palette `"default"` or `"colorblind"` (see [var_palette()]) -
+#' @param palette `"default"` or `"colorblind"` -
 #'   unlike most of this package's colours, a cluster's own colour is not
 #'   kept stable across plots: which cluster is "1" depends on this run's
 #'   data and `k` alone.
+#' @inheritParams saving-plots
 #' @return A ggplot object.
-#' @seealso [build_discard_clusters()], [plot_cluster_variables()].
+#' @seealso [build_discard_clusters()], [plot_discard_cluster_variables()].
 #' @md
 #' @export
-plot_discard_clusters <- function(x, palette = c("default", "colorblind")) {
+plot_discard_clusters <- function(x, palette = c("default", "colorblind"), save = NULL) {
+  save_on_exit(save, "plot_discard_clusters")
   palette <- match.arg(palette)
   d <- x$strata
   pal <- group_palette(levels(d$cluster))
@@ -176,11 +178,13 @@ plot_discard_clusters <- function(x, palette = c("default", "colorblind")) {
 #' clustering, 1 means it alone determines it.
 #'
 #' @param x Output of [build_discard_clusters()].
+#' @inheritParams saving-plots
 #' @return A ggplot object.
 #' @seealso [build_discard_clusters()], [plot_discard_clusters()].
 #' @md
 #' @export
-plot_cluster_variables <- function(x) {
+plot_discard_cluster_variables <- function(x, save = NULL) {
+  save_on_exit(save, "plot_discard_cluster_variables")
   imp <- x$importance
   imp$variable <- factor(imp$variable, levels = rev(imp$variable))
   ggplot(imp, aes(x = variable, y = cramers_v)) +

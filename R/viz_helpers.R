@@ -516,6 +516,7 @@ shortfall_label <- function(d, sep = "\n") {
 #' @return `"discard"`, `"length"` or `"age"`.
 #' @keywords internal
 #' @export
+#' @noRd
 normalize_what <- function(what) {
   w <- tolower(trimws(as.character(what)))
   out <- switch(w,
@@ -566,15 +567,17 @@ normalize_what <- function(what) {
 #' @family coverage plots
 #' @md
 #' @examples
+#' \dontrun{
 #' # every status for a 50% coverage bar with no trip or measurement floor
 #' status_legend_plot(50, "discard", min_trips = NULL)
 #'
 #' # the legend of a figure that is on screen
-#' data(anchoveta_catch)
-#' p <- plot_coverage_heat(anchoveta_catch, y = "metier4", x = "vesselFlagCountry",
+#' p <- plot_coverage_heat(catch, y = "metier4", x = "vesselFlagCountry",
 #'                         min_cov = 50, min_trip = 2)
 #' do.call(status_legend_plot, attr(p, "status_legend"))
+#' }
 #' @export
+#' @noRd
 status_legend_plot <- function(threshold, what = "discard", min_meas = 0,
                                key = c("point", "tile"), size = NULL,
                                min_trips = 2, drop_none = TRUE) {
@@ -636,6 +639,7 @@ status_legend_plot <- function(threshold, what = "discard", min_meas = 0,
 #' @seealso [status_legend_plot()], [status_palette()]
 #' @keywords internal
 #' @export
+#' @noRd
 status_key_layer <- function(d, all_status, key = c("tile", "point")) {
   key <- match.arg(key)
   dummy <- d[rep(1L, length(all_status)), , drop = FALSE]
@@ -658,6 +662,7 @@ status_key_layer <- function(d, all_status, key = c("tile", "point")) {
 #' @keywords internal
 #' @md
 #' @export
+#' @noRd
 ICES_AREA_CENTROID <- data.frame(
   area = c("1", "2.a", "2.b",
            "3.a", "3.a.20", "3.a.21",
@@ -670,11 +675,7 @@ ICES_AREA_CENTROID <- data.frame(
            "7.j", "7.k",
            "8", "8.a", "8.b", "8.c", "8.d", "8.e",
            "9", "9.a", "9.b",
-           "10.a", "12", "14.a", "14.b",
-           # FAO Major Fishing Area 87 (Pacific, Southeast) - so the
-           # bundled anchoveta example data can be mapped too
-           "87.1.1", "87.1.2", "87.2.4", "87.2.5",
-           "87.3.1", "87.3.2", "87.3.3", "87.3.4"),
+           "10.a", "12", "14.a", "14.b"),
   lon = c(20.0, 5.0, 0.0,
           10.5, 10.2, 11.6,
           10.7, 12.5, 12.0, 16.5, 19.0, 18.5,
@@ -686,9 +687,7 @@ ICES_AREA_CENTROID <- data.frame(
           -11.0, -14.0,
           -5.0, -3.0, -2.5, -4.2, -6.0, -10.0,
           -10.0, -9.5, -11.0,
-          -28.0, -10.0, -35.0, -25.0,
-          -82.0, -80.0, -78.0, -73.0,
-          -71.0, -73.0, -74.0, -75.0),
+          -28.0, -10.0, -35.0, -25.0),
   lat = c(73.0, 68.0, 64.0,
           57.5, 58.2, 56.9,
           55.2, 55.5, 55.0, 55.6, 55.6, 58.0,
@@ -700,9 +699,7 @@ ICES_AREA_CENTROID <- data.frame(
           50.6, 49.6,
           45.5, 46.4, 45.0, 44.0, 45.6, 45.5,
           39.0, 40.0, 38.0,
-          46.0, 74.0, 60.0, 62.0,
-          -6.0, -8.0, -13.0, -17.0,
-          -22.0, -30.0, -37.0, -43.0),
+          46.0, 74.0, 60.0, 62.0),
   stringsAsFactors = FALSE)
 
 #' Approximate centroids of ICES areas
@@ -710,10 +707,8 @@ ICES_AREA_CENTROID <- data.frame(
 #' @description
 #' `ICES_AREA_CENTROID` is a table of approximate `lon` / `lat` centroids for
 #' the ICES divisions and subdivisions a stock assessment in the NE Atlantic
-#' normally uses - enough to place one pie or bubble per area on a map - plus
-#' the FAO Area 87 (Pacific, Southeast) divisions, so the bundled anchoveta
-#' example data can be mapped too. Codes are stored without the leading
-#' `"27."`.
+#' normally uses - enough to place one pie or bubble per area on a map. Codes
+#' are stored without the leading `"27."`.
 #'
 #' `ices_area_centroid()` looks codes up in that table, with or without the
 #' prefix.
@@ -730,6 +725,7 @@ ICES_AREA_CENTROID <- data.frame(
 #' ices_area_centroid(c("27.4.b", "7.d", "27.3.a.20"))
 #' head(ICES_AREA_CENTROID)
 #' @export
+#' @noRd
 ices_area_centroid <- function(codes) {
   key <- sub("^27\\.", "", trimws(as.character(codes)))
   m <- ICES_AREA_CENTROID[match(key, ICES_AREA_CENTROID$area), c("lon", "lat")]
@@ -756,6 +752,7 @@ ices_area_centroid <- function(codes) {
 #' default_weight_label("length", "Dis")
 #' default_weight_label("age", "All")
 #' @export
+#' @noRd
 default_weight_label <- function(what, catchCategory = NULL) {
   if (identical(what, "discard")) return("landings")
   switch(catchCategory %||% "Lan",
@@ -772,6 +769,7 @@ default_weight_label <- function(what, catchCategory = NULL) {
 #' @return A character vector of `catchCategory` values to keep.
 #' @keywords internal
 #' @export
+#' @noRd
 catch_category_parts <- function(cc) {
   if (is.null(cc)) return("Lan")
   if (identical(cc, "All")) c("Lan", "Dis") else cc
@@ -790,6 +788,7 @@ catch_category_parts <- function(cc) {
 #' @seealso [prep_distributions()], [plot_NaLoA()]
 #' @keywords internal
 #' @export
+#' @noRd
 biology_axis_labels <- function(distributionType = "LengthTotal",
                                 quantity = "numbers") {
   is_age <- identical(distributionType, "Age")
@@ -822,6 +821,7 @@ biology_axis_labels <- function(distributionType = "LengthTotal",
 #' @return `list(data, class_label, value_label)`.
 #' @keywords internal
 #' @export
+#' @noRd
 biology_dist_prep <- function(data, distributions, distributionType,
                               catchCategory, quantity, grp, dims,
                               plus_from = NULL, bin_from = NULL) {

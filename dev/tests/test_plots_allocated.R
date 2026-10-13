@@ -10,11 +10,12 @@
 ## exist only in the result's own $catch), the shade is mapped and means what
 ## it says, and the catch category, facets, plus group and length bins.
 ##
-## The fixture is the anchoveta example with ONE catch row per domainBiology:
+## The fixture is the synthetic test fixture with ONE catch row per domainBiology:
 ## the framework's aggregation counts a distribution once per catch row that
 ## names its domain (as the allocation itself does), which is right for CEF
 ## files built from InterCatch and not for the example as it is bundled.
 
+source("dev/tests/fixture.R")
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
@@ -38,9 +39,9 @@ suppressPackageStartupMessages(library(ggplot2))
 lf <- tempfile(fileext = ".txt")
 
 ## ---- the fixture ---------------------------------------------------------------
-data(anchoveta_catch); data(anchoveta_dist)
-c23 <- subset(anchoveta_catch, year == 2023)
-d23 <- as.data.frame(subset(anchoveta_dist, year == 2023))
+test_catch <- fx_catch(); test_dist <- fx_dist()
+c23 <- subset(test_catch, year == 2023)
+d23 <- as.data.frame(subset(test_dist, year == 2023))
 hier <- c("metier4", "ICESDivision", "seasonValue")
 grp <- quiet(define_raising_groups_auto(c23, hierarchy = hier, thresholds = c(50, 40, 30)))
 raised <- as.data.frame(quiet(run_native_raising(c23, hier, grp, type = "discards",

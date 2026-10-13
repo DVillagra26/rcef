@@ -27,20 +27,24 @@ ok(identical(unname(exclusion_choices(s, dims, "weight")[1]), "TBB | 27.4.b"),
    "ordering by weight puts the heaviest first")
 
 ## --- each route on its own -------------------------------------------
-ok(setequal(excluded_keys(s, dims, cov_min = 50),
+excl <- function(...) {
+  o <- exclusion_overview(s, dims, ...)
+  if (is.null(o)) character(0) else o$key
+}
+ok(setequal(excl(cov_min = 50),
             c("TBB | 27.4.c", "OTB | 27.4.b")),
    "a coverage bar drops the thinly sampled strata")
-ok(!"GNS | 27.4.b" %in% excluded_keys(s, dims, cov_min = 50),
+ok(!"GNS | 27.4.b" %in% excl(cov_min = 50),
    "NA coverage is left in: unknown is not the same as low")
-ok(setequal(excluded_keys(s, dims, meas_min = 100),
+ok(setequal(excl(meas_min = 100),
             c("TBB | 27.4.c", "OTB | 27.4.c", "GNS | 27.4.b")),
    "a measurement bar drops the barely measured strata")
-ok(identical(excluded_keys(s, dims, named = "OTB | 27.4.c"), "OTB | 27.4.c"),
+ok(identical(excl(named = "OTB | 27.4.c"), "OTB | 27.4.c"),
    "a named stratum is dropped")
-ok(setequal(excluded_keys(s, dims, dr_min = 0.05, dr_max = 0.5),
+ok(setequal(excl(dr_min = 0.05, dr_max = 0.5),
             c("TBB | 27.4.c", "OTB | 27.4.c")),
    "a rate window drops the strata outside it")
-ok(identical(excluded_keys(s, dims), character(0)),
+ok(identical(excl(), character(0)),
    "nothing set excludes nothing")
 
 ## --- the routes combine, and the reason says which fired -------------

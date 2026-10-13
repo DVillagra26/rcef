@@ -87,7 +87,7 @@ counted: BMS is a third catch part with its own raising, not a discard.\tabular{
    \code{weightingCategory} \tab \code{"Lan"}. \cr
    \code{weightingTotal} \tab The landings that carry a discard estimate (their \code{domainCatchDis} is filled): the weight \code{rate} is weighted by. \cr
    \code{rate} \tab \code{total / weightingTotal} (D/L): discards per tonne of covered landings, as the CAS output reports it. A ratio, so it can exceed 1. \code{NA} when \code{total} is missing or \code{weightingTotal} is 0. \cr
-   \code{discardRate} \tab \code{total / (weightingTotal + total)} (D/(L+D)): the discards as a share of the covered landings plus the discards - the \code{discard_rate} of \code{\link[=build_strata]{build_strata()}}. Between 0 and 1. \code{NA} when \code{total} is missing or the denominator is 0. \cr
+   \code{discardRate} \tab \code{total / (weightingTotal + total)} (D/(L+D)): the discards as a share of the covered landings plus the discards - Between 0 and 1. \code{NA} when \code{total} is missing or the denominator is 0. \cr
    \code{landings} \tab All landings in the stratum, covered or not. \cr
    \code{coverage} \tab \code{weightingTotal / landings}, in percent; \code{NA} when there are no landings. \cr
    \code{numTrips} \tab The trips behind the stratum; \code{NA} when the data does not report them. The largest count among the stratum's rows (one trip repeats across the rows of a sample), and summed when the plots pool strata into one cell. \cr
@@ -144,26 +144,25 @@ like, rather than passing raw catch to each.
 }
 }
 \examples{
-data(anchoveta_catch)
-data(anchoveta_dist)
+\dontrun{
 
 # discard rate and coverage per metier x country
-cov <- build_coverage_strata(anchoveta_catch, c("metier4", "vesselFlagCountry"))
+cov <- build_coverage_strata(catch, c("metier4", "vesselFlagCountry"))
 head(cov[order(-cov$landings), ])
 
 # the same table, coarser or finer
-build_coverage_strata(anchoveta_catch, "seasonValue")
-nrow(build_coverage_strata(anchoveta_catch,
+build_coverage_strata(catch, "seasonValue")
+nrow(build_coverage_strata(catch,
                            c("fleetValue", "areaValue", "seasonValue")))
 
 # dims left out: nothing pooled - one row per fleetValue x areaValue x
 # vesselFlagCountry x seasonValue combination the catch actually has
-nrow(build_coverage_strata(anchoveta_catch))
+nrow(build_coverage_strata(catch))
 
 # length coverage of the landings: weight, share with a distribution,
 # and the measurements behind it
-len <- build_coverage_strata(anchoveta_catch, c("metier4", "vesselFlagCountry"),
-                             anchoveta_dist, what = "length",
+len <- build_coverage_strata(catch, c("metier4", "vesselFlagCountry"),
+                             distributions, what = "length",
                              catchCategory = "Lan")
 head(len[order(-len$total), ])
 
@@ -171,14 +170,12 @@ head(len[order(-len$total), ])
 plot_coverage_heat(cov, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
 plot_DR(cov, x = "metier4", colour = "vesselFlagCountry")
 }
+}
 \seealso{
-\link{coverage-plots} and \code{\link[=plot_DR]{plot_DR()}}, which draw this
-table; \code{\link[=build_strata]{build_strata()}}, the raising-side stratum table;
-\code{\link[=classify_strata]{classify_strata()}}, which judges strata against thresholds.
+\link{coverage-plots} and \code{\link[=plot_DR]{plot_DR()}}, which draw this table.
 
 Other coverage plots: 
 \code{\link{coverage-plots}},
-\code{\link{plot_coverage_map}()},
-\code{\link{status_legend_plot}()}
+\code{\link{plot_coverage_map}()}
 }
 \concept{coverage plots}

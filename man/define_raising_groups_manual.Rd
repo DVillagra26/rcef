@@ -2,35 +2,77 @@
 % Please edit documentation in R/rcef_groups.R
 \name{define_raising_groups_manual}
 \alias{define_raising_groups_manual}
-\title{Define manual raising groups in one call}
+\title{Define raising groups by hand}
 \usage{
-define_raising_groups_manual(strata, rules, sets = list())
+define_raising_groups_manual(strata, rules, sets = list(), dims = NULL)
 }
 \arguments{
-\item{strata}{A classified stratum table from [classify_strata()].}
+\item{strata}{The stratum table, as \code{build_strata(catch, dims)} returns it:
+one row per stratum, with its columns, \code{stratum_id}, \code{landings},
+\code{coverage} and \code{discard_rate}.}
 
-\item{rules}{A list of rules from [new_rule()].}
+\item{rules}{A list of rules, each from \code{new_rule()} - see \emph{Rules}.}
 
-\item{sets}{Named value sets referenced by clauses.}
+\item{sets}{Named lists of values that clauses refer to with \code{set}.}
+
+\item{dims}{The columns that define a stratum. Only needed to write the
+strata a rule takes out with \code{excluded} into its donor condition.}
 }
 \value{
-A list with `strata` (tagged), `summary`, `strataCond` and
-  `matchedDataCond`.
+A list with \code{strata} (the strata, tagged with the group that raises
+them and the groups they donate to), \code{summary} (one row per group: strata
+raised, landings, donor pool, coverage and discard rate), and
+\code{strataCond} and \code{matchedDataCond}, named lists of quosures, one per
+group.
 }
 \description{
-Convenience wrapper for the manual method: tag the strata with their
-groups, summarise the rule set, and return the raising-ready conditions in
-one step. The `strataCond` / `matchedDataCond` in the result go straight
-into catchRaising() or catchAllocationAoL().
+Turns a set of rules you write into the groups \code{\link[=catchRaising]{catchRaising()}} and
+\code{\link[=catchAllocationAoL]{catchAllocationAoL()}} take: the strata each group raises, and the data its
+discard ratio is taken from.
+}
+\details{
+\subsection{Rules}{
+
+A rule is one group, written with
+\code{new_rule(id, label, raise, source, dr_min, dr_max, excluded, cov_min, meas_min)}:
+\itemize{
+\item \code{raise} is a list of clauses that select the strata the group raises. A
+clause is \code{list(var = "metier4", values = c("TBB", "OTB"))}, or with
+\code{negate = TRUE} the strata that do not have those values, or
+\code{set = "name"} to take the values from the named set in \code{sets}. Several
+clauses are all required.
+\item \code{source} selects the strata that donate, in the same way; the \code{raise}
+strata when left out. A stratum can donate to several groups.
+\item \code{dr_min} and \code{dr_max} keep only donors whose discard rate is inside that
+window, \code{cov_min} those with at least that coverage (percent),
+\code{meas_min} those with at least that many measurements, and \code{excluded}
+takes out the strata you name.
+}
+
+Rules are applied in order and the first one that claims a stratum raises
+it, so a last rule without clauses is the catch-all: it raises what the
+rules above it left. The strata of the groups never overlap.
+}
+
+\subsection{Using the groups}{
+
+As for \code{\link[=define_raising_groups_auto]{define_raising_groups_auto()}}, the conditions select strata by
+columns of the stratum table, so the catch has to carry them before
+\code{\link[=catchRaising]{catchRaising()}} evaluates them: \code{add_stratum_metrics(catch, dims)} adds
+them, and \code{run_native_raising(catch, dims, groups)} adds them and then
+calls \code{catchRaising()}.
+}
 }
 \examples{
 \dontrun{
-rules <- list(new_rule("G1", raise = list(list(var = "metier4",
-                                                values = "TBB"))),
-              new_rule("G2"))                 # catch-all
-g <- define_raising_groups_manual(sc, rules)
+rules <- list(
+  new_rule("G1", raise = list(list(var = "metier4", values = "TBB"))),
+  new_rule("G2"))                          # catch-all: everything else
+groups <- define_raising_groups_manual(build_strata(catch, "metier4"), rules)
+groups$summary
 }
 }
 \seealso{
-[assign_rule_groups()], [conds_from_rules()]
+\code{\link[=define_raising_groups_auto]{define_raising_groups_auto()}} for groups made from the data,
+\code{\link[=check_group_conditions]{check_group_conditions()}} to check them, \code{\link[=catchRaising]{catchRaising()}} to raise.
 }

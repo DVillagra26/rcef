@@ -4,12 +4,13 @@
 ## so it never falls back to plain alphabetical order ("100-119" before
 ## "16-31") wherever it turns up.
 ##
-## Uses the bundled anchoveta example (as the other recent plot tests do,
+## Uses the synthetic test fixture (as the other recent plot tests do,
 ## for portability), with its own `mesh` column overwritten by a synthetic
 ## set of values chosen so natural and alphabetical order disagree -
 ## "100-119" sorts before "16-31" and "90-99" alphabetically, but after both
 ## naturally; that disagreement is what each check below actually proves.
 
+source("dev/tests/fixture.R")
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
@@ -25,9 +26,9 @@ drawable <- function(p)
   !is.null(p) && inherits(p, "ggplot") &&
   !inherits(try(ggplot_build(p), silent = TRUE), "try-error")
 
-data(anchoveta_catch)
-data(anchoveta_dist)
-c23 <- subset(anchoveta_catch, year == 2023)
+test_catch <- fx_catch()
+test_dist <- fx_dist()
+c23 <- subset(test_catch, year == 2023)
 mesh_vals <- c("0", "16-31", "32-69", "70-99", "90-99", "100-119", ">=120")
 # Keyed off fleetValue (shared by a stratum's Lan and Dis rows alike), not
 # raw row position - a mesh value has to agree within a stratum or discard
@@ -107,13 +108,13 @@ ok(length(levels(p6$data$mesh)) > 3 &&
   "plot_raised_DR(): x = mesh orders the points by size, not alphabetically")
 
 ## ---- plot_NaLoA(): fill = \"mesh\" -------------------------------------------
-p7 <- plot_NaLoA(c23, anchoveta_dist, fill = "mesh")
+p7 <- plot_NaLoA(c23, test_dist, fill = "mesh")
 ok(drawable(p7), "plot_NaLoA(): draws with fill = mesh")
 ok(identical(levels(p7$data$mesh), mesh_levels(p7$data$mesh)),
   "plot_NaLoA(): fill = mesh orders the legend by size")
 
 ## ---- plot_MWaLoA(): colour = \"mesh\" -----------------------------------------
-p8 <- plot_MWaLoA(c23, anchoveta_dist, colour = "mesh")
+p8 <- plot_MWaLoA(c23, test_dist, colour = "mesh")
 ok(drawable(p8), "plot_MWaLoA(): draws with colour = mesh")
 ok(identical(levels(p8$data$mesh), mesh_levels(p8$data$mesh)),
   "plot_MWaLoA(): colour = mesh orders the legend by size")

@@ -54,6 +54,7 @@
 #'
 #' @keywords internal
 #' @export
+#' @noRd
 PAL_BASE <- c(
   "#4980B6", "#FFB649", "#00DB92", "#B60049", "#FF92FF", "#495B12",
   "#EDB6B6", "#5B37A4", "#00DBED", "#A4C849", "#924912", "#80495B",
@@ -71,11 +72,13 @@ PAL_BASE <- c(
 #' the fill itself is dark.
 #'
 #' @export
+#' @noRd
 OUTLINE <- "black"
 
 #' Line weight for those outlines
 #'
 #' @export
+#' @noRd
 OUTLINE_LW <- 0.25
 
 #' Cache of colours already handed out, per variable
@@ -95,6 +98,7 @@ OUTLINE_LW <- 0.25
 #'
 #' @keywords internal
 #' @export
+#' @noRd
 PAL_CB <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2",
            "#D55E00", "#CC79A7", "#000000")
 
@@ -112,6 +116,7 @@ PAL_CB <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2",
 #'
 #' @keywords internal
 #' @export
+#' @noRd
 PAL_GRADUAL <- c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99",
                  "#E31A1C", "#FDBF6F", "#FF7F00", "#CAB2D6", "#6A3D9A",
                  "#FFFF99", "#B15928")
@@ -131,6 +136,7 @@ PAL_GRADUAL <- c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99",
 #' @seealso [scale_fill_var()], [scale_colour_var()], [reset_palettes()]
 #' @keywords internal
 #' @export
+#' @noRd
 var_palette <- function(var, values,
                         palette = c("default", "colorblind", "gradual")) {
   palette <- match.arg(palette)
@@ -178,6 +184,7 @@ var_palette <- function(var, values,
 #' @return Called for its side effect; invisibly the variables seeded.
 #' @seealso [var_palette()], [reset_palettes()]
 #' @export
+#' @noRd
 seed_palettes <- function(data, vars = PALETTE_VARS) {
   if (is.null(data) || !nrow(data)) return(invisible(character(0)))
   done <- character(0)
@@ -202,6 +209,7 @@ seed_palettes <- function(data, vars = PALETTE_VARS) {
 #' have to look the same in all of them.
 #'
 #' @export
+#' @noRd
 PALETTE_VARS <- c("vesselFlagCountry", "seasonValue",
                   "metier4", "metier5", "metier6", "gear", "target", "mesh",
                   "metier4_mesh", "FleetType", "catchCategory",
@@ -215,6 +223,7 @@ PALETTE_VARS <- c("vesselFlagCountry", "seasonValue",
 #' @return Called for its side effect.
 #' @seealso [var_palette()]
 #' @export
+#' @noRd
 reset_palettes <- function() rm(list = ls(.LEVEL_COLOURS), envir = .LEVEL_COLOURS)
 
 #' Fill scale using the stable per-level colours
@@ -228,6 +237,7 @@ reset_palettes <- function() rm(list = ls(.LEVEL_COLOURS), envir = .LEVEL_COLOUR
 #' @return A ggplot fill scale.
 #' @seealso [var_palette()]
 #' @export
+#' @noRd
 scale_fill_var <- function(var, values, name = var,
                            palette = c("default", "colorblind", "gradual"),
                            ...)
@@ -243,6 +253,7 @@ scale_fill_var <- function(var, values, name = var,
 #' @return A ggplot colour scale.
 #' @seealso [var_palette()], [scale_fill_var()]
 #' @export
+#' @noRd
 scale_colour_var <- function(var, values, name = var,
                              palette = c("default", "colorblind", "gradual"),
                              ...)
@@ -257,6 +268,7 @@ scale_colour_var <- function(var, values, name = var,
 #' @param ids The group ids.
 #' @return A character vector of colours, named by id.
 #' @export
+#' @noRd
 group_palette <- function(ids) {
   ids <- unique(ids[!is.na(ids)])
   n <- length(ids)
@@ -281,6 +293,7 @@ group_palette <- function(ids) {
 #' @param base Base font size in points.
 #' @return A ggplot theme object.
 #' @export
+#' @noRd
 app_theme <- function(base = 11) {
   theme_bw(base_size = base) +
     theme(

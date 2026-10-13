@@ -16,6 +16,8 @@
 #    - cross-package calls namespace-qualified
 #    - CRLF -> LF
 #    - roxygen @family / @source added for provenance
+#    - help pages for catchAllocationAoL(), catchAtAoLAggregation() and
+#      meanWoLatAoLAggregation(), written here (upstream documents none)
 #    - distributionType takes CEF's own value "LengthTotal" where upstream
 #      says "Length": the four argument defaults and the three match.arg()
 #      calls (seven places, each marked)
@@ -645,7 +647,120 @@ grp_AoL_alloc_condition <- function(catch_data,
 
 
 
-#' @noRd
+## [pkg] Help page written here: upstream documents none of the allocation functions.
+#' Allocate length or age distributions to the catch
+#'
+#' @description
+#' Gives every stratum of the catch a length (or age) distribution. Where the
+#' catch of a stratum has a sampled distribution it is kept; where it has none,
+#' one is estimated from the sampled distributions of a group of matching strata
+#' and marked as estimated. The result holds, for each stratum, the numbers and
+#' the mean weight at every length or age class - what [catchAtAoLAggregation()]
+#' and [meanWoLatAoLAggregation()] add up into catch-at-length / catch-at-age
+#' tables, and what [plot_allocated_NaLoA()] and [plot_allocated_MWaLoA()] draw.
+#'
+#' @details
+#' ## Groups
+#'
+#' The allocation is done group by group. A group is a pair of conditions, one
+#' from `condition_alloc_st_list` and one from `condition_matched_data_list`:
+#' the first selects the catch rows that are allocated together, the second the
+#' catch rows whose sampled distributions are pooled to estimate the
+#' distribution of those that have none. The two lists have the same length and
+#' the same names - a group's name, `GA1`, `GA2`, ... when the lists have none -
+#' and each condition is written as in `dplyr::filter()`: a quosure
+#' (`rlang::quo(metier4 == "TBB")`), a text that is turned into one, or a
+#' logical vector with a value for every row of `catch_data`.
+#'
+#' The allocation strata must not overlap - a catch row in two of them is an
+#' error, which [check_group_conditions()] reports before anything is
+#' allocated. The matched data may overlap, and usually do: a group can draw
+#' on a wider pool than its own strata. Every group is allocated within one
+#' year and one stock.
+#'
+#' ## How a distribution is estimated
+#'
+#' The numbers at length (or age) of a stratum without a sampled distribution
+#' are the pooled sampled numbers of the matched data, scaled by the weight of
+#' the stratum's catch over the weight of the catch that was sampled. Its mean
+#' weight at length (or age) is the mean of the sampled mean weights, weighted
+#' by the numbers at that class (`weighting = "NumberAtAoL"`) or by the catch
+#' (`"CATON"`). A stratum that has a sampled distribution keeps it as it is.
+#'
+#' Catch and distributions are linked on `vesselFlagCountry`, `year`,
+#' `workingGroup`, `stock`, `speciesCode`, `catchCategory` and
+#' `domainBiology`. Units are harmonised first - catch weight to kg and
+#' thousands, distribution values to g and numbers (N) - so what comes back is
+#' in those.
+#'
+#' ## What comes back
+#'
+#' A list of two tables:
+#'
+#' * `distribution`: every distribution row - the sampled ones as they came, and
+#'   the estimated ones - with `sampledOrEstimated` (`"sampled"` or
+#'   `"estimated"`) and `allocGroup`, the group they were allocated in.
+#'   Numbers are `variableType == "Number"` rows, mean weights
+#'   `"WeightLive"` rows.
+#' * `catch`: the allocated catch rows, with `allocGroup`. A stratum without a
+#'   `domainBiology` is given one (`"[alloc]_<season>_<area>_<unit>_<fleet>_<category>"`),
+#'   and its estimated distributions carry it, so the two tables join on
+#'   `domainBiology` - which is why anything that reads an allocation takes both
+#'   tables from this result, not the catch that went in.
+#'
+#' With `assembled_output = TRUE` the rows that were not allocated (another
+#' origin or variable type, or in no group) are added, with `allocGroup` `NA`.
+#'
+#' @param catch_data The catch, a CEF long-format table, with the stratum
+#'   columns the conditions refer to (see [derive_fields()]).
+#' @param distribution_data The CEF distributions table: `distributionType`,
+#'   `distributionClass`, `variableType` (`"Number"` or `"WeightLive"`),
+#'   `value`, `domainBiology` and the keys above.
+#' @param condition_alloc_st_list The conditions that select the strata that are
+#'   allocated together, one per group - see *Groups*.
+#' @param condition_matched_data_list The conditions that select the matched
+#'   data of each group; same length and names as `condition_alloc_st_list`.
+#'   Defaults to the allocation strata themselves.
+#' @param distributionType `"LengthTotal"`, `"Age"` or both (the default):
+#'   which distributions are allocated. These are CEF's own values.
+#' @param originType_catch `"WGEstimate"` (default) or `"Official"`: the origin
+#'   of the catch rows that are allocated. One at a time.
+#' @param variableType_catch `"WeightLive"` (default) or `"Number"`: the
+#'   variable of the catch rows that are allocated. One at a time.
+#' @param variableType_mean The variable whose mean at length or age is
+#'   allocated; only `"WeightLive"`.
+#' @param weighting How the mean weights at length or age are weighted:
+#'   `"NumberAtAoL"` (default), by the numbers at that class, or `"CATON"`, by
+#'   the catch.
+#' @param verbose Report what is done, group by group.
+#' @param assembled_output `TRUE` (default): add the rows that were not
+#'   allocated to the result; `FALSE`: only the allocated rows.
+#' @param append Whether to append to the log file (`FALSE`: overwrite it).
+#' @param ... Passed on to [check_group_conditions()], e.g. `logFile`, where the
+#'   check of the conditions is written.
+#' @return A list with `distribution` and `catch`, see *What comes back*.
+#' @seealso [catchAtAoLAggregation()] and [meanWoLatAoLAggregation()] to add the
+#'   allocation up; [define_raising_groups_auto()] for conditions made from the
+#'   data; [catchRaising()] for the discards.
+#' @author Yves Reecht
+#' @md
+#' @examples
+#' \dontrun{
+#' # one group: every stratum, matched against every stratum
+#' alloc <- catchAllocationAoL(catch, distributions,
+#'                             condition_alloc_st_list = list(ALL = rlang::quo(TRUE)),
+#'                             distributionType = "LengthTotal",
+#'                             logFile = tempfile(fileext = ".txt"))
+#' table(alloc$distribution$sampledOrEstimated)
+#'
+#' # two groups: beam trawls are filled from beam trawls, the rest from every stratum
+#' alloc <- catchAllocationAoL(catch, distributions,
+#'   condition_alloc_st_list     = list(TBB  = rlang::quo(metier4 == "TBB"),
+#'                                      REST = rlang::quo(metier4 != "TBB")),
+#'   condition_matched_data_list = list(TBB  = rlang::quo(metier4 == "TBB"),
+#'                                      REST = rlang::quo(TRUE)),
+#'   distributionType = "LengthTotal", logFile = tempfile(fileext = ".txt"))
+#' }
 #' @export
 catchAllocationAoL <- function(catch_data,
                                distribution_data,
@@ -843,7 +958,80 @@ catchAllocationAoL <- function(catch_data,
 ## ###########################################################################
 ## Reporting functions:
 
-#' @noRd
+## [pkg] Help page written here: upstream documents none of the allocation functions.
+#' Catch at length or age: the numbers of an allocation, added up
+#'
+#' @description
+#' Adds the numbers at length (or age) of an allocation - or of any CEF
+#' distributions linked to a catch - up into a table with one column per length
+#' or age class, for each combination of the variables in `grouping`: the catch
+#' at length, or at age.
+#'
+#' @details
+#' The distributions are linked to the catch rows on `vesselFlagCountry`,
+#' `year`, `workingGroup`, `stock`, `speciesCode`, `catchCategory` and
+#' `domainBiology`, and only the `"Number"` distributions of `distributionType`
+#' are used. A distribution is counted once for every catch row it is linked
+#' to. Take both tables from one [catchAllocationAoL()] result, whose domains
+#' belong to one catch row each, and pass one `originType_catch` and one
+#' `variableType_catch`: with the defaults, which take both, a stratum that has
+#' rows for both is counted twice.
+#'
+#' ## Classes
+#'
+#' `minAoL` drops the classes below it. With `maxAoL` set and `plusGroup`
+#' `TRUE`, every class from `maxAoL` up is pooled into one plus group, whose
+#' column is labelled `"<maxAoL>+"`; with `plusGroup` `FALSE` the classes above
+#' `maxAoL` are left out and `maxAoL` is a class like the others. With `maxAoL`
+#' `NA` the highest class found closes the table, without a plus.
+#'
+#' @param distribution_data The distributions: a CEF distributions table, or the
+#'   `distribution` table of a [catchAllocationAoL()] result.
+#' @param catch_data The catch they belong to: a CEF catch table, or the `catch`
+#'   table of the same allocation.
+#' @param grouping The variables to add up by: columns of the catch rows
+#'   (`catchCategory`, `seasonValue`, `metier4`, ...) or of the distributions
+#'   (`attributeType`, `attributeValue`).
+#' @param originType_catch `"WGEstimate"` or `"Official"`: the origin of the
+#'   catch rows to link. Pass one.
+#' @param variableType_catch `"WeightLive"` or `"Number"`: the variable of the
+#'   catch rows to link. Pass one.
+#' @param distributionType `"Age"` (default) or `"LengthTotal"`, CEF's own
+#'   values. One at a time.
+#' @param unit The unit to convert the numbers to before adding them up: `"N"`
+#'   (fish) or `"NE3"` (thousands of fish). `NULL` (default) leaves them as
+#'   they are.
+#' @param round Digits to round the numbers to; `NULL` (default) does not
+#'   round.
+#' @param minAoL The lowest class kept.
+#' @param maxAoL The class from which the plus group starts, or the highest
+#'   class kept without one; `NA` (default) for the highest class found.
+#' @param plusGroup Pool the classes from `maxAoL` up into a plus group
+#'   (`TRUE`, default) or leave them out (`FALSE`).
+#' @return A tibble with the `grouping` columns, `unit` (the unit of the numbers)
+#'   and one column per class, named `N_<distributionType>_<class>`:
+#'   `N_LengthTotal_300`, `N_Age_3`, `N_Age_7+`.
+#' @seealso [meanWoLatAoLAggregation()] for the mean weights;
+#'   [catchAllocationAoL()] for the allocation; [plot_allocated_NaLoA()] to look
+#'   at it.
+#' @author Yves Reecht
+#' @md
+#' @examples
+#' \dontrun{
+#' alloc <- catchAllocationAoL(catch, distributions,
+#'                             condition_alloc_st_list = list(ALL = rlang::quo(TRUE)),
+#'                             distributionType = "LengthTotal",
+#'                             logFile = tempfile(fileext = ".txt"))
+#'
+#' # catch at length, in thousands of fish, by catch category and season,
+#' # with every class from 400 up as one plus group
+#' catchAtAoLAggregation(alloc$distribution, alloc$catch,
+#'                       grouping = c("catchCategory", "seasonValue"),
+#'                       originType_catch = "WGEstimate",
+#'                       variableType_catch = "WeightLive",
+#'                       distributionType = "LengthTotal",
+#'                       unit = "NE3", round = 0, maxAoL = 400)
+#' }
 #' @export
 catchAtAoLAggregation <- function(distribution_data,
                                   catch_data,
@@ -929,7 +1117,61 @@ catchAtAoLAggregation <- function(distribution_data,
 }
 
 
-#' @noRd
+## [pkg] Help page written here: upstream documents none of the allocation functions.
+#' Mean weight at length or age: the mean weights of an allocation, averaged
+#'
+#' @description
+#' Averages the mean weights at length (or age) of an allocation - or of any
+#' CEF distributions linked to a catch - into a table with one column per
+#' length or age class, for each combination of the variables in `grouping`: the
+#' mean weight at length, or at age.
+#'
+#' @details
+#' The distributions are linked to the catch rows as in
+#' [catchAtAoLAggregation()], which has the same warning about taking both
+#' tables from one allocation and passing a single `originType_catch` and
+#' `variableType_catch`. The mean weights of the `"WeightLive"` distributions
+#' are averaged within each group and class, weighted by the numbers at that
+#' class (`weighting = "NumberAtAoL"`). The numbers come from the `"Number"`
+#' distributions of the same domain, so a mean weight without numbers is left
+#' out of the average.
+#'
+#' `minAoL`, `maxAoL` and `plusGroup` cut and pool the classes exactly as they
+#' do in [catchAtAoLAggregation()].
+#'
+#' @inheritParams catchAtAoLAggregation
+#' @param weighting How the mean weights are weighted: `"NumberAtAoL"` (default),
+#'   by the numbers at the class. `"CATON"` is accepted but currently stops with
+#'   the error `object 'total' not found`.
+#' @param variableType_dist The variable of the distributions that is averaged;
+#'   only `"WeightLive"`.
+#' @param unit The unit to convert the weights to before averaging: `"g"`,
+#'   `"kg"` or `"t"`. `NULL` (default) leaves them as they are.
+#' @param round Digits to round the weights to; `NULL` (default) does not round.
+#' @param samplesOnly Not used.
+#' @return A tibble with the `grouping` columns, `unit` (the unit of the
+#'   weights) and one column per class, named `W_<distributionType>_<class>`:
+#'   `W_LengthTotal_300`, `W_Age_3`, `W_Age_7+`.
+#' @seealso [catchAtAoLAggregation()] for the numbers;
+#'   [catchAllocationAoL()] for the allocation; [plot_allocated_MWaLoA()] to look
+#'   at it.
+#' @author Yves Reecht
+#' @md
+#' @examples
+#' \dontrun{
+#' alloc <- catchAllocationAoL(catch, distributions,
+#'                             condition_alloc_st_list = list(ALL = rlang::quo(TRUE)),
+#'                             distributionType = "LengthTotal",
+#'                             logFile = tempfile(fileext = ".txt"))
+#'
+#' # mean weight at length in kg, by catch category
+#' meanWoLatAoLAggregation(alloc$distribution, alloc$catch,
+#'                         grouping = "catchCategory",
+#'                         originType_catch = "WGEstimate",
+#'                         variableType_catch = "WeightLive",
+#'                         distributionType = "LengthTotal",
+#'                         unit = "kg", round = 3)
+#' }
 #' @export
 meanWoLatAoLAggregation <- function(distribution_data,
                                     catch_data,

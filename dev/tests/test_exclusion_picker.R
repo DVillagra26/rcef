@@ -10,6 +10,7 @@
 ## Checked on the length/age allocation box and the discard manual box,
 ## which share the one exclusion server.
 
+source("dev/tests/fixture.R")
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
@@ -21,8 +22,8 @@ if (!requireNamespace("shiny", quietly = TRUE)) {
 } else {
   ap <- system.file("app", package = "rcef")
   if (!nzchar(ap)) stop("rcef is not installed; R CMD INSTALL first")
-  data("anchoveta_catch", package = "rcef", envir = environment())
-  data("anchoveta_dist",  package = "rcef", envir = environment())
+  test_catch <- fx_catch()
+  test_dist <- fx_dist()
   DEF <- c("vesselFlagCountry", "fleetValue", "areaValue", "seasonValue")
   `%||%` <- function(a, b) if (is.null(a)) b else a
   html_of <- function(o) as.character(o$html %||% o)
@@ -34,7 +35,7 @@ if (!requireNamespace("shiny", quietly = TRUE)) {
 
   ## two strata made to order: one with no landings and no discards, one
   ## with landings and a discard rate of exactly 0
-  cd <- as.data.frame(anchoveta_catch)
+  cd <- as.data.frame(test_catch)
   st <- build_strata(cd, DEF)
   both <- st[st$landings > 0 & st$discards > 0, ]
   k_key <- function(r) stratum_keys(r, DEF)
@@ -45,7 +46,7 @@ if (!requireNamespace("shiny", quietly = TRUE)) {
   ok(k_key(empty) != k_key(landed), "(fixture: two different strata)")
 
   shiny::testServer(ap, {
-    rv$cef_catches <- cd; rv$dist <- anchoveta_dist; rv$load_method <- "cef"
+    rv$cef_catches <- cd; rv$dist <- test_dist; rv$load_method <- "cef"
     session$setInputs(sep = ",", stock = "", year = "", threshold = 50)
     session$flushReact()
 

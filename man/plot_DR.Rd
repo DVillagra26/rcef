@@ -13,7 +13,8 @@ plot_DR(
   rate = c("ratio", "rate"),
   reference = NULL,
   jitter = TRUE,
-  palette = c("default", "colorblind", "gradual")
+  palette = c("default", "colorblind", "gradual"),
+  save = NULL
 )
 }
 \arguments{
@@ -39,7 +40,11 @@ scale of \code{rate}. Draws a dashed line and labels the strata above it.}
 still one stratum.}
 
 \item{palette}{\code{"default"}, \code{"colorblind"} or \code{"gradual"}: the point
-colours (see \code{\link[=var_palette]{var_palette()}}).}
+colours.}
+
+\item{save}{Where to write the plot as well, or \code{NULL} (default) to only
+return it: a folder, a file name, or a list of options - see
+\link{saving-plots}.}
 }
 \value{
 A ggplot object, or \code{NULL} when no stratum has a discard rate.
@@ -75,7 +80,8 @@ a discard estimate - the same number the CAS output reports. It is a
 ratio, so it can exceed 100\%.
 \item \code{"rate"} (the "discard rate") is \code{discardRate} = `total / (weightingTotal
 \itemize{
-\item total)\verb{: the discards as a share of the catch - those landings plus the discards, the }discard_rate` of \code{\link[=build_strata]{build_strata()}}. It stays between 0 and
+\item total)`: the discards as a share of the catch - those landings plus the
+discards. It stays between 0 and
 100\%.
 }
 }
@@ -115,21 +121,22 @@ ordinary one. \code{"rate"} is bounded, so its axis is an ordinary 0-100\% one.
 }
 }
 \examples{
-data(anchoveta_catch)
+\dontrun{
 
-plot_DR(anchoveta_catch, x = "metier4", colour = "vesselFlagCountry")
-plot_DR(anchoveta_catch, x = "vesselFlagCountry", colour = "metier4",
+plot_DR(catch, x = "metier4", colour = "vesselFlagCountry")
+plot_DR(catch, x = "vesselFlagCountry", colour = "metier4",
        facet = "seasonValue")
 
 # discards as a share of the catch, with a reference line: the strata
 # above 20\% are named, in full
-plot_DR(anchoveta_catch, x = "metier4", colour = "vesselFlagCountry",
+plot_DR(catch, x = "metier4", colour = "vesselFlagCountry",
        rate = "rate", reference = 0.2)
 
 # the table behind the points
-cov <- build_coverage_strata(anchoveta_catch, c("metier4", "vesselFlagCountry"))
+cov <- build_coverage_strata(catch, c("metier4", "vesselFlagCountry"))
 head(cov[!is.na(cov$rate), c("metier4", "vesselFlagCountry", "total", "rate",
                              "discardRate")])
+}
 }
 \seealso{
 \code{\link[=build_coverage_strata]{build_coverage_strata()}} for the table behind the points;

@@ -54,9 +54,8 @@ they fall - by raising group, say - so they are not mistaken for a group
 that simply raised little.
 }
 \examples{
-\donttest{
-data(anchoveta_catch)
-cef  <- subset(anchoveta_catch, year == 2023)
+\dontrun{
+cef  <- subset(catch, year == 2023)
 dims <- c("metier4", "ICESDivision", "seasonValue")
 log  <- tempfile(fileext = ".txt")
 strict  <- define_raising_groups_auto(cef, hierarchy = dims,
@@ -80,6 +79,6 @@ raised_overview_table(c(strict = raised_strict, relaxed = raised_relaxed),
 }
 }
 \seealso{
-\code{\link[=plot_comparison]{plot_comparison()}} for the same comparison as a figure;
+\code{\link[=plot_compare_raised]{plot_compare_raised()}} for the same comparison as a figure;
 \code{\link[=plot_raised_catches]{plot_raised_catches()}} for one raised catch.
 }

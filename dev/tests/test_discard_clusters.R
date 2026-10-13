@@ -1,8 +1,9 @@
-## build_discard_clusters() / plot_discard_clusters() / plot_cluster_variables()
+## build_discard_clusters() / plot_discard_clusters() / plot_discard_cluster_variables()
 ##
-## Uses the bundled anchoveta example so this runs anywhere (no local-only
+## Uses the synthetic test fixture so this runs anywhere (no local-only
 ## CEF file needed).
 
+source("dev/tests/fixture.R")
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
@@ -14,8 +15,8 @@ drawable <- function(p)
   !is.null(p) && inherits(p, "ggplot") &&
   !inherits(try(ggplot_build(p), silent = TRUE), "try-error")
 
-data(anchoveta_catch)
-c23 <- subset(anchoveta_catch, year == 2023)
+test_catch <- fx_catch()
+c23 <- subset(test_catch, year == 2023)
 dims <- c("metier4", "ICESDivision", "seasonValue")
 
 ## ---- reproducible, and does not touch the caller's random state ---------
@@ -62,12 +63,12 @@ ok(drawable(p1), "plot_discard_clusters(): draws")
 ok(identical(p1$labels$title, "Which strata share a discard rate"),
    "plot_discard_clusters(): title")
 
-p2 <- plot_cluster_variables(dc1)
-ok(drawable(p2), "plot_cluster_variables(): draws")
+p2 <- plot_discard_cluster_variables(dc1)
+ok(drawable(p2), "plot_discard_cluster_variables(): draws")
 ok(identical(p2$labels$title, "Which variable best predicts the discard-rate cluster"),
-   "plot_cluster_variables(): title")
+   "plot_discard_cluster_variables(): title")
 ok(nrow(p2$data) == length(dims),
-   "plot_cluster_variables(): one bar per grouping variable")
+   "plot_discard_cluster_variables(): one bar per grouping variable")
 
 cat(sprintf("\nDONE  %d failure(s)\n", FAIL))
 if (FAIL) quit(status = 1L)

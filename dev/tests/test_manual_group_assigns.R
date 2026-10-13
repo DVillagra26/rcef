@@ -11,6 +11,7 @@
 ## matched nothing. The length/age builder collects them from its saved
 ## and pending groups; both are pinned here, on the live server.
 
+source("dev/tests/fixture.R")
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
@@ -22,18 +23,18 @@ if (!requireNamespace("shiny", quietly = TRUE)) {
 } else {
   ap <- system.file("app", package = "rcef")
   if (!nzchar(ap)) stop("rcef is not installed; R CMD INSTALL first")
-  data("anchoveta_catch", package = "rcef", envir = environment())
-  data("anchoveta_dist",  package = "rcef", envir = environment())
+  test_catch <- fx_catch()
+  test_dist <- fx_dist()
   DEF <- c("vesselFlagCountry", "fleetValue", "areaValue", "seasonValue")
   `%||%` <- function(a, b) if (is.null(a)) b else a
 
-  cd <- derive_fields(as.data.frame(anchoveta_catch))
+  cd <- derive_fields(as.data.frame(test_catch))
   ref <- build_strata(cd, c(DEF, "metier4"))
   n_ps <- sum(ref$metier4 == "PS")
   ok(n_ps > 0 && n_ps < nrow(ref), "(fixture: PS is some, not all, of the strata)")
 
   shiny::testServer(ap, {
-    rv$cef_catches <- anchoveta_catch; rv$dist <- anchoveta_dist
+    rv$cef_catches <- test_catch; rv$dist <- test_dist
     rv$load_method <- "cef"
     session$setInputs(sep = ",", stock = "", year = "", threshold = 50)
     session$flushReact()
@@ -67,7 +68,7 @@ if (!requireNamespace("shiny", quietly = TRUE)) {
       matched = alloc_cond_string(list(metier4 = "PS")), excluded = character(0),
       alloc_expr = alloc_quo(list(metier4 = "PS")),
       matched_expr = alloc_quo(list(metier4 = "PS"))))
-    bl <- suppressWarnings(biology_link(cd, anchoveta_dist,
+    bl <- suppressWarnings(biology_link(cd, test_dist,
             c("catchCategory", DEF, "metier4"), NULL, "LengthTotal"))
     rv$len_groups <- gl
     session$flushReact()

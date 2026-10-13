@@ -6,15 +6,16 @@
 ## now carries those along, NA where the stratum genuinely spans more than
 ## one value.
 
+source("dev/tests/fixture.R")
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
   else { FAIL <<- FAIL + 1L; cat("FAIL  ", what, "\n") }
 }
 
-data(anchoveta_catch)
-data(anchoveta_dist)
-c23 <- subset(anchoveta_catch, year == 2023)
+test_catch <- fx_catch()
+test_dist <- fx_dist()
+c23 <- subset(test_catch, year == 2023)
 
 ## ---- dims left out: the finest stratum, everything is pinned -----------
 cov0 <- build_coverage_strata(c23)
@@ -53,7 +54,7 @@ ok(sum(names(cov2) == "mesh") == 1,
   "build_coverage_strata(): a column already in dims is not duplicated")
 
 ## ---- length / age branch gets the same treatment -------------------------
-covL <- build_coverage_strata(c23, c("metier4", "vesselFlagCountry"), anchoveta_dist,
+covL <- build_coverage_strata(c23, c("metier4", "vesselFlagCountry"), test_dist,
                               what = "length", catchCategory = "Lan")
 ok(all(c("mesh", "metier5") %in% names(covL)),
   "build_coverage_strata(): length/age branch also keeps the derived columns")

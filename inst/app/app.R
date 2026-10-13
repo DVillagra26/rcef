@@ -5540,7 +5540,7 @@ server <- function(input, output, session) {
     do.call(tagList, rows) })
 
   # One walk of the cascade, not two. This used to be a pair of reactives
-  # calling decision_tree() and decision_tree2() with identical arguments,
+  # calling decision_tree() twice with identical arguments,
   # so every threshold change resolved the whole cascade twice to build
   # one table that was a prefix of the other. check_partition() reads only
   # n_strata and landings, both present here.

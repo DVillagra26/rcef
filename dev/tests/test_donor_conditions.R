@@ -1,5 +1,6 @@
 ## matchedDataCond must read as the thresholds that were set, not as the
 ## list of strata that happen to fail them today.
+source("dev/tests/fixture.R")
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
@@ -82,9 +83,9 @@ ok(!any(grepl("add_stratum_metrics", em2)),
 ## stratum table a SECOND time, colliding coverage into coverage.x /
 ## coverage.y so no plain `coverage` existed. This is the exact failing
 ## condition from the field.
-fx <- "anchoveta"
+fx <- "fixture"
 if (length(fx)) {
-  cd <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
+  cd <- fx_catch()
   prep <- rcef:::cef_prepare(cd, c("metier4", "vesselFlagCountry", "ICESDivision", "seasonValue"))
   ok("coverage" %in% names(prep), "cef_prepare keeps a plain coverage column")
   ok("n_measurements" %in% names(prep), "and a plain n_measurements column")

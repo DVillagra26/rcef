@@ -13,6 +13,7 @@
 #'
 #' @format A named list: package -> the capability it gates.
 #' @export
+#' @noRd
 RCEF_OPTIONAL <- list(
   icesVocab = "funMakeRelation(): ICES species and area vocabularies",
   icesSD    = "funMakeRelation(): the ICES stock database")
@@ -28,6 +29,7 @@ RCEF_OPTIONAL <- list(
 #' @export
 #' @examples
 #' rcef_sources()$dir
+#' @noRd
 rcef_sources <- function() {
   ok <- vapply(names(RCEF_OPTIONAL), requireNamespace, logical(1),
                quietly = TRUE)
@@ -55,6 +57,7 @@ rcef_sources <- function() {
 #' @export
 #' @examples
 #' rcef_status()$raising
+#' @noRd
 rcef_status <- function(x = NULL) {
   has <- function(f) {
     e <- tryCatch(asNamespace("rcef"), error = function(e) globalenv())

@@ -10,6 +10,7 @@
 ## its ladder/nested mode choice (nested is now the only cascade) - this
 ## check has nothing to do with that and outlived it.
 
+source("dev/tests/fixture.R")
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
@@ -24,9 +25,9 @@ if (requireNamespace("dplyr", quietly = TRUE)) {
      "and is not dplyr's function")
   ## the shape the app runs in: dplyr attached, rcef attached
   f <- get("grouping_vars", envir = asNamespace("rcef"))
-  fx <- "anchoveta"
+  fx <- "fixture"
   if (length(fx)) {
-    cd <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
+    cd <- fx_catch()
     ok(length(f(cd)) > 5,
        "and returns a real vocabulary with dplyr on the search path")
   }

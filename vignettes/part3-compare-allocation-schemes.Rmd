@@ -216,7 +216,7 @@ cat(sprintf("hierarchical raising: %d rows (%d imported, %d raised)\n",
 
 # How much weight each scheme raises
 
-`raised_overview_table()` and `plot_comparison()` compare raised catches
+`raised_overview_table()` and `plot_compare_raised()` compare raised catches
 directly: give them two or more, written `list(a, b)` or `c(a, b)`, and nothing
 else is needed. A scheme is called after its object unless you name it, as
 below.
@@ -251,17 +251,17 @@ splits it further and `catchCategory` keeps just the landings or the
 discards, which are otherwise dwarfed by the landings.
 
 ```{r overview-plot-metier, fig.height = 4.5, fig.alt = "Discards by metier, one bar per scheme, imported solid and raised transparent"}
-plot_comparison(c(manual = raised_manual, hierarchical = raised_hier),
-                x = "metier4", catchCategory = "Dis")
+plot_compare_raised(c(manual = raised_manual, hierarchical = raised_hier),
+                    x = "metier4", catchCategory = "Dis")
 ```
 
 By country, one panel per season - a finer aggregation than the group
 definitions themselves ever used:
 
 ```{r overview-plot-country, fig.height = 6.5, fig.alt = "Discards by country, one panel per season, one bar per scheme"}
-plot_comparison(c(manual = raised_manual, hierarchical = raised_hier),
-                x = "vesselFlagCountry", facet = "seasonValue",
-                catchCategory = "Dis")
+plot_compare_raised(c(manual = raised_manual, hierarchical = raised_hier),
+                    x = "vesselFlagCountry", facet = "seasonValue",
+                    catchCategory = "Dis")
 ```
 
 # Do the groups agree with themselves?

@@ -25,24 +25,25 @@ NULL
 #' answers the question a table cannot: how much of the stock is being raised
 #' from each pool, and which strata were swept into the fallback.
 #'
-#' @param df A recommendation table from [recommend_raising()] or a tagged
-#'   table from [assign_rule_groups()].
+#' @param df A stratum table: one row per stratum, with the columns named by
+#'   `left_var`, `right_var` and `value_var`.
 #' @param left_var Column on the left axis, usually the stratum label.
 #' @param right_var Column on the right axis, usually the donor group.
 #' @param value_var Column giving each ribbon its width.
-#' @param pal Named colours for the groups, e.g. from `group_palette()`.
+#' @param pal Named colours for the groups; a default palette when `NULL`.
 #' @param title Plot title.
 #' @param left_label,right_label Axis labels.
 #' @param stratum_axis Label for the stratum axis.
+#' @inheritParams saving-plots
 #' @return A ggplot object, or `NULL` when there is nothing to draw.
-#' @seealso [plot_river_level()], [recommend_raising()]
 #' @family raising plots
 #' @export
 plot_river <- function(df, left_var, right_var = "raise_level",
                        value_var = "landings", pal = NULL,
                        title = "Which strata are raised from which group",
                        left_label = NULL, right_label = NULL,
-                       stratum_axis = "Stratum") {
+                       stratum_axis = "Stratum", save = NULL) {
+  save_on_exit(save, "plot_river")
   # left_label / right_label: optional character vectors (same length as
   # df) giving the text to show on each axis. When supplied they override
   # the raw left_var / right_var values - this is how a stratum is shown
@@ -102,9 +103,10 @@ plot_river <- function(df, left_var, right_var = "raise_level",
 #' @param pal Named colours for the groups.
 #' @param value_var Column giving each ribbon its width.
 #' @return A ggplot object, or `NULL`.
-#' @seealso [plot_river()], [decision_tree2()]
+#' @seealso [plot_river()], [decision_tree()]
 #' @family raising plots
 #' @export
+#' @noRd
 plot_river_level <- function(rec_g, step_id, dims, pal,
                              value_var = "landings") {
   d <- rec_g[rec_g$raise_step == step_id, , drop = FALSE]
@@ -160,16 +162,16 @@ plot_river_level <- function(rec_g, step_id, dims, pal,
 #'   category, summed.
 #' @param ncol Facet columns, when `facet` is set.
 #' @param palette `"default"`, `"colorblind"` or `"gradual"`: the scenario
-#'   colours (see [var_palette()]).
+#'   colours.
+#' @inheritParams saving-plots
 #' @return A ggplot object, or `NULL` when there is nothing to draw.
 #' @seealso [raised_overview_table()] for the same comparison as a table;
 #'   [plot_raised_catches()] for one raised catch.
 #' @family raising plots
 #' @md
 #' @examples
-#' \donttest{
-#' data(anchoveta_catch)
-#' cef  <- subset(anchoveta_catch, year == 2023)
+#' \dontrun{
+#' cef  <- subset(catch, year == 2023)
 #' dims <- c("metier4", "ICESDivision", "seasonValue")
 #' log  <- tempfile(fileext = ".txt")
 #' strict  <- define_raising_groups_auto(cef, hierarchy = dims,
@@ -182,27 +184,28 @@ plot_river_level <- function(rec_g, step_id, dims, pal,
 #'                                      type = "discards", log_file = log)
 #'
 #' # the scenarios are named after the objects ...
-#' plot_comparison(c(raised_strict, raised_relaxed), x = "metier4")
+#' plot_compare_raised(c(raised_strict, raised_relaxed), x = "metier4")
 #'
 #' # ... or after you; discards only, one panel per quarter
-#' plot_comparison(c(strict = raised_strict, relaxed = raised_relaxed),
-#'                 x = "metier4", facet = "seasonValue", catchCategory = "Dis")
+#' plot_compare_raised(c(strict = raised_strict, relaxed = raised_relaxed),
+#'                     x = "metier4", facet = "seasonValue", catchCategory = "Dis")
 #' }
 #' @export
-plot_comparison <- function(raised_catch_scenarios, scenarios_names = NULL,
+plot_compare_raised <- function(raised_catch_scenarios, scenarios_names = NULL,
                             x = NULL, facet = NULL, catchCategory = NULL,
                             ncol = 2,
-                            palette = c("default", "colorblind", "gradual")) {
+                            palette = c("default", "colorblind", "gradual"), save = NULL) {
+  save_on_exit(save, "plot_compare_raised")
   palette <- match.arg(palette)
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
   sc <- scenario_list(substitute(raised_catch_scenarios),
                       function() raised_catch_scenarios, parent.frame(),
-                      scenarios_names, fn = "plot_comparison()", min = 2L)$data
+                      scenarios_names, fn = "plot_compare_raised()", min = 2L)$data
   keys <- c(if (has(x)) x, if (has(facet)) facet)
   for (nm in names(sc)) {
     miss <- setdiff(keys, names(sc[[nm]]))
     if (length(miss))
-      stop("plot_comparison(): '", nm, "' has no column ",
+      stop("plot_compare_raised(): '", nm, "' has no column ",
            paste0("'", miss, "'", collapse = ", "), call. = FALSE)
   }
   want <- NULL
@@ -210,7 +213,7 @@ plot_comparison <- function(raised_catch_scenarios, scenarios_names = NULL,
     want <- switch(toupper(catchCategory),
                    LAN = , LANDINGS = "Landings",
                    DIS = , DISCARDS = "Discards",
-                   stop("plot_comparison(): `catchCategory` must be \"Lan\" ",
+                   stop("plot_compare_raised(): `catchCategory` must be \"Lan\" ",
                         "or \"Dis\"", call. = FALSE))
   cc_label <- if (is.null(want)) "Catch" else want
 
@@ -280,16 +283,17 @@ plot_comparison <- function(raised_catch_scenarios, scenarios_names = NULL,
 #' than only in the totals. This is the stratum-level preview the application
 #' uses - the scenarios of [run_scenario()], lined up by
 #' [compare_scenarios()]; for the raised catches that [catchRaising()] returns
-#' use [plot_comparison()].
+#' use [plot_compare_raised()].
 #'
 #' @param cmp Output of [compare_scenarios()].
 #' @param x_var Column on the x axis.
 #' @param facet_var Optional facet column.
 #' @param ncol Facet columns.
 #' @return A ggplot object, or `NULL`.
-#' @seealso [compare_scenarios()], [comparison_table()], [plot_comparison()]
+#' @seealso [compare_scenarios()], [comparison_table()], [plot_compare_raised()]
 #' @family raising plots
 #' @export
+#' @noRd
 plot_scenario_comparison <- function(cmp, x_var, facet_var = NULL, ncol = 2) {
   if (!nrow(cmp)) return(NULL)
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)

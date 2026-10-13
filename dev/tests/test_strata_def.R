@@ -11,6 +11,7 @@
 ## Exercised through the live server, not just a UI render - a wiring gap
 ## here is invisible to parse() and to a plain render.
 
+source("dev/tests/fixture.R")
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
@@ -63,12 +64,12 @@ if (!requireNamespace("shiny", quietly = TRUE)) {
     ok(grepl(sprintf('id="%s"', id), h, fixed = TRUE),
        paste("the exclusion picker UI slot exists:", id))
 
-  data("anchoveta_catch", package = "rcef", envir = environment())
-  data("anchoveta_dist",  package = "rcef", envir = environment())
+  test_catch <- fx_catch()
+  test_dist <- fx_dist()
   DEF <- c("vesselFlagCountry", "fleetValue", "areaValue", "seasonValue")
 
   shiny::testServer(app, {
-    rv$cef_catches <- anchoveta_catch; rv$dist <- anchoveta_dist
+    rv$cef_catches <- test_catch; rv$dist <- test_dist
     rv$load_method <- "cef"
     session$setInputs(sep = ",", stock = "", year = "", threshold = 50,
                       hier_2 = "seasonValue")

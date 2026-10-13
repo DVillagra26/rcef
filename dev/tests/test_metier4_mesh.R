@@ -9,6 +9,7 @@
 ## gear, each gear's meshes small to large - instead of falling back to the
 ## alphabetical order that puts "TBB_100-119" before "TBB_70-99".
 
+source("dev/tests/fixture.R")
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
@@ -52,13 +53,13 @@ ok(identical(derive_fields(d), d),
    "derive_fields(): calling it again changes nothing")
 
 ## ---- the bundled example already carries it ----------------------------
-data(anchoveta_catch); data(anchoveta_dist)
-cc <- anchoveta_catch
+test_catch <- fx_catch(); test_dist <- fx_dist()
+cc <- test_catch
 ok("metier4_mesh" %in% names(cc) &&
      identical(cc$metier4_mesh, derive_fields(cc)$metier4_mesh),
-   "anchoveta_catch: metier4_mesh is there and is what derive_fields() gives")
+   "test_catch: metier4_mesh is there and is what derive_fields() gives")
 ok(identical(sort(unique(cc$metier4_mesh)), c("LHP_0", "MPT_0", "PS_0", "PS_16-31")),
-   "anchoveta_catch: LHP_0 / MPT_0 / PS_0 / PS_16-31")
+   "test_catch: LHP_0 / MPT_0 / PS_0 / PS_16-31")
 
 ## ---- every list that has to know about a derived column ----------------
 ok("metier4_mesh" %in% FILTER_VARS && "metier4_mesh" %in% DIMS_ALL_CANDIDATES &&
@@ -205,11 +206,11 @@ ok(identical(glab$k[match(present, glab$glab)], seq_along(present)),
 p5 <- plot_DR(c23, x = "metier4_mesh")
 ok(drawable(p5) && in_order(levels(p5$data$metier4_mesh)),
    "plot_DR(): x = metier4_mesh orders the x axis")
-p6 <- plot_NaLoA(c23, anchoveta_dist, fill = "metier4_mesh")
+p6 <- plot_NaLoA(c23, test_dist, fill = "metier4_mesh")
 ok(drawable(p6) && length(levels(p6$data$metier4_mesh)) > 3 &&
      in_order(levels(p6$data$metier4_mesh)),
    "plot_NaLoA(): fill = metier4_mesh orders the legend")
-p7 <- plot_MWaLoA(c23, anchoveta_dist, colour = "metier4_mesh")
+p7 <- plot_MWaLoA(c23, test_dist, colour = "metier4_mesh")
 ok(drawable(p7) && length(levels(p7$data$metier4_mesh)) > 3 &&
      in_order(levels(p7$data$metier4_mesh)),
    "plot_MWaLoA(): colour = metier4_mesh orders the legend")

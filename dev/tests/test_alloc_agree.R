@@ -3,6 +3,7 @@
 ## run_allocation_set() passed app_type POSITIONALLY into what is now the
 ## alloc_dims slot, so the comparison ran with the wrong app_type and no
 ## dims while the final run was correct.
+source("dev/tests/fixture.R")
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
@@ -16,9 +17,9 @@ ok <- function(cond, what) {
 ## any particular input - only that the two entry points behave the
 ## same, whether they succeed or error.
 if (exists("catchAllocationAoL")) {
-  data("anchoveta_catch", package = "rcef", envir = environment())
-  data("anchoveta_dist",  package = "rcef", envir = environment())
-  cd <- anchoveta_catch; dist <- anchoveta_dist
+  test_catch <- fx_catch()
+  test_dist <- fx_dist()
+  cd <- test_catch; dist <- test_dist
   dims <- c("catchCategory", "metier4", "vesselFlagCountry", "ICESDivision", "seasonValue")
   groups <- list(GA1 = list(alloc = "TRUE", matched = "TRUE"))
 

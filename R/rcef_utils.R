@@ -23,7 +23,7 @@
 #                        levels an assessment actually groups by;
 #    to_tonnes()         one weight unit for the whole app (tonnes);
 #    the labellers       stratum_label(), stratum_axis_label(), rule_label(),
-#                        class_axis_label(), facet_scales(), fmt_t3().
+#                        facet_scales(), fmt_t3().
 #
 #  DEPENDENCIES  Imports: dplyr, rlang. The library block below is what the
 #  app and the test scripts rely on being attached.
@@ -61,6 +61,7 @@ suppressPackageStartupMessages({
 #' @param x Numeric weight in tonnes.
 #' @return A character vector.
 #' @export
+#' @noRd
 fmt_t3 <- function(x) formatC(x, format = "f", digits = 3, big.mark = ",")
 
 # ----------------------------------------------------------
@@ -101,6 +102,7 @@ fmt_t3 <- function(x) formatC(x, format = "f", digits = 3, big.mark = ",")
 #'   empty and every picker showed only "-- none --", with no error to
 #'   say why.
 #' @export
+#' @noRd
 
 grouping_vars <- function(d, max_levels = 400, extra_drop = character(0)) {
   if (is.null(d) || !is.data.frame(d) || !ncol(d)) return(character(0))
@@ -189,6 +191,7 @@ grouping_vars <- function(d, max_levels = 400, extra_drop = character(0)) {
 #'
 #' @keywords internal
 #' @export
+#' @noRd
 KEY_FAMILY_RANK <- c(fleetValue = 1L, metier6 = 2L, metier5 = 3L, metier4 = 4L,
                      areaValue = 1L, ICESSubdivision = 2L, ICESDivision = 3L,
                      ICESSubArea = 4L, vesselFlagCountry = 1L, seasonValue = 1L)
@@ -196,6 +199,7 @@ KEY_FAMILY_RANK <- c(fleetValue = 1L, metier6 = 2L, metier5 = 3L, metier4 = 4L,
 #' Which family a cascade-key variable belongs to
 #' @keywords internal
 #' @export
+#' @noRd
 KEY_FAMILY_OF <- c(fleetValue = "Fleet", metier6 = "Fleet", metier5 = "Fleet",
                    metier4 = "Fleet", areaValue = "Area",
                    ICESSubdivision = "Area", ICESDivision = "Area",
@@ -220,6 +224,7 @@ KEY_FAMILY_OF <- c(fleetValue = "Fleet", metier6 = "Fleet", metier5 = "Fleet",
 #'   or `character(0)` if none.
 #' @seealso [key_order_warnings()], [key_vocab_grouped()]
 #' @export
+#' @noRd
 key_vs_strata_warnings <- function(keys, strata_vars) {
   warn <- character(0)
   for (k in keys) {
@@ -251,6 +256,7 @@ key_vs_strata_warnings <- function(keys, strata_vars) {
 #'   or `character(0)` if none.
 #' @seealso [key_vs_strata_warnings()], [key_vocab_grouped()]
 #' @export
+#' @noRd
 key_order_warnings <- function(keys) {
   warn <- character(0)
   seen <- list()
@@ -285,6 +291,7 @@ key_order_warnings <- function(keys) {
 #'   filtered to columns [grouping_vars()] would offer.
 #' @seealso [grouping_vars()], [key_vs_strata_warnings()]
 #' @export
+#' @noRd
 key_vocab_grouped <- function(d) {
   gv <- grouping_vars(d)
   fam <- list(
@@ -313,6 +320,7 @@ key_vocab_grouped <- function(d) {
 #' @param v A character vector.
 #' @return A single string.
 #' @export
+#' @noRd
 and_list <- function(v) {
   if (!length(v)) return("")
   if (length(v) == 1) return(v)
@@ -325,6 +333,7 @@ and_list <- function(v) {
 #'
 #' @keywords internal
 #' @export
+#' @noRd
 FILTER_VARS <- c("metier4", "metier5", "metier6", "fleetValue",
                  "target", "mesh", "metier4_mesh", "FleetType",
                  "vesselFlagCountry",
@@ -347,6 +356,7 @@ FILTER_VARS <- c("metier4", "metier5", "metier6", "fleetValue",
 #' @return A list with `ICESSubArea`, `ICESDivision` and `ICESSubdivision`.
 #' @seealso [derive_fields()]
 #' @export
+#' @noRd
 ices_area_levels <- function(area) {
   a <- as.character(area)
   parts <- strsplit(a, ".", fixed = TRUE)
@@ -409,17 +419,17 @@ ices_area_levels <- function(area) {
 #'   With `what = "distribution"`, `distribution_data` with `fleetValue`,
 #'   `areaValue`, `seasonValue` (and `vesselFlagCountry`, when the
 #'   distributions have none of their own) and the derived columns added.
-#' @seealso [ices_area_levels()], [build_strata()]
+#' @seealso [build_coverage_strata()]
 #' @examples
-#' data(anchoveta_catch)
-#' data(anchoveta_dist)
+#' \dontrun{
 #'
-#' catch <- derive_fields(anchoveta_catch)
+#' catch <- derive_fields(catch)
 #' head(catch[, c("fleetValue", "metier4", "metier4_mesh", "ICESDivision")], 3)
 #'
 #' # the distributions get the same fields, read off the catch on domainBiology
-#' dist <- derive_fields(anchoveta_catch, anchoveta_dist, what = "distribution")
+#' dist <- derive_fields(catch, distributions, what = "distribution")
 #' head(dist[, c("domainBiology", "fleetValue", "metier4_mesh", "ICESDivision")], 3)
+#' }
 #' @export
 derive_fields <- function(catch_data, distribution_data = NULL,
                           what = c("catch", "distribution")) {
@@ -559,6 +569,7 @@ distribution_fields <- function(distribution_data = NULL) {
 #'
 #' @keywords internal
 #' @export
+#' @noRd
 WEIGHT_TO_TONNES <- c(kg = 1e-3, g = 1e-6, t = 1, tonnes = 1, KG = 1e-3, G = 1e-6)
 
 #' Convert a CEF weight to tonnes
@@ -572,6 +583,7 @@ WEIGHT_TO_TONNES <- c(kg = 1e-3, g = 1e-6, t = 1, tonnes = 1, KG = 1e-3, G = 1e-
 #'   assumes kilograms.
 #' @return Numeric weights in tonnes.
 #' @export
+#' @noRd
 to_tonnes <- function(total, unit = NULL) {
   if (is.null(unit)) return(as.numeric(total) * 1e-3)   # CEF default is kg
   f <- unname(WEIGHT_TO_TONNES[as.character(unit)])
@@ -589,6 +601,7 @@ to_tonnes <- function(total, unit = NULL) {
 #' @param dims The key columns to join.
 #' @return A character vector, one label per row.
 #' @export
+#' @noRd
 stratum_label <- function(df, dims) {
   present <- intersect(dims, names(df))
   if (!length(present)) return(rep("(stratum)", nrow(df)))
@@ -601,6 +614,7 @@ stratum_label <- function(df, dims) {
 #' @param dims The key columns.
 #' @return A single string, e.g. `"Stratum (metier4 + vesselFlagCountry)"`.
 #' @export
+#' @noRd
 stratum_axis_label <- function(dims) {
   if (!length(dims)) return("Stratum")
   paste0("Stratum (", paste(dims, collapse = " + "), ")")
@@ -621,6 +635,7 @@ stratum_axis_label <- function(dims) {
 #'   still matches the literal string, for older saved recommendations.
 #' @return A character vector of labels.
 #' @export
+#' @noRd
 rule_label <- function(rec_g, dims = NULL) {
   cond <- rec_g$raise_condition
   lvl  <- rec_g$raise_level
@@ -641,18 +656,11 @@ rule_label <- function(rec_g, dims = NULL) {
 #' @param free_x,free_y Let each panel choose its own x / y range.
 #' @return One of "fixed", "free_x", "free_y", "free".
 #' @export
+#' @noRd
 facet_scales <- function(free_x = FALSE, free_y = FALSE) {
   if (free_x && free_y) "free" else if (free_y) "free_y"
   else if (free_x) "free_x" else "fixed"
 }
-
-#' X-axis label for a length or age distribution
-#'
-#' @param type The app's distribution type, "LengthTotal" or "Age".
-#' @return "Length (cm)" or "Age (years)".
-#' @export
-class_axis_label <- function(type = "LengthTotal")
-  if (identical(type, "Age")) "Age (years)" else "Length (cm)"
 
 
 #' Stratum columns a biology table may carry
@@ -662,6 +670,7 @@ class_axis_label <- function(type = "LengthTotal")
 #'
 #' @format A character vector.
 #' @export
+#' @noRd
 DIMS_ALL_CANDIDATES <- c("metier4", "metier5", "metier6", "vesselFlagCountry",
                          "ICESSubArea", "ICESDivision", "ICESSubdivision",
                          "seasonValue", "FleetType", "target", "mesh",

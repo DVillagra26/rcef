@@ -8,8 +8,9 @@
 ## before calling a function it then asked for "LengthTotal" - so the script
 ## it wrote could not run - and every result carried "Length".
 ##
-## Uses the bundled anchoveta example, as test_anchoveta_example.R does.
+## Uses the synthetic test fixture, as test_workflow_example.R does.
 
+source("dev/tests/fixture.R")
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
@@ -23,9 +24,9 @@ quiet <- function(expr) {
 suppressPackageStartupMessages(library(ggplot2))
 lf <- tempfile(fileext = ".txt")
 
-data(anchoveta_catch); data(anchoveta_dist)
-c23 <- subset(anchoveta_catch, year == 2023)
-d23 <- subset(anchoveta_dist, year == 2023)
+test_catch <- fx_catch(); test_dist <- fx_dist()
+c23 <- subset(test_catch, year == 2023)
+d23 <- subset(test_dist, year == 2023)
 dims <- c("metier4", "ICESDivision", "seasonValue")
 grp <- quiet(define_raising_groups_auto(c23, hierarchy = dims, thresholds = c(50, 40, 30)))
 raised <- quiet(run_native_raising(c23, dims, grp, type = "discards", log_file = lf))

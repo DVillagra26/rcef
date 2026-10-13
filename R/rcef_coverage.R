@@ -51,7 +51,7 @@
 #' | `weightingCategory` | `"Lan"`. |
 #' | `weightingTotal` | The landings that carry a discard estimate (their `domainCatchDis` is filled): the weight `rate` is weighted by. |
 #' | `rate` | `total / weightingTotal` (D/L): discards per tonne of covered landings, as the CAS output reports it. A ratio, so it can exceed 1. `NA` when `total` is missing or `weightingTotal` is 0. |
-#' | `discardRate` | `total / (weightingTotal + total)` (D/(L+D)): the discards as a share of the covered landings plus the discards - the `discard_rate` of [build_strata()]. Between 0 and 1. `NA` when `total` is missing or the denominator is 0. |
+#' | `discardRate` | `total / (weightingTotal + total)` (D/(L+D)): the discards as a share of the covered landings plus the discards - Between 0 and 1. `NA` when `total` is missing or the denominator is 0. |
 #' | `landings` | All landings in the stratum, covered or not. |
 #' | `coverage` | `weightingTotal / landings`, in percent; `NA` when there are no landings. |
 #' | `numTrips` | The trips behind the stratum; `NA` when the data does not report them. The largest count among the stratum's rows (one trip repeats across the rows of a sample), and summed when the plots pool strata into one cell. |
@@ -123,38 +123,36 @@
 #'   there is nothing to describe (no landings or discards, or no catch rows
 #'   for that `catchCategory`). Distributions that link to nothing are not
 #'   "nothing": every stratum is then reported with coverage 0.
-#' @seealso [coverage-plots] and [plot_DR()], which draw this
-#'   table; [build_strata()], the raising-side stratum table;
-#'   [classify_strata()], which judges strata against thresholds.
+#' @seealso [coverage-plots] and [plot_DR()], which draw this table.
 #' @family coverage plots
 #' @md
 #' @examples
-#' data(anchoveta_catch)
-#' data(anchoveta_dist)
+#' \dontrun{
 #'
 #' # discard rate and coverage per metier x country
-#' cov <- build_coverage_strata(anchoveta_catch, c("metier4", "vesselFlagCountry"))
+#' cov <- build_coverage_strata(catch, c("metier4", "vesselFlagCountry"))
 #' head(cov[order(-cov$landings), ])
 #'
 #' # the same table, coarser or finer
-#' build_coverage_strata(anchoveta_catch, "seasonValue")
-#' nrow(build_coverage_strata(anchoveta_catch,
+#' build_coverage_strata(catch, "seasonValue")
+#' nrow(build_coverage_strata(catch,
 #'                            c("fleetValue", "areaValue", "seasonValue")))
 #'
 #' # dims left out: nothing pooled - one row per fleetValue x areaValue x
 #' # vesselFlagCountry x seasonValue combination the catch actually has
-#' nrow(build_coverage_strata(anchoveta_catch))
+#' nrow(build_coverage_strata(catch))
 #'
 #' # length coverage of the landings: weight, share with a distribution,
 #' # and the measurements behind it
-#' len <- build_coverage_strata(anchoveta_catch, c("metier4", "vesselFlagCountry"),
-#'                              anchoveta_dist, what = "length",
+#' len <- build_coverage_strata(catch, c("metier4", "vesselFlagCountry"),
+#'                              distributions, what = "length",
 #'                              catchCategory = "Lan")
 #' head(len[order(-len$total), ])
 #'
 #' # the plots draw the same table, from the raw catch or from the table
 #' plot_coverage_heat(cov, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
 #' plot_DR(cov, x = "metier4", colour = "vesselFlagCountry")
+#' }
 #' @export
 build_coverage_strata <- function(catch, dims = NULL, distributions = NULL,
                                   what = "discard", catchCategory = NULL) {

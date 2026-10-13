@@ -140,6 +140,7 @@ code_header <- function(script_name) c(
 #'   The RDBESStockCoord scripts are vendored, so nothing is sourced.
 #' @return A character vector of R code.
 #' @export
+#' @noRd
 code_setup <- function(external_dir = NULL) c(
   "## ---- Workflow functions ----------------------------------",
   "## Everything below - the workbench helpers AND the RDBESStockCoord",

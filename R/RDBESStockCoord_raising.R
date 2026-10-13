@@ -16,6 +16,7 @@
 #    - cross-package calls namespace-qualified
 #    - CRLF -> LF
 #    - roxygen @family / @source added for provenance
+#    - a help page for catchRaising(), written here (see the block above it)
 #
 #  Exported: catchRaising(), grp_catch_raising(), grp_catch_raising_condition()
 #
@@ -52,11 +53,13 @@
 ##'     indicating "census", "estimated" or "raised".
 ##' @author Yves Reecht
 ##'
+##' @noRd
 NULL
 
 ##' @rdname dis_raising
 ##'
 ##' @export
+##' @noRd
 grp_catch_raising <- function(raising_st_catch,
                               matched_data_catch,
                               originType = c("WGEstimate", "Official"),
@@ -249,6 +252,7 @@ grp_catch_raising <- function(raising_st_catch,
 ##'     specification as for `condition_raising_st`.
 ##'
 ##' @export
+##' @noRd
 grp_catch_raising_condition <- function(catch_data, 
                                         condition_raising_st,
                                         condition_matched_data = condition_raising_st,
@@ -369,15 +373,104 @@ grp_catch_raising_condition <- function(catch_data,
 
 
 
+## [pkg] Help page written here: the upstream block documents the three raising
+## functions together on one page that is not built (@noRd).
 ##'
-##' @rdname dis_raising
-##' @param condition_raising_st_list List of conditions, as described in `condition_raising_st`. See
-##'     details for further explanations.
-##' @param condition_matched_data_list List of conditions, as described in
-##'     `condition_matched_data`. Must have the same length as `condition_raising_st_list`
-##' @param assembled_output Logical; whether to assemble raised, census and estimated data. Only
-##'     raised data are returned otherwise.
+##' Raise the discards of each group from its donor pool
 ##'
+##' @description
+##' Gives the landings that have no discard estimate a raised one, group by
+##' group. The discard ratio comes from a donor pool of matched data that can be
+##' wider than the group itself. The result is the catch with the raised
+##' discards added, every row flagged `"imported"` or `"raised"` and tagged with
+##' its group.
+##'
+##' @details
+##' ## Groups
+##'
+##' A group is a pair of conditions, one from `condition_raising_st_list` and
+##' one from `condition_matched_data_list`: the first selects the catch rows
+##' that are raised together (the raising stratum), the second the rows whose
+##' landings and discards give the ratio (the donor pool, or matched data). The
+##' two lists have the same length and the same names - a group's name, `G1`,
+##' `G2`, ... when the lists have none - and each condition is written as in
+##' `dplyr::filter()`: a quosure (`rlang::quo(metier4 == "TBB")`), a text that
+##' is turned into one, or a logical vector with a value for every row of
+##' `catch_data`.
+##'
+##' The raising strata must not overlap - a catch row in two of them is an
+##' error, which [check_group_conditions()] reports before anything is raised.
+##' The matched data may overlap, and usually do: a group can draw on a wider
+##' pool than its own strata. Every group is raised within one year and one
+##' stock.
+##'
+##' ## What is raised
+##'
+##' In a raising stratum the landings that have no discard estimate are the
+##' ones raised: those whose `domainCatchDis` has no discards row of the chosen
+##' `originType` and `variableType`. Each gets a discards row of its landings
+##' times the group's discard ratio. The ratio is the mean of discards over
+##' landings of the matched data, weighted by the landings - the total discards
+##' over the total landings of the matched strata that have a discard estimate.
+##'
+##' A raised row has `catchCategory` `"Dis"` and `importedOrRaised`
+##' `"raised"`; its `domainCatchDis` is the landings' own, or
+##' `"[raised]_<season>_<area>_<management unit>_<fleet>"` when they had none,
+##' and `domainBiology` and `domainCatchBMS` are `NA`. Every other row of the
+##' stratum - landings, the discards that were reported, BMS - is kept as it is
+##' and flagged `"imported"`.
+##'
+##' `total` is converted first, to kg for weights and to thousands (`NE3`) for
+##' numbers. `catch_data` is a CEF long-format table whose columns run in CEF
+##' order - `vesselFlagCountry`, `year`, `workingGroup`, `stock`, `speciesCode`,
+##' `catchCategory` one after another - as they do in a table read from CEF
+##' files.
+##'
+##' @param catch_data The catch, a CEF long-format table, with the columns the
+##'     conditions refer to (see [derive_fields()]).
+##' @param condition_raising_st_list The conditions that select the raising
+##'     strata, one per group - see *Groups*.
+##' @param condition_matched_data_list The conditions that select the matched
+##'     data of each group; same length and names as
+##'     `condition_raising_st_list`. Defaults to the raising strata themselves.
+##' @param originType `"WGEstimate"` (default) or `"Official"`: the origin of the
+##'     rows that are raised. One at a time.
+##' @param variableType `"WeightLive"` (default) or `"Number"`: the variable of
+##'     the rows that are raised. One at a time.
+##' @param type `"discards"` (default) or `"BMS"`. Only discards are
+##'     implemented; `"BMS"` stops with an error.
+##' @param verbose Print messages while raising.
+##' @param assembled_output `TRUE` (default): the raised discards together with
+##'     the imported rows of the raising strata; `FALSE`: only the raised
+##'     discards.
+##' @param append Whether to append to the log file (`FALSE`: overwrite it).
+##' @param ... Passed on to [check_group_conditions()], e.g. `logFile`, where the
+##'     check of the conditions is written.
+##' @return A tibble with the columns of `catch_data` plus `importedOrRaised`
+##'     (`"imported"` or `"raised"`) and `DrGroup`, the name of the group, on
+##'     every row. Rows of `catch_data` that fall in no raising stratum are not
+##'     part of it.
+##' @seealso [define_raising_groups_auto()] and [define_raising_groups_manual()]
+##'     for conditions made from the data; [plot_raised_catches()],
+##'     [plot_raised_DR()] and [raised_overview_table()] to look at the result;
+##'     [catchAllocationAoL()] for the lengths and ages.
+##' @author Yves Reecht
+##' @md
+##' @examples
+##' \dontrun{
+##' # one group per fleet, each raised from its own discard ratio
+##' strataCond <- list(TBB = rlang::quo(metier4 == "TBB"),
+##'                    OTB = rlang::quo(metier4 == "OTB"))
+##' raised <- catchRaising(catch, strataCond, verbose = FALSE,
+##'                        logFile = tempfile(fileext = ".txt"))
+##' table(raised$DrGroup, raised$importedOrRaised)
+##'
+##' # the same groups, both drawing their ratio on every beam and otter trawl
+##' donors <- rlang::quo(metier4 %in% c("TBB", "OTB"))
+##' raised <- catchRaising(catch, strataCond,
+##'                        condition_matched_data_list = list(TBB = donors, OTB = donors),
+##'                        verbose = FALSE, logFile = tempfile(fileext = ".txt"))
+##' }
 ##' @export
 catchRaising <- function(catch_data, 
                          condition_raising_st_list,

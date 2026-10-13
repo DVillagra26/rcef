@@ -12,14 +12,13 @@ Description: Implements the ICES discard-raising and length/age catch
     allocation workflows over CEF (RDBES) long-format data: discard-rate
     and sampling-coverage tables with the plots that draw them, strata
     construction, sampling-status classification, automatic and manual
-    definition of raising/allocation groups, and the emission of a
-    reproducible script or ICES TAF script set. Wraps the RDBESStockCoord
-    engines catchRaising() and catchAllocationAoL().
+    definition of raising/allocation groups, and plots of the raised and
+    allocated catch. Wraps the RDBESStockCoord engines catchRaising() and
+    catchAllocationAoL().
 License: file LICENSE
 URL: https://github.com/DVillagra26/rcef
 BugReports: https://github.com/DVillagra26/rcef/issues
 Encoding: UTF-8
-LazyData: true
 Roxygen: list(markdown = FALSE)
 RoxygenNote: 7.3.3
 Depends:

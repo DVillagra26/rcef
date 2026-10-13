@@ -447,7 +447,7 @@ Which variable actually drives the clustering - Cramer's V of each against
 the cluster, 0 unrelated, 1 fully determining it:
 
 ```{r clusters-importance, fig.height = 4, fig.alt = "Cramer's V of metier4, mesh, vesselFlagCountry, seasonValue and areaValue against the discard-rate cluster, sorted strongest first"}
-plot_cluster_variables(dc)
+plot_discard_cluster_variables(dc)
 ```
 
 # Length distribution

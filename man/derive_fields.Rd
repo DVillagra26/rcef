@@ -64,16 +64,16 @@ number and same order; columns of the same name already on it (an earlier
 call, say) are replaced.
 }
 \examples{
-data(anchoveta_catch)
-data(anchoveta_dist)
+\dontrun{
 
-catch <- derive_fields(anchoveta_catch)
+catch <- derive_fields(catch)
 head(catch[, c("fleetValue", "metier4", "metier4_mesh", "ICESDivision")], 3)
 
 # the distributions get the same fields, read off the catch on domainBiology
-dist <- derive_fields(anchoveta_catch, anchoveta_dist, what = "distribution")
+dist <- derive_fields(catch, distributions, what = "distribution")
 head(dist[, c("domainBiology", "fleetValue", "metier4_mesh", "ICESDivision")], 3)
 }
+}
 \seealso{
-[ices_area_levels()], [build_strata()]
+[build_coverage_strata()]
 }

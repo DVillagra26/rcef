@@ -49,13 +49,14 @@ cat(sprintf("NOT EXPORTED     : %d\n", length(miss)))
 for (m in miss)
   cat(sprintf("  %-8s %s::%s\n", m$kind, m$file, m$name))
 
-## how much of what IS exported still has no man page
+## how much of what IS exported has no help page on purpose (only the functions a
+## user calls directly are documented; the rest is plumbing marked @noRd)
 stubs <- 0L
 for (f in files) {
   x <- readLines(f, warn = FALSE)
   stubs <- stubs + sum(grepl("@noRd", x))
 }
-cat(sprintf("\nexported without a man page (@noRd): %d  -> dev/DOC_BACKLOG.txt\n",
+cat(sprintf("\nexported without a help page, on purpose (@noRd): %d\n",
             stubs))
 cat(sprintf("\nDONE  %d not exported\n", length(miss)))
 if (length(miss)) quit(status = 1L)

@@ -9,6 +9,7 @@
 ## 3. The sampling status is a colour worked out at plot time from the
 ##    thresholds; it is not a column of the table.
 
+source("dev/tests/fixture.R")
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
@@ -23,9 +24,9 @@ same <- function(a, b) isTRUE(all.equal(a$data, b$data, check.attributes = FALSE
 drawable <- function(p) inherits(p, "ggplot") &&
   !inherits(try(ggplot_build(p), silent = TRUE), "try-error")
 
-data("anchoveta_catch", package = "rcef", envir = environment())
-data("anchoveta_dist",  package = "rcef", envir = environment())
-cd <- anchoveta_catch; dd <- anchoveta_dist
+test_catch <- fx_catch()
+test_dist <- fx_dist()
+cd <- test_catch; dd <- test_dist
 
 ## ---- 1. one engine: no `engine`, no `n_per_screen` ----------------------
 fns <- c("plot_coverage_heat", "plot_coverage_bubble", "plot_coverage_bar",

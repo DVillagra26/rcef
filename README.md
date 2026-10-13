@@ -29,10 +29,12 @@ table, so every number in a figure can be read off it:
 
 ```r
 library(rcef)
-data(anchoveta_catch); data(anchoveta_dist)     # the bundled example stock
+catch         <- derive_fields(read.csv("catches_CEF_v17.1.csv"))      # your CEF catch
+distributions <- derive_fields(catch, read.csv("distributions_CEF_v17.1.csv"),
+                               what = "distribution")                    # and its distributions
 
 # discard rate and coverage per stratum, at the aggregation you choose
-tab <- build_coverage_strata(anchoveta_catch, c("metier4", "vesselFlagCountry"))
+tab <- build_coverage_strata(catch, c("metier4", "vesselFlagCountry"))
 tab
 
 # the same numbers as figures (raw catch or the table both work)
@@ -45,12 +47,12 @@ plot_DR(tab, x = "metier4", colour = "vesselFlagCountry",
        rate = "rate", reference = 0.3)
 
 # length and age: add the distributions
-build_coverage_strata(anchoveta_catch, c("metier4", "vesselFlagCountry"),
-                      distributions = anchoveta_dist, what = "length")
+build_coverage_strata(catch, c("metier4", "vesselFlagCountry"),
+                      distributions = distributions, what = "length")
 
 # mean weight at age, the ages from 3 upward pooled into a "3+" plus group, and
 # the fish measured at each age as bars behind the lines
-plot_MWaLoA(anchoveta_catch, anchoveta_dist,
+plot_MWaLoA(catch, distributions,
            distributionType = "Age", colour = "vesselFlagCountry",
            plus_group = 3, show_samples = TRUE)
 ```
@@ -65,12 +67,12 @@ draws them all.
 
 ## Raise without the app
 
-Headless — the whole point of the split — on the bundled example:
+Headless — the whole point of the split:
 
 ```r
 library(rcef)
-data(anchoveta_catch)
-cef <- subset(anchoveta_catch, year == 2023)     # one stock and year at a time
+catch <- derive_fields(read.csv("catches_CEF_v17.1.csv"))
+cef <- subset(catch, year == 2023)               # one stock and year at a time
 
 dims   <- c("metier4", "ICESDivision", "seasonValue")          # what a stratum is
 st     <- classify_strata(build_strata(cef, dims), threshold = 50)  # covered enough?
@@ -82,7 +84,7 @@ table(raised$catchCategory, raised$importedOrRaised)   # what was imported, what
 ```
 
 Raised it more than one way? Hand the raised catches to
-`raised_overview_table()` and `plot_comparison()` - two or more, written
+`raised_overview_table()` and `plot_compare_raised()` - two or more, written
 `c(a, b)` - and they are compared scenario by scenario. A scenario is named
 after its object unless you pass `scenarios_names`, and `by` aggregates the
 table at any other level:
@@ -92,16 +94,12 @@ groups2 <- define_raising_groups_auto(cef, hierarchy = dims, thresholds = c(80, 
 raised2 <- run_native_raising(cef, dims, groups2, type = "discards")
 
 raised_overview_table(c(raised, raised2), by = "seasonValue")   # imported vs raised
-plot_comparison(c(raised, raised2), x = "metier4", catchCategory = "Dis")
+plot_compare_raised(c(raised, raised2), x = "metier4", catchCategory = "Dis")
 ```
 
-No shiny is loaded. On your own data, start from
-`cef <- derive_fields(read.csv("catches_CEF_v17.1.csv"))` and subset one
-stock and year the same way. Raising uses the discard estimates whose
+No shiny is loaded. Raising uses the discard estimates whose
 `originType` matches the `originType` argument (`"WGEstimate"` by default,
 or `"Official"`), so that is the value the rows you want raised must carry.
-The bundled example carries it on every row, so the block above runs as
-written.
 
 ## Layout
 
@@ -115,7 +113,6 @@ R/                     THE PACKAGE
   rcef_status.R          replaces the old external_loader.R
 inst/app/              THE APPLICATION — shipped, never R CMD check'ed
   app.R, app_ui_helpers.R, app_mod_intercatch_ui.R, app_state.R
-data/                  anchoveta_catch, anchoveta_dist — the example data set
 dev/                   tests, tooling, deploy (.Rbuildignore'd)
 ```
 
@@ -170,11 +167,11 @@ R CMD build .                        # also runs the four vignettes (~1.5 min); 
 object carries `@export` — the functions **and the constants**; the
 constants are the ones easily forgotten, and a missing one fails at
 runtime with `object 'X' not found`, not at build time. `document()` is
-safe to run. Objects that also carry `@noRd` export correctly but have no
-man page yet; the functions still to document are listed in
-`dev/DOC_BACKLOG.txt`, and replacing a `@noRd` with a real roxygen block
-is the unit of work. `dev/check_exports.R` prints the current counts and
-fails if a new function is ever added without a tag.
+safe to run. Only the functions a user calls directly have a help page
+(the table in `?rcef` lists them); every other object carries `@noRd`, which
+still exports it but writes no page, since it is plumbing between the
+documented ones. `dev/check_exports.R` prints the current counts and fails
+if a new function is ever added without a tag.
 
 Documentation blocks use `@md` (the package keeps roxygen's Markdown off
 globally, so each block opts in), which gives backticks, `[fn()]` links and

@@ -36,7 +36,7 @@
 #  The shared plumbing (facet layers, status legend, catch-part wording,
 #  the biology distribution front half) lives in R/viz_helpers.R; the
 #  raising flow diagrams (plot_river(), plot_river_level(),
-#  plot_comparison()) live in R/viz_raising.R.
+#  plot_compare_raised()) live in R/viz_raising.R.
 #
 #  PACKAGE DEPENDENCIES
 #    Imports: ggplot2, dplyr, tidyr, ggrepel, scales, rlang, stats, tools
@@ -82,7 +82,7 @@ NULL
 #' [build_coverage_strata()] table that has the `area` column (and the
 #' `group` column) among its `dims`.
 #'
-#' Areas are placed at approximate centroids ([ices_area_centroid()]); an area
+#' Areas are placed at approximate centroids; an area
 #' with no known centroid is warned about by name and left off the map. The
 #' map needs the suggested `maps` package.
 #'
@@ -97,6 +97,7 @@ NULL
 #'   title comes from `what` and `catchCategory`.
 #' @param scale Multiplies every pie radius (and, when grouped, the size of
 #'   the box's grid cell).
+#' @inheritParams saving-plots
 #' @return A ggplot object, or `NULL` (with a message) when nothing can be
 #'   mapped.
 #' @seealso [coverage-plots] for the heatmap, bubbles and bars;
@@ -104,15 +105,17 @@ NULL
 #' @family coverage plots
 #' @md
 #' @examples
+#' \dontrun{
 #' if (requireNamespace("maps", quietly = TRUE)) {
-#'   data(anchoveta_catch)
-#'   plot_coverage_map(anchoveta_catch)
-#'   plot_coverage_map(anchoveta_catch, group = "seasonValue")
+#'   plot_coverage_map(catch)
+#'   plot_coverage_map(catch, group = "seasonValue")
+#' }
 #' }
 #' @export
 plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
                               group = NULL, what = "discard",
-                              catchCategory = NULL, scale = 1) {
+                              catchCategory = NULL, scale = 1, save = NULL) {
+  save_on_exit(save, "plot_coverage_map")
   fn <- "plot_coverage_map"
   area_var <- area; group_var <- group; bubble_scale <- scale
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
@@ -333,7 +336,7 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #' threshold, and a stratum with no reported trip count fails an active trips
 #' test however low it is set - unknown is not treated as adequate. A fully
 #' covered stratum with no trip count reads "safe" at `min_trip = NULL` but
-#' stays a warning at `min_trip = 0` (see [classify_strata()]).
+#' stays a warning at `min_trip = 0`.
 #'
 #' ## What the title and caption say
 #'
@@ -395,36 +398,34 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #'   `NULL` (the default) to leave measurements out of the classification.
 #'   An error with `what = "discard"` (no fish are measured for a discard
 #'   estimate).
-#' @param palette `"default"`, `"colorblind"` or `"gradual"` (see
-#'   [var_palette()]). Recolours the bar fill; on the heatmap and bubbles the
-#'   status colours are fixed, and asking for anything but `"default"` warns.
-#' @return A ggplot object, or `NULL` when there is nothing to draw. The
-#'   heatmap and bubbles also carry a `"status_legend"` attribute: the
-#'   specification [status_legend_plot()] rebuilds a complete legend from.
+#' @param palette `"default"`, `"colorblind"` or `"gradual"`. Recolours the bar
+#'   fill; on the heatmap and bubbles the status colours are fixed, and asking
+#'   for anything but `"default"` warns.
+#' @inheritParams saving-plots
+#' @return A ggplot object, or `NULL` when there is nothing to draw.
 #' @seealso [build_coverage_strata()] for the table, [plot_coverage_map()],
-#'   [plot_DR()]; [classify_strata()] and [cat_lookup()] for the
-#'   classification behind the colours.
+#'   [plot_DR()].
 #' @name coverage-plots
 #' @family coverage plots
 #' @md
 #' @examples
-#' data(anchoveta_catch)
-#' data(anchoveta_dist)
+#' \dontrun{
 #'
 #' # discard coverage: which metier x country strata carry a discard estimate?
-#' plot_coverage_heat(anchoveta_catch, y = "metier4", x = "vesselFlagCountry")
-#' plot_coverage_bubble(anchoveta_catch, y = "metier4", x = "vesselFlagCountry",
+#' plot_coverage_heat(catch, y = "metier4", x = "vesselFlagCountry")
+#' plot_coverage_bubble(catch, y = "metier4", x = "vesselFlagCountry",
 #'                      min_cov = 50, min_trip = 2)
-#' plot_coverage_bar(anchoveta_catch, y = "metier4", fill = "vesselFlagCountry")
+#' plot_coverage_bar(catch, y = "metier4", fill = "vesselFlagCountry")
 #'
 #' # length coverage of the landings, with a floor on the measurements
-#' plot_coverage_heat(anchoveta_catch, anchoveta_dist, y = "metier4",
+#' plot_coverage_heat(catch, distributions, y = "metier4",
 #'                    x = "vesselFlagCountry", what = "length", catchCategory = "Lan",
 #'                    min_cov = 50, min_fish = 100)
 #'
 #' # the same figure from the table behind it
-#' cov <- build_coverage_strata(anchoveta_catch, c("metier4", "vesselFlagCountry"))
+#' cov <- build_coverage_strata(catch, c("metier4", "vesselFlagCountry"))
 #' plot_coverage_heat(cov, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
+#' }
 NULL
 
 
@@ -435,7 +436,8 @@ plot_coverage_heat <- function(catch, distributions = NULL, y, x = NULL,
                                catchCategory = NULL,
                                min_cov = 50, min_trip = NULL, min_fish = NULL,
                                palette = c("default", "colorblind",
-                                          "gradual")) {
+                                          "gradual"), save = NULL) {
+  save_on_exit(save, "plot_coverage_heat")
   fn <- "plot_coverage_heat"
   palette <- match.arg(palette)
   if (is.null(y) || !nzchar(y)) stop(fn, "(): `y` is required", call. = FALSE)
@@ -512,7 +514,8 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
                                  catchCategory = NULL,
                                  min_cov = 50, min_trip = NULL, min_fish = NULL,
                                  palette = c("default", "colorblind",
-                                            "gradual")) {
+                                            "gradual"), save = NULL) {
+  save_on_exit(save, "plot_coverage_bubble")
   fn <- "plot_coverage_bubble"
   palette <- match.arg(palette)
   if (is.null(y) || !nzchar(y)) stop(fn, "(): `y` is required", call. = FALSE)
@@ -614,7 +617,8 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
                               facet = NULL, what = "discard",
                               catchCategory = NULL,
                               palette = c("default", "colorblind",
-                                         "gradual")) {
+                                         "gradual"), save = NULL) {
+  save_on_exit(save, "plot_coverage_bar")
   fn <- "plot_coverage_bar"
   palette <- match.arg(palette)
   if (is.null(y) || !nzchar(y)) stop(fn, "(): `y` is required", call. = FALSE)
@@ -787,7 +791,7 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 #'   ratio, so it can exceed 100%.
 #' * `"rate"` (the "discard rate") is `discardRate` = `total / (weightingTotal
 #'   + total)`: the discards as a share of the catch - those landings plus the
-#'   discards, the `discard_rate` of [build_strata()]. It stays between 0 and
+#'   discards. It stays between 0 and
 #'   100%.
 #'
 #' ## The weighted mean
@@ -835,33 +839,36 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 #' @param jitter Jitter the points horizontally. Cosmetic only - one point is
 #'   still one stratum.
 #' @param palette `"default"`, `"colorblind"` or `"gradual"`: the point
-#'   colours (see [var_palette()]).
+#'   colours.
+#' @inheritParams saving-plots
 #' @return A ggplot object, or `NULL` when no stratum has a discard rate.
 #' @seealso [build_coverage_strata()] for the table behind the points;
 #'   [coverage-plots] for how well those strata are sampled.
 #' @family discard-rate plots
 #' @md
 #' @examples
-#' data(anchoveta_catch)
+#' \dontrun{
 #'
-#' plot_DR(anchoveta_catch, x = "metier4", colour = "vesselFlagCountry")
-#' plot_DR(anchoveta_catch, x = "vesselFlagCountry", colour = "metier4",
+#' plot_DR(catch, x = "metier4", colour = "vesselFlagCountry")
+#' plot_DR(catch, x = "vesselFlagCountry", colour = "metier4",
 #'        facet = "seasonValue")
 #'
 #' # discards as a share of the catch, with a reference line: the strata
 #' # above 20% are named, in full
-#' plot_DR(anchoveta_catch, x = "metier4", colour = "vesselFlagCountry",
+#' plot_DR(catch, x = "metier4", colour = "vesselFlagCountry",
 #'        rate = "rate", reference = 0.2)
 #'
 #' # the table behind the points
-#' cov <- build_coverage_strata(anchoveta_catch, c("metier4", "vesselFlagCountry"))
+#' cov <- build_coverage_strata(catch, c("metier4", "vesselFlagCountry"))
 #' head(cov[!is.na(cov$rate), c("metier4", "vesselFlagCountry", "total", "rate",
 #'                              "discardRate")])
+#' }
 #' @export
 plot_DR <- function(catch, x, colour = NULL, shape = NULL,
                     facet = NULL, rate = c("ratio", "rate"),
                     reference = NULL, jitter = TRUE,
-                    palette = c("default", "colorblind", "gradual")) {
+                    palette = c("default", "colorblind", "gradual"), save = NULL) {
+  save_on_exit(save, "plot_DR")
   palette <- match.arg(palette)
   rate_type <- match.arg(rate)
   if (!is.null(reference) && !(is.numeric(reference) && length(reference) == 1 &&
@@ -1133,7 +1140,8 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL,
 #'   scale of `rate`. Draws a dashed line.
 #' @param jitter Jitter the points horizontally. Cosmetic only.
 #' @param palette `"default"`, `"colorblind"` or `"gradual"`: the point
-#'   colours (see [var_palette()]).
+#'   colours.
+#' @inheritParams saving-plots
 #' @return A ggplot object, or `NULL` when no stratum has a discard rate.
 #' @seealso [plot_DR()] for the pre-raising counterpart;
 #'   [plot_raised_catches()] for the raised weight itself.
@@ -1145,7 +1153,8 @@ plot_raised_DR <- function(raised_catch, x, colour = NULL, shape = NULL,
                            facet = NULL, alpha = "importedOrRaised",
                            rate = c("ratio", "rate"),
                            reference = NULL, jitter = TRUE,
-                           palette = c("default", "colorblind", "gradual")) {
+                           palette = c("default", "colorblind", "gradual"), save = NULL) {
+  save_on_exit(save, "plot_raised_DR")
   palette <- match.arg(palette)
   rate_type <- match.arg(rate)
   S <- "importedOrRaised"
@@ -1325,11 +1334,10 @@ plot_raised_DR <- function(raised_catch, x, colour = NULL, shape = NULL,
 #' dodged histogram. Numbers are in thousands, length in cm and age in years.
 #'
 #' @details
-#' `data` is either raw CEF catch together with `distributions` - linked
-#' through `domainBiology` and the country and summed inside, with
+#' `data` is raw CEF catch and `distributions` the CEF distributions: they are
+#' linked through `domainBiology` and the country and summed inside, with
 #' `catchCategory` choosing the landings, the discards, BMS or the catch as a
-#' whole - or a table already summarised by `length_numbers()`. When
-#' `distributions` is given the catch part goes in the plot title. A
+#' whole. The catch part goes in the plot title. A
 #' distributions row that repeats another exactly is dropped, with a warning:
 #' a repeat is not a second sample.
 #'
@@ -1342,9 +1350,9 @@ plot_raised_DR <- function(raised_catch, x, colour = NULL, shape = NULL,
 #' bins* - except numbers simply add rather than being averaged, so there is
 #' no per-distribution weighting step to speak of.
 #'
-#' @param data Raw CEF catch data, or a `length_numbers()` table.
-#' @param distributions A CEF distributions table. Needed with raw catch;
-#'   leave it out when `data` is already a `length_numbers()` table.
+#' @param data Raw CEF catch data.
+#' @param distributions A CEF distributions table, linked to the catch through
+#'   `domainBiology`.
 #' @param distributionType `"LengthTotal"` (default) or `"Age"`.
 #' @param catchCategory `"All"` (default: landings and discards together,
 #'   titled "catch"), `"Lan"`, `"Dis"` or `"BMS"`. Only used with
@@ -1359,32 +1367,32 @@ plot_raised_DR <- function(raised_catch, x, colour = NULL, shape = NULL,
 #'   into. `NULL` (default): no binning. Lengths only.
 #' @param scales Facet scales: `"fixed"` (default), `"free_x"`, `"free_y"` or
 #'   `"free"`.
-#' @param palette `"default"`, `"colorblind"` or `"gradual"` (see
-#'   [var_palette()]).
+#' @param palette `"default"`, `"colorblind"` or `"gradual"`.
+#' @inheritParams saving-plots
 #' @return A ggplot object, or `NULL` when there is nothing to draw.
 #' @seealso [plot_MWaLoA()] for the mean weight in the same classes;
 #'   [coverage-plots] for whether the strata have a distribution at all.
 #' @family distribution plots
 #' @md
 #' @examples
-#' data(anchoveta_catch)
-#' data(anchoveta_dist)
+#' \dontrun{
 #'
 #' # numbers at length of the landings, stacked by country
-#' plot_NaLoA(anchoveta_catch, anchoveta_dist,
+#' plot_NaLoA(catch, distributions,
 #'           catchCategory = "Lan", fill = "vesselFlagCountry")
 #'
 #' # numbers at age, one panel per quarter, dodged
-#' plot_NaLoA(anchoveta_catch, anchoveta_dist,
+#' plot_NaLoA(catch, distributions,
 #'           distributionType = "Age", fill = "vesselFlagCountry",
 #'           facet = "seasonValue", stacked = FALSE)
 #'
 #' # every age from 3 upward pooled into "3+"
-#' plot_NaLoA(anchoveta_catch, anchoveta_dist,
+#' plot_NaLoA(catch, distributions,
 #'           distributionType = "Age", fill = "vesselFlagCountry", plus_group = 3)
 #'
 #' # length classes pooled into 2cm bins
-#' plot_NaLoA(anchoveta_catch, anchoveta_dist, fill = "vesselFlagCountry", bin_width = 2)
+#' plot_NaLoA(catch, distributions, fill = "vesselFlagCountry", bin_width = 2)
+#' }
 #' @export
 plot_NaLoA <- function(data, distributions = NULL,
                        distributionType = c("LengthTotal", "Age"),
@@ -1393,7 +1401,8 @@ plot_NaLoA <- function(data, distributions = NULL,
                        stacked = TRUE,
                        plus_group = NULL, bin_width = NULL,
                        scales = "fixed",
-                       palette = c("default", "colorblind", "gradual")) {
+                       palette = c("default", "colorblind", "gradual"), save = NULL) {
+  save_on_exit(save, "plot_NaLoA")
   fn <- "plot_NaLoA(): "
   typed_dt <- !missing(distributionType); typed_cc <- !missing(catchCategory)
   dims <- NULL
@@ -1538,11 +1547,10 @@ plot_NaLoA <- function(data, distributions = NULL,
 #' each point.
 #'
 #' @details
-#' `data` is either raw CEF catch together with `distributions` - linked
-#' through `domainBiology` and the country and summarised inside, with
+#' `data` is raw CEF catch and `distributions` the CEF distributions: they are
+#' linked through `domainBiology` and the country and summarised inside, with
 #' `catchCategory` choosing the landings, the discards, BMS or the catch as a
-#' whole - or a table already summarised by `length_meanweight()`. When
-#' `distributions` is given the catch part goes in the plot title. A
+#' whole. The catch part goes in the plot title. A
 #' distributions row that repeats another exactly is dropped, with a warning:
 #' a repeat is not a second sample.
 #'
@@ -1569,11 +1577,7 @@ plot_NaLoA <- function(data, distributions = NULL,
 #' over strata like any other point, so the band is still a spread across
 #' strata, not across ages. It shows what a plus group does to the curve: the
 #' ragged tail of old ages, each on a handful of fish, becomes one point
-#' with many. It applies to ages only, and needs raw catch with
-#' `distributions` - a table that is already summarised cannot be pooled
-#' again. A table built from a link that `pool_plus_group()` pooled carries a
-#' `plus` column instead, and the plot labels the class from it: that is how
-#' the app draws a plus group.
+#' with many. It applies to ages only.
 #'
 #' ## Length bins
 #'
@@ -1581,9 +1585,7 @@ plot_NaLoA <- function(data, distributions = NULL,
 #' into 5cm bins (`10`-`14` becomes one class labelled `10-15`), pooled the
 #' same way a plus group is - numbers added, mean weights averaged weighted
 #' by those numbers, inside each distribution first, then strata averaged as
-#' usual. It applies to lengths only (`distributionType = "LengthTotal"`),
-#' and needs raw catch with `distributions`, same restriction and the same
-#' `bin_width` column fallback as the plus group.
+#' usual. It applies to lengths only (`distributionType = "LengthTotal"`).
 #'
 #' ## The fish behind each point
 #'
@@ -1601,13 +1603,11 @@ plot_NaLoA <- function(data, distributions = NULL,
 #' estimate for ages read off an age-length key. A distribution counts once
 #' however many strata it is linked to, and one that reports no count
 #' (`numMeasurements` 0) adds none - a point with no bar is a point whose
-#' sample size is unknown, not zero, and the caption says so. Needs raw catch
-#' with `distributions`, or a `length_meanweight()` table (which carries the
-#' count as `n_fish`).
+#' sample size is unknown, not zero, and the caption says so.
 #'
-#' @param data Raw CEF catch data, or a `length_meanweight()` table.
-#' @param distributions A CEF distributions table. Needed with raw catch;
-#'   leave it out when `data` is already a `length_meanweight()` table.
+#' @param data Raw CEF catch data.
+#' @param distributions A CEF distributions table, linked to the catch through
+#'   `domainBiology`.
 #' @param distributionType `"LengthTotal"` (default) or `"Age"`.
 #' @param catchCategory `"All"` (default: landings and discards together,
 #'   titled "catch"), `"Lan"`, `"Dis"` or `"BMS"`. Only used with
@@ -1626,39 +1626,39 @@ plot_NaLoA <- function(data, distributions = NULL,
 #'   each point*.
 #' @param scales Facet scales: `"fixed"` (default), `"free_x"`, `"free_y"` or
 #'   `"free"`.
-#' @param palette `"default"`, `"colorblind"` or `"gradual"` (see
-#'   [var_palette()]).
+#' @param palette `"default"`, `"colorblind"` or `"gradual"`.
+#' @inheritParams saving-plots
 #' @return A ggplot object, or `NULL` when there is nothing to draw.
 #' @seealso [plot_NaLoA()] for the numbers in the same classes;
 #'   [coverage-plots] for whether the strata have a distribution at all.
 #' @family distribution plots
 #' @md
 #' @examples
-#' data(anchoveta_catch)
-#' data(anchoveta_dist)
+#' \dontrun{
 #'
 #' # mean weight at length of the landings, one line per country
-#' plot_MWaLoA(anchoveta_catch, anchoveta_dist,
+#' plot_MWaLoA(catch, distributions,
 #'            catchCategory = "Lan", colour = "vesselFlagCountry")
 #'
 #' # at age, one panel per quarter
-#' plot_MWaLoA(anchoveta_catch, anchoveta_dist,
+#' plot_MWaLoA(catch, distributions,
 #'            distributionType = "Age",
 #'            colour = "vesselFlagCountry", facet = "seasonValue")
 #'
 #' # what a plus group does: every age from 3 upward pooled into "3+"
-#' plot_MWaLoA(anchoveta_catch, anchoveta_dist,
+#' plot_MWaLoA(catch, distributions,
 #'            distributionType = "Age", colour = "vesselFlagCountry",
 #'            plus_group = 3)
 #'
 #' # length classes pooled into 2cm bins
-#' plot_MWaLoA(anchoveta_catch, anchoveta_dist, colour = "vesselFlagCountry",
+#' plot_MWaLoA(catch, distributions, colour = "vesselFlagCountry",
 #'            bin_width = 2)
 #'
 #' # the fish measured at each age, as bars behind the lines
-#' plot_MWaLoA(anchoveta_catch, anchoveta_dist,
+#' plot_MWaLoA(catch, distributions,
 #'            distributionType = "Age", colour = "vesselFlagCountry",
 #'            show_samples = TRUE)
+#' }
 #' @export
 plot_MWaLoA <- function(data, distributions = NULL,
                         distributionType = c("LengthTotal", "Age"),
@@ -1668,7 +1668,8 @@ plot_MWaLoA <- function(data, distributions = NULL,
                         bin_width = NULL,
                         show_samples = FALSE,
                         scales = "fixed",
-                        palette = c("default", "colorblind", "gradual")) {
+                        palette = c("default", "colorblind", "gradual"), save = NULL) {
+  save_on_exit(save, "plot_MWaLoA")
   fn <- "plot_MWaLoA(): "
   typed_dt <- !missing(distributionType); typed_cc <- !missing(catchCategory)
   dims <- NULL
@@ -1935,8 +1936,8 @@ plot_MWaLoA <- function(data, distributions = NULL,
 #'
 #' @details
 #' `allocated` is the allocation result and nothing else is needed: the list
-#' with `$distribution` and `$catch` that `catchAllocationAoL()` returns
-#' (`run_allocation()` returns the same). Both are taken from the result rather
+#' with `$distribution` and `$catch` that `catchAllocationAoL()` returns. Both
+#' are taken from the result rather
 #' than from the data that went into the allocation, because the distributions
 #' it estimates for a stratum with no biological domain carry a domain the
 #' allocation made up, and only its own `$catch` knows it. The numbers are the
@@ -1947,10 +1948,9 @@ plot_MWaLoA <- function(data, distributions = NULL,
 #'
 #' Like that aggregation, it counts a distribution once for every catch row
 #' that names its `domainBiology`, so it assumes one catch row per domain,
-#' catch category and country - which CEF files built from InterCatch have, and
-#' the bundled anchoveta example does not (its allocated numbers come out
-#' inflated for that reason, though the shapes and the sampled / estimated
-#' contrast still read).
+#' catch category and country - which CEF files built from InterCatch have.
+#' Where there are several, the allocated numbers come out inflated, though
+#' the shapes and the sampled / estimated contrast still read.
 #'
 #' ## Where sampled / estimated goes
 #'
@@ -1987,8 +1987,8 @@ plot_MWaLoA <- function(data, distributions = NULL,
 #'   into. `NULL` (default): no binning. Lengths only.
 #' @param scales Facet scales: `"fixed"` (default), `"free_x"`, `"free_y"` or
 #'   `"free"`.
-#' @param palette `"default"`, `"colorblind"` or `"gradual"` (see
-#'   [var_palette()]).
+#' @param palette `"default"`, `"colorblind"` or `"gradual"`.
+#' @inheritParams saving-plots
 #' @return A ggplot object, or `NULL` when there is nothing to draw.
 #' @seealso [plot_NaLoA()] for the numbers before the allocation;
 #'   [plot_allocated_MWaLoA()] for the mean weight in the same classes;
@@ -1997,19 +1997,18 @@ plot_MWaLoA <- function(data, distributions = NULL,
 #' @family distribution plots
 #' @md
 #' @examples
-#' \donttest{
-#' data(anchoveta_catch)
-#' data(anchoveta_dist)
-#' cef  <- subset(anchoveta_catch, year == 2023)
-#' dist <- subset(anchoveta_dist, year == 2023)
+#' \dontrun{
+#' cef  <- subset(catch, year == 2023)
+#' dist <- subset(distributions, year == 2023)
 #' dims <- c("metier4", "ICESDivision", "seasonValue")
 #' groups <- define_raising_groups_auto(cef, hierarchy = dims,
 #'                                      thresholds = c(50, 40, 30))
 #' raised <- run_native_raising(cef, dims, groups, type = "discards",
 #'                              log_file = tempfile(fileext = ".txt"))
-#' alloc  <- run_allocation(raised, dist,
-#'                          list(ALL = list(alloc = "TRUE", matched = "TRUE")),
-#'                          log_file = tempfile(fileext = ".txt"))
+#' alloc  <- catchAllocationAoL(raised, dist,
+#'                              condition_alloc_st_list = list(ALL = rlang::quo(TRUE)),
+#'                              distributionType = "LengthTotal", verbose = FALSE,
+#'                              logFile = tempfile(fileext = ".txt"))
 #'
 #' # landings numbers at length by country: solid = sampled, transparent = estimated
 #' plot_allocated_NaLoA(alloc, catchCategory = "Lan", fill = "vesselFlagCountry")
@@ -2031,7 +2030,8 @@ plot_allocated_NaLoA <- function(allocated,
                                  stacked = TRUE,
                                  plus_group = NULL, bin_width = NULL,
                                  scales = "fixed",
-                                 palette = c("default", "colorblind", "gradual")) {
+                                 palette = c("default", "colorblind", "gradual"), save = NULL) {
+  save_on_exit(save, "plot_allocated_NaLoA")
   fn <- "plot_allocated_NaLoA(): "
   distributionType <- match.arg(distributionType)
   palette <- match.arg(palette)
@@ -2174,27 +2174,26 @@ plot_allocated_NaLoA <- function(allocated,
 #'   into. `NULL` (default): no binning. Lengths only.
 #' @param scales Facet scales: `"fixed"` (default), `"free_x"`, `"free_y"` or
 #'   `"free"`.
-#' @param palette `"default"`, `"colorblind"` or `"gradual"` (see
-#'   [var_palette()]).
+#' @param palette `"default"`, `"colorblind"` or `"gradual"`.
+#' @inheritParams saving-plots
 #' @return A ggplot object, or `NULL` when there is nothing to draw.
 #' @seealso [plot_MWaLoA()] for the mean weight before the allocation;
 #'   [plot_allocated_NaLoA()] for the numbers in the same classes.
 #' @family distribution plots
 #' @md
 #' @examples
-#' \donttest{
-#' data(anchoveta_catch)
-#' data(anchoveta_dist)
-#' cef  <- subset(anchoveta_catch, year == 2023)
-#' dist <- subset(anchoveta_dist, year == 2023)
+#' \dontrun{
+#' cef  <- subset(catch, year == 2023)
+#' dist <- subset(distributions, year == 2023)
 #' dims <- c("metier4", "ICESDivision", "seasonValue")
 #' groups <- define_raising_groups_auto(cef, hierarchy = dims,
 #'                                      thresholds = c(50, 40, 30))
 #' raised <- run_native_raising(cef, dims, groups, type = "discards",
 #'                              log_file = tempfile(fileext = ".txt"))
-#' alloc  <- run_allocation(raised, dist,
-#'                          list(ALL = list(alloc = "TRUE", matched = "TRUE")),
-#'                          log_file = tempfile(fileext = ".txt"))
+#' alloc  <- catchAllocationAoL(raised, dist,
+#'                              condition_alloc_st_list = list(ALL = rlang::quo(TRUE)),
+#'                              distributionType = "LengthTotal", verbose = FALSE,
+#'                              logFile = tempfile(fileext = ".txt"))
 #'
 #' # landings mean weight at length by country: solid = sampled, transparent = estimated
 #' plot_allocated_MWaLoA(alloc, catchCategory = "Lan", colour = "vesselFlagCountry")
@@ -2210,7 +2209,8 @@ plot_allocated_MWaLoA <- function(allocated,
                                   alpha = "sampledOrEstimated",
                                   plus_group = NULL, bin_width = NULL,
                                   scales = "fixed",
-                                  palette = c("default", "colorblind", "gradual")) {
+                                  palette = c("default", "colorblind", "gradual"), save = NULL) {
+  save_on_exit(save, "plot_allocated_MWaLoA")
   fn <- "plot_allocated_MWaLoA(): "
   distributionType <- match.arg(distributionType)
   palette <- match.arg(palette)

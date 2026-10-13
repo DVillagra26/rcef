@@ -12,6 +12,7 @@
 ##
 ##  Usage:  Rscript dev/check_server.R
 ## ---------------------------------------------------------------
+source("dev/tests/fixture.R")
 for (pk in c("shiny", "DT", "rcef"))
   if (!requireNamespace(pk, quietly = TRUE))
     stop("check_server.R needs ", pk)
@@ -49,13 +50,13 @@ say(isTRUE(res), "the server function runs to completion", res)
 ##  go stale so Apply has something to apply. Every one of those was
 ##  wrong at some point and nothing caught it.
 ## ---------------------------------------------------------------
-fx <- "anchoveta"
+fx <- "fixture"
 if (!length(fx)) {
   cat("skip   no CEF fixture installed; filter round-trip not run\n")
 } else {
   res2 <- tryCatch({
     shiny::testServer(d, {
-      rv$cef_catches <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
+      rv$cef_catches <- fx_catch()
       session$flushReact()
       dd <- dat()
       lv <- expf_levels()
@@ -109,14 +110,14 @@ if (!length(fx)) {
 if (!length(fx)) {
   cat("skip   no CEF fixture installed; Apply round-trip not run\n")
 } else {
-  dxf <- "anchoveta"
+  dxf <- "fixture"
   # testServer() does not return the value of its expression, so the
   # result is carried out in an environment rather than by return value.
   outbox <- new.env(parent = emptyenv())
   bad <- tryCatch({
     shiny::testServer(d, {
-      rv$cef_catches <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
-      if (length(dxf)) rv$dist <- {data("anchoveta_dist", package = "rcef", envir = environment()); anchoveta_dist}
+      rv$cef_catches <- fx_catch()
+      if (length(dxf)) rv$dist <- fx_dist()
       session$flushReact()
       lv <- expf_levels()
       if (!length(lv)) stop("no filterable columns in the fixture")
@@ -162,7 +163,7 @@ if (!length(fx)) {
   ## ---------------------------------------------------------------
   lod <- tryCatch({
     shiny::testServer(d, {
-      rv$cef_catches <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
+      rv$cef_catches <- fx_catch()
       session$flushReact()
       session$setInputs(cov_y = "metier5", cov_fill = "ICESDivision",
                         dr_x  = "metier4", dr_fill  = "ICESSubArea")
@@ -198,7 +199,7 @@ if (!length(fx)) {
   outs <- c("auto_conds", "man_conds", "code_txt", "final_status")
   rend <- tryCatch({
     shiny::testServer(d, {
-      rv$cef_catches <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
+      rv$cef_catches <- fx_catch()
       session$flushReact()
       broke <- character(0)
       for (o in outs) {
@@ -234,7 +235,7 @@ if (length(fx)) {
   box <- new.env(parent = emptyenv())
   crash <- tryCatch({
     shiny::testServer(d, {
-      rv$cef_catches <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
+      rv$cef_catches <- fx_catch()
       session$flushReact()
       session$setInputs(hier_2 = "vesselFlagCountry", hier_3 = "seasonValue", threshold = 50,
                         ar_sd_sdmode = "custom", ar_sd_sd1 = "metier4",
@@ -279,8 +280,8 @@ if (length(fx)) {
   ob <- new.env(parent = emptyenv())
   res5 <- tryCatch({
     shiny::testServer(d, {
-      rv$cef_catches <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
-      rv$dist <- {data("anchoveta_dist", package = "rcef", envir = environment()); anchoveta_dist}
+      rv$cef_catches <- fx_catch()
+      rv$dist <- fx_dist()
       session$flushReact()
       has_layer <- function(p, cls)
         any(vapply(p$layers, function(l) inherits(l$geom, cls), logical(1)))

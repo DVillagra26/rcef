@@ -4,15 +4,19 @@
 \alias{plot_discard_clusters}
 \title{Discard-rate clusters, shown on the map of \code{dims}}
 \usage{
-plot_discard_clusters(x, palette = c("default", "colorblind"))
+plot_discard_clusters(x, palette = c("default", "colorblind"), save = NULL)
 }
 \arguments{
 \item{x}{Output of \code{\link[=build_discard_clusters]{build_discard_clusters()}}.}
 
-\item{palette}{\code{"default"} or \code{"colorblind"} (see \code{\link[=var_palette]{var_palette()}}) -
+\item{palette}{\code{"default"} or \code{"colorblind"} -
 unlike most of this package's colours, a cluster's own colour is not
 kept stable across plots: which cluster is "1" depends on this run's
 data and \code{k} alone.}
+
+\item{save}{Where to write the plot as well, or \code{NULL} (default) to only
+return it: a folder, a file name, or a list of options - see
+\link{saving-plots}.}
 }
 \value{
 A ggplot object.
@@ -24,5 +28,5 @@ cluster so a reader can see at a glance whether it occupies its own part
 of the map or overlaps the rest.
 }
 \seealso{
-\code{\link[=build_discard_clusters]{build_discard_clusters()}}, \code{\link[=plot_cluster_variables]{plot_cluster_variables()}}.
+\code{\link[=build_discard_clusters]{build_discard_clusters()}}, \code{\link[=plot_discard_cluster_variables]{plot_discard_cluster_variables()}}.
 }

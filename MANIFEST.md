@@ -83,23 +83,18 @@ ones; keeping them whole would have dragged shiny into `Imports`.
 
 ## dev/ — not shipped (`.Rbuildignore`)
 
-`dev/tests/` (the 11 suites + `run_tests.R`), `dev/testdata/`,
+`dev/tests/` (the suites), `dev/testdata/` (the synthetic CEF fixture they share),
 `dev/check_syntax.R`, `dev/load_all_sourced.R`.
 
 ## data/
 
-`anchoveta_catch` and `anchoveta_dist` - a fully synthetic
-Southeast-Pacific anchoveta CEF pair, lazy-loaded with the package
-(`data(anchoveta_catch)`). The only example data now shipped: the real
-bll / pok CEF files and the IC exchange / overview fixtures that used to
-live in `inst/extdata/` were removed from the repository - the tests and
-the app checks run off `anchoveta_*`.
-
-The example carries `originType = "WGEstimate"` on every row - the value
-`catchRaising()`, `catchAllocationAoL()` and the app's picker select on -
-so it runs the whole workflow (coverage tables and plots, discard raising,
-length and age allocation, aggregation), one year at a time.
-`dev/tests/test_anchoveta_example.R` guards that, headless.
+None: the package ships no data. The tests and the app checks run off the
+synthetic CEF fixture in `dev/testdata/` (`dev/tests/fixture.R` loads it); it
+carries `originType = "WGEstimate"` on every row - the value `catchRaising()`,
+`catchAllocationAoL()` and the app's picker select on - so it runs the whole
+workflow (coverage tables and plots, discard raising, length and age
+allocation, aggregation), one year at a time.
+`dev/tests/test_workflow_example.R` guards that, headless.
 
 ## inst/extdata/ (local only)
 

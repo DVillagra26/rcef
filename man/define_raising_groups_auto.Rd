@@ -2,7 +2,7 @@
 % Please edit documentation in R/rcef_groups.R
 \name{define_raising_groups_auto}
 \alias{define_raising_groups_auto}
-\title{Define automatic raising groups in one call}
+\title{Define raising groups automatically}
 \usage{
 define_raising_groups_auto(
   strata,
@@ -14,35 +14,87 @@ define_raising_groups_auto(
 )
 }
 \arguments{
-\item{strata}{A classified stratum table from [classify_strata()].}
+\item{strata}{The catch, a CEF long-format table that carries the \code{dims}
+columns (see \code{\link[=derive_fields]{derive_fields()}}).}
 
-\item{hierarchy}{Key columns, finest first.}
+\item{hierarchy}{The columns the wider pools share, in the order they are
+given up: with \code{c("metier4", "ICESDivision", "seasonValue")} a stratum
+looks first at the same metier, division and season, then at any metier in
+its division and season, then at any division in its season, then at
+everything.}
 
-\item{thresholds}{One threshold, or one per hierarchy level.}
+\item{thresholds}{The bar, in percent coverage, each pool of the cascade has
+to reach: one value per \code{hierarchy} column, finest pool first, or a single
+value used for all of them.}
 
-\item{self_threshold}{Own-stratum threshold; `NA` to fold into step 1.}
+\item{self_threshold}{The bar for a stratum's own data; \code{NA} (default) folds
+that step into the first pool.}
 
-\item{dims}{The full stratum dimensions; defaults to `hierarchy`.}
+\item{dims}{The columns that define a stratum; defaults to \code{hierarchy}.}
 
-\item{all_label}{Label for the fallback pool.}
+\item{all_label}{The label of the last pool, every stratum.}
 }
 \value{
-A list with `recommendation`, `groups`, `strataCond` and
-  `matchedDataCond`.
+A list with
+\itemize{
+\item \code{recommendation}: the strata, each with the pool it is raised from
+(\code{raise_step}, \code{raise_level}, \code{raise_condition}, \code{raise_coverage},
+\code{raise_n_strata});
+\item \code{groups}: one row per group, i.e. per distinct pool in use;
+\item \code{strataCond} and \code{matchedDataCond}: named lists of quosures, one per
+group, the strata it raises and the data its discard ratio is taken from.
+}
 }
 \description{
-Convenience wrapper for the automatic method: recommend a donor pool for
-every stratum and return the raising-ready conditions in one step. The
-`strataCond` / `matchedDataCond` in the result go straight into
-catchRaising() (discards) or catchAllocationAoL() (lengths and ages).
+Recommends a donor pool for every stratum with a cascade that widens until a
+pool is sampled well enough, and returns the groups as the conditions that
+\code{\link[=catchRaising]{catchRaising()}} and \code{\link[=catchAllocationAoL]{catchAllocationAoL()}} take.
+}
+\details{
+\subsection{The cascade}{
+
+A stratum is one combination of the \code{dims} columns. Each is raised from the
+narrowest pool of strata whose coverage - the share of its landings that has
+a discard estimate, in percent - reaches the bar for that pool. The pools are
+tried in this order, and a stratum takes the first that qualifies:
+\enumerate{
+\item its own data, when \code{self_threshold} is not \code{NA};
+\item the strata that agree with it on every \code{hierarchy} column;
+\item then those that agree on \code{hierarchy} without its first column, without its
+first two, and so on: the first column is given up first and the last is
+kept longest;
+\item every stratum (\code{all_label}).
+}
+
+\code{thresholds} holds the bar of each pool in 2 and 3, finest first. Strata whose
+landings all have a discard estimate need no raising; they form a group of
+their own.
+}
+
+\subsection{Using the groups}{
+
+\code{strataCond} selects strata by \code{stratum_id}, a column of the stratum table
+that raw CEF rows do not carry, and \code{matchedDataCond} is written in the
+same terms. The catch has to carry \code{stratum_id} (and \code{coverage},
+\code{discard_rate}, ...) before \code{\link[=catchRaising]{catchRaising()}} or \code{\link[=catchAllocationAoL]{catchAllocationAoL()}}
+evaluate the conditions row by row. \code{add_stratum_metrics(catch, dims)} adds
+them; \code{run_native_raising(catch, dims, groups)} adds them and then calls
+\code{catchRaising()}.
+}
 }
 \examples{
 \dontrun{
-sc <- classify_strata(build_strata(catch, dims), 50)
-g  <- define_raising_groups_auto(sc, c("metier4", "vesselFlagCountry"), 50)
-# g$strataCond / g$matchedDataCond -> catchRaising()
+dims   <- c("metier4", "ICESDivision", "seasonValue")
+groups <- define_raising_groups_auto(catch, hierarchy = dims,
+                                     thresholds = c(50, 40, 30))
+groups$groups            # one row per group
+
+# the conditions need stratum_id on the catch: run_native_raising() adds it
+raised <- run_native_raising(catch, dims, groups, type = "discards",
+                             log_file = tempfile(fileext = ".txt"))
 }
 }
 \seealso{
-[recommend_raising()], [conds_from_auto()]
+\code{\link[=define_raising_groups_manual]{define_raising_groups_manual()}} for groups written by hand,
+\code{\link[=check_group_conditions]{check_group_conditions()}} to check them, \code{\link[=catchRaising]{catchRaising()}} to raise.
 }

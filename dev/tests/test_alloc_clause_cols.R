@@ -6,21 +6,22 @@
 ## areaValue / seasonValue, none of which is metier4). It must now say so, and must still
 ## assign normally once the column is there.
 
+source("dev/tests/fixture.R")
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
   else { FAIL <<- FAIL + 1L; cat("FAIL  ", what, "\n") }
 }
 
-data("anchoveta_catch", package = "rcef", envir = environment())
-data("anchoveta_dist",  package = "rcef", envir = environment())
+test_catch <- fx_catch()
+test_dist <- fx_dist()
 mk <- function(cl) list(label = "g", alloc = alloc_cond_string(cl),
   matched = alloc_cond_string(cl), excluded = character(0),
   alloc_expr = alloc_quo(cl), matched_expr = alloc_quo(cl))
 g <- list(GA1 = mk(list(metier4 = "PS")))
 
 ## strata that DO carry the column: assigned, and no complaint
-with_col <- suppressWarnings(biology_link(anchoveta_catch, anchoveta_dist,
+with_col <- suppressWarnings(biology_link(test_catch, test_dist,
   c("catchCategory", "metier4", "vesselFlagCountry"), NULL, "LengthTotal"))
 w1 <- NULL
 a1 <- withCallingHandlers(assign_alloc_groups(with_col, g, TRUE),
@@ -32,7 +33,7 @@ ok(is.null(w1), "... and does not warn")
 ok(!length(attr(a1, "missing_clause_cols")), "... and records no missing columns")
 
 ## strata WITHOUT it (the default app strata): nothing assigned - but loudly
-without_col <- suppressWarnings(biology_link(anchoveta_catch, anchoveta_dist,
+without_col <- suppressWarnings(biology_link(test_catch, test_dist,
   c("catchCategory", "vesselFlagCountry", "fleetValue"), NULL, "LengthTotal"))
 ok(!"metier4" %in% names(without_col), "(fixture: the strata really lack metier4)")
 w2 <- NULL

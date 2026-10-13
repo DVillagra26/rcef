@@ -173,7 +173,7 @@ effort_summary <- function(effort) {
 # ------------------------------------------------------------
 #' The raised catches handed to a comparison function, with their names
 #'
-#' [raised_overview_table()] and [plot_comparison()] take their raised catches
+#' [raised_overview_table()] and [plot_compare_raised()] take their raised catches
 #' written `list(a, b)` or, the way it is most naturally typed, `c(a, b)` -
 #' which for data frames would otherwise flatten into one list of columns. The
 #' call is therefore read before it is evaluated: each element is evaluated on
@@ -195,7 +195,7 @@ effort_summary <- function(effort) {
 #' @noRd
 #' @export
 scenario_list <- function(expr, value, env, scenarios_names = NULL,
-                          fn = "plot_comparison()", min = 2L) {
+                          fn = "plot_compare_raised()", min = 2L) {
   listing <- is.call(expr) && is.name(expr[[1]]) &&
     as.character(expr[[1]]) %in% c("c", "list")
   single <- FALSE
@@ -334,13 +334,12 @@ level_factor <- function(x, levels) {
 #' @return A tibble with `Scenario` (for several raised catches), `Catch
 #'   category`, the `by` columns, `Raised/Imported`, `Caton (t)`, `Percent of
 #'   category` and, when any, `No donor (rows)`.
-#' @seealso [plot_comparison()] for the same comparison as a figure;
+#' @seealso [plot_compare_raised()] for the same comparison as a figure;
 #'   [plot_raised_catches()] for one raised catch.
 #' @md
 #' @examples
-#' \donttest{
-#' data(anchoveta_catch)
-#' cef  <- subset(anchoveta_catch, year == 2023)
+#' \dontrun{
+#' cef  <- subset(catch, year == 2023)
 #' dims <- c("metier4", "ICESDivision", "seasonValue")
 #' log  <- tempfile(fileext = ".txt")
 #' strict  <- define_raising_groups_auto(cef, hierarchy = dims,
@@ -452,6 +451,7 @@ raised_overview_table <- function(raised_catch_scenarios, scenarios_names = NULL
 #'   case-insensitively), so discards are readable on their own when landings
 #'   would otherwise dominate the scale. `NULL` (default) keeps both, stacked.
 #' @param ncol Facet columns, when `facet` is set.
+#' @inheritParams saving-plots
 #' @return A ggplot object.
 #' @seealso [plot_raised_DR()] for the discard rate of the same raised catch.
 #' @family raising plots
@@ -459,7 +459,8 @@ raised_overview_table <- function(raised_catch_scenarios, scenarios_names = NULL
 #' @export
 plot_raised_catches <- function(raised_catch, x = NULL, facet = NULL,
                                 fill = NULL, alpha = "importedOrRaised",
-                                catchCategory = NULL, ncol = 2) {
+                                catchCategory = NULL, ncol = 2, save = NULL) {
+  save_on_exit(save, "plot_raised_catches")
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
   S <- "importedOrRaised"
   if (!is.null(alpha) && !identical(alpha, S))

@@ -1,12 +1,13 @@
 ## plot_raised_catches() (renamed from plot_raised_composition()) and the new
 ## plot_raised_DR() - the after-raising counterparts of plot_DR().
 ##
-## Uses the bundled anchoveta example and run_native_raising() (as
-## test_anchoveta_example.R does) rather than a local-machine-only CEF file,
+## Uses the synthetic test fixture and run_native_raising() (as
+## test_workflow_example.R does) rather than a local-machine-only CEF file,
 ## so this runs anywhere. plot_raised_DR() takes the raised catch and nothing
 ## else: one point per raw stratum, solid when its discards were imported and
 ## transparent when the raising added them.
 
+source("dev/tests/fixture.R")
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
@@ -26,8 +27,8 @@ drawable <- function(p)
 has_geom <- function(p, cls)
   any(vapply(p$layers, function(l) inherits(l$geom, cls), logical(1)))
 
-data(anchoveta_catch)
-c23 <- subset(anchoveta_catch, year == 2023)
+test_catch <- fx_catch()
+c23 <- subset(test_catch, year == 2023)
 dims <- c("metier4", "ICESDivision", "seasonValue")
 grp <- quiet(define_raising_groups_auto(c23, hierarchy = dims, thresholds = c(50, 40, 30)))
 raised <- quiet(run_native_raising(c23, dims, grp, type = "discards", log_file = lf))

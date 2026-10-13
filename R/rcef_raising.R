@@ -60,6 +60,7 @@
 #'   totals added.
 #' @seealso [run_native_raising()], [run_scenario()]
 #' @export
+#' @noRd
 apply_raising <- function(strata, donor_key = "raise_condition",
                           donor_members = NULL) {
   s <- strata
@@ -118,6 +119,7 @@ apply_raising <- function(strata, donor_key = "raise_condition",
 #' @return A scenario list, ready for [run_scenario()] or [scenarios_to_json()].
 #' @seealso [scenario_manual()], [run_scenario()]
 #' @export
+#' @noRd
 scenario_auto <- function(name, dims, hierarchy, thresholds,
                           self_threshold = NA, dr_min = NA, dr_max = NA) {
   list(name = name, method = "auto", dims = dims, hierarchy = hierarchy,
@@ -135,6 +137,7 @@ scenario_auto <- function(name, dims, hierarchy, thresholds,
 #' @return A scenario list.
 #' @seealso [scenario_auto()], [run_scenario()]
 #' @export
+#' @noRd
 scenario_manual <- function(name, dims, rules, sets) {
   list(name = name, method = "manual", dims = dims, rules = rules, sets = sets,
        saved = format(Sys.time(), "%Y-%m-%d %H:%M:%S"))
@@ -146,6 +149,7 @@ scenario_manual <- function(name, dims, rules, sets) {
 #' @return A JSON string.
 #' @seealso [scenarios_from_json()]
 #' @export
+#' @noRd
 scenarios_to_json <- function(sc) jsonlite::toJSON(sc, auto_unbox = TRUE, pretty = TRUE)
 
 #' Read scenarios back from JSON
@@ -154,6 +158,7 @@ scenarios_to_json <- function(sc) jsonlite::toJSON(sc, auto_unbox = TRUE, pretty
 #' @return A list of scenarios.
 #' @seealso [scenarios_to_json()]
 #' @export
+#' @noRd
 scenarios_from_json <- function(txt) {
   x <- jsonlite::fromJSON(txt, simplifyDataFrame = FALSE, simplifyVector = TRUE)
   if (!is.null(x$name)) list(x) else x
@@ -177,6 +182,7 @@ scenarios_from_json <- function(txt) {
 #' out <- run_scenario(sc, catch)
 #' }
 #' @export
+#' @noRd
 run_scenario <- function(sc, catch_data) {
   s <- build_strata(catch_data, sc$dims)
   if (sc$method == "auto") {
@@ -217,6 +223,7 @@ common_keys <- function(runs) Reduce(intersect, lapply(runs, names))
 #' @return A long data frame with one row per stratum and scenario.
 #' @seealso [comparison_table()], [run_scenario()]
 #' @export
+#' @noRd
 compare_scenarios <- function(runs, dims) {
   purrr::imap_dfr(runs, function(r, nm) {
     r %>% group_by(across(all_of(dims))) %>%
@@ -235,6 +242,7 @@ compare_scenarios <- function(runs, dims) {
 #' @return A wide data frame, one column per scenario.
 #' @seealso [compare_scenarios()]
 #' @export
+#' @noRd
 comparison_table <- function(cmp, keys) {
   wide <- cmp %>% select(all_of(keys), scenario, estimated_discards) %>%
     tidyr::pivot_wider(names_from = scenario, values_from = estimated_discards)

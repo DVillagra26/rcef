@@ -496,62 +496,6 @@ pool_length_bins <- function(linked, bin_width, dims = character(0)) {
   rbind(nonfin, pooled)
 }
 
-#' The values behind each mean-weight point, un-collapsed
-#'
-#' [length_meanweight()] answers "what is the mean weight at this class"
-#' by collapsing every stratum that shares the grouping into one number.
-#' That number is what should be used, but it hides how much the strata
-#' it came from disagreed - and a mean of four seasons that range from
-#' 180 g to 340 g is a different object from a mean of four that all sit
-#' at 250 g.
-#'
-#' This returns the values BEFORE the collapse, one row per contributing
-#' stratum, so a box can be drawn where a single dot would otherwise sit.
-#' The `+/- 1 sd` band on the line plot answers the same question with a
-#' summary statistic; a box answers it with the values, which for four or
-#' five strata is the more honest picture.
-#'
-#' @param linked A linked biology table, as [length_meanweight()] takes.
-#' @param group_vars Grouping columns. Everything NOT named here is what
-#'   the box spreads over.
-#' @return A data frame with `.class`, the grouping columns,
-#'   `mean_weight` (the stratum's own value), `.w` (its weight in the
-#'   mean) and `n_group`, the number of values sharing that class and
-#'   group. `NULL` if there is nothing to draw.
-#' @seealso [length_meanweight()], [plot_MWaLoA()]
-#' @export
-length_meanweight_raw <- function(linked, group_vars = character(0)) {
-  if (is.null(linked) || !nrow(linked)) return(NULL)
-  mw <- linked[linked$.var_kind == "meanweight", , drop = FALSE]
-  if (!nrow(mw)) return(NULL)
-  nb <- linked[linked$.var_kind == "numbers", , drop = FALSE]
-
-  join_keys <- intersect(c("domainBiology", "catchCategory", ".class",
-                           "vesselFlagCountry"), names(mw))
-  if (nrow(nb)) {
-    nb2 <- nb %>% select(all_of(join_keys), .w_num = .value_std) %>%
-      group_by(across(all_of(join_keys))) %>%
-      summarise(.w_num = sum(.w_num, na.rm = TRUE), .groups = "drop")
-    mw <- mw %>% left_join(nb2, by = join_keys)
-  } else mw$.w_num <- NA_real_
-
-  mw$.w <- ifelse(!is.na(mw$.w_num) & mw$.w_num > 0, mw$.w_num,
-                  ifelse(!is.na(mw$.n_meas) & mw$.n_meas > 0, mw$.n_meas, 1))
-
-  keys <- unique(c(".class", group_vars))
-  keep <- intersect(c(keys, "catchCategory", DIMS_ALL_CANDIDATES), names(mw))
-  out <- mw[, unique(c(keep, ".value_std", ".w", ".n_meas")), drop = FALSE]
-  names(out)[names(out) == ".value_std"] <- "mean_weight"
-  out <- out[is.finite(out$mean_weight), , drop = FALSE]
-  if (!nrow(out)) return(NULL)
-  # how many values share each box, so the plot can say where a "box" is
-  # really one point and stop pretending to show a spread
-  k <- do.call(paste, c(lapply(keys, function(v) as.character(out[[v]])),
-                        sep = "\r"))
-  out$n_group <- as.integer(table(k)[k])
-  as.data.frame(out)
-}
-
 
 
 
@@ -662,6 +606,7 @@ length_link_summary <- function(bl, linked, type = "LengthTotal") {
 #' @export
 #' @examples
 #' cc_bracket(c("Lan", "Dis", "BMS"))
+#' @noRd
 cc_bracket <- function(cc, bms_as_dis = TRUE) {
   cc <- as.character(cc)
   dis <- if (bms_as_dis) c("Dis", "BMS") else "Dis"
@@ -678,6 +623,7 @@ cc_bracket <- function(cc, bms_as_dis = TRUE) {
 #' @examples
 #' as_cc_spec(50)
 #' as_cc_spec(list(Lan = c(50, 40), Dis = c(30, 20)))
+#' @noRd
 as_cc_spec <- function(x, default = NA_real_) {
   if (is.null(x)) return(list(Lan = default, Dis = default))
   if (is.list(x)) {
@@ -698,6 +644,7 @@ as_cc_spec <- function(x, default = NA_real_) {
 #' @export
 #' @examples
 #' cc_step_value(list(Lan = c(50, 40), Dis = c(30, 20)), 2)
+#' @noRd
 cc_step_value <- function(spec, i, default = NA_real_) {
   sp <- as_cc_spec(spec, default)
   pick <- function(v) if (length(v) >= i) v[i] else
@@ -712,6 +659,7 @@ cc_step_value <- function(spec, i, default = NA_real_) {
 #' @export
 #' @examples
 #' fmt_cc_spec(list(Lan = c(50, 40), Dis = c(30, 20)))
+#' @noRd
 fmt_cc_spec <- function(x) {
   num <- function(v) if (length(v) == 1) format(v) else
     paste0("c(", paste(format(v), collapse = ", "), ")")
@@ -888,6 +836,7 @@ alloc_steps <- function(keys, thresholds, keep_cc = TRUE, min_meas = 0,
 #' @param step One step from [alloc_steps()].
 #' @return A length-one character vector.
 #' @export
+#' @noRd
 alloc_step_scope <- function(step) {
   if (identical(step$id, "last")) "last resort - no threshold"
   else if (isTRUE(step$drop_cc)) "categories joined"
@@ -992,6 +941,7 @@ emit_alloc_conditions <- function(groups) {
 #' @return A character vector of R code lines.
 #' @seealso [emit_alloc_code()]
 #' @export
+#' @noRd
 emit_alloc_grouping_code <- function(spec, method = "hierarchical",
                                      tag = "Length") {
   fmt <- function(v) {
@@ -1081,6 +1031,7 @@ emit_alloc_grouping_code <- function(spec, method = "hierarchical",
 #' @seealso [emit_hier_code()], [emit_alloc_grouping_code()],
 #'   [emit_alloc_conditions()]
 #' @export
+#' @noRd
 emit_alloc_recipe_code <- function(spec, groups, tag = "Length",
                                    method = "hierarchical") {
   conds <- emit_alloc_conditions(groups)
@@ -1265,74 +1216,6 @@ assign_alloc_groups <- function(strata, groups, bms_as_dis = TRUE) {
   strata$n_donates_to <- lengths(used)
   attr(strata, "missing_clause_cols") <- missing_cols
   strata
-}
-
-#' Allocated against donated, one row per allocation group
-#'
-#' The biology counterpart of [raising_groups()] on the discard side. Two
-#' numbers that are easy to conflate and mean different things: how many
-#' strata a group ALLOCATES (exactly one group per stratum) and how many
-#' sit in the pool it allocates FROM (a stratum can lend to several).
-#'
-#' @param assigned A table tagged by [assign_alloc_groups()].
-#' @param groups The allocation group list.
-#' @return A data frame, one row per group, plus `(unassigned)` if any.
-#' @seealso [assign_alloc_groups()], [alloc_group_summary()]
-#' @export
-alloc_overview <- function(assigned, groups) {
-  if (is.null(assigned) || !nrow(assigned) || !length(groups)) return(NULL)
-  ids <- names(groups)
-  w <- if ("weight" %in% names(assigned)) assigned$weight else rep(0, nrow(assigned))
-  used <- if ("usedToAllocGroup" %in% names(assigned)) assigned$usedToAllocGroup
-          else rep(list(character(0)), nrow(assigned))
-
-  out <- data.frame(
-    group = ids,
-    label = vapply(ids, function(g) fld(groups[[g]], "label", ""), character(1)),
-    n_strata_allocated = vapply(ids, function(g)
-      sum(assigned$alloc_group %in% g), integer(1)),
-    weight_allocated = vapply(ids, function(g)
-      sum(w[assigned$alloc_group %in% g], na.rm = TRUE), numeric(1)),
-    n_strata_in_pool = vapply(ids, function(g)
-      sum(vapply(used, function(v) g %in% v, logical(1))), integer(1)),
-    stringsAsFactors = FALSE)
-
-  un <- sum(is.na(assigned$alloc_group))
-  if (un > 0)
-    out <- rbind(out, data.frame(
-      group = "(unassigned)", label = "",
-      n_strata_allocated = un,
-      weight_allocated = sum(w[is.na(assigned$alloc_group)], na.rm = TRUE),
-      n_strata_in_pool = NA_integer_, stringsAsFactors = FALSE))
-  out$weight_allocated <- round(out$weight_allocated, 3)
-  rownames(out) <- NULL
-  out
-}
-
-# One row per group: what it allocates and what it is matched to.
-#' @noRd
-#' @export
-alloc_group_summary <- function(assigned, groups) {
-  if (is.null(assigned) || !nrow(assigned)) return(NULL)
-  base <- assigned %>%
-    filter(!is.na(alloc_group)) %>%
-    group_by(group = alloc_group) %>%
-    summarise(strata = dplyr::n(),
-              weight = sum(weight, na.rm = TRUE),
-              measured = sum(weight_measured, na.rm = TRUE), .groups = "drop") %>%
-    mutate(coverage = ifelse(weight > 0, round(measured / weight * 100, 1), NA))
-  base$allocStrataCond <- vapply(base$group,
-    function(g) groups[[g]]$alloc %||% "", character(1))
-  base$bioMatchedCond <- vapply(base$group,
-    function(g) groups[[g]]$matched %||% groups[[g]]$alloc %||% "", character(1))
-  un <- sum(is.na(assigned$alloc_group))
-  if (un > 0)
-    base <- bind_rows(base, data.frame(
-      group = "(unassigned)", strata = un,
-      weight = sum(assigned$weight[is.na(assigned$alloc_group)], na.rm = TRUE),
-      measured = NA_real_, coverage = NA_real_,
-      allocStrataCond = "-", bioMatchedCond = "-", stringsAsFactors = FALSE))
-  base %>% mutate(weight = round(weight, 3), measured = round(measured, 3))
 }
 
 # The river for the allocation: stratum on the left, the MEANING of the
@@ -1535,6 +1418,7 @@ assign_alloc_cascade <- function(bl, keys, steps, bms_as_dis = TRUE) {
 #'   (narrower) behaviour for callers that have no broader definition.
 #' @return A length-one character vector.
 #' @export
+#' @noRd
 alloc_step_grouping <- function(step, keys = NULL, dims = NULL) {
   if (identical(step$id, "own")) return("the stratum itself")
   if (identical(step$id, "last") || isTRUE(step$drop_all))
@@ -1571,6 +1455,7 @@ alloc_step_grouping <- function(step, keys = NULL, dims = NULL) {
 #'   empty.
 #' @seealso [alloc_step_grouping()], [decision_tree()]
 #' @export
+#' @noRd
 alloc_cascade_table <- function(assigned, steps, keys = NULL, dims = NULL) {
   if (is.null(assigned) || !nrow(assigned)) return(NULL)
   # the full key set, so the grouping column can name what each rung keeps
@@ -1921,14 +1806,15 @@ stratum_sparkline_map <- function(linked, dims, keys) {
 #' here already resolved into keys.
 #'
 #' @param clauses The clause list, as [alloc_cond_string()] takes.
-#' @param excluded Stratum keys to drop, from [excluded_keys()].
+#' @param excluded Stratum keys to drop, as `stratum_keys()` builds them.
 #' @param dims The key columns those keys were built from.
 #' @return A list with `text` and `quo`.
-#' @seealso [excluded_keys()], [donor_exclusion_expr()]
+#' @seealso [donor_exclusion_expr()]
 #' @export
 #' @examples
 #' alloc_matched_cond(list(catchCategory = "Dis"), "TBB | 27.4.b",
 #'                    c("metier4", "ICESDivision"))
+#' @noRd
 alloc_matched_cond <- function(clauses, excluded = character(0), dims = NULL,
                                cov_min = NA, meas_min = NA) {
   base <- alloc_cond_string(clauses)
@@ -1957,6 +1843,7 @@ alloc_matched_cond <- function(clauses, excluded = character(0), dims = NULL,
 #' @return A list with `allocStrataCond` and `bioMatchedCond`.
 #' @seealso [conds_from_rules()], [emit_alloc_conditions()]
 #' @export
+#' @noRd
 alloc_conds_from_groups <- function(groups) {
   if (!length(groups)) return(list(allocStrataCond = list(),
                                    bioMatchedCond = list()))

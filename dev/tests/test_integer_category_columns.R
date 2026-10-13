@@ -6,6 +6,7 @@
 ## integer mapped straight onto a fill or shape scale errors, and on an axis
 ## it is read as continuous).
 
+source("dev/tests/fixture.R")
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
@@ -21,9 +22,9 @@ quiet <- function(expr) {
   out
 }
 
-data(anchoveta_catch)
-data(anchoveta_dist)
-c23 <- subset(anchoveta_catch, year == 2023)
+test_catch <- fx_catch()
+test_dist <- fx_dist()
+c23 <- subset(test_catch, year == 2023)
 ok(is.integer(c23$seasonValue) && !"Season" %in% names(c23) &&
      !"Country" %in% names(c23),
    "fixture: seasonValue is an integer, and there is no Season / Country alias")
@@ -68,13 +69,13 @@ ok(drawable(plot_coverage_bar(c23, y = "metier4", fill = "seasonValue")),
    "plot_coverage_bar(): fill = seasonValue")
 ok(drawable(quiet(plot_coverage_map(c23, group = "seasonValue"))),
    "plot_coverage_map(): group = seasonValue")
-ok(drawable(plot_NaLoA(c23, anchoveta_dist, fill = "seasonValue")),
+ok(drawable(plot_NaLoA(c23, test_dist, fill = "seasonValue")),
    "plot_NaLoA(): fill = seasonValue")
-ok(drawable(plot_MWaLoA(c23, anchoveta_dist, colour = "vesselFlagCountry",
+ok(drawable(plot_MWaLoA(c23, test_dist, colour = "vesselFlagCountry",
                         shape = "seasonValue")),
    "plot_MWaLoA(): shape = seasonValue")
 dc <- quiet(build_discard_clusters(c23, c("metier4", "vesselFlagCountry", "seasonValue"), k = 3))
-ok(drawable(plot_discard_clusters(dc)) && drawable(plot_cluster_variables(dc)),
+ok(drawable(plot_discard_clusters(dc)) && drawable(plot_discard_cluster_variables(dc)),
    "build_discard_clusters(): seasonValue among the dims")
 
 ## ---- after raising ------------------------------------------------------

@@ -1,37 +1,31 @@
-## decision_tree() / decision_tree2().
+## decision_tree(..., cumulative = TRUE).
 ##
-## These were a strict superset of one another - decision_tree2() called
+## These were a strict superset of one another - the second function called
 ## decision_tree() and appended running totals - and the app held a
 ## reactive for each, called with identical arguments. Every threshold
 ## change therefore walked the whole cascade twice to build one table
 ## that was a prefix of the other.
 ##
-## Now one function with `cumulative =`. decision_tree2() is kept as a
-## thin delegate so saved scripts naming it keep running. What has to
-## stay true is that the merge changed no numbers.
+## Now one function with `cumulative =`. What has to stay true is that the
+## merge changed no numbers.
 
+source("dev/tests/fixture.R")
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
   else { FAIL <<- FAIL + 1L; cat("FAIL  ", what, "\n") }
 }
-fx <- "anchoveta"
+fx <- "fixture"
 if (!length(fx)) {
   cat("no CEF fixture available - skipping\n")
 } else {
-  cd <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
+  cd <- fx_catch()
   dm <- c("metier4", "vesselFlagCountry", "ICESDivision", "seasonValue")
   st <- classify_strata(build_strata(cd, dm), 50)
   rec <- recommend_raising(st, dm, rep(50, 5), "Catch All by All", dm)
 
   plain <- decision_tree(rec, dm, rep(50, 5), dm)
   rich  <- decision_tree(rec, dm, rep(50, 5), dm, cumulative = TRUE)
-  old   <- decision_tree2(rec, dm, rep(50, 5), dm)
-
-  ## ---- the delegate returns exactly what it always did ---------------
-  ok(identical(rich, old),
-     "decision_tree2() is byte-identical to cumulative = TRUE")
-  ok(is.data.frame(old) && nrow(old) > 0, "and still returns a real table")
 
   ## ---- the plain form is untouched -----------------------------------
   ok(identical(plain, rich[, names(plain), drop = FALSE]),

@@ -77,6 +77,7 @@
 #' @param notes Further lines of commentary, one bullet each.
 #' @return A character vector of R code (comment lines).
 #' @export
+#' @noRd
 taf_header <- function(script, purpose, reads = character(0),
                        writes = character(0), notes = character(0)) {
   bullet <- function(label, x)
@@ -97,6 +98,7 @@ taf_header <- function(script, purpose, reads = character(0),
 #' Order is the order the scripts must be run in, which is also the order
 #' they are shown and concatenated in.
 #' @export
+#' @noRd
 TAF_FILES <- c(
   data                          = "data.R",
   model_explore_discards        = "model_explore_discards.R",
@@ -112,6 +114,7 @@ TAF_FILES <- c(
 #' wording both the warning dialog and the emitted header use, so they
 #' cannot describe the same route differently.
 #' @export
+#' @noRd
 TAF_METHOD_LABEL <- c(
   ic_exchange = "InterCatch exchange format (HI / SI / SD)",
   ic_output   = "InterCatch output format (StockOverview / NumbersAtAge...)",
@@ -120,6 +123,7 @@ TAF_METHOD_LABEL <- c(
 
 #' Short human labels, used for the sub-tabs
 #' @export
+#' @noRd
 TAF_LABEL <- c(
   data                          = "data.R",
   model_explore_discards        = "1. Explore discards",
@@ -133,6 +137,7 @@ TAF_LABEL <- c(
 #' @param extra Extra package names.
 #' @return A character vector of R code.
 #' @export
+#' @noRd
 taf_libs <- function(extra = character(0)) {
   base <- c("dplyr", "tidyr", "ggplot2", "rlang")
   c("library(dplyr); library(tidyr); library(ggplot2); library(rlang)",
@@ -145,6 +150,7 @@ taf_libs <- function(extra = character(0)) {
 #' @param stage Directory name.
 #' @return A character vector of R code.
 #' @export
+#' @noRd
 taf_mkdir <- function(stage)
   c(sprintf('if (!dir.exists("%s")) dir.create("%s", recursive = TRUE)',
             stage, stage), "")
@@ -156,6 +162,7 @@ taf_mkdir <- function(stage)
 #' @param external_dir Ignored; kept so old callers do not break.
 #' @return A character vector of R code.
 #' @export
+#' @noRd
 taf_sources <- function(external_dir = NULL) c(
   "## ---- Workflow functions ----------------------------------",
   "## catchRaising(), catchAllocationAoL() and the CEF readers are not on",
@@ -177,6 +184,7 @@ taf_sources <- function(external_dir = NULL) c(
 #'
 #' @return A character vector of R code.
 #' @export
+#' @noRd
 taf_derive <- function() c(
   "## ---- Derived fields ---------------------------------------",
   "## derive_fields() adds, from fleetValue and areaValue:",
@@ -198,6 +206,7 @@ taf_derive <- function() c(
 #'
 #' @return A character vector of R code.
 #' @export
+#' @noRd
 taf_save_plot_helper <- function() c(
   "## ---- Figures ----------------------------------------------",
   "## Drawn here, beside the analysis they belong to; written to output/,",
@@ -220,6 +229,7 @@ taf_save_plot_helper <- function() c(
 #' @param section Which script's plots to emit.
 #' @return A character vector of R code, empty when the section kept none.
 #' @export
+#' @noRd
 taf_plot_blocks <- function(kept, section) {
   if (!length(kept)) return(character(0))
   keep_i <- which(vapply(kept, function(k)
@@ -265,6 +275,7 @@ taf_plot_blocks <- function(kept, section) {
 #'   `year`, `external_dir`, `input_desc`.
 #' @return A character vector of R code.
 #' @export
+#' @noRd
 taf_data <- function(ctx) {
   meth <- ctx$load_method %||% "cef"
   filt <- character(0)
@@ -326,6 +337,7 @@ taf_data <- function(ctx) {
 #'   at the end of the script.
 #' @return A character vector of R code.
 #' @export
+#' @noRd
 taf_model_explore_discards <- function(ctx, kept = list()) {
   dims <- ctx$dims_disc %||%
     c("metier4", "vesselFlagCountry", "ICESDivision", "seasonValue")
@@ -425,6 +437,7 @@ taf_model_explore_discards <- function(ctx, kept = list()) {
 #'   `compare_lines`, `final_lines`, `dims_disc`.
 #' @return A character vector of R code.
 #' @export
+#' @noRd
 taf_model_allocate_raise_discards <- function(ctx) {
   c(taf_header("model_allocate_raise_discards",
       "Define the raising groups and run catchRaising()",
@@ -475,6 +488,7 @@ taf_model_allocate_raise_discards <- function(ctx) {
 #'   at the end of the script.
 #' @return A character vector of R code.
 #' @export
+#' @noRd
 taf_model_explore_length_age <- function(ctx, kept = list()) {
   dims_length <- ctx$dims_len %||% c("catchCategory", "metier4",
                                      "vesselFlagCountry", "ICESDivision",
@@ -552,6 +566,7 @@ taf_model_explore_length_age <- function(ctx, kept = list()) {
 #' @param ctx Session context. Uses `len_alloc_lines`, `age_alloc_lines`.
 #' @return A character vector of R code.
 #' @export
+#' @noRd
 taf_model_allocate_length_age <- function(ctx) {
   none <- function(tag) c(
     sprintf("## (no %s allocation was saved in the session)", tag), "")
@@ -624,6 +639,7 @@ taf_model_allocate_length_age <- function(ctx) {
 #'   output section are drawn here.
 #' @return A character vector of R code.
 #' @export
+#' @noRd
 taf_output <- function(kept = list()) {
   blocks <- taf_plot_blocks(kept, "output")
   head <- c(taf_header("output",
@@ -673,6 +689,7 @@ taf_output <- function(kept = list()) {
 #' @param x A title.
 #' @return A lower-case, underscore-separated string.
 #' @export
+#' @noRd
 taf_slug <- function(x) {
   x <- tolower(gsub("[^A-Za-z0-9]+", "_", x %||% "plot"))
   x <- gsub("^_+|_+$", "", x)
@@ -686,6 +703,7 @@ taf_slug <- function(x) {
 #' Emit the (empty) report.R placeholder
 #' @return A character vector of R code.
 #' @export
+#' @noRd
 taf_report <- function() c(
   taf_header("report",
     "Assemble the tables and figures for the working-group report",
@@ -712,6 +730,7 @@ taf_report <- function() c(
 #' @param kept The kept-plot records, for output.R.
 #' @return A named list of character vectors, one per part, in run order.
 #' @export
+#' @noRd
 taf_bundle <- function(ctx = list(), kept = list()) {
   safe <- function(f) tryCatch(f(), error = function(e)
     c("## This script could not be generated from the current session:",
@@ -735,6 +754,7 @@ taf_bundle <- function(ctx = list(), kept = list()) {
 #' @param parts Which parts to include; defaults to all, in run order.
 #' @return A character vector.
 #' @export
+#' @noRd
 taf_concat <- function(bundle, parts = names(TAF_FILES)) {
   parts <- intersect(names(TAF_FILES), parts)
   unlist(lapply(parts, function(p) c(
@@ -751,6 +771,7 @@ taf_concat <- function(bundle, parts = names(TAF_FILES)) {
 #' @param parts Which parts to write.
 #' @return The paths written, invisibly.
 #' @export
+#' @noRd
 taf_write <- function(bundle, dir, parts = names(TAF_FILES)) {
   parts <- intersect(names(TAF_FILES), parts)
   if (!dir.exists(dir)) dir.create(dir, recursive = TRUE, showWarnings = FALSE)
@@ -773,6 +794,7 @@ taf_write <- function(bundle, dir, parts = names(TAF_FILES)) {
 #' @param file The path the download handler wants written.
 #' @return `"zip"` or `"concat"`, invisibly, saying which happened.
 #' @export
+#' @noRd
 taf_zip <- function(bundle, parts, file) {
   parts <- intersect(names(TAF_FILES), parts)
   tmp <- file.path(tempdir(), paste0("taf_", as.integer(Sys.time())))
@@ -795,6 +817,7 @@ taf_zip <- function(bundle, parts, file) {
 
 #' One-line description of each script, shown above its listing
 #' @export
+#' @noRd
 TAF_BLURB <- c(
   data = paste("Reads the catch, distribution and effort tables and derives",
                "the metier and ICES area levels. No thresholds, no groups,",
@@ -829,6 +852,7 @@ TAF_BLURB <- c(
 #' @param v A length-one value, or `NULL`.
 #' @return A quoted string, or `"NULL"`.
 #' @export
+#' @noRd
 taf_q <- function(v) {
   if (is.null(v) || !length(v)) return("NULL")
   v <- v[1]
@@ -843,6 +867,7 @@ taf_q <- function(v) {
 #'   entries are emitted positionally, `NULL` entries dropped.
 #' @return A character vector, one element per line.
 #' @export
+#' @noRd
 taf_call <- function(fn, args) {
   args <- args[!vapply(args, is.null, logical(1))]
   nm <- names(args); if (is.null(nm)) nm <- rep("", length(args))

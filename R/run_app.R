@@ -11,6 +11,7 @@
 #' Packages the shiny front end needs on top of the package Imports
 #' @format A character vector.
 #' @export
+#' @noRd
 RCEF_APP_PKGS <- c("shiny", "DT")
 
 #' Run the RCEF Workbench application
@@ -27,6 +28,7 @@ RCEF_APP_PKGS <- c("shiny", "DT")
 #' run_app()
 #' run_app(port = 4321, launch.browser = FALSE)
 #' }
+#' @noRd
 run_app <- function(..., app_dir = system.file("app", package = "rcef")) {
   miss <- RCEF_APP_PKGS[!vapply(RCEF_APP_PKGS, requireNamespace,
                                 logical(1), quietly = TRUE)]

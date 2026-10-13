@@ -11,7 +11,8 @@ plot_raised_catches(
   fill = NULL,
   alpha = "importedOrRaised",
   catchCategory = NULL,
-  ncol = 2
+  ncol = 2,
+  save = NULL
 )
 }
 \arguments{
@@ -35,6 +36,10 @@ case-insensitively), so discards are readable on their own when landings
 would otherwise dominate the scale. \code{NULL} (default) keeps both, stacked.}
 
 \item{ncol}{Facet columns, when \code{facet} is set.}
+
+\item{save}{Where to write the plot as well, or \code{NULL} (default) to only
+return it: a folder, a file name, or a list of options - see
+\link{saving-plots}.}
 }
 \value{
 A ggplot object.
@@ -61,10 +66,8 @@ imported and the raised weights are added together.
 \code{\link[=plot_raised_DR]{plot_raised_DR()}} for the discard rate of the same raised catch.
 
 Other raising plots: 
-\code{\link{plot_comparison}()},
+\code{\link{plot_compare_raised}()},
 \code{\link{plot_raised_DR}()},
-\code{\link{plot_river}()},
-\code{\link{plot_river_level}()},
-\code{\link{plot_scenario_comparison}()}
+\code{\link{plot_river}()}
 }
 \concept{raising plots}

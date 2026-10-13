@@ -152,12 +152,13 @@ row_condition <- function(row, keys) {
 #'   little. `NA` = off.
 #' @param meas_min Minimum number of measurements to remain eligible.
 #'   `NA` = off.
-#' @param excluded Stratum keys picked out by hand, as produced by
-#'   [excluded_keys()].
+#' @param excluded Stratum keys picked out by hand, as `stratum_keys()` builds
+#'   them.
 #' @param dims Key columns, needed to match `excluded` against the rows.
 #' @return `s` with a `donor_ok` logical column.
 #' @seealso [recommend_raising()]
 #' @export
+#' @noRd
 flag_donor_exclusion <- function(s, dr_min = NA, dr_max = NA,
                                  cov_min = NA, meas_min = NA,
                                  excluded = character(0), dims = NULL,
@@ -210,6 +211,7 @@ flag_donor_exclusion <- function(s, dr_min = NA, dr_max = NA,
 #'   when either dimension set is empty or nothing matches.
 #' @seealso [flag_donor_exclusion()], [stratum_keys()]
 #' @export
+#' @noRd
 roll_up_excluded_keys <- function(strata, named, from_dims, to_dims) {
   if (!length(named) || is.null(strata) || !nrow(strata)) return(character(0))
   from_dims <- from_dims[nzchar(from_dims)]
@@ -272,6 +274,7 @@ donor_exclusion_expr <- function(excluded, dims) {
 #'   and `id`.
 #' @seealso [recommend_raising()], [decision_tree()]
 #' @export
+#' @noRd
 raising_steps <- function(hierarchy, thresholds, dims = NULL) {
   if (length(thresholds) == 1) thresholds <- rep(thresholds, length(hierarchy) + 1)
   stopifnot(length(thresholds) == length(hierarchy) + 1)
@@ -368,6 +371,7 @@ raising_steps <- function(hierarchy, thresholds, dims = NULL) {
 #'   `raise_n_strata` added.
 #' @seealso [raising_groups()], [conds_from_auto()], [decision_tree()]
 #' @export
+#' @noRd
 recommend_raising <- function(strata, hierarchy, thresholds,
                               all_label = "ALL", dims = NULL) {
   if (is.null(dims)) dims <- hierarchy
@@ -455,6 +459,7 @@ recommend_raising <- function(strata, hierarchy, thresholds,
 #' @return A data frame, one row per step (including step 0 and the fallback).
 #' @seealso [recommend_raising()], [check_partition()]
 #' @export
+#' @noRd
 decision_tree <- function(rec, hierarchy, thresholds,
                           dims = NULL, cumulative = FALSE) {
   steps <- raising_steps(hierarchy, thresholds, dims)
@@ -498,6 +503,7 @@ decision_tree <- function(rec, hierarchy, thresholds,
 #'   totals compared.
 #' @seealso [decision_tree()]
 #' @export
+#' @noRd
 check_partition <- function(rec, tr) {
   tot_n <- nrow(rec); tot_l <- sum(rec$landings, na.rm = TRUE)
   list(n_ok = sum(tr$n_strata) == tot_n,
@@ -518,6 +524,7 @@ check_partition <- function(rec, tr) {
 #'   `n_strata`.
 #' @seealso [conds_from_auto()]
 #' @export
+#' @noRd
 raising_groups <- function(rec) {
   rec %>%
     count(raise_level, raise_condition, name = "n_strata") %>%
@@ -548,6 +555,7 @@ raising_groups <- function(rec) {
 #'   [conds_from_rules()].
 #' @seealso [assign_rule_groups()], [conds_from_rules()]
 #' @export
+#' @noRd
 new_rule <- function(id, label = "", raise = list(), source = NULL,
                      dr_min = NA, dr_max = NA, excluded = character(0),
                      cov_min = NA, meas_min = NA) {
@@ -665,6 +673,7 @@ apply_rules_all <- function(df, rules, sets = list()) {
 #'   `usedToRaiseGroups_txt` and `n_donates_to` added.
 #' @seealso [new_rule()], [conds_from_rules()], [rule_group_summary()]
 #' @export
+#' @noRd
 assign_rule_groups <- function(strata, rules, sets = list()) {
   strata$toBeRaisedGroup <- apply_rules_first(strata, rules, sets)
   used <- apply_rules_all(strata, rules, sets)
@@ -699,6 +708,7 @@ assign_rule_groups <- function(strata, rules, sets = list()) {
 #'   by construction.
 #' @seealso [conds_from_rules()], [rule_group_summary()]
 #' @export
+#' @noRd
 rule_effective_sets <- function(strata, rules, sets = list()) {
   n <- if (is.null(strata)) 0L else nrow(strata)
   taken <- rep(FALSE, n)
@@ -727,6 +737,7 @@ rule_effective_sets <- function(strata, rules, sets = list()) {
 #'   statistics for each group.
 #' @seealso [assign_rule_groups()]
 #' @export
+#' @noRd
 rule_group_summary <- function(strata, rules, sets = list()) {
   # first-match-wins, so the counts match what catchRaising() will do
   eff <- rule_effective_sets(strata, rules, sets)
@@ -776,6 +787,7 @@ rule_group_summary <- function(strata, rules, sets = list()) {
 #'   quosures) and `groups` (the [raising_groups()] table).
 #' @seealso [recommend_raising()], [define_raising_groups_auto()]
 #' @export
+#' @noRd
 conds_from_auto <- function(rec) {
   g <- raising_groups(rec)
   sid <- split(rec$stratum_id, match(rec$raise_condition, g$raise_condition))
@@ -812,6 +824,7 @@ conds_from_auto <- function(rec) {
 #'   quosures, one per rule.
 #' @seealso [new_rule()], [define_raising_groups_manual()]
 #' @export
+#' @noRd
 conds_from_rules <- function(rules, sets = list(), dims = NULL) {
   ids <- vapply(rules, `[[`, character(1), "id")
   mk <- function(txt) rlang::new_quosure(rlang::parse_expr(txt), env = globalenv())
@@ -855,9 +868,7 @@ conds_from_rules <- function(rules, sets = list(), dims = NULL) {
 #'
 #' So a catch-all is written as the negation of everything above it. Only
 #' the catch-all is touched: the other clauses are left exactly as the user
-#' wrote them, which is what makes the emitted script readable. This is the
-#' difference from [complement_conds()], which complements every clause and
-#' produces the `& !(...)` noise on lines that never needed it.
+#' wrote them, which is what makes the emitted script readable.
 #'
 #' Strata conditions only. A donor pool (`matchedDataCond` /
 #' `bioMatchedCond`) may legitimately be reused by several groups, and
@@ -869,10 +880,11 @@ conds_from_rules <- function(rules, sets = list(), dims = NULL) {
 #' @return The same names, with any bare `TRUE` replaced by
 #'   `!( (clause1) | (clause2) | ... )`. A `TRUE` in first position stays
 #'   `TRUE`: with nothing above it, it really does mean everything.
-#' @seealso [conds_from_rules()], [complement_conds()]
+#' @seealso [conds_from_rules()]
 #' @export
 #' @examples
 #' close_catch_all(list(G1 = "metier4 == \"TBB\"", G2 = "TRUE"), as_quo = FALSE)
+#' @noRd
 close_catch_all <- function(clauses, as_quo = TRUE) {
   if (!length(clauses)) return(clauses)
   txt <- vapply(clauses, function(c)
@@ -893,37 +905,6 @@ close_catch_all <- function(clauses, as_quo = TRUE) {
   if (!as_quo) return(out)
   lapply(stats::setNames(out, names(clauses)), function(t)
     rlang::new_quosure(rlang::parse_expr(t), env = globalenv()))
-}
-
-#' Make a set of overlapping strata clauses into a partition
-#'
-#' First-match-wins on screen; a partition for the engine. Each clause
-#' becomes itself AND NOT every clause above it, and a bare `TRUE`
-#' (a catch-all) becomes NOT-everything-above. This is what
-#' [conds_from_rules()] applies internally; it is exported so an emitted
-#' script can show the simple clauses and complement them in one call
-#' rather than printing the noise inline.
-#'
-#' @param clauses A named list of condition strings or quosures, in order.
-#' @return A named list of quosures forming a partition.
-#' @seealso [conds_from_rules()]
-#' @export
-#' @examples
-#' complement_conds(list(G1 = "metier4 == \"TBB\"", G2 = "TRUE"))
-complement_conds <- function(clauses) {
-  txt <- vapply(clauses, function(c)
-    if (inherits(c, "quosure")) rlang::quo_text(c) else as.character(c),
-    character(1))
-  mk <- function(t) rlang::new_quosure(rlang::parse_expr(t), env = globalenv())
-  seen <- character(0); out <- vector("list", length(txt))
-  for (i in seq_along(txt)) {
-    this <- txt[[i]]
-    t <- if (!length(seen)) this
-         else if (this == "TRUE") paste0("!(", paste(seen, collapse = " | "), ")")
-         else paste0("(", this, ") & !(", paste(seen, collapse = " | "), ")")
-    out[[i]] <- mk(t); seen <- c(seen, paste0("(", this, ")"))
-  }
-  stats::setNames(out, names(clauses))
 }
 
 # ----------------------------------------------------------
@@ -953,27 +934,76 @@ combine_thresholds <- function(self_threshold, thresholds, hierarchy) {
   c(self_threshold, thresholds)
 }
 
-#' Define automatic raising groups in one call
+#' Define raising groups automatically
 #'
-#' Convenience wrapper for the automatic method: recommend a donor pool for
-#' every stratum and return the raising-ready conditions in one step. The
-#' `strataCond` / `matchedDataCond` in the result go straight into
-#' catchRaising() (discards) or catchAllocationAoL() (lengths and ages).
+#' @description
+#' Recommends a donor pool for every stratum with a cascade that widens until a
+#' pool is sampled well enough, and returns the groups as the conditions that
+#' [catchRaising()] and [catchAllocationAoL()] take.
 #'
-#' @param strata A classified stratum table from [classify_strata()].
-#' @param hierarchy Key columns, finest first.
-#' @param thresholds One threshold, or one per hierarchy level.
-#' @param self_threshold Own-stratum threshold; `NA` to fold into step 1.
-#' @param dims The full stratum dimensions; defaults to `hierarchy`.
-#' @param all_label Label for the fallback pool.
-#' @return A list with `recommendation`, `groups`, `strataCond` and
-#'   `matchedDataCond`.
-#' @seealso [recommend_raising()], [conds_from_auto()]
+#' @details
+#' ## The cascade
+#'
+#' A stratum is one combination of the `dims` columns. Each is raised from the
+#' narrowest pool of strata whose coverage - the share of its landings that has
+#' a discard estimate, in percent - reaches the bar for that pool. The pools are
+#' tried in this order, and a stratum takes the first that qualifies:
+#'
+#' 1. its own data, when `self_threshold` is not `NA`;
+#' 2. the strata that agree with it on every `hierarchy` column;
+#' 3. then those that agree on `hierarchy` without its first column, without its
+#'    first two, and so on: the first column is given up first and the last is
+#'    kept longest;
+#' 4. every stratum (`all_label`).
+#'
+#' `thresholds` holds the bar of each pool in 2 and 3, finest first. Strata whose
+#' landings all have a discard estimate need no raising; they form a group of
+#' their own.
+#'
+#' ## Using the groups
+#'
+#' `strataCond` selects strata by `stratum_id`, a column of the stratum table
+#' that raw CEF rows do not carry, and `matchedDataCond` is written in the
+#' same terms. The catch has to carry `stratum_id` (and `coverage`,
+#' `discard_rate`, ...) before [catchRaising()] or [catchAllocationAoL()]
+#' evaluate the conditions row by row. `add_stratum_metrics(catch, dims)` adds
+#' them; `run_native_raising(catch, dims, groups)` adds them and then calls
+#' `catchRaising()`.
+#'
+#' @param strata The catch, a CEF long-format table that carries the `dims`
+#'   columns (see [derive_fields()]).
+#' @param hierarchy The columns the wider pools share, in the order they are
+#'   given up: with `c("metier4", "ICESDivision", "seasonValue")` a stratum
+#'   looks first at the same metier, division and season, then at any metier in
+#'   its division and season, then at any division in its season, then at
+#'   everything.
+#' @param thresholds The bar, in percent coverage, each pool of the cascade has
+#'   to reach: one value per `hierarchy` column, finest pool first, or a single
+#'   value used for all of them.
+#' @param self_threshold The bar for a stratum's own data; `NA` (default) folds
+#'   that step into the first pool.
+#' @param dims The columns that define a stratum; defaults to `hierarchy`.
+#' @param all_label The label of the last pool, every stratum.
+#' @return A list with
+#'   * `recommendation`: the strata, each with the pool it is raised from
+#'     (`raise_step`, `raise_level`, `raise_condition`, `raise_coverage`,
+#'     `raise_n_strata`);
+#'   * `groups`: one row per group, i.e. per distinct pool in use;
+#'   * `strataCond` and `matchedDataCond`: named lists of quosures, one per
+#'     group, the strata it raises and the data its discard ratio is taken from.
+#' @seealso [define_raising_groups_manual()] for groups written by hand,
+#'   [check_group_conditions()] to check them, [catchRaising()] to raise.
+#' @md
 #' @examples
 #' \dontrun{
-#' sc <- classify_strata(build_strata(catch, dims), 50)
-#' g  <- define_raising_groups_auto(sc, c("metier4", "vesselFlagCountry"), 50)
-#' # g$strataCond / g$matchedDataCond -> catchRaising()
+#' dims   <- c("metier4", "ICESDivision", "seasonValue")
+#' groups <- define_raising_groups_auto(catch, hierarchy = dims,
+#'                                      thresholds = c(50, 40, 30))
+#' groups$groups            # one row per group
+#'
+#' # the conditions need stratum_id on the catch: run_native_raising() adds it
+#' raised <- run_native_raising(catch, dims, groups, type = "discards",
+#'                              log_file = tempfile(fileext = ".txt"))
 #' }
 #' @export
 define_raising_groups_auto <- function(strata, hierarchy, thresholds,
@@ -989,30 +1019,70 @@ define_raising_groups_auto <- function(strata, hierarchy, thresholds,
        matchedDataCond = conds$matchedDataCond)
 }
 
-#' Define manual raising groups in one call
+#' Define raising groups by hand
 #'
-#' Convenience wrapper for the manual method: tag the strata with their
-#' groups, summarise the rule set, and return the raising-ready conditions in
-#' one step. The `strataCond` / `matchedDataCond` in the result go straight
-#' into catchRaising() or catchAllocationAoL().
+#' @description
+#' Turns a set of rules you write into the groups [catchRaising()] and
+#' [catchAllocationAoL()] take: the strata each group raises, and the data its
+#' discard ratio is taken from.
 #'
-#' @param strata A classified stratum table from [classify_strata()].
-#' @param rules A list of rules from [new_rule()].
-#' @param sets Named value sets referenced by clauses.
-#' @return A list with `strata` (tagged), `summary`, `strataCond` and
-#'   `matchedDataCond`.
-#' @seealso [assign_rule_groups()], [conds_from_rules()]
+#' @details
+#' ## Rules
+#'
+#' A rule is one group, written with
+#' `new_rule(id, label, raise, source, dr_min, dr_max, excluded, cov_min, meas_min)`:
+#'
+#' * `raise` is a list of clauses that select the strata the group raises. A
+#'   clause is `list(var = "metier4", values = c("TBB", "OTB"))`, or with
+#'   `negate = TRUE` the strata that do not have those values, or
+#'   `set = "name"` to take the values from the named set in `sets`. Several
+#'   clauses are all required.
+#' * `source` selects the strata that donate, in the same way; the `raise`
+#'   strata when left out. A stratum can donate to several groups.
+#' * `dr_min` and `dr_max` keep only donors whose discard rate is inside that
+#'   window, `cov_min` those with at least that coverage (percent),
+#'   `meas_min` those with at least that many measurements, and `excluded`
+#'   takes out the strata you name.
+#'
+#' Rules are applied in order and the first one that claims a stratum raises
+#' it, so a last rule without clauses is the catch-all: it raises what the
+#' rules above it left. The strata of the groups never overlap.
+#'
+#' ## Using the groups
+#'
+#' As for [define_raising_groups_auto()], the conditions select strata by
+#' columns of the stratum table, so the catch has to carry them before
+#' [catchRaising()] evaluates them: `add_stratum_metrics(catch, dims)` adds
+#' them, and `run_native_raising(catch, dims, groups)` adds them and then
+#' calls `catchRaising()`.
+#'
+#' @param strata The stratum table, as `build_strata(catch, dims)` returns it:
+#'   one row per stratum, with its columns, `stratum_id`, `landings`,
+#'   `coverage` and `discard_rate`.
+#' @param rules A list of rules, each from `new_rule()` - see *Rules*.
+#' @param sets Named lists of values that clauses refer to with `set`.
+#' @param dims The columns that define a stratum. Only needed to write the
+#'   strata a rule takes out with `excluded` into its donor condition.
+#' @return A list with `strata` (the strata, tagged with the group that raises
+#'   them and the groups they donate to), `summary` (one row per group: strata
+#'   raised, landings, donor pool, coverage and discard rate), and
+#'   `strataCond` and `matchedDataCond`, named lists of quosures, one per
+#'   group.
+#' @seealso [define_raising_groups_auto()] for groups made from the data,
+#'   [check_group_conditions()] to check them, [catchRaising()] to raise.
+#' @md
 #' @examples
 #' \dontrun{
-#' rules <- list(new_rule("G1", raise = list(list(var = "metier4",
-#'                                                 values = "TBB"))),
-#'               new_rule("G2"))                 # catch-all
-#' g <- define_raising_groups_manual(sc, rules)
+#' rules <- list(
+#'   new_rule("G1", raise = list(list(var = "metier4", values = "TBB"))),
+#'   new_rule("G2"))                          # catch-all: everything else
+#' groups <- define_raising_groups_manual(build_strata(catch, "metier4"), rules)
+#' groups$summary
 #' }
 #' @export
-define_raising_groups_manual <- function(strata, rules, sets = list()) {
+define_raising_groups_manual <- function(strata, rules, sets = list(), dims = NULL) {
   assigned <- assign_rule_groups(strata, rules, sets)
-  conds    <- conds_from_rules(rules, sets)
+  conds    <- conds_from_rules(rules, sets, dims)
   list(strata          = assigned,
        summary         = rule_group_summary(strata, rules, sets),
        strataCond      = conds$strataCond,
@@ -1022,23 +1092,6 @@ define_raising_groups_manual <- function(strata, rules, sets = list()) {
 # ----------------------------------------------------------
 #  Reporting on the cascade and the donor pools
 # ----------------------------------------------------------
-
-#' Cascade step table with running totals
-#'
-#' Deprecated. `decision_tree(..., cumulative = TRUE)` returns exactly this
-#' table; the two were a strict superset of one another, and the app called
-#' both with identical arguments, walking the cascade twice on every
-#' invalidation to produce one table that was a prefix of the other.
-#'
-#' Kept so saved scripts that name it keep running.
-#'
-#' @param rec Output of [recommend_raising()].
-#' @param hierarchy,thresholds,dims As passed to [recommend_raising()].
-#' @return A data frame, one row per step, with cumulative columns.
-#' @seealso [decision_tree()], [check_partition()]
-#' @export
-decision_tree2 <- function(rec, hierarchy, thresholds, dims = NULL)
-  decision_tree(rec, hierarchy, thresholds, dims, cumulative = TRUE)
 
 # The running totals, split out so decision_tree() can add them itself.
 #' @param tr A decision tree table.
@@ -1087,8 +1140,9 @@ add_tree_totals <- function(tr) {
 #'   `donors`, `n_claimed`, `n_strata`, `landings`, `pct_strata`,
 #'   `pct_landings`, `cum_pct_strata`, `cum_pct_landings`, `n_donors`,
 #'   `donor_coverage`, `donor_DR`.
-#' @seealso [rule_effective_sets()], [decision_tree2()], [rule_group_summary()]
+#' @seealso [rule_effective_sets()], [decision_tree()], [rule_group_summary()]
 #' @export
+#' @noRd
 rule_decision_table <- function(strata, rules, sets = list()) {
   if (is.null(strata) || !nrow(strata) || !length(rules))
     return(NULL)
@@ -1155,6 +1209,7 @@ rule_decision_table <- function(strata, rules, sets = list()) {
 #'   `raise_level` columns; unassigned strata get `NA`.
 #' @seealso [rule_decision_table()], [plot_river_level()]
 #' @export
+#' @noRd
 rule_river_data <- function(strata, rules, sets = list()) {
   if (is.null(strata) || !nrow(strata)) return(strata)
   eff <- rule_effective_sets(strata, rules, sets)
@@ -1197,6 +1252,7 @@ rule_river_data <- function(strata, rules, sets = list()) {
 #' @return A data frame, one row per rule plus a `STILL MISSING` row.
 #' @seealso [rules_unassigned()], [assign_rule_groups()]
 #' @export
+#' @noRd
 rules_progress <- function(strata, rules, sets = list(),
                            weight_col = "landings") {
   if (is.null(strata) || !nrow(strata) || !length(rules)) return(NULL)
@@ -1243,6 +1299,7 @@ rules_progress <- function(strata, rules, sets = list(),
 #' @return A data frame of unclaimed strata, or `NULL` if none.
 #' @seealso [rules_progress()]
 #' @export
+#' @noRd
 rules_unassigned <- function(strata, rules, sets = list(), dims = NULL,
                              weight_col = "landings") {
   if (is.null(strata) || !nrow(strata)) return(NULL)
@@ -1282,6 +1339,7 @@ rules_unassigned <- function(strata, rules, sets = list(), dims = NULL,
 #' @return A data frame, one row per stratum, sorted heaviest first.
 #' @seealso [strata_donor_table()], [recommend_raising()]
 #' @export
+#' @noRd
 strata_raise_table <- function(rec, dims) {
   if (is.null(rec) || !nrow(rec)) return(NULL)
   keep <- intersect(dims, names(rec))
@@ -1320,6 +1378,7 @@ strata_raise_table <- function(rec, dims) {
 #' @return A data frame, one row per stratum, sorted heaviest first.
 #' @seealso [strata_raise_table()]
 #' @export
+#' @noRd
 strata_donor_table <- function(rec, dims) {
   if (is.null(rec) || !nrow(rec)) return(NULL)
   keep <- intersect(dims, names(rec))

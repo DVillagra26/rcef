@@ -10,6 +10,7 @@
 ## sort, dropdown label, pool summary) is wired the same way
 ## measurements already is.
 
+source("dev/tests/fixture.R")
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
@@ -153,9 +154,9 @@ ok(u2$cat_key == "warn_trip",
    "a table with no numTrips column at all gets the same treatment")
 
 ## ---- 4. aggregation direction: max within a build, sum across a pool -
-fx <- "anchoveta"
+fx <- "fixture"
 if (length(fx)) {
-  cd <- {data("anchoveta_catch", package = "rcef", envir = environment()); anchoveta_catch}
+  cd <- fx_catch()
   ok("numTrips" %in% names(build_strata(cd, c("metier4", "vesselFlagCountry"))),
      "numTrips reaches build_strata()'s output")
 
@@ -193,12 +194,6 @@ ok(all(grepl("trips", names(ch))),
 ov <- exclusion_overview(strata, "metier4", trips_min = 2)
 ok(nrow(ov) == 3 && all(ov$reason == "too few trips"),
    "a trips floor excludes strata below it, with the right reason")
-
-s <- donor_pool_summary(strata, "metier4", warn_trips_min = 5)
-ok(s$numTrips == 3 && !isTRUE(s$ok),
-   "the pool's own trip total (summed) is checked against the sanity bar")
-s_off <- donor_pool_summary(strata, "metier4", warn_trips_min = NA)
-ok(isTRUE(s_off$ok), "switching the trips sanity check off stops the warning")
 
 expr <- exclusion_expr(trips_min = 2)
 ok(identical(expr, "numTrips >= 2"), "trips reaches the emitted condition")

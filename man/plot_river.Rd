@@ -13,12 +13,13 @@ plot_river(
   title = "Which strata are raised from which group",
   left_label = NULL,
   right_label = NULL,
-  stratum_axis = "Stratum"
+  stratum_axis = "Stratum",
+  save = NULL
 )
 }
 \arguments{
-\item{df}{A recommendation table from [recommend_raising()] or a tagged
-table from [assign_rule_groups()].}
+\item{df}{A stratum table: one row per stratum, with the columns named by
+`left_var`, `right_var` and `value_var`.}
 
 \item{left_var}{Column on the left axis, usually the stratum label.}
 
@@ -26,13 +27,17 @@ table from [assign_rule_groups()].}
 
 \item{value_var}{Column giving each ribbon its width.}
 
-\item{pal}{Named colours for the groups, e.g. from `group_palette()`.}
+\item{pal}{Named colours for the groups; a default palette when `NULL`.}
 
 \item{title}{Plot title.}
 
 \item{left_label, right_label}{Axis labels.}
 
 \item{stratum_axis}{Label for the stratum axis.}
+
+\item{save}{Where to write the plot as well, or \code{NULL} (default) to only
+return it: a folder, a file name, or a list of options - see
+\link{saving-plots}.}
 }
 \value{
 A ggplot object, or `NULL` when there is nothing to draw.
@@ -44,13 +49,9 @@ answers the question a table cannot: how much of the stock is being raised
 from each pool, and which strata were swept into the fallback.
 }
 \seealso{
-[plot_river_level()], [recommend_raising()]
-
 Other raising plots: 
-\code{\link{plot_comparison}()},
+\code{\link{plot_compare_raised}()},
 \code{\link{plot_raised_DR}()},
-\code{\link{plot_raised_catches}()},
-\code{\link{plot_river_level}()},
-\code{\link{plot_scenario_comparison}()}
+\code{\link{plot_raised_catches}()}
 }
 \concept{raising plots}

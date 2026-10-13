@@ -8,31 +8,33 @@
 \description{
 Implements the ICES discard-raising and length / age catch-allocation
 workflows over CEF (RDBES) long-format data: exploring how well the data
-is sampled, defining the groups that raise or allocate, running the
-RDBESStockCoord engines, and writing the result out as a reproducible
-script or an ICES TAF script set. A shiny application, started with
-\code{\link[=run_app]{run_app()}}, drives the same functions.
+is sampled, defining the groups that raise or allocate, and running the
+RDBESStockCoord engines on them.
 }
 \details{
 \subsection{Where to start}{\tabular{ll}{
    To ... \tab Use \cr
-   read InterCatch files into CEF \tab \code{\link[=funICoutCEF]{funICoutCEF()}} \cr
+   read InterCatch files into CEF \tab \code{\link[=funICoutCEF]{funICoutCEF()}}, \code{\link[=funIntercatchCEF]{funIntercatchCEF()}}, and \code{\link[=funMakeRelation]{funMakeRelation()}} for the stock relation they need \cr
    add the strata-ready columns (\code{metier4}, \code{mesh}, ICES area levels, ...), to the catch or to its distributions \tab \code{\link[=derive_fields]{derive_fields()}} \cr
    see discard rates and sampling coverage per stratum, as a table \tab \code{\link[=build_coverage_strata]{build_coverage_strata()}} \cr
    look at them \tab \link{coverage-plots} (heatmap, bubbles, bars), \code{\link[=plot_coverage_map]{plot_coverage_map()}}, \code{\link[=plot_DR]{plot_DR()}} \cr
    look at numbers and mean weight at length or age \tab \code{\link[=plot_NaLoA]{plot_NaLoA()}}, \code{\link[=plot_MWaLoA]{plot_MWaLoA()}} \cr
-   build the raising-side stratum table and judge it \tab \code{\link[=build_strata]{build_strata()}}, \code{\link[=classify_strata]{classify_strata()}} \cr
-   define raising groups automatically (a cascade that coarsens until coverage clears a bar) \tab \code{\link[=recommend_raising]{recommend_raising()}}, \code{\link[=conds_from_auto]{conds_from_auto()}} \cr
-   define them by hand \tab \code{\link[=new_rule]{new_rule()}}, \code{\link[=conds_from_rules]{conds_from_rules()}} \cr
-   check a group definition before raising \tab \code{\link[=check_group_conditions]{check_group_conditions()}} \cr
-   look at a raised catch, imported against raised \tab \code{\link[=plot_raised_catches]{plot_raised_catches()}}, \code{\link[=plot_raised_DR]{plot_raised_DR()}} \cr
+   find strata with a similar discard rate \tab \code{\link[=build_discard_clusters]{build_discard_clusters()}}, \code{\link[=plot_discard_clusters]{plot_discard_clusters()}}, \code{\link[=plot_discard_cluster_variables]{plot_discard_cluster_variables()}} \cr
+   define raising groups automatically (a cascade that coarsens until coverage clears a bar) \tab \code{\link[=define_raising_groups_auto]{define_raising_groups_auto()}} \cr
+   define them by hand \tab \code{\link[=define_raising_groups_manual]{define_raising_groups_manual()}} \cr
+   check a group definition before raising or allocating \tab \code{\link[=check_group_conditions]{check_group_conditions()}} \cr
+   raise the discards \tab \code{\link[=catchRaising]{catchRaising()}} \cr
+   look at a raised catch, imported against raised \tab \code{\link[=plot_raised_catches]{plot_raised_catches()}}, \code{\link[=plot_raised_DR]{plot_raised_DR()}}, \code{\link[=plot_river]{plot_river()}} \cr
+   compare two or more raised catches, as a table or a figure \tab \code{\link[=raised_overview_table]{raised_overview_table()}}, \code{\link[=plot_compare_raised]{plot_compare_raised()}} \cr
+   give every stratum a length or age distribution \tab \code{\link[=catchAllocationAoL]{catchAllocationAoL()}} \cr
+   add the allocation up into catch-at-length / -age and mean-weight tables \tab \code{\link[=catchAtAoLAggregation]{catchAtAoLAggregation()}}, \code{\link[=meanWoLatAoLAggregation]{meanWoLatAoLAggregation()}} \cr
    look at an allocation, sampled against estimated, at length or age \tab \code{\link[=plot_allocated_NaLoA]{plot_allocated_NaLoA()}}, \code{\link[=plot_allocated_MWaLoA]{plot_allocated_MWaLoA()}} \cr
-   compare two or more raised catches, as a table or a figure \tab \code{\link[=raised_overview_table]{raised_overview_table()}}, \code{\link[=plot_comparison]{plot_comparison()}} \cr
-   compare grouping schemes side by side, before raising \tab \code{\link[=scenario_auto]{scenario_auto()}}, \code{\link[=run_scenario]{run_scenario()}}, \code{\link[=compare_scenarios]{compare_scenarios()}} \cr
-   write the session out as an ICES TAF script set \tab \code{\link[=taf_bundle]{taf_bundle()}} \cr
-   use all of this through the application \tab \code{\link[=run_app]{run_app()}} \cr
+   save any of the plots to a file \tab the \code{save} argument they all take, see \link{saving-plots} \cr
 }
 
+
+The package exports more functions than these. The others are plumbing
+between the ones above and have no help page.
 
 Four vignettes walk it through on real data, in this order:
 \code{"part1-explore-sampling-coverage"} (every exploratory plot),
@@ -55,19 +57,22 @@ Exploring the data first is its own short chain:
 or that table, so the same numbers can be read as a table and looked at
 as a figure. Raising and allocation then run:
 
-\if{html}{\out{<div class="sourceCode">}}\preformatted{derive_fields() -> build_strata() -> classify_strata()
-  -> define_raising_groups_auto() | define_raising_groups_manual()
-  -> run_native_raising()   (discards; wraps catchRaising())
-  -> catchAllocationAoL()   (lengths and ages)
+\if{html}{\out{<div class="sourceCode">}}\preformatted{derive_fields() -> define_raising_groups_auto() | define_raising_groups_manual()
+  -> catchRaising()          (discards)
+  -> catchAllocationAoL()    (lengths and ages)
+  -> catchAtAoLAggregation() / meanWoLatAoLAggregation()
 }\if{html}{\out{</div>}}
 
 Both grouping methods return the same \code{strataCond} / \code{matchedDataCond}
 shape, which is what the two RDBESStockCoord engines consume, so one group
-definition drives either. The group conditions are written against stratum
-columns (\code{stratum_id}, \code{coverage}, \code{discard_rate}, ...) that raw catch rows
-do not carry; \code{run_native_raising()} adds them before it calls
-\code{catchRaising()}, so call the engine directly only on a table that already
-has them.
+definition drives either. Groups written by hand against the columns of the
+catch (\code{metier4 == "TBB"}, say) go to the engines as they are. The groups
+the two \verb{define_raising_groups_*()} functions return select strata by
+\code{stratum_id} and may test \code{coverage} or \code{discard_rate}: columns of a
+stratum, which raw catch rows do not carry. The catch has to carry them
+before an engine evaluates the conditions row by row, and
+\code{run_native_raising(catch, dims, groups)} adds them and then calls
+\code{catchRaising()}.
 }
 
 \subsection{How the code is laid out}{
@@ -79,12 +84,14 @@ split is visible in git:
 group code. Algorithms, argument lists and return shapes are upstream's.
 Local edits are packaging, plus one - \code{distributionType} takes CEF's own
 \code{"LengthTotal"} where upstream says \code{"Length"} - and are marked
-\verb{## [pkg]}. Do not refactor these; fix upstream and re-vendor.
+\verb{## [pkg]}. The help pages of \code{\link[=catchRaising]{catchRaising()}}, \code{\link[=catchAllocationAoL]{catchAllocationAoL()}}
+and the two aggregation functions are written here. Do not refactor
+these files; fix upstream and re-vendor.
 \item \code{R/rcef_*.R}: written here - strata, classification, coverage, grouping,
-scenarios, script emission. Free to refactor.
-\item \code{R/viz_*.R}: written here - the theme and the plots. Pure ggplot2, no
-shiny; separated so they can be dropped or split into their own package
-later without touching the analysis code.
+summaries. Free to refactor.
+\item \code{R/viz_*.R}: written here - the theme and the plots. Pure ggplot2;
+separated so they can be dropped or split into their own package later
+without touching the analysis code.
 }
 }
 }

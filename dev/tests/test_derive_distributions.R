@@ -11,6 +11,7 @@
 ## distributions table that carries the fields still plots, tabulates and
 ## allocates exactly as one that does not.
 
+source("dev/tests/fixture.R")
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
@@ -184,23 +185,23 @@ ok(identical(m, "Missing expected column(s): fleetValue"),
    "a catch with no fleetValue: the message it always gave")
 
 ## ---- the bundled example ---------------------------------------------------------------------
-data(anchoveta_catch); data(anchoveta_dist)
-c23 <- subset(anchoveta_catch, year == 2023)
-d23 <- subset(anchoveta_dist, year == 2023)
+test_catch <- fx_catch(); test_dist <- fx_dist()
+c23 <- subset(test_catch, year == 2023)
+d23 <- subset(test_dist, year == 2023)
 ha  <- heard(derive_fields(c23, d23, what = "distribution"))
 dd23 <- ha$value
 ok(nrow(dd23) == nrow(d23) && identical(dd23[names(d23)], d23) && length(ha$warnings) == 0L,
-   "anchoveta: all the rows back, nothing orphaned")
+   "fixture: all the rows back, nothing orphaned")
 ok(!anyNA(dd23[c("fleetValue", "areaValue", "metier4", "metier4_mesh", "ICESDivision")]),
-   "anchoveta: fleet, area and the fields from them are there for every row")
+   "fixture: fleet, area and the fields from them are there for every row")
 # the example's distributions cover whole domains (all seasons): season is the one thing they cannot say
 ok(anyNA(dd23$seasonValue) && length(ha$messages) == 1L,
-   "anchoveta: a domain spans seasons, so seasonValue is NA there - and said")
+   "fixture: a domain spans seasons, so seasonValue is NA there - and said")
 k <- paste(dd23$domainBiology, dd23$catchCategory, dd23$vesselFlagCountry)
 one_season <- tapply(c23$seasonValue, paste(c23$domainBiology, c23$catchCategory, c23$vesselFlagCountry),
                      function(s) length(unique(s)) == 1L)
 ok(identical(!is.na(dd23$seasonValue), as.vector(one_season[k])),
-   "anchoveta: seasonValue is there exactly where the domain has one season")
+   "fixture: seasonValue is there exactly where the domain has one season")
 
 ## ---- deriving the distributions changes nothing downstream ----------------------------------------
 dims <- c("metier4", "ICESDivision")

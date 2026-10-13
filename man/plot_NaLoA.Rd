@@ -15,14 +15,15 @@ plot_NaLoA(
   plus_group = NULL,
   bin_width = NULL,
   scales = "fixed",
-  palette = c("default", "colorblind", "gradual")
+  palette = c("default", "colorblind", "gradual"),
+  save = NULL
 )
 }
 \arguments{
-\item{data}{Raw CEF catch data, or a \code{length_numbers()} table.}
+\item{data}{Raw CEF catch data.}
 
-\item{distributions}{A CEF distributions table. Needed with raw catch;
-leave it out when \code{data} is already a \code{length_numbers()} table.}
+\item{distributions}{A CEF distributions table, linked to the catch through
+\code{domainBiology}.}
 
 \item{distributionType}{\code{"LengthTotal"} (default) or \code{"Age"}.}
 
@@ -46,8 +47,11 @@ into. \code{NULL} (default): no binning. Lengths only.}
 \item{scales}{Facet scales: \code{"fixed"} (default), \code{"free_x"}, \code{"free_y"} or
 \code{"free"}.}
 
-\item{palette}{\code{"default"}, \code{"colorblind"} or \code{"gradual"} (see
-\code{\link[=var_palette]{var_palette()}}).}
+\item{palette}{\code{"default"}, \code{"colorblind"} or \code{"gradual"}.}
+
+\item{save}{Where to write the plot as well, or \code{NULL} (default) to only
+return it: a folder, a file name, or a list of options - see
+\link{saving-plots}.}
 }
 \value{
 A ggplot object, or \code{NULL} when there is nothing to draw.
@@ -57,11 +61,10 @@ The catch numbers spread over the length (or age) classes, as a stacked or
 dodged histogram. Numbers are in thousands, length in cm and age in years.
 }
 \details{
-\code{data} is either raw CEF catch together with \code{distributions} - linked
-through \code{domainBiology} and the country and summed inside, with
+\code{data} is raw CEF catch and \code{distributions} the CEF distributions: they are
+linked through \code{domainBiology} and the country and summed inside, with
 \code{catchCategory} choosing the landings, the discards, BMS or the catch as a
-whole - or a table already summarised by \code{length_numbers()}. When
-\code{distributions} is given the catch part goes in the plot title. A
+whole. The catch part goes in the plot title. A
 distributions row that repeats another exactly is dropped, with a warning:
 a repeat is not a second sample.
 
@@ -75,24 +78,24 @@ bins} - except numbers simply add rather than being averaged, so there is
 no per-distribution weighting step to speak of.
 }
 \examples{
-data(anchoveta_catch)
-data(anchoveta_dist)
+\dontrun{
 
 # numbers at length of the landings, stacked by country
-plot_NaLoA(anchoveta_catch, anchoveta_dist,
+plot_NaLoA(catch, distributions,
           catchCategory = "Lan", fill = "vesselFlagCountry")
 
 # numbers at age, one panel per quarter, dodged
-plot_NaLoA(anchoveta_catch, anchoveta_dist,
+plot_NaLoA(catch, distributions,
           distributionType = "Age", fill = "vesselFlagCountry",
           facet = "seasonValue", stacked = FALSE)
 
 # every age from 3 upward pooled into "3+"
-plot_NaLoA(anchoveta_catch, anchoveta_dist,
+plot_NaLoA(catch, distributions,
           distributionType = "Age", fill = "vesselFlagCountry", plus_group = 3)
 
 # length classes pooled into 2cm bins
-plot_NaLoA(anchoveta_catch, anchoveta_dist, fill = "vesselFlagCountry", bin_width = 2)
+plot_NaLoA(catch, distributions, fill = "vesselFlagCountry", bin_width = 2)
+}
 }
 \seealso{
 \code{\link[=plot_MWaLoA]{plot_MWaLoA()}} for the mean weight in the same classes;
