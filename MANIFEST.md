@@ -60,7 +60,7 @@ every return shape, every algorithm.
 | `rcef_summaries.R` | `R_development/summaries.R` | `raised_overview_table()` and the reading of `c(a, b)` raised catches |
 | `viz_theme.R` | `R_development/0_Functions_theme.R` | `plot_colours()` (every colour of every plot: three palettes, a level keeps its colour, one status scale), `app_theme()` |
 | `viz_plots.R` | `R_development/0_Functions_plots.R` | the public plot functions (ggplot only), the catch and the distributions each looked at before a step and after it by the same function (`plot_catches()`, `plot_DR()`, `plot_NaLoA()`, `plot_MWaLoA()`); `coverage_grid()`, the one body behind the heatmap and the bubble grid, including the sampling status of a cell |
-| `viz_helpers.R` | *(split from the plots)* | mesh size order, category columns, the imported / raised and sampled / estimated shade, the facet layer, the grouping sentence of a caption, catch-part wording, the class axis of the distribution plots |
+| `viz_helpers.R` | *(split from the plots)* | mesh size order, category columns, the imported / raised and sampled / estimated marks (a cross, a dotted line, a hatched bar), the facet layer, the grouping sentence of a caption, catch-part wording, the class axis of the distribution plots |
 | `viz_raising.R` | *(split from the plots)* | `plot_river()`, `plot_compare_raised()` |
 | `viz_clusters.R` | *(new)* | `build_discard_clusters()` and its two plots |
 | `viz_save.R` | *(new)* | the `save` argument every plot takes |

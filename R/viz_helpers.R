@@ -1,7 +1,8 @@
 # ============================================================
 #  viz_helpers.R
 #  Shared plumbing for R/viz_plots.R: mesh order and category columns, the
-#  imported / raised and sampled / estimated shade, the facet layer, the
+#  imported / raised and sampled / estimated marks (a cross, a dotted line, a
+#  hatched bar), the facet layer, the
 #  grouping sentence, the catch-part words and the class axis of the
 #  distribution plots. The plot functions themselves are in
 #  viz_plots.R, the coverage table they draw from in rcef_coverage.R -
@@ -135,18 +136,20 @@ status_levels <- function(var) switch(var,
   sampledOrEstimated = c("sampled", "estimated"),
   NULL)
 
-#' Whether, and how, a plot shows what the raising or the allocation added
+#' Whether, and how, a plot marks what the raising or the allocation added
 #'
-#' One rule for the four plots that look at a catch or at distributions
-#' before or after a step - [plot_catches()], [plot_DR()], [plot_NaLoA()] and
-#' [plot_MWaLoA()]. The status column (`S`) is a variable like any other: by
-#' default it is the shade, solid for what was in the data and transparent for
-#' what the step added; named in `x`, `fill`, `colour`, `shape` or `facet` it is
-#' drawn there instead, and then not as a shade as well; `alpha = NULL` draws no
-#' shade. A shade only means something when the step did add something, so with
-#' nothing raised (or estimated) there is none. The title says what the data
-#' holds, precisely: *imported + raised* or *only imported*, *sampled +
-#' estimated* or *only sampled*.
+#' One rule for the plots that look at a catch or at distributions before or
+#' after a step - [plot_catches()], [plot_DR()], [plot_NaLoA()], [plot_MWaLoA()]
+#' and [plot_compare_raised()]. The status column (`S`) is a variable like any
+#' other: by default it is the mark, and what the mark is depends on what is
+#' drawn. What was in the data is drawn plain; what the step added is a cross
+#' where the data are points, a dotted line where they are lines, and a
+#' transparent, hatched bar where they are bars. Named in `x`, `fill`, `colour`,
+#' `shape` or `facet` it is drawn there instead, and then not as a mark as well;
+#' `alpha = NULL` draws no mark. A mark only means something when the step did
+#' add something, so with nothing raised (or estimated) there is none. The title
+#' says what the data holds, precisely: *imported + raised* or *only imported*,
+#' *sampled + estimated* or *only sampled*.
 #'
 #' @param S `"importedOrRaised"` or `"sampledOrEstimated"`.
 #' @param alpha The plot's `alpha` argument: `S` or `NULL`.
@@ -156,23 +159,24 @@ status_levels <- function(var) switch(var,
 #'   (`NULL` or empty when the data has no such column: it is the data as it
 #'   came, imported, or sampled).
 #' @param fn The calling function's name, for the error (with its colon).
-#' @param override What the shade's legend keys are drawn with (a fill, a
+#' @param override What the alpha scale's legend keys are drawn with (a fill, a
 #'   colour ...), so they show on the white key background.
-#' @return A list: `shown` (it is mapped elsewhere), `on` (it is the shade:
+#' @return A list: `shown` (it is mapped elsewhere), `on` (it is the mark:
 #'   something was raised or estimated), `word` (what the title says the data
 #'   is: `"imported + raised"`, `"only imported"`, `"only raised"`, `"sampled +
 #'   estimated"`, `"only sampled"` or `"only estimated"`), `status` (a function
-#'   turning the column's values into the factor the shade is mapped to:
-#'   `Imported` / `Raised`, `Sampled` / `Estimated`) and `scale` (the alpha scale
-#'   to add when `on`).
+#'   turning the column's values into the factor the mark is mapped to:
+#'   `Imported` / `Raised`, `Sampled` / `Estimated`) and the scales to add when
+#'   `on`: `scale` (transparency, 1 and 0.45 - the bars', and the points' when
+#'   `shape` is taken), `shape` (circle and cross) and `line` (solid and dotted).
 #' @keywords internal
 #' @noRd
 #' @export
-status_shade <- function(S, alpha, named, present, fn, override = list(fill = "grey30")) {
+status_marks <- function(S, alpha, named, present, fn, override = list(fill = "grey30")) {
   lv <- status_levels(S)
   if (!is.null(alpha) && !identical(alpha, S))
-    stop(fn, "`alpha` is \"", S, "\" (solid = ", lv[1], ", transparent = ", lv[2],
-         ") or NULL for no shade", call. = FALSE)
+    stop(fn, "`alpha` is \"", S, "\" (to mark what was ", lv[2],
+         ") or NULL for no mark", call. = FALSE)
   shown <- S %in% named
   lab <- paste0(toupper(substring(lv, 1, 1)), substring(lv, 2))
   have <- lv[lv %in% present]
@@ -183,7 +187,120 @@ status_shade <- function(S, alpha, named, present, fn, override = list(fill = "g
               else paste("only", have),
        status = function(x) factor(lab[match(as.character(x), lv)], levels = lab),
        scale = scale_alpha_manual(values = setNames(c(1, 0.45), lab), name = NULL,
-                                  guide = guide_legend(override.aes = override)))
+                                  guide = guide_legend(override.aes = override)),
+       shape = scale_shape_manual(values = setNames(c(21, 4), lab), name = NULL),
+       line  = scale_linetype_manual(values = setNames(c("solid", "dotted"), lab),
+                                     name = NULL))
+}
+
+#' The colour of the points of a plot that marks its raised values with crosses
+#'
+#' A circle is drawn with a fill and a dark outline, a cross has no fill and
+#' takes its colour from the `colour` aesthetic. So a plot that draws the
+#' status as circles and crosses gives each point a `.edge`: the dark outline
+#' for a circle and, for a cross, the level of the category the circle would
+#' have been filled with (or one fixed colour when there is none). And a
+#' `.stroke`, which lets a cross be drawn heavier than the outline of a circle.
+#'
+#' @param d The plot's data, with `.status` (`Imported` / `Raised`, or `Sampled` /
+#'   `Estimated`) in it.
+#' @param category The column the circles are filled by, or `NULL`.
+#' @param cross_stroke,circle_stroke The line weight of a cross and of a
+#'   circle's outline.
+#' @return `d` with `.edge` and `.stroke`.
+#' @keywords internal
+#' @noRd
+#' @export
+cross_marks <- function(d, category, cross_stroke, circle_stroke) {
+  marked <- d$.status %in% c("Raised", "Estimated")
+  d$.edge   <- ifelse(marked, if (is.null(category)) ".cross" else as.character(d[[category]]),
+                      ".outline")
+  d$.stroke <- ifelse(marked, cross_stroke, circle_stroke)
+  d
+}
+
+#' Stripes inside bars: how a hatched bar is drawn
+#'
+#' A bar that is transparent is hatched as well, so what the raising or the
+#' allocation added can be told from what was in the data even where
+#' transparency is hard to see. The stripes run at 45 degrees and are a fixed
+#' distance apart on the page - not in data units - so they look the same on
+#' every bar and in every panel, and they continue across neighbouring bars. A
+#' grob, because the distance is in millimetres and the size of the panel is
+#' only known when it is drawn.
+#'
+#' @param x A `hatch_grob`: its `rects` (the bars' `xmin`, `xmax`, `ymin`,
+#'   `ymax` in the panel's npc units) and the `gap` between stripes, in mm.
+#' @return The grob with its stripes.
+#' @keywords internal
+#' @noRd
+#' @exportS3Method grid::makeContent
+makeContent.hatch_grob <- function(x) {
+  W <- grid::convertWidth(grid::unit(1, "npc"), "mm", valueOnly = TRUE)
+  H <- grid::convertHeight(grid::unit(1, "npc"), "mm", valueOnly = TRUE)
+  r <- x$rects
+  step <- x$gap * sqrt(2)               # between two stripes, measured along x - y
+  seg <- lapply(seq_len(nrow(r)), function(i) {
+    x0 <- r$xmin[i] * W; x1 <- r$xmax[i] * W
+    y0 <- r$ymin[i] * H; y1 <- r$ymax[i] * H
+    if (!all(is.finite(c(x0, x1, y0, y1))) || x1 <= x0 || y1 <= y0) return(NULL)
+    k <- seq.int(ceiling((x0 - y1) / step), floor((x1 - y0) / step))
+    cc <- k * step                       # the stripe x - y = cc, cut to the bar
+    xa <- pmax(x0, y0 + cc); xb <- pmin(x1, y1 + cc)
+    keep <- xb > xa
+    cbind(x0 = xa[keep], y0 = (xa - cc)[keep], x1 = xb[keep], y1 = (xb - cc)[keep])
+  })
+  seg <- do.call(rbind, seg)
+  grid::setChildren(x, if (is.null(seg) || !nrow(seg)) grid::gList()
+    else grid::gList(grid::segmentsGrob(
+      grid::unit(seg[, "x0"], "mm"), grid::unit(seg[, "y0"], "mm"),
+      grid::unit(seg[, "x1"], "mm"), grid::unit(seg[, "y1"], "mm"))))
+}
+
+#' A bar layer that hatches its transparent bars
+#'
+#' [ggplot2::geom_col()] whose bars with an `alpha` below 1 are also hatched
+#' (see [makeContent.hatch_grob()]), in the colour of their outline - and so are
+#' their legend keys. The plots that mark what a step added map `alpha` to the
+#' status, so the hatch follows the status without a second aesthetic. The
+#' geom is made here, per call, from the `GeomCol` of the ggplot2 in use.
+#'
+#' @param mapping,data,position,show.legend,inherit.aes,... As in
+#'   [ggplot2::geom_col()].
+#' @param hatch_gap The distance between two stripes, in mm.
+#' @keywords internal
+#' @noRd
+#' @export
+geom_col_hatch <- function(mapping = NULL, data = NULL, position = "stack", ...,
+                           hatch_gap = 1.8, show.legend = NA, inherit.aes = TRUE) {
+  geom <- ggproto("GeomColHatch", GeomCol,
+    draw_panel = function(self, data, panel_params, coord, lineend = "butt",
+                          linejoin = "mitre", hatch_gap = 1.8) {
+      bars <- ggproto_parent(GeomCol, self)$draw_panel(data, panel_params, coord,
+                                                       lineend = lineend, linejoin = linejoin)
+      hit <- which(!is.na(data$alpha) & data$alpha < 1)
+      if (!length(hit) || !coord$is_linear()) return(bars)
+      cd <- coord$transform(data[hit, , drop = FALSE], panel_params)
+      col <- cd$colour[!is.na(cd$colour)][1]
+      lw  <- cd$linewidth[!is.na(cd$linewidth)][1]
+      grid::grobTree(bars, grid::gTree(
+        rects = cd[c("xmin", "xmax", "ymin", "ymax")], gap = hatch_gap,
+        gp = grid::gpar(col = if (is.na(col)) "grey25" else col,
+                        lwd = (if (is.na(lw)) 0.25 else lw) * .pt, lineend = "butt"),
+        cl = "hatch_grob"))
+    },
+    draw_key = function(data, params, size) {
+      box <- draw_key_polygon(data, params, size)
+      if (is.na(data$alpha %||% NA) || data$alpha >= 1) return(box)
+      c0 <- seq(-0.75, 0.75, by = 0.25)     # the stripes y = x + c0 across the square key
+      grid::grobTree(box, grid::segmentsGrob(
+        x0 = ifelse(c0 >= 0, 0, -c0), y0 = ifelse(c0 >= 0, c0, 0),
+        x1 = ifelse(c0 >= 0, 1 - c0, 1), y1 = ifelse(c0 >= 0, 1, 1 + c0),
+        gp = grid::gpar(col = data$colour %||% "grey25", lwd = 0.7)))
+    })
+  layer(geom = geom, stat = "identity", data = data, mapping = mapping,
+        position = position, show.legend = show.legend, inherit.aes = inherit.aes,
+        params = list(hatch_gap = hatch_gap, na.rm = FALSE, ...))
 }
 
 #' Facet layer for the plots

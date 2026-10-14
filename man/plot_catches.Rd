@@ -17,8 +17,8 @@ plot_catches(
 )
 }
 \arguments{
-\item{catch}{Raw CEF catch data, or the raised catch (\code{\link[=catchRaising]{catchRaising()}}):
-\code{catchCategory} and \code{total}, and for the shade \code{importedOrRaised}.}
+\item{catch}{CEF catch data, or the raised catch (\code{\link[=catchRaising]{catchRaising()}}):
+\code{catchCategory} and \code{total}, and for the mark \code{importedOrRaised}.}
 
 \item{x}{Column on the x axis: one bar (or bar segment) per level;
 \code{"importedOrRaised"} included.}
@@ -29,10 +29,10 @@ plot_catches(
 by catch category - landings, discards, BMS; \code{"importedOrRaised"} is
 allowed.}
 
-\item{alpha}{\code{"importedOrRaised"} (default) draws the shade: solid for
-imported, transparent for raised. \code{NULL} draws none. Left out when
-\code{importedOrRaised} is the \code{x}, the \code{fill} or the \code{facet}, and when nothing
-was raised.}
+\item{alpha}{\code{"importedOrRaised"} (default) marks what the raising added:
+solid bars for imported weight, transparent and hatched ones for raised.
+\code{NULL} draws no mark. Left out when \code{importedOrRaised} is the \code{x}, the
+\code{fill} or the \code{facet}, and when nothing was raised.}
 
 \item{catchCategory}{Optional filter to just \code{"Lan"}, \code{"Dis"} or \code{"BMS"}
 (matched case-insensitively), so discards are readable on their own when
@@ -55,24 +55,25 @@ A stacked bar of catch weight at any aggregation: bars are landings,
 discards (and BMS), or just the one, via \code{catchCategory}. Given the raised
 catch (the output of \code{\link[=catchRaising]{catchRaising()}}) it shows what the raising added -
 \code{importedOrRaised}, imported from the data versus added by the raising - as
-the shade, as the \code{fill} or as a \code{facet}, as you choose. Given raw catch
+the mark, as the \code{fill} or as a \code{facet}, as you choose. Given raw catch
 it is the weight as it was reported. The arguments are the same either way,
 and so is the plot; the title says which it is.
 }
 \details{
-\code{importedOrRaised} is a variable like any other. By default it is the shade
-(\code{alpha = "importedOrRaised"}): solid for what was imported, transparent for
-what raising added. Name it in \code{fill} to give the two a colour each (the bars
+\code{importedOrRaised} is a variable like any other. By default it is the mark
+(\code{alpha = "importedOrRaised"}): solid for what was imported, transparent and
+hatched for what raising added. Name it in \code{fill} to give the two a colour
+each (the bars
 are then no longer coloured landings / discards: say which they are with
 \code{catchCategory}, or with \code{facet = "catchCategory"}), in \code{facet} to give each
-its own panel, or in \code{x} for a bar each; it is then not drawn as a shade as
-well. \code{alpha = NULL} draws no shade, and unless it is named elsewhere the
+its own panel, or in \code{x} for a bar each; it is then not drawn as a mark as
+well. \code{alpha = NULL} draws no mark, and unless it is named elsewhere the
 imported and the raised weights are added together.
 
 The title says what the rows drawn are: \emph{imported + raised} when the raising
 added some of them, \emph{only imported} when it did not - a raw catch, a raised
 catch in which nothing needed raising, or the landings of a raised catch,
-which are always imported - and then there is no shade, because there is
+which are always imported - and then there is no mark, because there is
 nothing to tell apart.
 }
 \examples{
@@ -81,7 +82,7 @@ nothing to tell apart.
 # the catch as reported, by metier
 plot_catches(catch, x = "metier4")
 
-# the same of the raised catch: solid = imported, transparent = raised
+# the same of the raised catch: solid = imported, hatched = raised
 raised <- catchRaising(catch, strataCond, logFile = tempfile(fileext = ".txt"))
 plot_catches(raised, x = "metier4", facet = "vesselFlagCountry")
 

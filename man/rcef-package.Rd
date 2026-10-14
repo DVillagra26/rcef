@@ -50,10 +50,14 @@ Exploring the data first is its own short chain:
   -> plot_coverage_heat() / _bubble() / _bar() / _map() | plot_DR() | plot_catches()
 }\if{html}{\out{</div>}}
 
-\code{\link[=build_coverage_strata]{build_coverage_strata()}} is the discard-rate / sampling-coverage table
-(CAR / CAS-style columns, no status) the plots draw; they take raw catch
-or that table, so the same numbers can be read as a table and looked at
-as a figure. Raising and allocation then run:
+\code{\link[=derive_fields]{derive_fields()}} runs once, on the raw catch (and on its distributions):
+everything after it reads the columns the catch has and derives nothing
+itself, so columns of your own - a fleet grouping, say - sit beside the
+derived ones and are used the same way. \code{\link[=build_coverage_strata]{build_coverage_strata()}} is the
+discard-rate / sampling-coverage table (CAR / CAS-style columns, no status)
+the plots draw; they take the catch or that table, so the same numbers can
+be read as a table and looked at as a figure. Raising and allocation then
+run:
 
 \if{html}{\out{<div class="sourceCode">}}\preformatted{derive_fields() -> your strataCond / matchedDataCond -> check_group_conditions()
   -> catchRaising()          (discards)

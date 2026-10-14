@@ -159,8 +159,9 @@ the title says what the data holds: *imported + raised* / *only imported*,
 
 `plot_allocated_NaLoA(alloc, ...)` is `plot_NaLoA(alloc$catch, alloc$distribution, ...)`;
 `plot_raised_catches(raised_catch = r, ...)` is `plot_catches(catch = r, ...)`;
-`plot_raised_DR(raised_catch = r, ...)` is `plot_DR(catch = r, ...)`. The shade is
-`alpha`, as before; `alpha = NULL` draws none.
+`plot_raised_DR(raised_catch = r, ...)` is `plot_DR(catch = r, ...)`. The mark -
+transparency then, now a cross, a dotted line or a hatched bar - is still
+`alpha`; `alpha = NULL` draws none.
 
 ---
 

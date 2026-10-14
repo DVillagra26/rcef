@@ -21,7 +21,8 @@ plot_NaLoA(
 )
 }
 \arguments{
-\item{data}{Raw CEF catch data; after the allocation, its \verb{$catch}.}
+\item{data}{CEF catch data carrying the columns you group by
+(\code{\link[=derive_fields]{derive_fields()}} output, or your own); after the allocation, its \verb{$catch}.}
 
 \item{distributions}{A CEF distributions table, linked to the catch through
 \code{domainBiology}; after the allocation, its \verb{$distribution}.}
@@ -37,10 +38,10 @@ titled "catch"), \code{"Lan"}, \code{"Dis"} or \code{"BMS"}. Only used with
 \item{facet}{Up to two facet columns: \code{"col"} or \code{c("row", "col")};
 \code{"sampledOrEstimated"} included.}
 
-\item{alpha}{\code{"sampledOrEstimated"} (default) draws the shade: solid for
-sampled, transparent for estimated. \code{NULL} draws none. Left out when
-\code{sampledOrEstimated} is the \code{fill} or a \code{facet}, and when nothing was
-estimated.}
+\item{alpha}{\code{"sampledOrEstimated"} (default) marks what the allocation
+estimated: solid bars for sampled numbers, transparent and hatched ones for
+estimated. \code{NULL} draws no mark. Left out when \code{sampledOrEstimated} is the
+\code{fill} or a \code{facet}, and when nothing was estimated.}
 
 \item{stacked}{Stack the bars on \code{fill} (default) rather than dodge them.}
 
@@ -68,10 +69,10 @@ The catch numbers spread over the length (or age) classes, as a stacked or
 dodged histogram. Numbers are in thousands, length in cm and age in years.
 Given the result of the allocation (\code{\link[=catchAllocationAoL]{catchAllocationAoL()}}) it shows what
 the allocation did: \code{sampledOrEstimated} says whether a number was sampled
-or estimated for a stratum nobody sampled, and it is drawn as the shade
-(solid = sampled, transparent = estimated), as the \code{fill} or as a \code{facet},
-as you choose. The arguments are the same before and after, and so is the
-plot; the title says which it is.
+or estimated for a stratum nobody sampled, and it is drawn as the mark
+(solid bars = sampled, transparent and hatched bars = estimated), as the
+\code{fill} or as a \code{facet}, as you choose. The arguments are the same before and
+after, and so is the plot; the title says which it is.
 }
 \details{
 \code{data} is the catch and \code{distributions} the CEF distributions: they are
@@ -89,18 +90,18 @@ biological domain carry a domain the allocation made up, and only its own
 them, which the plot warns about.
 
 The allocation adds \code{sampledOrEstimated} to the distributions, and from then
-on it is a variable like any other. By default it is the shade
-(\code{alpha = "sampledOrEstimated"}): solid where the numbers were sampled,
-transparent where the allocation estimated them. Name it in \code{fill} to give
-the two a colour each, or in \code{facet} to give each its own panel; it is then
-not drawn as a shade as well. \code{alpha = NULL} draws no shade, and unless it
-is also the fill or a facet the sampled and the estimated numbers are added
-together - the numbers the allocation finally reports.
+on it is a variable like any other. By default it is the mark
+(\code{alpha = "sampledOrEstimated"}): solid bars where the numbers were sampled,
+transparent and hatched ones where the allocation estimated them. Name it in
+\code{fill} to give the two a colour each, or in \code{facet} to give each its own
+panel; it is then not drawn as a mark as well. \code{alpha = NULL} draws no mark,
+and unless it is also the fill or a facet the sampled and the estimated
+numbers are added together - the numbers the allocation finally reports.
 
 The title says what the distributions drawn are: \emph{sampled + estimated} when
 the allocation estimated some of them, \emph{only sampled} when it did not -
 distributions as they were sampled, or an allocation that estimated none of
-the ones drawn - and then there is no shade, because there is nothing to
+the ones drawn - and then there is no mark, because there is nothing to
 tell apart.
 
 Like the allocation itself, the numbers count a distribution once for every
@@ -140,7 +141,7 @@ plot_NaLoA(catch, distributions,
 plot_NaLoA(catch, distributions, fill = "vesselFlagCountry", bin_width = 2)
 
 # after the allocation: both tables of its result. Landings by country,
-# solid = sampled, transparent = estimated
+# solid = sampled, hatched = estimated
 alloc <- catchAllocationAoL(raised, distributions,
                             condition_alloc_st_list = list(ALL = rlang::quo(TRUE)),
                             distributionType = "LengthTotal", verbose = FALSE,

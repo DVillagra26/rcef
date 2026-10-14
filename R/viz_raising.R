@@ -101,7 +101,7 @@ plot_river <- function(df, left_var, right_var = "raise_level",
 #' defining the groups, say. For each level of `x` (and each panel of `facet`)
 #' one bar per scenario: its colour says which scenario, its shade whether the
 #' weight came with the data (imported, solid) or was added by the raising
-#' (raised, transparent). The bars are catch weight, or only the landings or
+#' (raised, transparent and hatched). The bars are catch weight, or only the landings or
 #' only the discards with `catchCategory`.
 #'
 #' @details
@@ -221,8 +221,8 @@ plot_compare_raised <- function(raised_catch_scenarios, scenarios_names = NULL,
   d$.xn <- as.integer(d$.x) + (as.integer(d$scenario) - (n + 1) / 2) * w
 
   ggplot(d, aes(x = .xn, y = t, fill = scenario, alpha = src)) +
-    geom_col(width = w * 0.9, position = position_stack(reverse = TRUE),
-             colour = OUTLINE, linewidth = 0.25) +
+    geom_col_hatch(width = w * 0.9, position = position_stack(reverse = TRUE),
+                   colour = OUTLINE, linewidth = 0.25) +
     scale_x_continuous(breaks = seq_along(xl), labels = xl,
                        expand = expansion(add = 0.55)) +
     scale_fill_manual(values = plot_colours(levels(d$scenario), "scenario", palette),
@@ -236,7 +236,7 @@ plot_compare_raised <- function(raised_catch_scenarios, scenarios_names = NULL,
            "grouping = no grouping, raw data per stratum.",
            sprintf("bars = %s weight (t), summed per stratum.", tolower(cc_label)),
            "color = discard raising/allocation scenario.",
-           "shade = imported from the data, or added by raising.",
+           "solid = imported from the data, hatched = added by raising.",
            width = 110),
          x = if (has(x)) x else NULL, y = sprintf("%s (t)", cc_label)) +
     app_theme() +

@@ -37,7 +37,10 @@ drawable <- function(p)
 has_geom <- function(p, cls)
   any(vapply(p$layers, function(l) inherits(l$geom, cls), logical(1)))
 near <- function(a, b) isTRUE(all.equal(as.numeric(a), as.numeric(b), tolerance = 1e-9))
-shaded <- function(p) !is.null(p$scales$get_scales("alpha"))
+shaded <- function(p) {      # the status is drawn as a mark: bars by transparency, points as a cross
+  s <- p$scales$get_scales("shape")
+  !is.null(p$scales$get_scales("alpha")) || (!is.null(s) && identical(as.numeric(unname(s$palette(2))), c(21, 4)))
+}
 n_panels <- function(p) nrow(ggplot_build(p)$layout$layout)
 
 test_catch <- fx_catch()
@@ -111,7 +114,7 @@ ok(drawable(pcf) && !shaded(pcf) && is.factor(pcf$data[[S]]) &&
      near(tapply(pcf$data$t, pcf$data[[S]], sum), by_src),
    "plot_catches(): fill = importedOrRaised - a colour each, no shade, the same weights")
 ok(grepl("color = importedOrRaised", pcf$labels$caption, fixed = TRUE) &&
-     !grepl("shade =", pcf$labels$caption, fixed = TRUE),
+     !grepl("hatched", pcf$labels$caption, fixed = TRUE),
    "plot_catches(): ... and the caption says what the colour is")
 pcx <- plot_catches(raised, x = "metier4", facet = S)
 ok(drawable(pcx) && !shaded(pcx) && inherits(pcx$facet, "FacetWrap") && n_panels(pcx) == 2 &&
@@ -152,7 +155,7 @@ ok(identical(p2$labels$title, "Discard ratio per stratum, imported + raised"),
 ok(grepl("raw data per strata including imported and raised", p2$labels$caption, fixed = TRUE),
    "plot_DR(): the caption says what a point is")
 ok(!has_geom(p2, "GeomErrorbar"),
-   "plot_DR(): no weighted-mean line once strata are raised - the transparent points are the reference")
+   "plot_DR(): no weighted-mean line once strata are raised - the crosses are the reference")
 ok(!has_geom(p2, "GeomHline"),
    "plot_DR(): no reference line when `reference` is not set")
 ok(sum(vapply(p2$layers, function(l) inherits(l$geom, "GeomPoint"), logical(1))) == 1,
@@ -167,18 +170,25 @@ ok(identical(p2_rate$labels$title, "Discard rate per stratum, imported + raised"
      !has_geom(p2_rate, "GeomText") && !any(grepl("labels =", p2_rate$labels$caption)),
    "plot_DR(): rate = \"rate\" is named in the title; the reference line draws, its labels do not (raised)")
 
-## raw strata, imported solid and raised transparent: a two-level status, not a share
+## raw strata, imported circles and raised crosses: a two-level status, not a share
 ok(is.factor(p2$data$.status) && identical(levels(p2$data$.status), c("Imported", "Raised")) &&
      !anyNA(p2$data$.status) && any(p2$data$.status == "Imported") && any(p2$data$.status == "Raised"),
    "plot_DR(): every point is Imported or Raised (this example has both)")
 ok(!".raised_share" %in% names(p2$data) && !grepl("share", p2$labels$caption, ignore.case = TRUE) &&
-     is.null(p2$scales$get_scales("alpha")$name),
+     is.null(p2$scales$get_scales("shape")$name),
    "plot_DR(): no 'share raised' - not in the data, the caption or a legend title")
 b2 <- ggplot_build(p2)$data[[1]]
-ok(setequal(round(unique(b2$alpha), 2), c(1, 0.45)),
-   "plot_DR(): imported points are solid (alpha 1), raised ones transparent (0.45)")
+ok(setequal(unique(b2$shape), c(21, 4)) && identical(b2$shape == 4, p2$data$.status == "Raised") &&
+     all(round(b2$alpha, 2) == 0.85),
+   "plot_DR(): imported strata are circles (shape 21), raised ones crosses (shape 4), alike in transparency")
+ok(all(b2$colour[b2$shape == 21] == OUTLINE) && all(b2$colour[b2$shape == 4] != OUTLINE) &&
+     !anyNA(b2$colour) && all(b2$stroke[b2$shape == 4] > b2$stroke[b2$shape == 21][1]),
+   "plot_DR(): a circle keeps the dark outline, a cross is drawn in the colour of its category and heavier")
+ok(identical(unname(p2$scales$get_scales("shape")$palette(2)), c(21, 4)) &&
+     grepl("circles = imported from the data, crosses = added by raising", p2$labels$caption, fixed = TRUE),
+   "plot_DR(): the legend and the caption say circle = imported, cross = raised")
 ok(max(which(p2$data$.status == "Raised")) < min(which(p2$data$.status == "Imported")),
-   "plot_DR(): raised points are drawn first, so no solid point is buried under one")
+   "plot_DR(): raised points are drawn first, so no imported point is buried under one")
 
 # one point per raw stratum (fleet x area x country x season with landings)
 wg <- raised$originType %in% "WGEstimate" & raised$variableType %in% "WeightLive"

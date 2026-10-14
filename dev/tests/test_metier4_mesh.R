@@ -140,9 +140,9 @@ ok(identical(levels(r2$mesh), c("16-31", "100-119")) &&
 # disagree - "PS_100-119" sorts before "PS_16-31" and "PS_90-99" as text. Keyed
 # off fleetValue + areaValue, which a stratum's Lan and Dis rows share, so the
 # value agrees within a stratum and discard coverage linking still matches.
-# It is written into fleetValue's mesh part and re-derived, not just pasted
-# onto the mesh column: the length and age plots re-run derive_fields() on the
-# catch, which would put the real mesh values straight back.
+# It is written into fleetValue's mesh part and derived afresh: derive_fields()
+# keeps a column the catch already has, so the derived ones go first - the
+# plots themselves derive nothing and would draw the old values.
 mesh_vals <- c("0", "16-31", "32-69", "70-99", "90-99", "100-119", ">=120")
 key <- paste(c23$fleetValue, c23$areaValue)
 new_mesh <- mesh_vals[(as.integer(factor(key)) - 1) %% length(mesh_vals) + 1]
@@ -151,7 +151,8 @@ c23$fleetValue <- vapply(seq_len(nrow(c23)), function(i) {
   z[3] <- new_mesh[i]
   paste(z, collapse = "_")
 }, "")
-c23 <- derive_fields(c23)
+c23 <- derive_fields(c23[setdiff(names(c23), c("metier4", "metier5", "metier6", "target",
+                                               "mesh", "metier4_mesh"))])
 natural <- mesh_var_levels("metier4_mesh", c23$metier4_mesh)
 # more than three levels, or "in order" could be alphabetical order by luck
 in_order <- function(lv) length(lv) > 3 && identical(lv, natural[natural %in% lv])

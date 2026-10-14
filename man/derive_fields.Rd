@@ -33,10 +33,18 @@ mesh joined (`"TBB_70-99"`; just the gear when the fleet code has no mesh
 part); the three ICES area levels from `areaValue`; and `Stratum`, the four
 native keys joined. Country and season are not among them -
 `vesselFlagCountry` and `seasonValue` already name them, so a `Country` /
-`Season` alias would only be a second name for the same column. Existing
-columns are left untouched, so it is safe to call more than once.
+`Season` alias would only be a second name for the same column.
 }
 \details{
+Run it once, on the raw CEF data, and build on the result. The coverage
+table and the plots read the columns your catch has and derive nothing
+themselves, so a column you add (a fleet grouping of your own, say) or
+regroup (your own `metier4`) is used as it stands. A column the catch
+already has is left as it is - an edit of yours, or a column from an earlier
+call - so calling it again, or deriving the distributions from a catch you
+have edited, never undoes the edit; drop a column first to have it derived
+afresh.
+
 An ICES area code is a nested path (`27.4.b.1`), so it is split into
 subarea, division and subdivision. A code already coarser than the level
 asked for REPEATS rather than becoming `NA`: `27.4` is its own division and

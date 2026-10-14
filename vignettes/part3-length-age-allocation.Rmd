@@ -201,14 +201,14 @@ distributions the allocation estimated for a stratum without samples carry a
 domain it made up, and only this `$catch` knows it (the plot warns when it is
 missing).
 
-`sampledOrEstimated` is a variable like any other: by default it is the shade -
-solid where the numbers were sampled, transparent where the allocation
-estimated them - and it can be the `fill` or a `facet` instead. The title says
-what the distributions hold: *sampled + estimated* here; before the allocation,
-as in the plot above, *only sampled* and no shade, because there is nothing to
-tell apart. Numbers are in thousands and lengths in cm.
+`sampledOrEstimated` is a variable like any other: by default it is the mark -
+solid bars where the numbers were sampled, transparent and hatched ones where
+the allocation estimated them - and it can be the `fill` or a `facet` instead.
+The title says what the distributions hold: *sampled + estimated* here; before
+the allocation, as in the plot above, *only sampled* and no mark, because there
+is nothing to tell apart. Numbers are in thousands and lengths in cm.
 
-```{r alloc-numbers, fig.height = 5, fig.alt = "Numbers at length of the landings, solid where sampled and transparent where estimated, one panel per metier"}
+```{r alloc-numbers, fig.height = 5, fig.alt = "Numbers at length of the landings, solid bars where sampled and hatched where estimated, one panel per metier"}
 plot_NaLoA(allocated$catch, allocated$distribution, catchCategory = "Lan",
            fill = "metier4", facet = "metier4", scales = "free", stacked = TRUE)
 ```
@@ -223,10 +223,10 @@ plot_NaLoA(allocated$catch, allocated$distribution, catchCategory = "Dis",
 ```
 
 The mean weight at length, the number-weighted mean of every stratum that
-shares the plotted columns - one line for what was sampled and one for what the
-allocation estimated, side by side:
+shares the plotted columns - one line for what was sampled (solid, with circles)
+and one for what the allocation estimated (dotted, with crosses), side by side:
 
-```{r alloc-mw, fig.height = 5, fig.alt = "Mean weight at length of the landings, one colour per metier, solid for sampled and transparent for estimated"}
+```{r alloc-mw, fig.height = 5, fig.alt = "Mean weight at length of the landings, one colour per metier, a solid line for sampled and a dotted one for estimated"}
 plot_MWaLoA(allocated$catch, allocated$distribution, catchCategory = "Lan",
             colour = "metier4")
 ```

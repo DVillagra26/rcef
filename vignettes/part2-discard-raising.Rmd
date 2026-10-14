@@ -77,7 +77,9 @@ catch_data <- catch_data %>%
 `metier4` (and `target`, `mesh`, `metier4_mesh`) out of `fleetValue` and the ICES area
 levels out of `areaValue`. Country and season are already their own
 columns - `vesselFlagCountry` and `seasonValue` - so there is nothing to
-derive for those two.
+derive for those two. It runs once, here: from this point on the tables, the
+plots and the groups read the columns `catch_data` has and derive nothing, so a
+column you add - or regroup - is used as you left it.
 
 ```{r derive}
 catch_data <- derive_fields(catch_data)
@@ -232,10 +234,10 @@ cat(sprintf("manual raising: %d rows (%d imported, %d raised)\n",
 Imported against raised, at any aggregation. `plot_catches()` is the plot of
 the catch weight, for any catch - raw, or raised as here. It takes any
 catch-side column on `x` and an optional `facet`: landings / discards are the
-fill, imported / raised is the shading (solid = imported, transparent =
-raised), and whatever you put on `x` or `facet` is the aggregation. The title
-says what the catch holds: *imported + raised* here; a catch in which nothing
-was raised is titled *only imported* and has no shading, as in vignette 1.
+fill, imported / raised is the mark (solid = imported, transparent and
+hatched = raised), and whatever you put on `x` or `facet` is the aggregation.
+The title says what the catch holds: *imported + raised* here; a catch in which
+nothing was raised is titled *only imported* and has no mark, as in vignette 1.
 `catchCategory` narrows it to just
 `"Lan"` or `"Dis"`, useful whenever one of the two makes the other hard to see.
 
@@ -261,22 +263,22 @@ plot_catches(catch = raised_manual, x = "metier4", facet = "vesselFlagCountry")
 Not how much weight moved, but whether the *strata a group draws its rate
 from* agree with each other. `plot_DR()` is the discard rate per stratum -
 the plot of vignette 1 for raw catch - and given the raised catch it draws one
-point per raw stratum, **solid** where its discards came with the data
-(imported, i.e. sampled) and **transparent** where the raising added them; the
+point per raw stratum, a **circle** where its discards came with the data
+(imported, i.e. sampled) and a **cross** where the raising added them; the
 title says the strata are *imported + raised*. Put the raising **group** on
-`x` (`"DrGroup"`): a group's transparent points all sit on one line, the rate
-it was raised at, and its solid points show how far the strata it was built
-from scatter around that line - a group whose solid points run from 2% to
+`x` (`"DrGroup"`): a group's crosses all sit on one line, the rate
+it was raised at, and its circles show how far the strata it was built
+from scatter around that line - a group whose circles run from 2% to
 40% is a guess dressed up as a group, no matter how plausible its raised
 rate looks.
 
-Once strata are raised the transparent points are the reference, so the
+Once strata are raised the crosses are the reference, so the
 weighted-mean line and the per-point labels of the raw plot are left out. Only
 the strata of the raised catch are drawn, so a group raised from a pool wider than its own
 strata - G4, the rest of the gears - shows its donors under the groups they
 belong to rather than under G4.
 
-```{r donors-plot, fig.height = 5, fig.alt = "Discard rate of every stratum of the raised catch by raising group, solid where imported and transparent where raised, coloured by metier"}
+```{r donors-plot, fig.height = 5, fig.alt = "Discard rate of every stratum of the raised catch by raising group, circles where imported and crosses where raised, coloured by metier"}
 plot_DR(catch = raised_manual,
         x = "DrGroup", colour = "metier4", rate = "rate")
 ```
@@ -558,11 +560,11 @@ raised_overview_table(c(annex = raised_manual, own = raised_own), by = "DrGroup"
 ```
 
 The same comparison drawn. For each level of `x` there is one bar per scheme
-(the colour), imported weight solid and raised weight transparent; `facet`
+(the colour), imported weight solid and raised weight transparent and hatched; `facet`
 splits it further and `catchCategory` keeps just the landings or the discards,
 which are otherwise dwarfed by the landings.
 
-```{r compare-metier, fig.height = 4.5, fig.alt = "Discards by metier, one bar per scheme, imported solid and raised transparent"}
+```{r compare-metier, fig.height = 4.5, fig.alt = "Discards by metier, one bar per scheme, imported solid and raised hatched"}
 plot_compare_raised(c(annex = raised_manual, own = raised_own),
                     x = "metier4", catchCategory = "Dis")
 ```
@@ -577,10 +579,10 @@ plot_compare_raised(c(annex = raised_manual, own = raised_own),
 ```
 
 And whether the strata a group draws its rate from agree with each other,
-for the alternative: with every group on its own strata, each group's solid
-points are exactly the strata it was raised from.
+for the alternative: with every group on its own strata, each group's circles
+are exactly the strata it was raised from.
 
-```{r donors-own-plot, fig.height = 5, fig.alt = "Discard rate of every stratum of the own-strata raised catch by raising group, solid where imported and transparent where raised, coloured by metier"}
+```{r donors-own-plot, fig.height = 5, fig.alt = "Discard rate of every stratum of the own-strata raised catch by raising group, circles where imported and crosses where raised, coloured by metier"}
 plot_DR(catch = raised_own,
         x = "DrGroup", colour = "metier4", rate = "rate")
 ```

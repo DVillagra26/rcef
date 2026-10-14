@@ -34,8 +34,16 @@
 #' part); the three ICES area levels from `areaValue`; and `Stratum`, the four
 #' native keys joined. Country and season are not among them -
 #' `vesselFlagCountry` and `seasonValue` already name them, so a `Country` /
-#' `Season` alias would only be a second name for the same column. Existing
-#' columns are left untouched, so it is safe to call more than once.
+#' `Season` alias would only be a second name for the same column.
+#'
+#' Run it once, on the raw CEF data, and build on the result. The coverage
+#' table and the plots read the columns your catch has and derive nothing
+#' themselves, so a column you add (a fleet grouping of your own, say) or
+#' regroup (your own `metier4`) is used as it stands. A column the catch
+#' already has is left as it is - an edit of yours, or a column from an earlier
+#' call - so calling it again, or deriving the distributions from a catch you
+#' have edited, never undoes the edit; drop a column first to have it derived
+#' afresh.
 #'
 #' An ICES area code is a nested path (`27.4.b.1`), so it is split into
 #' subarea, division and subdivision. A code already coarser than the level
@@ -123,42 +131,51 @@ derive_fields <- function(catch_data, distribution_data = NULL,
     stop("Missing expected column(s): ", paste(miss, collapse = ", "))
   }
 
-  tok <- strsplit(as.character(catch_data$fleetValue), "_", fixed = TRUE)
-  tok_at <- function(i) vapply(tok, function(z)
+  # A column the catch already has is kept as it is - the caller's own regrouping, or a
+  # column from an earlier call - and the codes are split only when some column still
+  # needs them, so deriving a catch that is already derived costs nothing.
+  d <- catch_data
+  put <- function(col, value) if (!col %in% names(d)) d[[col]] <<- value
+  tok <- area <- NULL
+  fleet_tok <- function() {
+    if (is.null(tok)) tok <<- strsplit(as.character(catch_data$fleetValue), "_", fixed = TRUE)
+    tok
+  }
+  area_tok <- function() {
+    if (is.null(area)) area <<- strsplit(as.character(catch_data$areaValue), ".", fixed = TRUE)
+    area
+  }
+  tok_at <- function(i) vapply(fleet_tok(), function(z)
     if (length(z) >= i) z[i] else NA_character_, character(1))
-  tok_join <- function(n) vapply(tok, function(z)
+  tok_join <- function(n) vapply(fleet_tok(), function(z)
     paste(z[seq_len(min(n, length(z)))], collapse = "_"), character(1))
-  area <- strsplit(as.character(catch_data$areaValue), ".", fixed = TRUE)
-  area_join <- function(n) vapply(area, function(z) {
+  area_join <- function(n) vapply(area_tok(), function(z) {
     if (!length(z) || all(is.na(z))) return(NA_character_)
     paste(z[seq_len(min(n, length(z)))], collapse = ".")
   }, character(1))
 
-  d <- catch_data %>%
-    mutate(
-      metier4 = tok_join(1),                 # GNS
-      metier5 = tok_join(2),                 # GNS_DEF
-      metier6 = tok_join(3),                 # GNS_DEF_120-219
-      target  = tok_at(2),
-      mesh    = tok_at(3),
-      # Gear and mesh together, e.g. TBB_70-99. A mesh size only means
-      # something within its gear, so this is the level a fleet is usually
-      # read at - and as one label it can sit on a single axis, fill or
-      # filter. A fleet code with no mesh part ("All", "OTB_DEF") is just
-      # its gear, the way metier5 / metier6 stop at the last part there
-      # is, rather than becoming "TBB_NA" or dropping out as NA.
-      metier4_mesh = ifelse(is.na(mesh) | !nzchar(mesh), metier4,
-                            paste(metier4, mesh, sep = "_")),
-      ICESSubArea     = area_join(2),        # 27.X
-      ICESDivision    = area_join(3),        # 27.X.X
-      ICESSubdivision = area_join(4),        # 27.X.X.X
-      # The stratum AS UPLOADED: the four native CEF keys, joined. This
-      # is the finest grouping the data itself defines, and it is the
-      # only one that needs no interpretation - every other column here
-      # is something rcef derived by splitting or mapping a native one.
-      Stratum = paste(vesselFlagCountry, fleetValue, areaValue,
-                      seasonValue, sep = " | "),
-    )
+  put("metier4", tok_join(1))                # GNS
+  put("metier5", tok_join(2))                # GNS_DEF
+  put("metier6", tok_join(3))                # GNS_DEF_120-219
+  put("target",  tok_at(2))
+  put("mesh",    tok_at(3))
+  # Gear and mesh together, e.g. TBB_70-99. A mesh size only means
+  # something within its gear, so this is the level a fleet is usually
+  # read at - and as one label it can sit on a single axis, fill or
+  # filter. A fleet code with no mesh part ("All", "OTB_DEF") is just
+  # its gear, the way metier5 / metier6 stop at the last part there
+  # is, rather than becoming "TBB_NA" or dropping out as NA.
+  put("metier4_mesh", ifelse(is.na(d$mesh) | !nzchar(as.character(d$mesh)), d$metier4,
+                             paste(d$metier4, d$mesh, sep = "_")))
+  put("ICESSubArea",     area_join(2))       # 27.X
+  put("ICESDivision",    area_join(3))       # 27.X.X
+  put("ICESSubdivision", area_join(4))       # 27.X.X.X
+  # The stratum AS UPLOADED: the four native CEF keys, joined. This
+  # is the finest grouping the data itself defines, and it is the
+  # only one that needs no interpretation - every other column here
+  # is something rcef derived by splitting or mapping a native one.
+  put("Stratum", paste(d$vesselFlagCountry, d$fleetValue, d$areaValue,
+                       d$seasonValue, sep = " | "))
   if (identical(what, "catch")) return(d)
 
   # ---- what = "distribution": the same fields, read off the catch ------------
@@ -213,6 +230,31 @@ derive_fields <- function(catch_data, distribution_data = NULL,
   out <- distribution_data
   for (col in carry) out[[col]] <- lk[[col]][i]
   out
+}
+
+#' What to add to the error of a column the catch lacks
+#'
+#' The coverage table and the plots derive nothing themselves - they read the
+#' columns the catch has - so a column named as a stratum, a fill or a facet
+#' that [derive_fields()] would have added, and the catch does not carry, is a
+#' missing column like any other. This is the sentence that tells where it
+#' comes from.
+#'
+#' @param cols The names of the missing columns.
+#' @return `""` when none of them is a column [derive_fields()] adds, otherwise
+#'   a sentence fragment, starting with " - ", to put after the error.
+#' @keywords internal
+#' @noRd
+#' @export
+derive_hint <- function(cols) {
+  # asked of derive_fields() itself, so a column added there is known here without
+  # a second edit
+  proto <- data.frame(fleetValue = "A_B_C", areaValue = "27.4", vesselFlagCountry = "X",
+                      seasonValue = 1L, stringsAsFactors = FALSE)
+  hit <- intersect(cols, setdiff(names(derive_fields(proto)), names(proto)))
+  if (!length(hit)) return("")
+  paste0(" - derive_fields() adds ", paste(hit, collapse = ", "),
+         ": run it once on the raw catch and use that")
 }
 
 # ----------------------------------------------------------

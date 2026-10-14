@@ -93,6 +93,12 @@ rows through `domainBiology` and hands the distributions back with the same
 added columns (the plots below link the two themselves; this is for grouping
 or filtering a distributions table directly).
 
+Run it once, on the raw data, and keep working on the result: the coverage
+table and every plot below read the columns the data has and derive nothing
+themselves. So a column of your own - a grouping of the fleet, say - sits
+beside the derived ones and is used the same way (`x = "fleetGroup"`), and one
+you regroup (your own `metier4`) is drawn as you left it.
+
 ```{r derive}
 catch_data <- derive_fields(catch_data)
 age_catch  <- derive_fields(age_catch)
@@ -219,8 +225,11 @@ blind".
 ## Map: one pie per FAO area
 
 One sampled / not-sampled pie per ICES area, radius = landings. `area` is the
-level the pies are drawn at (`areaValue`, `ICESDivision`, `ICESSubArea`).
-`group` puts a labelled box of pies per area, one pie per level.
+level the pies are drawn at (`areaValue`, `ICESDivision`, `ICESSubArea`); a
+coarser level is placed where its data is - at the mean of the centroids of the
+`areaValue`s that have data in it, so the pie of 27.7 sits around 7.d and 7.e
+when nothing comes from the rest of 7. `group` puts a labelled box of pies per
+area, one pie per level.
 
 ```{r disc-map, fig.height = 5, fig.alt = "Coverage map, one sampled / not-sampled pie per area"}
 plot_coverage_map(catch = catch_data, area = "ICESDivision", group = "metier4")
@@ -360,7 +369,8 @@ level, never merged into it. A stratum with no discard estimate has no rate
 and gets no point; point size is the landings. The title says the strata are
 *only imported*: this is the data as it was reported. Give it the raised catch
 (vignette 2) and the same plot, with the same arguments, shows what the raising
-did - imported solid, raised transparent, titled *imported + raised*.
+did - imported strata as circles, raised ones as crosses, titled
+*imported + raised*.
 
 `rate` chooses the y variable and the word the title and axis use - both are
 columns of the table. The y axis names the formula too, right next to the
@@ -424,7 +434,7 @@ landings and discards (and BMS, when the catch has it). `x` and `facet` are the
 aggregation, and `catchCategory` narrows it to the landings or to the
 discards, which the landings would otherwise dwarf. The title says the weight
 is *only imported* - the data as it was reported; the raised catch of vignette
-2 gives the same plot, with what the raising added drawn transparent.
+2 gives the same plot, with what the raising added transparent and hatched.
 
 ```{r catches, fig.alt = "Landings and discards per metier, stacked"}
 plot_catches(catch = catch_data, x = "metier4")
@@ -480,8 +490,8 @@ Age. Both take raw catch plus `distributions`: the link and the summary run
 inside, with `catchCategory` choosing the part. The titles say the distributions
 are *only sampled*: this is the data as it was reported. Give them the two
 tables of an allocation (vignette 3) and the same plots, with the same
-arguments, show what the allocation did - sampled solid, estimated
-transparent, titled *sampled + estimated*.
+arguments, show what the allocation did - sampled solid, estimated hatched
+(bars) or dotted with crosses (lines), titled *sampled + estimated*.
 Numbers are in thousands (N3), length in cm. The caption's first line names
 the stratum a bar or a line pools: the sampled strata that share the plotted
 columns (`fill` or `colour`, and `facet`); everything else is grouped into

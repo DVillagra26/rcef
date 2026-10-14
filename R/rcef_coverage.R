@@ -98,12 +98,16 @@
 #'
 #' For length and age the expensive step is linking the catch to the
 #' distributions. Build the table once and pass it to as many plots as you
-#' like, rather than passing raw catch to each.
+#' like, rather than passing the catch to each. The same goes for
+#' [derive_fields()]: run it once, on the raw catch, and keep building on that
+#' catch - the table and the plots never derive anything again.
 #'
 #' @param catch CEF catch data (long format) carrying `catchCategory`,
 #'   `total` and, for discards, `domainCatchDis`, plus every column named in
-#'   `dims`. [derive_fields()] adds `metier4`, `mesh`, `metier4_mesh` and the
-#'   ICES area levels.
+#'   `dims`. Those can be columns of your own, or the ones [derive_fields()]
+#'   adds (`metier4`, `mesh`, `metier4_mesh`, the ICES area levels): run it once
+#'   on the raw catch and pass that - the table reads the columns the catch has
+#'   and derives nothing itself.
 #' @param dims Character vector of the columns that define a stratum, for
 #'   example `c("metier4", "vesselFlagCountry")`, or the finer
 #'   `c("fleetValue", "areaValue", "seasonValue")`. Default `NULL`: nothing
@@ -180,7 +184,7 @@ build_coverage_strata <- function(catch, dims = NULL, distributions = NULL,
   miss <- setdiff(dims, names(catch))
   if (length(miss))
     stop(fn, "(): column(s) not in `catch`: ", paste(miss, collapse = ", "),
-         call. = FALSE)
+         derive_hint(miss), call. = FALSE)
   # a table already aggregated to strata has none of these and would
   # otherwise come back as "nothing to describe"
   need <- setdiff(c("catchCategory", "total",
@@ -316,12 +320,13 @@ build_coverage_strata <- function(catch, dims = NULL, distributions = NULL,
   key   <- function(x) if (length(dims))
     do.call(paste, c(unname(as.list(x[dims])), sep = "\r")) else rep("", nrow(x))
 
-  # The catch with its fields derived afresh, as text, and the distributions
-  # normalised. A catch row counts as measured only when its domainBiology is
-  # filled AND that key appears in the distributions for the same catch category
-  # and country: a filled key that matches nothing is a dangling reference, a
-  # data problem and not evidence of sampling.
-  d  <- derive_fields(catch)
+  # The catch as it stands - its fields are the ones it has, derived once by the
+  # caller or added by hand - and the distributions normalised. A catch row counts
+  # as measured only when its domainBiology is filled AND that key appears in the
+  # distributions for the same catch category and country: a filled key that
+  # matches nothing is a dangling reference, a data problem and not evidence of
+  # sampling.
+  d  <- catch
   pd <- prep_distributions(distributions, dist_type)
   by <- biology_match_keys(d, pd)
   d$.t <- convert_units(d$total, if ("variableUnit" %in% names(d)) d$variableUnit, "t")
@@ -381,18 +386,14 @@ build_coverage_strata <- function(catch, dims = NULL, distributions = NULL,
   out$coverage         <- bl$coverage
   out$numMeasurements  <- bl$numMeasurements
   out$numTrips         <- bl$numTrips
-  # the extra columns are read off the catch with its fields derived afresh, as
-  # text: a column a csv gave back as a number (ICESSubArea 27.4) would
-  # otherwise meet its own text in the join below. Only the columns the
-  # caller's catch carries are kept.
+  # the extra columns are read off the same table the strata came from, so a
+  # column a csv gave back as a number (ICESSubArea 27.4) meets itself in the
+  # join below and not its text
   ex <- extras(d)
-  if (!is.null(ex)) {
-    ex <- ex[, c(dims, intersect(setdiff(names(ex), dims), names(catch))), drop = FALSE]
+  if (!is.null(ex))
     # with no stratum column at all (only the catch parts) every row takes the one value
-    if (ncol(ex) > length(dims))
-      out <- if (length(dims)) left_join(out, ex, by = dims)
-             else cbind(out, ex[rep(1L, nrow(out)), , drop = FALSE])
-  }
+    out <- if (length(dims)) left_join(out, ex, by = dims)
+           else cbind(out, ex[rep(1L, nrow(out)), , drop = FALSE])
   out
 }
 

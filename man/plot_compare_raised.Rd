@@ -50,7 +50,7 @@ A ggplot object, or \code{NULL} when there is nothing to draw.
 defining the groups, say. For each level of \code{x} (and each panel of \code{facet})
 one bar per scenario: its colour says which scenario, its shade whether the
 weight came with the data (imported, solid) or was added by the raising
-(raised, transparent). The bars are catch weight, or only the landings or
+(raised, transparent and hatched). The bars are catch weight, or only the landings or
 only the discards with \code{catchCategory}.
 }
 \details{

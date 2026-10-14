@@ -50,8 +50,8 @@ plot_coverage_bar(
 )
 }
 \arguments{
-\item{catch}{Raw CEF catch data, or a table from
-\code{\link[=build_coverage_strata]{build_coverage_strata()}}.}
+\item{catch}{CEF catch data carrying the columns you plot by (\code{\link[=derive_fields]{derive_fields()}}
+output, or columns of your own), or a table from \code{\link[=build_coverage_strata]{build_coverage_strata()}}.}
 
 \item{distributions}{A CEF distributions table - needed for
 \code{what = "length"} / \code{"age"} with raw catch, ignored otherwise.}
@@ -103,11 +103,13 @@ Four views of how well a set of strata is sampled: a heatmap
 and a sampled-versus-unsampled weight bar chart (\code{plot_coverage_bar()}),
 all documented here, plus a map (\code{\link[=plot_coverage_map]{plot_coverage_map()}}) on its own page.
 
-All take raw CEF catch (and \code{distributions} for length and age) or the
-table \code{\link[=build_coverage_strata]{build_coverage_strata()}} returns from it. Given raw catch they build
+All take the CEF catch (and \code{distributions} for length and age) or the
+table \code{\link[=build_coverage_strata]{build_coverage_strata()}} returns from it. Given the catch they build
 that table at exactly the plotted columns; given the table they pool it to
 them. So the numbers behind a figure can always be read as a table, at the
-same aggregation.
+same aggregation. The plotted columns are read off the catch as it is -
+\code{\link[=derive_fields]{derive_fields()}} run once on the raw data, and any column of your own - and
+nothing is derived again.
 }
 \details{
 \subsection{What "sampled" means}{

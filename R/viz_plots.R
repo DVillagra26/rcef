@@ -24,8 +24,8 @@
 #  The last four look at the data before a step and after it with the same
 #  arguments: the raising adds importedOrRaised to the catch and the
 #  allocation adds sampledOrEstimated to the distributions, and that
-#  variable - the shade, by default - and the title say which it is
-#  (status_shade() in R/viz_helpers.R).
+#  variable - the mark, by default: a cross, a dotted line, a hatched bar - and
+#  the title say which it is (status_marks() in R/viz_helpers.R).
 #
 #  The coverage and discard-rate plots draw the table that
 #  build_coverage_strata() (R/rcef_coverage.R) returns. Given raw CEF
@@ -84,15 +84,30 @@ NULL
 #' [build_coverage_strata()] table that has the `area` column (and the
 #' `group` column) among its `dims`.
 #'
-#' Areas are placed at approximate centroids; an area
-#' with no known centroid is warned about by name and left off the map. The
-#' map needs the suggested `maps` package.
+#' ## Where a pie is placed
 #'
-#' @param catch Raw CEF catch data, or a [build_coverage_strata()] table
-#'   (its own `what` is then used).
+#' Areas are placed at approximate centroids of the ICES divisions and
+#' subdivisions. A coarser `area` column (`"ICESSubArea"`, `"ICESDivision"`)
+#' is placed where its data is: at the mean of the centroids of the
+#' `areaValue`s that have data in it. The pie of subarea 27.7 sits around 7.d
+#' and 7.e when nothing comes from 7.a or 7.f, not in the middle of the whole
+#' of 7, and 27.3 sits between 27.3.a.20 and 27.3.a.21 when those are the only
+#' two areas with data. Only a level with no `areaValue` behind it - a table
+#' aggregated to the subarea alone, say - takes the centroid of the area
+#' itself, and a subarea or division the list leaves out (3, 3.d, 5 ...) has
+#' one too, the mean of the listed areas inside it. An area with no centroid at
+#' all is warned about by name and left off the map. The map needs the
+#' suggested `maps` package.
+#'
+#' @param catch CEF catch data (with `areaValue` and the `area` / `group`
+#'   columns on it), or a [build_coverage_strata()] table (its own `what` is
+#'   then used).
 #' @param distributions A CEF distributions table - needed for
 #'   `what = "length"` / `"age"` with raw catch, ignored otherwise.
-#' @param area Column holding the ICES area code. Default `"areaValue"`.
+#' @param area Column holding the ICES area code: `"areaValue"` (default), or a
+#'   coarser level such as `"ICESSubArea"` or `"ICESDivision"`, which needs
+#'   `areaValue` in `catch` to be placed where the data is (see *Where a pie is
+#'   placed*).
 #' @param group Optional column: one boxed grid of pies per area, one pie per
 #'   level. A `group` with a single level warns and draws one pie per area.
 #' @param what,catchCategory As in [coverage-plots]. The weight word in the
@@ -113,6 +128,9 @@ NULL
 #' if (requireNamespace("maps", quietly = TRUE)) {
 #'   plot_coverage_map(catch)
 #'   plot_coverage_map(catch, group = "seasonValue")
+#'
+#'   # one pie per subarea, placed at the mean of the areaValue centroids with data
+#'   plot_coverage_map(catch, area = "ICESSubArea", group = "fleetGroup")
 #' }
 #' }
 #' @export
@@ -131,8 +149,8 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
   # Approximate centroids (decimal degrees) of the ICES divisions and subdivisions a
   # stock assessment in the NE Atlantic normally uses - enough to place one pie per
   # area. Codes are looked up with or without the leading "27."; one with no
-  # centroid is named in a warning and left off the map.
-  centroid <- function(codes) {
+  # centroid is named in a warning (when `warn`) and left off the map.
+  centroid <- function(codes, warn = TRUE) {
     tab <- data.frame(
       area = c("1", "2.a", "2.b",
                "3.a", "3.a.20", "3.a.21",
@@ -171,10 +189,21 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
               39.0, 40.0, 38.0,
               46.0, 74.0, 60.0, 62.0),
       stringsAsFactors = FALSE)
+    # A coarser level the list leaves out (3, 3.d, 5, 14 ...) sits at the mean of the
+    # finest listed areas inside it - so a subarea or division with no listed
+    # centroid of its own still has one.
+    up <- unique(unlist(lapply(strsplit(tab$area, ".", fixed = TRUE), function(p)
+      vapply(seq_len(length(p) - 1L), function(k) paste(p[seq_len(k)], collapse = "."), ""))))
+    leaf <- tab[!tab$area %in% up, , drop = FALSE]
+    for (a in setdiff(up, tab$area)) {
+      k <- startsWith(leaf$area, paste0(a, "."))
+      tab <- rbind(tab, data.frame(area = a, lon = mean(leaf$lon[k]), lat = mean(leaf$lat[k]),
+                                   stringsAsFactors = FALSE))
+    }
     key <- sub("^27\\.", "", trimws(as.character(codes)))
     m <- tab[match(key, tab$area), c("lon", "lat")]
     bad <- unique(key[is.na(m$lon) & nzchar(key)])
-    if (length(bad))
+    if (warn && length(bad))
       warning("no centroid for ICES area(s): ", paste(bad, collapse = ", "),
               " - dropped from the map", call. = FALSE)
     data.frame(area = as.character(codes), lon = m$lon, lat = m$lat,
@@ -195,10 +224,46 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
                     cov = if (identical(what, "discard")) sc$weightingTotal else sc$covered,
                     stringsAsFactors = FALSE)
   agg <- agg[!is.na(agg$w) & agg$w > 0, , drop = FALSE]
-  cen <- centroid(agg[[area_var]])
-  agg$lon <- cen$lon; agg$lat <- cen$lat
-  agg <- agg[!is.na(agg$lon), , drop = FALSE]
+  # Where a pie goes. A coarse area column (ICESSubArea, ICESDivision ...) says little
+  # about where its data is: the pie of 27.7 belongs around 7.d and 7.e when nothing
+  # comes from 7.a or 7.f, not in the middle of the whole of 7. So a level is placed
+  # at the mean of the centroids of the areaValues that have data in it; only a level
+  # with no areaValue behind it takes the centroid listed for the area itself.
+  ac <- data.frame(area = unique(as.character(agg[[area_var]])),
+                   lon = NA_real_, lat = NA_real_, stringsAsFactors = FALSE)
+  src <- as.data.frame(catch)
+  averaged <- FALSE
+  if (!identical(area_var, "areaValue") && all(c(area_var, "areaValue") %in% names(src))) {
+    # the rows with data: the weight the map is about (landings for discards, the
+    # catch part for length and age) above zero - the same strata that get a pie
+    parts <- catch_category_parts(if (is.null(catchCategory)) "All" else catchCategory)
+    wt <- if (identical(what, "discard")) {
+            if (is.na(coverage_table_what(src))) ifelse(src$catchCategory %in% "Lan", src$total, 0)
+            else src$landings
+          } else ifelse(src$catchCategory %in% parts, src$total, 0)
+    has_data <- !is.na(wt) & wt > 0
+    fine <- unique(data.frame(level = as.character(src[[area_var]][has_data]),
+                              fine  = as.character(src$areaValue[has_data]),
+                              stringsAsFactors = FALSE))
+    fc <- centroid(unique(fine$fine), warn = FALSE)
+    for (i in seq_len(nrow(ac))) {
+      f <- fc[match(fine$fine[fine$level == ac$area[i]], fc$area), , drop = FALSE]
+      if (any(!is.na(f$lon))) {
+        ac$lon[i] <- mean(f$lon, na.rm = TRUE); ac$lat[i] <- mean(f$lat, na.rm = TRUE)
+        averaged <- TRUE
+      }
+    }
+  }
+  own <- is.na(ac$lon)
+  if (any(own)) {
+    c0 <- centroid(ac$area[own])
+    ac$lon[own] <- c0$lon; ac$lat[own] <- c0$lat
+  }
+  ac <- ac[!is.na(ac$lon), , drop = FALSE]
+  agg <- agg[as.character(agg[[area_var]]) %in% ac$area, , drop = FALSE]
   if (!nrow(agg)) { message("plot_coverage_map(): no mappable areas."); return(invisible(NULL)) }
+  agg$lon <- ac$lon[match(as.character(agg[[area_var]]), ac$area)]
+  agg$lat <- ac$lat[match(as.character(agg[[area_var]]), ac$area)]
   agg$frac <- pmin(1, pmax(0, agg$cov / agg$w))
 
   lev <- NULL; ngrp <- 1L
@@ -222,8 +287,6 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
   # area's pies go in a tidy grid inside a labelled box: one cell per
   # level, left to right then top to bottom. Pie radius is sqrt(weight)
   # scaled so the busiest (area x level) cell anywhere fills its cell.
-  ac <- centroid(unique(agg[[area_var]]))
-  ac <- ac[!is.na(ac$lon), , drop = FALSE]
   cs  <- 0.46 * bubble_scale                 # half a grid cell, lat-deg
   nc  <- if (boxed) ceiling(sqrt(ngrp)) else 1L
   nr  <- if (boxed) ceiling(ngrp / nc) else 1L
@@ -286,6 +349,8 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
   cap  <- sub_wrap(
     strata_sentence(grp_keys, catch),
     sprintf("area = %s.", area_var),
+    if (averaged) sprintf("pie position = mean of the areaValue centroids with data in each %s.",
+                          area_var),
     sprintf("bubble size = %s weight (t).", weight_label),
     sprintf("coverage slice = %s.", cv$share),
     width = 110)
@@ -345,11 +410,13 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #' and a sampled-versus-unsampled weight bar chart (`plot_coverage_bar()`),
 #' all documented here, plus a map ([plot_coverage_map()]) on its own page.
 #'
-#' All take raw CEF catch (and `distributions` for length and age) or the
-#' table [build_coverage_strata()] returns from it. Given raw catch they build
+#' All take the CEF catch (and `distributions` for length and age) or the
+#' table [build_coverage_strata()] returns from it. Given the catch they build
 #' that table at exactly the plotted columns; given the table they pool it to
 #' them. So the numbers behind a figure can always be read as a table, at the
-#' same aggregation.
+#' same aggregation. The plotted columns are read off the catch as it is -
+#' [derive_fields()] run once on the raw data, and any column of your own - and
+#' nothing is derived again.
 #'
 #' @details
 #' ## What "sampled" means
@@ -434,8 +501,8 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #' columns are the strata (`y`, `x` or `fill`, `facet`), then the thresholds
 #' (`min_cov`, `min_trip`, `min_fish`), then `palette`.
 #'
-#' @param catch Raw CEF catch data, or a table from
-#'   [build_coverage_strata()].
+#' @param catch CEF catch data carrying the columns you plot by ([derive_fields()]
+#'   output, or columns of your own), or a table from [build_coverage_strata()].
 #' @param distributions A CEF distributions table - needed for
 #'   `what = "length"` / `"age"` with raw catch, ignored otherwise.
 #' @param what `"discard"` (default), `"length"` or `"age"`. Taken from the
@@ -933,8 +1000,8 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 #' landings, and an optional `reference` that draws a dashed line and names the
 #' strata above it. Given the raised catch (the output of [catchRaising()]) it
 #' shows what the raising did: a stratum whose discards came with the data
-#' (*imported*) is drawn solid, one whose discards the raising added
-#' (*raised*) is drawn transparent. The arguments are the same either way, and
+#' (*imported*) is drawn as a circle, one whose discards the raising added
+#' (*raised*) as a cross. The arguments are the same either way, and
 #' so is the plot; the title says which it is.
 #'
 #' @details
@@ -955,11 +1022,13 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 #'
 #' The raising adds `importedOrRaised` to the catch, and with it the plot knows
 #' what the raising did. `importedOrRaised` is a variable like any other. By
-#' default it is the shade (`alpha = "importedOrRaised"`): solid for imported
-#' strata, transparent for raised ones. Name it in `x`, `colour`, `shape` or
+#' default it is the mark (`alpha = "importedOrRaised"`): imported strata are
+#' circles, raised ones crosses (in the colour a circle would be filled with).
+#' When `shape` is already a column of its own the symbol is taken, and raised
+#' strata are transparent circles instead. Name it in `x`, `colour`, `shape` or
 #' `facet` to draw it there instead - a colour each, a panel each, two columns
-#' of points - and it is then not drawn as a shade as well. `alpha = NULL` draws
-#' no shade, and unless it is named elsewhere imported and raised strata are
+#' of points - and it is then not drawn as a mark as well. `alpha = NULL` draws
+#' no mark, and unless it is named elsewhere imported and raised strata are
 #' drawn alike. Whichever way, it is worked out per stratum (a stratum is raised
 #' when its discard rows were), never from the landings rows next to them, which
 #' are always imported; a stratum that holds both kinds of discard row is raised.
@@ -967,12 +1036,12 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 #' The title says what the strata drawn are: *imported + raised* when the
 #' raising added some of them, *only imported* when it did not - a raw catch,
 #' or a raised catch in which nothing needed raising - and then there is no
-#' shade, because there is nothing to tell apart.
+#' mark, because there is nothing to tell apart.
 #'
-#' Put the raising group on `x` (`"DrGroup"`): a group's transparent points all
-#' sit on one line, the rate it was raised at, and its solid points show how
+#' Put the raising group on `x` (`"DrGroup"`): a group's crosses all
+#' sit on one line, the rate it was raised at, and its circles show how
 #' far the strata it was built from scatter around that line - a group whose
-#' solid points are spread far from it is a guess dressed up as a group. Only
+#' circles are spread far from it is a guess dressed up as a group. Only
 #' the strata of the raised catch are drawn, so the donors of a group wider
 #' than its own strata (a REST group raised from every gear, say) appear under
 #' the groups they themselves belong to.
@@ -981,7 +1050,7 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 #' the raising as `NaN`: it has no rate to plot and is left out, with a message
 #' saying how many.
 #'
-#' Once strata are raised the transparent points are themselves the reference,
+#' Once strata are raised the crosses are themselves the reference,
 #' so the weighted-mean line, the reference line's label and the per-point
 #' labels, which help to read the rates as they were reported, are left out;
 #' the dashed `reference` line stays.
@@ -1040,8 +1109,9 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 #' @param shape Column mapped to the point shape; `"importedOrRaised"`
 #'   included.
 #' @param facet Optional facet column; `"importedOrRaised"` included.
-#' @param alpha `"importedOrRaised"` (default) draws the shade: solid for
-#'   imported, transparent for raised. `NULL` draws none. Left out when
+#' @param alpha `"importedOrRaised"` (default) marks what the raising added:
+#'   circles for imported strata, crosses for raised ones (transparent circles
+#'   when `shape` is a column). `NULL` draws no mark. Left out when
 #'   `importedOrRaised` is the `x`, `colour`, `shape` or `facet`, and when
 #'   nothing was raised.
 #' @param rate `"ratio"` (default, discards / landings) or `"rate"` (discards
@@ -1072,11 +1142,11 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 #' plot_DR(catch, x = "metier4", colour = "vesselFlagCountry",
 #'        rate = "rate", reference = 0.2)
 #'
-#' # the same plot of the raised catch: imported solid, raised transparent
+#' # the same plot of the raised catch: imported are circles, raised crosses
 #' raised <- catchRaising(catch, strataCond, logFile = tempfile(fileext = ".txt"))
 #' plot_DR(raised, x = "DrGroup", colour = "metier4")
 #'
-#' # imported against raised as the panels instead of the shade
+#' # imported against raised as the panels instead of the crosses
 #' plot_DR(raised, x = "metier4", colour = "vesselFlagCountry",
 #'        facet = "importedOrRaised")
 #'
@@ -1150,7 +1220,7 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL, facet = NULL,
   if (!nrow(d)) return(NULL)
   # what is drawn - the strata that have a rate - is what the title speaks of
   present <- if (S %in% names(d)) unique(as.character(d[[S]]))
-  st <- status_shade(S, alpha, keys, present, "plot_DR(): ",
+  st <- status_marks(S, alpha, keys, present, "plot_DR(): ",
                      override = list(fill = "grey30", shape = 21, size = 3.5))
   raised <- "raised" %in% present
   d <- category_cols(d, keys)
@@ -1177,7 +1247,7 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL, facet = NULL,
   if (has_landings)
     d$landings <- d$landings + max(d$landings, na.rm = TRUE) * 0.1
   # Raised points go down first and the big bubbles before the small ones, so
-  # a solid point is never buried under a transparent bubble.
+  # an imported point is never buried under a bigger bubble.
   if (".status" %in% names(d))
     d <- d[order(d$.status == "Imported", -d$landings), , drop = FALSE]
 
@@ -1203,7 +1273,7 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL, facet = NULL,
   # The rates as they were reported get a backdrop: the mean of each x level
   # (per panel), weighted by the landings behind each rate - for the ratio
   # exactly the rate of that level built directly - and, over a reference, the
-  # strata named. Once strata are raised the transparent points are the
+  # strata named. Once strata are raised the crosses are the
   # reference, and these only crowd them.
   backdrop <- !raised
   wm <- NULL
@@ -1230,22 +1300,30 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL, facet = NULL,
   lab_all <- do.call(paste, c(lapply(lab_vars, function(v) d[[v]]), sep = "|"))
   d$.lab <- if (is.null(ref_y) || !backdrop) "" else ifelse(d$.y > ref_y, lab_all, "")
 
+  # What marks a raised stratum: a cross. It has no fill, so it takes the colour a
+  # circle is filled with (see cross_marks()). Not when `shape` is already a column:
+  # then the marks are the transparency of the points.
+  cross <- st$on && !has(shape_var)
+  if (cross) d <- cross_marks(d, if (has(colour_var)) colour_var, 1.2, 0.5)
   pos <- if (jitter) position_jitter(width = 0.18, height = 0, seed = 1) else "identity"
   ae <- aes(x = .data[[x_var]], y = .y)
   if (has(colour_var)) ae <- modifyList(ae, aes(fill = .data[[colour_var]]))
   if (has(shape_var))  ae <- modifyList(ae, aes(shape = .data[[shape_var]]))
   if (has_landings)    ae <- modifyList(ae, aes(size = landings))
-  if (st$on)           ae <- modifyList(ae, aes(alpha = .status))
+  if (cross)           ae <- modifyList(ae, aes(shape = .status, colour = .edge, stroke = .stroke))
+  else if (st$on)      ae <- modifyList(ae, aes(alpha = .status))
 
   # only shapes 21-25 take a fill, so pin shape 21 when nothing maps to shape.
   # size is either mapped (added to ae above, scaled below) or fixed at the
   # old constant - never both, which is what a geom_point(size = ...) call
   # alongside an aes(size = ...) mapping would otherwise silently conflict on.
-  # The same for alpha: mapped to imported / raised, or fixed.
-  pt_args <- list(colour = OUTLINE, stroke = 0.5, position = pos)
-  if (!has(shape_var))  pt_args$shape <- 21
+  # The same for alpha: mapped to imported / raised, or fixed. With crosses the
+  # shape, the colour and the stroke are all mapped.
+  pt_args <- list(position = pos)
+  if (!cross)           pt_args <- c(pt_args, list(colour = OUTLINE, stroke = 0.5))
+  if (!has(shape_var) && !cross) pt_args$shape <- 21
   if (!has_landings)    pt_args$size  <- 3
-  if (!st$on)           pt_args$alpha <- 0.85
+  if (!st$on || cross)  pt_args$alpha <- 0.85
   p <- ggplot(d, ae)
   # the reference goes first, so the points sit on top of the line
   if (!is.null(ref_y))
@@ -1271,14 +1349,25 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL, facet = NULL,
       inherit.aes = FALSE, position = pos, size = 2.6, fontface = "bold",
       colour = "red3", box.padding = 0.4, min.segment.length = 0,
       segment.size = 0.2, segment.colour = "grey40", max.overlaps = Inf)
-  if (st$on) p <- p + st$scale
+  if (cross) {
+    p <- p + st$shape +
+      scale_colour_manual(values = c(if (has(colour_var)) plot_colours(d[[colour_var]], colour_var, palette),
+                                     .outline = OUTLINE, .cross = plot_colours(palette = palette)),
+                          na.value = "grey60", guide = "none") +
+      scale_continuous_identity("stroke", guide = "none") +
+      guides(shape = guide_legend(override.aes = list(
+        fill = "grey30", colour = "grey30", size = 3.5, stroke = c(0.5, 1.2))))
+    if (has_landings)
+      p <- p + guides(size = guide_legend(override.aes = list(
+        shape = 21, colour = OUTLINE, fill = "grey85")))
+  } else if (st$on) p <- p + st$scale
   if (has(shape_var))
-    p <- p + scale_shape_manual(values = c(21, 22, 23, 24, 25, 8, 3, 4))
+    p <- p + scale_shape_manual(values = c(21, 22, 23, 24, 25, 1, 2, 0))
   # the fill legend keys inherit the default shape (19), which takes no
   # fill, so the swatches come out empty unless forced to a filled shape
   if (has(colour_var))
-    p <- p + guides(fill = guide_legend(
-      override.aes = list(shape = 21, size = 3.5, alpha = 1)))
+    p <- p + guides(fill = guide_legend(override.aes = c(
+      list(shape = 21, size = 3.5, alpha = 1), if (cross) list(colour = OUTLINE))))
   if (has(shape_var))
     p <- p + guides(shape = guide_legend(
       override.aes = list(fill = "grey45", size = 3.5, alpha = 1)))
@@ -1319,7 +1408,10 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL, facet = NULL,
            sprintf("bubbles = estimated discard %s%s.", rate_type,
                    if (raised) ", imported and raised" else ""),
            if (has_landings) "bubble size = landings weight (t).",
-           if (st$on) "solid = imported from the data, transparent = added by raising.",
+           if (st$on) {
+             if (cross) "circles = imported from the data, crosses = added by raising."
+             else "solid = imported from the data, transparent = added by raising."
+           },
            if (raised && !st$on && !st$shown) "imported and raised strata are drawn alike.",
            if (backdrop)
              sprintf("horizontal line = landings weighted average per %s.", x_var),
@@ -1348,38 +1440,39 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL, facet = NULL,
 #' discards (and BMS), or just the one, via `catchCategory`. Given the raised
 #' catch (the output of [catchRaising()]) it shows what the raising added -
 #' `importedOrRaised`, imported from the data versus added by the raising - as
-#' the shade, as the `fill` or as a `facet`, as you choose. Given raw catch
+#' the mark, as the `fill` or as a `facet`, as you choose. Given raw catch
 #' it is the weight as it was reported. The arguments are the same either way,
 #' and so is the plot; the title says which it is.
 #'
 #' @details
-#' `importedOrRaised` is a variable like any other. By default it is the shade
-#' (`alpha = "importedOrRaised"`): solid for what was imported, transparent for
-#' what raising added. Name it in `fill` to give the two a colour each (the bars
+#' `importedOrRaised` is a variable like any other. By default it is the mark
+#' (`alpha = "importedOrRaised"`): solid for what was imported, transparent and
+#' hatched for what raising added. Name it in `fill` to give the two a colour
+#' each (the bars
 #' are then no longer coloured landings / discards: say which they are with
 #' `catchCategory`, or with `facet = "catchCategory"`), in `facet` to give each
-#' its own panel, or in `x` for a bar each; it is then not drawn as a shade as
-#' well. `alpha = NULL` draws no shade, and unless it is named elsewhere the
+#' its own panel, or in `x` for a bar each; it is then not drawn as a mark as
+#' well. `alpha = NULL` draws no mark, and unless it is named elsewhere the
 #' imported and the raised weights are added together.
 #'
 #' The title says what the rows drawn are: *imported + raised* when the raising
 #' added some of them, *only imported* when it did not - a raw catch, a raised
 #' catch in which nothing needed raising, or the landings of a raised catch,
-#' which are always imported - and then there is no shade, because there is
+#' which are always imported - and then there is no mark, because there is
 #' nothing to tell apart.
 #'
-#' @param catch Raw CEF catch data, or the raised catch ([catchRaising()]):
-#'   `catchCategory` and `total`, and for the shade `importedOrRaised`.
+#' @param catch CEF catch data, or the raised catch ([catchRaising()]):
+#'   `catchCategory` and `total`, and for the mark `importedOrRaised`.
 #' @param x Column on the x axis: one bar (or bar segment) per level;
 #'   `"importedOrRaised"` included.
 #' @param facet Optional facet column; `"importedOrRaised"` included.
 #' @param fill Column mapped to the bar fill. `NULL` (default) colours the bars
 #'   by catch category - landings, discards, BMS; `"importedOrRaised"` is
 #'   allowed.
-#' @param alpha `"importedOrRaised"` (default) draws the shade: solid for
-#'   imported, transparent for raised. `NULL` draws none. Left out when
-#'   `importedOrRaised` is the `x`, the `fill` or the `facet`, and when nothing
-#'   was raised.
+#' @param alpha `"importedOrRaised"` (default) marks what the raising added:
+#'   solid bars for imported weight, transparent and hatched ones for raised.
+#'   `NULL` draws no mark. Left out when `importedOrRaised` is the `x`, the
+#'   `fill` or the `facet`, and when nothing was raised.
 #' @param catchCategory Optional filter to just `"Lan"`, `"Dis"` or `"BMS"`
 #'   (matched case-insensitively), so discards are readable on their own when
 #'   landings would otherwise dominate the scale. `NULL` (default) keeps all
@@ -1398,7 +1491,7 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL, facet = NULL,
 #' # the catch as reported, by metier
 #' plot_catches(catch, x = "metier4")
 #'
-#' # the same of the raised catch: solid = imported, transparent = raised
+#' # the same of the raised catch: solid = imported, hatched = raised
 #' raised <- catchRaising(catch, strataCond, logFile = tempfile(fileext = ".txt"))
 #' plot_catches(raised, x = "metier4", facet = "vesselFlagCountry")
 #'
@@ -1423,7 +1516,7 @@ plot_catches <- function(catch, x = NULL, facet = NULL, fill = NULL,
     stop("plot_catches(): `catch` has no column ",
          paste0("'", miss, "'", collapse = ", "),
          if (S %in% miss) " - importedOrRaised comes with the output of catchRaising()",
-         call. = FALSE)
+         derive_hint(miss), call. = FALSE)
   # the catch parts, by the words the plot uses
   part_of <- function(v) {
     m <- unname(c(LAN = "Landings", LANDINGS = "Landings", DIS = "Discards",
@@ -1445,7 +1538,7 @@ plot_catches <- function(catch, x = NULL, facet = NULL, fill = NULL,
   # what is drawn - the rows left after the catch part - is what the title
   # speaks of: the landings of a raised catch were all imported
   present <- if (S %in% names(d)) unique(as.character(d[[S]]))
-  st <- status_shade(S, alpha, c(x, fill, facet), present, "plot_catches(): ")
+  st <- status_marks(S, alpha, c(x, fill, facet), present, "plot_catches(): ")
   raised <- "raised" %in% present
   # what the bars are coloured by when nothing else says: the catch parts there are
   parts <- c(Landings = "landings", Discards = "discards", BMS = "BMS")
@@ -1461,8 +1554,8 @@ plot_catches <- function(catch, x = NULL, facet = NULL, fill = NULL,
   ae <- aes(x = .x, y = t, fill = .data[[fill_col]])
   if (st$on) ae <- modifyList(ae, aes(alpha = .status))
   p <- ggplot(d, ae) +
-    geom_col(position = position_stack(reverse = TRUE), width = 0.72,
-             colour = "grey25", linewidth = 0.25)
+    geom_col_hatch(position = position_stack(reverse = TRUE), width = 0.72,
+                   colour = "grey25", linewidth = 0.25)
   p <- p + if (!has(fill)) {
     # every catch part, so landings keep their colour when only they are drawn
     cols <- c(plot_colours(c("Dis", "Lan"), "catchCategory", palette),
@@ -1484,7 +1577,7 @@ plot_catches <- function(catch, x = NULL, facet = NULL, fill = NULL,
                      utils::tail(parts, 1)),
            if (has(fill)) sprintf("color = %s.", fill),
            if (st$on)
-             "shade = imported from the data, or added by raising.",
+             "solid = imported from the data, hatched = added by raising.",
            if (raised && !st$on && !st$shown)
              "imported and raised weights added together.",
            width = 110),
@@ -1504,10 +1597,10 @@ plot_catches <- function(catch, x = NULL, facet = NULL, fill = NULL,
 #' dodged histogram. Numbers are in thousands, length in cm and age in years.
 #' Given the result of the allocation ([catchAllocationAoL()]) it shows what
 #' the allocation did: `sampledOrEstimated` says whether a number was sampled
-#' or estimated for a stratum nobody sampled, and it is drawn as the shade
-#' (solid = sampled, transparent = estimated), as the `fill` or as a `facet`,
-#' as you choose. The arguments are the same before and after, and so is the
-#' plot; the title says which it is.
+#' or estimated for a stratum nobody sampled, and it is drawn as the mark
+#' (solid bars = sampled, transparent and hatched bars = estimated), as the
+#' `fill` or as a `facet`, as you choose. The arguments are the same before and
+#' after, and so is the plot; the title says which it is.
 #'
 #' @details
 #' `data` is the catch and `distributions` the CEF distributions: they are
@@ -1527,18 +1620,18 @@ plot_catches <- function(catch, x = NULL, facet = NULL, fill = NULL,
 #' them, which the plot warns about.
 #'
 #' The allocation adds `sampledOrEstimated` to the distributions, and from then
-#' on it is a variable like any other. By default it is the shade
-#' (`alpha = "sampledOrEstimated"`): solid where the numbers were sampled,
-#' transparent where the allocation estimated them. Name it in `fill` to give
-#' the two a colour each, or in `facet` to give each its own panel; it is then
-#' not drawn as a shade as well. `alpha = NULL` draws no shade, and unless it
-#' is also the fill or a facet the sampled and the estimated numbers are added
-#' together - the numbers the allocation finally reports.
+#' on it is a variable like any other. By default it is the mark
+#' (`alpha = "sampledOrEstimated"`): solid bars where the numbers were sampled,
+#' transparent and hatched ones where the allocation estimated them. Name it in
+#' `fill` to give the two a colour each, or in `facet` to give each its own
+#' panel; it is then not drawn as a mark as well. `alpha = NULL` draws no mark,
+#' and unless it is also the fill or a facet the sampled and the estimated
+#' numbers are added together - the numbers the allocation finally reports.
 #'
 #' The title says what the distributions drawn are: *sampled + estimated* when
 #' the allocation estimated some of them, *only sampled* when it did not -
 #' distributions as they were sampled, or an allocation that estimated none of
-#' the ones drawn - and then there is no shade, because there is nothing to
+#' the ones drawn - and then there is no mark, because there is nothing to
 #' tell apart.
 #'
 #' Like the allocation itself, the numbers count a distribution once for every
@@ -1556,7 +1649,8 @@ plot_catches <- function(catch, x = NULL, facet = NULL, fill = NULL,
 #' bins* - except numbers simply add rather than being averaged, so there is
 #' no per-distribution weighting step to speak of.
 #'
-#' @param data Raw CEF catch data; after the allocation, its `$catch`.
+#' @param data CEF catch data carrying the columns you group by
+#'   ([derive_fields()] output, or your own); after the allocation, its `$catch`.
 #' @param distributions A CEF distributions table, linked to the catch through
 #'   `domainBiology`; after the allocation, its `$distribution`.
 #' @param distributionType `"LengthTotal"` (default) or `"Age"`.
@@ -1566,10 +1660,10 @@ plot_catches <- function(catch, x = NULL, facet = NULL, fill = NULL,
 #' @param fill Column mapped to the bar fill; `"sampledOrEstimated"` included.
 #' @param facet Up to two facet columns: `"col"` or `c("row", "col")`;
 #'   `"sampledOrEstimated"` included.
-#' @param alpha `"sampledOrEstimated"` (default) draws the shade: solid for
-#'   sampled, transparent for estimated. `NULL` draws none. Left out when
-#'   `sampledOrEstimated` is the `fill` or a `facet`, and when nothing was
-#'   estimated.
+#' @param alpha `"sampledOrEstimated"` (default) marks what the allocation
+#'   estimated: solid bars for sampled numbers, transparent and hatched ones for
+#'   estimated. `NULL` draws no mark. Left out when `sampledOrEstimated` is the
+#'   `fill` or a `facet`, and when nothing was estimated.
 #' @param stacked Stack the bars on `fill` (default) rather than dodge them.
 #' @param plus_group The first age of the plus group: `7` pools ages 7 and
 #'   older into one class, shown as `7+`. `NULL` (default): no plus group.
@@ -1607,7 +1701,7 @@ plot_catches <- function(catch, x = NULL, facet = NULL, fill = NULL,
 #' plot_NaLoA(catch, distributions, fill = "vesselFlagCountry", bin_width = 2)
 #'
 #' # after the allocation: both tables of its result. Landings by country,
-#' # solid = sampled, transparent = estimated
+#' # solid = sampled, hatched = estimated
 #' alloc <- catchAllocationAoL(raised, distributions,
 #'                             condition_alloc_st_list = list(ALL = rlang::quo(TRUE)),
 #'                             distributionType = "LengthTotal", verbose = FALSE,
@@ -1657,7 +1751,7 @@ plot_NaLoA <- function(data, distributions = NULL,
   d <- pr$data
   if (is.null(d) || !nrow(d)) return(NULL)
   plus_from <- pr$plus_from; bin_from <- pr$bin_from
-  st <- status_shade(S, alpha, c(fill, facet1, facet2), pr$status, fn)
+  st <- status_marks(S, alpha, c(fill, facet1, facet2), pr$status, fn)
   estimated <- "estimated" %in% pr$status
   if (S %in% names(d)) {
     if (st$on) d$.status <- st$status(d[[S]])
@@ -1677,10 +1771,10 @@ plot_NaLoA <- function(data, distributions = NULL,
   if (st$on) ae <- modifyList(ae, aes(alpha = .status))
   p <- ggplot(d, ae)
   p <- p + if (has(fill))
-    geom_col(aes(fill = factor(.data[[fill]])), width = bw * 0.95, position = pos,
-             colour = OUTLINE, linewidth = OUTLINE_LW)
-  else geom_col(width = bw * 0.95, position = pos, fill = plot_colours(palette = palette),
-                colour = OUTLINE, linewidth = OUTLINE_LW)
+    geom_col_hatch(aes(fill = factor(.data[[fill]])), width = bw * 0.95, position = pos,
+                   colour = OUTLINE, linewidth = OUTLINE_LW)
+  else geom_col_hatch(width = bw * 0.95, position = pos, fill = plot_colours(palette = palette),
+                      colour = OUTLINE, linewidth = OUTLINE_LW)
   if (has(fill))
     p <- p + scale_fill_manual(values = plot_colours(d[[fill]], fill, palette),
                                name = fill, na.value = "grey85")
@@ -1700,7 +1794,7 @@ plot_NaLoA <- function(data, distributions = NULL,
     sprintf("bars = %s%s summed over strata.", cc_lead, cls_word),
     if (has(fill))
       sprintf("%s by %s.", if (stacked) "stacked" else "dodged", fill),
-    if (st$on) "shade = sampled (solid), or estimated by the allocation (transparent).",
+    if (st$on) "solid = sampled, hatched = estimated by the allocation.",
     if (estimated && !st$on && !st$shown)
       "sampled and estimated numbers added together.",
     if (plus_on) sprintf("%s+ = ages %s+ pooled.", format(plus_from), format(plus_from)),
@@ -1738,9 +1832,10 @@ plot_NaLoA <- function(data, distributions = NULL,
 #' each point. Given the result of the allocation ([catchAllocationAoL()]) it
 #' shows what the allocation did: `sampledOrEstimated` says whether a mean
 #' weight was sampled or estimated for a stratum nobody sampled, and it is
-#' drawn as the shade (solid = sampled, transparent = estimated), as the
-#' `colour` or as a `facet`, as you choose. The arguments are the same before
-#' and after, and so is the plot; the title says which it is.
+#' drawn as the mark (a solid line with circles = sampled, a dotted line with
+#' crosses = estimated), as the `colour` or as a `facet`, as you choose. The
+#' arguments are the same before and after, and so is the plot; the title says
+#' which it is.
 #'
 #' @details
 #' `data` is the catch and `distributions` the CEF distributions: they are
@@ -1761,7 +1856,7 @@ plot_NaLoA <- function(data, distributions = NULL,
 #' takes one column (a wrapped set of panels) or two (`c("row", "col")`, a
 #' grid). Live weight and a line are the only options, so there is no
 #' `variableType` or `type` argument. The legend sits inside the panel like
-#' the other plots', except with `show_samples`, `plus_group` or the shade,
+#' the other plots', except with `show_samples`, `plus_group` or the mark,
 #' where it moves outside so it cannot cover the right-hand end of the curve.
 #'
 #' ## After the allocation
@@ -1769,18 +1864,20 @@ plot_NaLoA <- function(data, distributions = NULL,
 #' As in [plot_NaLoA()]: give both tables of the allocation's result, its
 #' `$catch` as `data` and its `$distribution` as `distributions`. The
 #' allocation adds `sampledOrEstimated` to the distributions, and it is a
-#' variable like any other: by default the shade (`alpha =
+#' variable like any other: by default the mark (`alpha =
 #' "sampledOrEstimated"`), or named in `colour` (a colour each) or in `facet`
-#' (a panel each), where it is not drawn as a shade as well. With the shade,
+#' (a panel each), where it is not drawn as a mark as well. With the mark,
 #' every combination of the plotted columns is one line per sampled /
-#' estimated, so the sampled curve and the curve the allocation estimated for
-#' the unsampled strata sit side by side. `alpha = NULL` draws no shade, and
-#' unless it is also the colour or a facet the sampled and the estimated
-#' weights are averaged together, weighted by their numbers.
+#' estimated, so the sampled curve (solid, with circles) and the curve the
+#' allocation estimated for the unsampled strata (dotted, with crosses) sit side
+#' by side. When `shape` is already a column of its own the crosses are not
+#' available, and the estimated points are transparent instead. `alpha = NULL`
+#' draws no mark, and unless it is also the colour or a facet the sampled and
+#' the estimated weights are averaged together, weighted by their numbers.
 #'
 #' The title says what the distributions drawn are: *sampled + estimated* when
 #' the allocation estimated some of them, *only sampled* when it did not, and
-#' then there is no shade, because there is nothing to tell apart. A
+#' then there is no mark, because there is nothing to tell apart. A
 #' distribution the allocation estimated has no measured fish to count, so it
 #' has no bar with `show_samples`.
 #'
@@ -1821,7 +1918,8 @@ plot_NaLoA <- function(data, distributions = NULL,
 #' (`numMeasurements` 0) adds none - a point with no bar is a point whose
 #' sample size is unknown, not zero, and the caption says so.
 #'
-#' @param data Raw CEF catch data; after the allocation, its `$catch`.
+#' @param data CEF catch data carrying the columns you group by
+#'   ([derive_fields()] output, or your own); after the allocation, its `$catch`.
 #' @param distributions A CEF distributions table, linked to the catch through
 #'   `domainBiology`; after the allocation, its `$distribution`.
 #' @param distributionType `"LengthTotal"` (default) or `"Age"`.
@@ -1834,10 +1932,11 @@ plot_NaLoA <- function(data, distributions = NULL,
 #'   `"sampledOrEstimated"` included.
 #' @param shape Column drawn as separate series with their own point shapes;
 #'   opens the averaged group back up and drops the band.
-#' @param alpha `"sampledOrEstimated"` (default) draws the shade: solid for
-#'   sampled, transparent for estimated. `NULL` draws none. Left out when
-#'   `sampledOrEstimated` is the `colour`, the `shape` or a `facet`, and when
-#'   nothing was estimated.
+#' @param alpha `"sampledOrEstimated"` (default) marks what the allocation
+#'   estimated: a solid line with circles for sampled mean weights, a dotted line
+#'   with crosses for estimated ones (transparent circles when `shape` is a
+#'   column). `NULL` draws no mark. Left out when `sampledOrEstimated` is the
+#'   `colour`, the `shape` or a `facet`, and when nothing was estimated.
 #' @param plus_group The first age of the plus group: `7` pools ages 7 and
 #'   older into one class, shown as `7+`. `NULL` (default): no plus group.
 #'   Ages only. See *The plus group*.
@@ -1883,7 +1982,7 @@ plot_NaLoA <- function(data, distributions = NULL,
 #'            show_samples = TRUE)
 #'
 #' # after the allocation: both tables of its result. Landings by country,
-#' # solid = sampled, transparent = estimated
+#' # solid line = sampled, dotted line with crosses = estimated
 #' plot_MWaLoA(alloc$catch, alloc$distribution,
 #'            catchCategory = "Lan", colour = "vesselFlagCountry")
 #'
@@ -1932,7 +2031,7 @@ plot_MWaLoA <- function(data, distributions = NULL,
   d <- pr$data
   if (is.null(d) || !nrow(d)) return(NULL)
   plus_from <- pr$plus_from; bin_from <- pr$bin_from
-  st <- status_shade(S, alpha, c(colour, facet1, facet2, shape), pr$status, fn,
+  st <- status_marks(S, alpha, c(colour, facet1, facet2, shape), pr$status, fn,
                      override = list(colour = "grey30", fill = "grey30"))
   estimated <- "estimated" %in% pr$status
   if (S %in% names(d)) {
@@ -1944,6 +2043,12 @@ plot_MWaLoA <- function(data, distributions = NULL,
   # that is the shade: the series each is a line of its own
   line_by <- c(if (has(colour)) colour, if (has(shape)) shape, if (st$on) ".status")
   d$.line <- if (length(line_by)) interaction(d[line_by], drop = TRUE) else 1L
+  # What marks an estimated mean weight: a dotted line, and crosses for its points
+  # (which have no fill, so they take the colour a circle is filled with: see
+  # cross_marks()). Not when `shape` is already a column: then the points are
+  # transparent instead.
+  cross <- st$on && !has(shape)
+  if (cross) d <- cross_marks(d, if (has(colour)) colour, 1, 0.4)
   with_dist <- !is.null(distributions)
   cc_word <- switch(catchCategory, Lan = "Landings", Dis = "Discards",
                     BMS = "BMS Catch", All = "Catch")
@@ -2023,12 +2128,19 @@ plot_MWaLoA <- function(data, distributions = NULL,
                      na.rm = TRUE)
   }
 
-  # the shade is a mapping of the line and its points, a fixed alpha otherwise
-  line_args <- list(linewidth = 0.65)
-  if (st$on) line_args$mapping <- aes(alpha = .status) else line_args$alpha <- 0.9
+  # the line is dotted where the status marks it; the points are crosses, or - when
+  # `shape` is a column of its own - transparent
+  line_args <- list(linewidth = 0.65, alpha = 0.9)
+  if (st$on) line_args$mapping <- aes(linetype = .status)
   p <- p + do.call(geom_line, line_args)
-  shade <- if (st$on) aes(alpha = .status) else aes()
-  p <- p + if (has(shape))
+  shade <- if (st$on && !cross) aes(alpha = .status) else aes()
+  p <- p + if (cross) {
+    if (has(colour))
+      geom_point(aes(fill = factor(.data[[colour]]), shape = .status, colour = .edge,
+                     stroke = .stroke), size = 2.2)
+    else geom_point(aes(shape = .status, colour = .edge, stroke = .stroke), size = 2.2,
+                    fill = plot_colours(palette = palette))
+  } else if (has(shape))
     geom_point(modifyList(aes(shape = factor(.data[[shape]])), shade), size = 2.3,
                stroke = 0.5, fill = "white")
   else if (has(colour))
@@ -2037,18 +2149,28 @@ plot_MWaLoA <- function(data, distributions = NULL,
   else geom_point(shade, shape = 21, size = 2.2, fill = plot_colours(palette = palette),
                   colour = OUTLINE, stroke = 0.4)
   if (has(shape))
-    p <- p + scale_shape_manual(values = c(16, 17, 15, 18, 4, 3, 8, 7),
+    p <- p + scale_shape_manual(values = c(16, 17, 15, 18, 1, 2, 0, 5),
                                 name = shape)
 
   if (has(colour)) {
     cols <- plot_colours(d[[colour]], colour, palette)
-    p <- p + scale_colour_manual(values = cols, name = colour, na.value = "grey70")
+    # the crosses' own outline colour is a value of the scale too, kept out of the legend
+    p <- p + scale_colour_manual(values = c(cols, if (cross) c(.outline = OUTLINE)),
+                                 breaks = if (cross) names(cols) else waiver(),
+                                 name = colour, na.value = "grey70")
     # fill is mapped by the band, the colour-fill points and the bars;
     # once `shape` opens the strata up only the bars are left
     if (!has(shape) || bars)
       p <- p + scale_fill_manual(values = cols, name = colour, na.value = "grey85")
-  }
-  if (st$on) p <- p + st$scale
+  } else if (cross)
+    p <- p + scale_colour_manual(values = c(.outline = OUTLINE, .cross = plot_colours(palette = palette)),
+                                 guide = "none")
+  if (st$on) p <- p + st$line
+  if (cross)
+    p <- p + st$shape + scale_continuous_identity("stroke", guide = "none") +
+      guides(shape = guide_legend(override.aes = list(
+        fill = "grey30", colour = "grey30", size = 2.4, stroke = c(0.4, 1))))
+  else if (st$on) p <- p + st$scale
 
   # what a point is: the mean weight of every sampled stratum that
   # shares the plotted columns, weighted by numbers - everything else is
@@ -2066,9 +2188,10 @@ plot_MWaLoA <- function(data, distributions = NULL,
   ribbon_txt <- if (has(shape))
     sprintf("each %s drawn separately (no ribbon).", shape)
   else if (band) "ribbon = +/- 1sd across grouped strata."
-  shade_txt <- if (st$on)
-    "shade = sampled (solid), or estimated by the allocation (transparent)."
-  else if (estimated && !st$shown)
+  shade_txt <- if (st$on) {
+    if (cross) "solid line and dots = sampled, dotted line and crosses = estimated by the allocation."
+    else "solid line = sampled, dotted line and transparent dots = estimated by the allocation."
+  } else if (estimated && !st$shown)
     "sampled and estimated weights averaged together (weighted by numbers)."
   plus_txt <- if (plus_on)
     sprintf("%s+ = ages %s+ pooled (per-distribution mean).",

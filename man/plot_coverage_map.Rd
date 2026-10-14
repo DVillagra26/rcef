@@ -17,13 +17,17 @@ plot_coverage_map(
 )
 }
 \arguments{
-\item{catch}{Raw CEF catch data, or a \code{\link[=build_coverage_strata]{build_coverage_strata()}} table
-(its own \code{what} is then used).}
+\item{catch}{CEF catch data (with \code{areaValue} and the \code{area} / \code{group}
+columns on it), or a \code{\link[=build_coverage_strata]{build_coverage_strata()}} table (its own \code{what} is
+then used).}
 
 \item{distributions}{A CEF distributions table - needed for
 \code{what = "length"} / \code{"age"} with raw catch, ignored otherwise.}
 
-\item{area}{Column holding the ICES area code. Default \code{"areaValue"}.}
+\item{area}{Column holding the ICES area code: \code{"areaValue"} (default), or a
+coarser level such as \code{"ICESSubArea"} or \code{"ICESDivision"}, which needs
+\code{areaValue} in \code{catch} to be placed where the data is (see \emph{Where a pie is
+placed}).}
 
 \item{group}{Optional column: one boxed grid of pies per area, one pie per
 level. A \code{group} with a single level warns and draws one pie per area.}
@@ -60,16 +64,30 @@ position.
 raw catch (plus \code{distributions} for length and age) or a
 \code{\link[=build_coverage_strata]{build_coverage_strata()}} table that has the \code{area} column (and the
 \code{group} column) among its \code{dims}.
+\subsection{Where a pie is placed}{
 
-Areas are placed at approximate centroids; an area
-with no known centroid is warned about by name and left off the map. The
-map needs the suggested \code{maps} package.
+Areas are placed at approximate centroids of the ICES divisions and
+subdivisions. A coarser \code{area} column (\code{"ICESSubArea"}, \code{"ICESDivision"})
+is placed where its data is: at the mean of the centroids of the
+\code{areaValue}s that have data in it. The pie of subarea 27.7 sits around 7.d
+and 7.e when nothing comes from 7.a or 7.f, not in the middle of the whole
+of 7, and 27.3 sits between 27.3.a.20 and 27.3.a.21 when those are the only
+two areas with data. Only a level with no \code{areaValue} behind it - a table
+aggregated to the subarea alone, say - takes the centroid of the area
+itself, and a subarea or division the list leaves out (3, 3.d, 5 ...) has
+one too, the mean of the listed areas inside it. An area with no centroid at
+all is warned about by name and left off the map. The map needs the
+suggested \code{maps} package.
+}
 }
 \examples{
 \dontrun{
 if (requireNamespace("maps", quietly = TRUE)) {
   plot_coverage_map(catch)
   plot_coverage_map(catch, group = "seasonValue")
+
+  # one pie per subarea, placed at the mean of the areaValue centroids with data
+  plot_coverage_map(catch, area = "ICESSubArea", group = "fleetGroup")
 }
 }
 }

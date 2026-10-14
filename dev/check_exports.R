@@ -37,6 +37,11 @@ nms <- vapply(defined, `[[`, "", "name")
 ns <- readLines("NAMESPACE", warn = FALSE)
 ex <- gsub('^"|"$', "",
            sub("^export\\((.*)\\)$", "\\1", grep("^export\\(", ns, value = TRUE)))
+## an S3 method is registered, not exported: S3method(generic, class) - or, for a
+## generic of another package, S3method(pkg::generic, class) - names generic.class
+s3 <- sub("^S3method\\((.*)\\)$", "\\1", grep("^S3method\\(", ns, value = TRUE))
+ex <- c(ex, vapply(strsplit(s3, ",", fixed = TRUE), function(z)
+  paste(sub("^.*::", "", trimws(z[1])), trimws(z[2]), sep = "."), ""))
 
 miss <- defined[!nms %in% ex]
 

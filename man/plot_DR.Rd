@@ -34,8 +34,9 @@ included.}
 
 \item{facet}{Optional facet column; \code{"importedOrRaised"} included.}
 
-\item{alpha}{\code{"importedOrRaised"} (default) draws the shade: solid for
-imported, transparent for raised. \code{NULL} draws none. Left out when
+\item{alpha}{\code{"importedOrRaised"} (default) marks what the raising added:
+circles for imported strata, crosses for raised ones (transparent circles
+when \code{shape} is a column). \code{NULL} draws no mark. Left out when
 \code{importedOrRaised} is the \code{x}, \code{colour}, \code{shape} or \code{facet}, and when
 nothing was raised.}
 
@@ -67,8 +68,8 @@ behind the points marking the mean rate of each \code{x} level, weighted by
 landings, and an optional \code{reference} that draws a dashed line and names the
 strata above it. Given the raised catch (the output of \code{\link[=catchRaising]{catchRaising()}}) it
 shows what the raising did: a stratum whose discards came with the data
-(\emph{imported}) is drawn solid, one whose discards the raising added
-(\emph{raised}) is drawn transparent. The arguments are the same either way, and
+(\emph{imported}) is drawn as a circle, one whose discards the raising added
+(\emph{raised}) as a cross. The arguments are the same either way, and
 so is the plot; the title says which it is.
 }
 \details{
@@ -90,11 +91,13 @@ is a property of sampled strata only.
 
 The raising adds \code{importedOrRaised} to the catch, and with it the plot knows
 what the raising did. \code{importedOrRaised} is a variable like any other. By
-default it is the shade (\code{alpha = "importedOrRaised"}): solid for imported
-strata, transparent for raised ones. Name it in \code{x}, \code{colour}, \code{shape} or
+default it is the mark (\code{alpha = "importedOrRaised"}): imported strata are
+circles, raised ones crosses (in the colour a circle would be filled with).
+When \code{shape} is already a column of its own the symbol is taken, and raised
+strata are transparent circles instead. Name it in \code{x}, \code{colour}, \code{shape} or
 \code{facet} to draw it there instead - a colour each, a panel each, two columns
-of points - and it is then not drawn as a shade as well. \code{alpha = NULL} draws
-no shade, and unless it is named elsewhere imported and raised strata are
+of points - and it is then not drawn as a mark as well. \code{alpha = NULL} draws
+no mark, and unless it is named elsewhere imported and raised strata are
 drawn alike. Whichever way, it is worked out per stratum (a stratum is raised
 when its discard rows were), never from the landings rows next to them, which
 are always imported; a stratum that holds both kinds of discard row is raised.
@@ -102,12 +105,12 @@ are always imported; a stratum that holds both kinds of discard row is raised.
 The title says what the strata drawn are: \emph{imported + raised} when the
 raising added some of them, \emph{only imported} when it did not - a raw catch,
 or a raised catch in which nothing needed raising - and then there is no
-shade, because there is nothing to tell apart.
+mark, because there is nothing to tell apart.
 
-Put the raising group on \code{x} (\code{"DrGroup"}): a group's transparent points all
-sit on one line, the rate it was raised at, and its solid points show how
+Put the raising group on \code{x} (\code{"DrGroup"}): a group's crosses all
+sit on one line, the rate it was raised at, and its circles show how
 far the strata it was built from scatter around that line - a group whose
-solid points are spread far from it is a guess dressed up as a group. Only
+circles are spread far from it is a guess dressed up as a group. Only
 the strata of the raised catch are drawn, so the donors of a group wider
 than its own strata (a REST group raised from every gear, say) appear under
 the groups they themselves belong to.
@@ -116,7 +119,7 @@ A raised stratum whose group had no donor to draw a rate from comes out of
 the raising as \code{NaN}: it has no rate to plot and is left out, with a message
 saying how many.
 
-Once strata are raised the transparent points are themselves the reference,
+Once strata are raised the crosses are themselves the reference,
 so the weighted-mean line, the reference line's label and the per-point
 labels, which help to read the rates as they were reported, are left out;
 the dashed \code{reference} line stays.
@@ -183,11 +186,11 @@ plot_DR(catch, x = "vesselFlagCountry", colour = "metier4",
 plot_DR(catch, x = "metier4", colour = "vesselFlagCountry",
        rate = "rate", reference = 0.2)
 
-# the same plot of the raised catch: imported solid, raised transparent
+# the same plot of the raised catch: imported are circles, raised crosses
 raised <- catchRaising(catch, strataCond, logFile = tempfile(fileext = ".txt"))
 plot_DR(raised, x = "DrGroup", colour = "metier4")
 
-# imported against raised as the panels instead of the shade
+# imported against raised as the panels instead of the crosses
 plot_DR(raised, x = "metier4", colour = "vesselFlagCountry",
        facet = "importedOrRaised")
 

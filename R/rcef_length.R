@@ -76,7 +76,9 @@ prep_distributions <- function(dist, type = "LengthTotal") {
   if ("sampledOrEstimated" %in% names(d))
     d$sampledOrEstimated[is.na(d$sampledOrEstimated)] <- "sampled"
 
-  dup <- duplicated(d)
+  # data.table's duplicated(): the data.frame method pastes every row together and
+  # took two seconds on a 100 000-row allocation result - on every plot
+  dup <- duplicated(data.table::as.data.table(d))
   if (any(dup)) {
     warning(sprintf(paste("%s distribution row(s) repeat another row exactly and",
                           "were dropped, so that nothing is counted twice - check",
@@ -156,8 +158,9 @@ biology_key <- function(x, keys) {
 #' ages. The pooled class is labelled with the first age (`from`) or with the
 #' lower edge of its bin (`bin_width = 5` turns class 12 into 10).
 #'
-#' @param data A summarised numbers / mean-weight table, or raw CEF catch (after
-#'   the allocation: the `$catch` of its result).
+#' @param data A summarised numbers / mean-weight table, or CEF catch with the
+#'   columns you group by already on it - [derive_fields()] run once, or your own
+#'   (after the allocation: the `$catch` of its result).
 #' @param distributions A CEF distributions table (after the allocation: the
 #'   `$distribution` of its result), or `NULL`.
 #' @param distributionType `"LengthTotal"` or `"Age"`.
@@ -237,7 +240,7 @@ biology_dist_prep <- function(data, distributions, distributionType,
 
   # ---- each distribution row, with the stratum columns of its catch -------------
   parts <- catch_category_parts(catchCategory)
-  d  <- derive_fields(as.data.frame(data))
+  d  <- as.data.frame(data)       # the catch as it stands: its own fields, derived once
   pd <- prep_distributions(distributions, distributionType)
   if (!is.null(pd)) pd <- pd[pd$catchCategory %in% parts, , drop = FALSE]
   if (is.null(pd) || !nrow(pd)) {
@@ -251,7 +254,7 @@ biology_dist_prep <- function(data, distributions, distributionType,
   absent <- setdiff(grp, union(names(d), names(pd)))
   if (length(absent))
     stop(fn, "the catch and the distributions have no column ",
-         paste0("'", absent, "'", collapse = ", "), call. = FALSE)
+         paste0("'", absent, "'", collapse = ", "), derive_hint(absent), call. = FALSE)
   estimated <- S %in% names(pd) && any(pd[[S]] %in% "estimated")
   # the estimated distributions of a stratum with no biological domain carry a
   # domain the allocation made up, which only its own catch has: the catch that

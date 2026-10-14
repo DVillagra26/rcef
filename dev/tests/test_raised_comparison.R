@@ -100,13 +100,14 @@ ok(identical(p$labels$title, "Raised catch per stratum, by scenario") &&
      identical(p$labels$y, "Catch (t)"),
    "catch weight by default: title and y axis say Catch")
 ok(grepl("color = discard raising/allocation scenario", p$labels$caption, fixed = TRUE) &&
-     grepl("shade = imported", p$labels$caption, fixed = TRUE),
-   "the caption says what colour and shade are")
+     grepl("solid = imported from the data, hatched = added by raising", p$labels$caption, fixed = TRUE),
+   "the caption says what colour and the hatching are")
 ok(identical(levels(p$data$src), c("Imported", "Raised")) &&
      all(p$data$src %in% c("Imported", "Raised")),
    "every bar part is Imported or Raised")
-ok(setequal(round(unique(ggplot_build(p)$data[[1]]$alpha), 2), c(1, 0.45)),
-   "imported is solid (alpha 1), raised transparent (0.45)")
+ok(setequal(round(unique(ggplot_build(p)$data[[1]]$alpha), 2), c(1, 0.45)) &&
+     inherits(p$layers[[1]]$geom, "GeomColHatch"),
+   "imported is solid (alpha 1), raised transparent (0.45) and hatched")
 ok(all(p$data$t >= 0) && nrow(p$data) == nrow(unique(p$data[c(".x", "scenario", "src")])),
    "one bar part per x, scenario and imported / raised")
 # the two plots agree: a scenario's bars add up to what plot_catches() draws

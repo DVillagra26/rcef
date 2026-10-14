@@ -15,8 +15,10 @@ build_coverage_strata(
 \arguments{
 \item{catch}{CEF catch data (long format) carrying \code{catchCategory},
 \code{total} and, for discards, \code{domainCatchDis}, plus every column named in
-\code{dims}. \code{\link[=derive_fields]{derive_fields()}} adds \code{metier4}, \code{mesh}, \code{metier4_mesh} and the
-ICES area levels.}
+\code{dims}. Those can be columns of your own, or the ones \code{\link[=derive_fields]{derive_fields()}}
+adds (\code{metier4}, \code{mesh}, \code{metier4_mesh}, the ICES area levels): run it once
+on the raw catch and pass that - the table reads the columns the catch has
+and derives nothing itself.}
 
 \item{dims}{Character vector of the columns that define a stratum, for
 example \code{c("metier4", "vesselFlagCountry")}, or the finer
@@ -141,7 +143,9 @@ would be true of the whole row.
 
 For length and age the expensive step is linking the catch to the
 distributions. Build the table once and pass it to as many plots as you
-like, rather than passing raw catch to each.
+like, rather than passing the catch to each. The same goes for
+\code{\link[=derive_fields]{derive_fields()}}: run it once, on the raw catch, and keep building on that
+catch - the table and the plots never derive anything again.
 }
 }
 \examples{

@@ -1,6 +1,6 @@
 ## plot_NaLoA() / plot_MWaLoA() on the RESULT of the allocation: numbers and mean
-## weight at length or age, the shade saying sampled (solid) or estimated by the
-## allocation (transparent).
+## weight at length or age, the mark saying sampled (solid bars; a solid line with
+## circles) or estimated by the allocation (hatched bars; a dotted line with crosses).
 ##
 ## They are the same functions as before the allocation, given the result's two
 ## tables - its $catch as `data` and its $distribution as `distributions` - and
@@ -11,7 +11,7 @@
 ## (units, classes in cm, thousands), the sampled part is what the plain plot
 ## draws from the same data, the estimated distributions of strata with no domain
 ## are found (they exist only in the result's own $catch, and the plot warns when
-## it is given the catch that went in), the shade is mapped and means what it
+## it is given the catch that went in), the mark is mapped and means what it
 ## says, the title says "sampled + estimated" - or "only sampled" when nothing
 ## was estimated - and the catch category, facets, plus group and length bins.
 ##
@@ -127,9 +127,11 @@ ok(!is.null(a_sc) && near(unname(a_sc$palette(2)), c(1, 0.45)),
 b <- ggplot_build(pl)$data[[1]]
 ok(all(sort(unique(round(b$alpha, 2))) == c(0.45, 1)),
    "both shades are really drawn")
-ok(grepl("sampled (solid), or estimated by the allocation (transparent)", pl$labels$caption, fixed = TRUE) &&
+ok(grepl("solid = sampled, hatched = estimated by the allocation", pl$labels$caption, fixed = TRUE) &&
      endsWith(pl$labels$title, ", sampled + estimated"),
-   "the caption says what the shade means, the title says the numbers are sampled + estimated")
+   "the caption says what the mark means, the title says the numbers are sampled + estimated")
+ok(inherits(pl$layers[[1]]$geom, "GeomColHatch"),
+   "the bars are a hatching layer: the estimated ones are drawn with stripes")
 ok(identical(pl$theme$legend.position, "right"),
    "the legends sit outside the panel (they are tall and would cover the bars)")
 ok(identical(NaLoA(al, catchCategory = "Lan", fill = "sampledOrEstimated")$theme$legend.position, "right") &&
@@ -179,10 +181,12 @@ ok(inherits(NaLoA(al, fill = "metier4", stacked = FALSE), "ggplot") &&
    "stacked = FALSE dodges, and the caption says so")
 ok(!inherits(try(ggplot_build(NaLoA(al)), silent = TRUE), "try-error"),
    "no fill and no facet: one colour, the shade alone")
-# a column the catch does not carry is derived, as everywhere else
+# a column the catch does not carry is not derived on the way: the plot reads the
+# catch as it is, and the error says where the column comes from
 al_nm <- al; al_nm$catch <- al$catch[setdiff(names(al$catch), "mesh")]
-ok(identical(NaLoA(al_nm, fill = "mesh")$data, NaLoA(al, fill = "mesh")$data),
-   "a derived column the result's catch lacks (mesh) is derived on the way")
+e_nm <- err(NaLoA(al_nm, fill = "mesh"))
+ok(grepl("no column 'mesh'", e_nm, fixed = TRUE) && grepl("derive_fields() adds mesh", e_nm, fixed = TRUE),
+   "a derived column the result's catch lacks (mesh) is an error that names derive_fields()")
 
 ## ---- what the allocation ran on ----------------------------------------------------------
 # rows of another origin are not what was allocated: they must not double the numbers
@@ -219,14 +223,17 @@ mm <- merge(w_long[c("vesselFlagCountry", ".status", ".class", ".mw")],
             by = c("vesselFlagCountry", ".status", ".class"), all = TRUE)
 ok(nrow(mm) == nrow(pw$data) && !anyNA(mm) && near(mm$.mw, mm$mean_weight),
    "mean weights: those of meanWoLatAoLAggregation(), in g, at classes in cm")
-ok(sum(vapply(pw$layers, function(l) identical(rlang::as_label(l$mapping$alpha), ".status"),
-              logical(1))) == 2,
-   "mean weight: the shade is mapped to sampled / estimated on the lines and on the points")
-ok(!is.null(pw$scales$get_scales("alpha")) &&
-     near(unname(pw$scales$get_scales("alpha")$palette(2)), c(1, 0.45)) &&
-     grepl("sampled (solid), or estimated by the allocation (transparent)", pw$labels$caption, fixed = TRUE) &&
+mapped_to_status <- function(p, aes)
+  sum(vapply(p$layers, function(l) identical(rlang::as_label(l$mapping[[aes]]), ".status"), logical(1)))
+ok(mapped_to_status(pw, "linetype") == 1 && mapped_to_status(pw, "shape") == 1 &&
+     mapped_to_status(pw, "alpha") == 0,
+   "mean weight: sampled / estimated is the line type of the lines and the symbol of the points")
+ok(identical(unname(pw$scales$get_scales("linetype")$palette(2)), c("solid", "dotted")) &&
+     near(unname(pw$scales$get_scales("shape")$palette(2)), c(21, 4)) &&
+     grepl("solid line and dots = sampled, dotted line and crosses = estimated by the allocation",
+           pw$labels$caption, fixed = TRUE) &&
      endsWith(pw$labels$title, "Mean Weight at Length, sampled + estimated"),
-   "mean weight: the same shade, the caption says so, and the title says allocated")
+   "mean weight: sampled is a solid line with circles, estimated a dotted line with crosses; the caption says so, and the title says allocated")
 ok(length(unique(ggplot_build(pw)$data[[1]]$group)) ==
      nrow(unique(pw$data[c("vesselFlagCountry", ".status")])),
    "one line per colour level and per sampled / estimated")
@@ -238,7 +245,7 @@ ok(all(pw$data$k %in% na_k$k),
    "a class with no fish (zero numbers) has no mean weight point - the allocation writes a weight at every class")
 pw0 <- MWaLoA(al)
 ok(!inherits(try(ggplot_build(pw0), silent = TRUE), "try-error") &&
-     !is.null(pw0$scales$get_scales("alpha")) &&
+     !is.null(pw0$scales$get_scales("linetype")) &&
      !inherits(try(ggplot_build(MWaLoA(al, colour = "metier4",
                                        facet = c("vesselFlagCountry", "seasonValue"))),
                    silent = TRUE), "try-error"),
@@ -314,7 +321,7 @@ ok(is.null(suppressMessages(MWaLoA(al, catchCategory = "BMS", distributionType =
 ## fill / colour / facet - and alpha = NULL draws no shade (the numbers are then
 ## added together).
 S <- "sampledOrEstimated"
-shaded <- function(p) !is.null(p$scales$get_scales("alpha"))
+shaded <- function(p) !is.null(p$scales$get_scales("alpha")) || !is.null(p$scales$get_scales("linetype"))
 n_panels <- function(p) nrow(ggplot_build(p)$layout$layout)
 by_lvl <- function(p) tapply(p$data$number, p$data[[S]], sum)
 raw_both <- c(sampled = raw_k("Lan", "sampled"), estimated = raw_k("Lan", "estimated"))
@@ -325,7 +332,7 @@ ok(!inherits(try(ggplot_build(nf), silent = TRUE), "try-error") && !shaded(nf) &
      near(as.numeric(by_lvl(nf)[c("sampled", "estimated")]), as.numeric(raw_both)),
    "numbers: fill = sampledOrEstimated - a colour each, no shade, the same numbers")
 ok(identical(nf$labels$fill, S) && grepl("stacked by sampledOrEstimated", nf$labels$caption, fixed = TRUE) &&
-     !grepl("shade =", nf$labels$caption, fixed = TRUE) &&
+     !grepl("hatched", nf$labels$caption, fixed = TRUE) &&
      identical(nf$scales$get_scales("fill")$palette(2)[["sampled"]], "#4980B6") &&
      identical(nf$scales$get_scales("fill")$palette(2)[["estimated"]], "#FFB649"),
    "numbers: ... and the caption and the two colours say so (sampled first)")

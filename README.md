@@ -21,7 +21,10 @@ remotes::install_github("DVillagra26/rcef", dependencies = TRUE)
 ## Look at the data first
 
 Discard rates and sampling coverage are one table, and the plots draw that
-table, so every number in a figure can be read off it:
+table, so every number in a figure can be read off it. `derive_fields()` runs
+once, on the raw data; the table and the plots read the columns the catch has
+and derive nothing, so a column of your own - a fleet grouping, say - works
+beside the derived ones:
 
 ```r
 library(rcef)
@@ -93,8 +96,9 @@ table(raised$catchCategory, raised$importedOrRaised)   # what was imported, what
 
 To look at what the raising did, use the plots you used before it: the catch
 weight and the discard rate of the raised catch take the same arguments as
-those of the raw catch. What was imported is drawn solid, what the raising
-added transparent, and the title says what the catch holds: *imported + raised*
+those of the raw catch. What was imported is drawn plain - a circle, a solid
+bar - and what the raising added is marked: a cross, a transparent and hatched
+bar. The title says what the catch holds: *imported + raised*
 (or *only imported*, when nothing was raised):
 
 ```r
@@ -132,9 +136,9 @@ catchAtAoLAggregation(alloc$distribution, alloc$catch, grouping = "catchCategory
 ```
 
 And the allocation is looked at with the length and age plots, given both tables of
-its result - solid is what was sampled, transparent what the allocation estimated,
-and the title says what the distributions hold: *sampled + estimated* (or *only
-sampled*, as before the allocation):
+its result - solid is what was sampled, hatched bars and dotted lines with crosses
+what the allocation estimated, and the title says what the distributions hold:
+*sampled + estimated* (or *only sampled*, as before the allocation):
 
 ```r
 plot_NaLoA(alloc$catch, alloc$distribution, catchCategory = "Lan", fill = "vesselFlagCountry")
