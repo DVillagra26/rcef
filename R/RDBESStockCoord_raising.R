@@ -450,10 +450,9 @@ grp_catch_raising_condition <- function(catch_data,
 ##'     (`"imported"` or `"raised"`) and `DrGroup`, the name of the group, on
 ##'     every row. Rows of `catch_data` that fall in no raising stratum are not
 ##'     part of it.
-##' @seealso [define_raising_groups_auto()] and [define_raising_groups_manual()]
-##'     for conditions made from the data; [plot_raised_catches()],
-##'     [plot_raised_DR()] and [raised_overview_table()] to look at the result;
-##'     [catchAllocationAoL()] for the lengths and ages.
+##' @seealso [check_group_conditions()] to check the groups before raising;
+##'     [plot_catches()], [plot_DR()] and [raised_overview_table()]
+##'     to look at the result; [catchAllocationAoL()] for the lengths and ages.
 ##' @author Yves Reecht
 ##' @md
 ##' @examples

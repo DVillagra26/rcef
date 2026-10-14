@@ -1,11 +1,10 @@
 # rcef — RCEF Workbench
 
 ICES discard raising and length/age catch allocation over CEF (RDBES)
-long-format data. **One package, one repo**: the analysis functions, the
-vendored RDBESStockCoord engines, and the shiny application that drives
-them.
+long-format data: the analysis and plotting functions, and the vendored
+RDBESStockCoord engines they drive.
 
-## Install and run
+## Install
 
 ```r
 # Restart R first (Session > Restart R) if rcef is already loaded: a loaded
@@ -13,14 +12,11 @@ them.
 # earlier installation".
 install.packages("remotes")                                    # once
 remotes::install_github("DVillagra26/rcef", dependencies = TRUE)
-
-rcef::run_app()
 ```
 
-`dependencies = TRUE` also installs what is only suggested: `shiny` and `DT`
-for the app, `icesVocab` and `icesSD` for InterCatch input. The plots need
-ggplot2 >= 3.5.0 and scales >= 1.3.0; the installer updates them if yours
-are older.
+`dependencies = TRUE` also installs what is only suggested: `icesVocab` and
+`icesSD` for InterCatch input. The plots need ggplot2 >= 3.5.0 and scales
+>= 1.3.0; the installer updates them if yours are older.
 
 ## Look at the data first
 
@@ -59,28 +55,51 @@ plot_MWaLoA(catch, distributions,
 
 Every title says what is sampled and over which weight ("Discard sampling of
 landed weight"), and every caption says how the numbers on the figure are
-worked out and which columns each mark is grouped over.
+worked out and which columns each mark is grouped over. Every plot takes the
+same `palette` argument - `"default"`, `"colorblind"` or `"gradual"` (for
+levels with an order, mesh sizes say) - and a level keeps its colour from
+plot to plot:
+
+```r
+plot_coverage_heat(tab, y = "metier4", x = "vesselFlagCountry", palette = "colorblind")
+plot_NaLoA(catch, distributions, fill = "mesh", palette = "gradual")
+```
 
 `?build_coverage_strata` lists every column, `?"coverage-plots"` every plot
 argument, and `vignette("part1-explore-sampling-coverage", package = "rcef")`
 draws them all.
 
-## Raise without the app
+## Raise and allocate
 
-Headless — the whole point of the split:
+The groups are yours to define: conditions for the strata that are raised together,
+and for the data each group takes its discard ratio from.
+`check_group_conditions()` tells you if a stratum sits in two groups.
 
 ```r
 library(rcef)
 catch <- derive_fields(read.csv("catches_CEF_v17.1.csv"))
 cef <- subset(catch, year == 2023)               # one stock and year at a time
 
-dims   <- c("metier4", "ICESDivision", "seasonValue")          # what a stratum is
-st     <- classify_strata(build_strata(cef, dims), threshold = 50)  # covered enough?
-groups <- define_raising_groups_auto(cef, hierarchy = dims,         # who borrows from whom
-                                     thresholds = c(50, 40, 30))
-raised <- run_native_raising(cef, dims, groups, type = "discards")
+strataCond <- list(TBB  = rlang::quo(metier4 == "TBB"),
+                   REST = rlang::quo(metier4 != "TBB"))
+matchedDataCond <- list(TBB  = rlang::quo(metier4 == "TBB"),
+                        REST = rlang::quo(TRUE))        # the rest draws on every metier
+
+check_group_conditions(cef, strataCond, logFile = NULL)
+raised <- catchRaising(cef, strataCond, matchedDataCond, type = "discards")
 
 table(raised$catchCategory, raised$importedOrRaised)   # what was imported, what was raised
+```
+
+To look at what the raising did, use the plots you used before it: the catch
+weight and the discard rate of the raised catch take the same arguments as
+those of the raw catch. What was imported is drawn solid, what the raising
+added transparent, and the title says what the catch holds: *imported + raised*
+(or *only imported*, when nothing was raised):
+
+```r
+plot_catches(raised, x = "metier4", facet = "vesselFlagCountry")
+plot_DR(raised, x = "DrGroup", colour = "metier4")     # one line per group: the rate it was raised at
 ```
 
 Raised it more than one way? Hand the raised catches to
@@ -90,16 +109,41 @@ after its object unless you pass `scenarios_names`, and `by` aggregates the
 table at any other level:
 
 ```r
-groups2 <- define_raising_groups_auto(cef, hierarchy = dims, thresholds = c(80, 60, 40))
-raised2 <- run_native_raising(cef, dims, groups2, type = "discards")
+all <- list(TBB = rlang::quo(TRUE), REST = rlang::quo(TRUE))        # both draw on everything
+raised2 <- catchRaising(cef, strataCond, all, type = "discards")
 
 raised_overview_table(c(raised, raised2), by = "seasonValue")   # imported vs raised
 plot_compare_raised(c(raised, raised2), x = "metier4", catchCategory = "Dis")
 ```
 
-No shiny is loaded. Raising uses the discard estimates whose
-`originType` matches the `originType` argument (`"WGEstimate"` by default,
-or `"Official"`), so that is the value the rows you want raised must carry.
+Lengths (or ages, the same way) are allocated from the raised catch, and added up into
+catch-at-length and mean-weight tables:
+
+```r
+distributions <- derive_fields(catch, read.csv("distributions_CEF_v17.1.csv"),
+                               what = "distribution")
+alloc <- catchAllocationAoL(raised, subset(distributions, year == 2023),
+                            condition_alloc_st_list = list(ALL = rlang::quo(TRUE)),
+                            distributionType = "LengthTotal")
+
+catchAtAoLAggregation(alloc$distribution, alloc$catch, grouping = "catchCategory",
+                      originType_catch = "WGEstimate", variableType_catch = "WeightLive",
+                      distributionType = "LengthTotal")
+```
+
+And the allocation is looked at with the length and age plots, given both tables of
+its result - solid is what was sampled, transparent what the allocation estimated,
+and the title says what the distributions hold: *sampled + estimated* (or *only
+sampled*, as before the allocation):
+
+```r
+plot_NaLoA(alloc$catch, alloc$distribution, catchCategory = "Lan", fill = "vesselFlagCountry")
+plot_MWaLoA(alloc$catch, alloc$distribution, catchCategory = "Lan", colour = "sampledOrEstimated")
+```
+
+Raising uses the discard estimates whose `originType` matches the `originType`
+argument (`"WGEstimate"` by default, or `"Official"`), so that is the value the
+rows you want raised must carry.
 
 ## Layout
 
@@ -109,17 +153,15 @@ R/                     THE PACKAGE
   RDBESStockCoord_*.R    vendored ICES WG code — do not refactor
   rcef_*.R               our analysis logic
   viz_*.R                our theme and plots (ggplot2 only)
-  run_app.R              the single entry point into the app
-  rcef_status.R          replaces the old external_loader.R
-inst/app/              THE APPLICATION — shipped, never R CMD check'ed
-  app.R, app_ui_helpers.R, app_mod_intercatch_ui.R, app_state.R
-dev/                   tests, tooling, deploy (.Rbuildignore'd)
+dev/                   tests and tooling (.Rbuildignore'd)
 ```
 
 **MANIFEST.md** maps every file to where it came from. **DROPPED.md**
-lists what was removed and why.
+lists what was removed and why, the Shiny application included: it was taken out
+of the working tree to work on the package alone, and is kept whole under the git tag
+`app-archive`.
 
-Four vignettes, all on real CEF data read from `inst/extdata/data_CEF_format`
+Three vignettes, all on real CEF data read from `inst/extdata/data_CEF_format`
 (git-ignored, so they only build on a machine that has the files - see
 *Developing*), in the order to read them (R requires a vignette's file name to
 start with a letter, so the number is in the title and after `part`):
@@ -127,39 +169,27 @@ start with a letter, so the number is in the title and after `part`):
 | vignette | what it does |
 |---|---|
 | `part1-explore-sampling-coverage` | 1. explores the data: sampling coverage, discard rates, and the lengths, ages and weights of the sampled strata - every plot family, on brill (discards, lengths) and saithe (ages) |
-| `part2a-discard-raising-manual-groups` | 2a. group allocation and discard raising with groups defined by hand, and the CC, CAR and CAS tables |
-| `part2b-discard-raising-hierarchical-groups` | 2b. the same with groups defined by the hierarchical cascade |
-| `part3-compare-allocation-schemes` | 3. compares allocation schemes: manual against hierarchical, and several hierarchies against each other |
+| `part2-discard-raising` | 2. discard raising with groups defined by hand, the CC, CAR and CAS tables, and two ways of raising compared |
+| `part3-length-age-allocation` | 3. the allocation of lengths from the raised catch, what it did to the numbers and mean weights, and the catch-at-length tables |
 
 Open one with `vignette("part1-explore-sampling-coverage", package = "rcef")`,
 or run its chunks one by one in RStudio.
-
-## The one rule
-
-> If a function needs `input`, `session`, or returns a shiny tag, it lives
-> in `inst/app/`. If it does arithmetic on catch data, it lives in `R/`.
-
-There is deliberately no shiny call anywhere under `R/` except the
-Suggests-guarded `shiny::runApp()` inside `run_app()`.
 
 ## Developing
 
 ```r
 source("dev/setup.R")        # pkgload::load_all(".") — no install needed
-shiny::runApp("inst/app")    # the app against the working tree
 devtools::document()         # regenerate NAMESPACE and man/ after any change
 ```
 
 ```sh
-bash dev/check_all.sh        # everything below, in one go
+bash dev/check_all.sh        # everything below, plus every suite in dev/tests (needs install)
 
+Rscript dev/check_ascii.R    # R/, vignettes and man/ are 7-bit ASCII
 Rscript dev/check_syntax.R   # parse() every file; must print DONE, 0 failures
 Rscript dev/check_exports.R  # must print NOT EXPORTED : 0
-Rscript dev/check_app.R      # sources the app + renders the UI (needs install)
-Rscript dev/check_server.R   # RUNS the server function (needs install)
-Rscript dev/check_sections.R # the two manual builders must present the same steps
 R CMD build --no-build-vignettes .   # catches DESCRIPTION errors in 2s — run before every push
-R CMD build .                        # also runs the four vignettes (~1.5 min); they read the
+R CMD build .                        # also runs the three vignettes (~1 min); they read the
                                      # local CEF csv files and stop with an error without them
 ```
 
@@ -177,16 +207,6 @@ Documentation blocks use `@md` (the package keeps roxygen's Markdown off
 globally, so each block opts in), which gives backticks, `[fn()]` links and
 pipe tables. Link only to functions that have a man page; write the others
 in code font.
-
-## Deploying to shinyapps.io
-
-`dev/deploy_shinyapps.R`. The catch worth knowing before you hit it:
-shinyapps.io resolves dependencies from CRAN, and `rcef` is not there. So
-install it **from GitHub** locally first — `remotes::install_github()`
-writes `RemoteType`/`RemoteUrl` into the installed DESCRIPTION and
-`rsconnect` reads them. Install with `devtools::install()` or
-`R CMD INSTALL` instead and the deploy fails with *"Unable to determine
-package source"*.
 
 ## Vendored code
 

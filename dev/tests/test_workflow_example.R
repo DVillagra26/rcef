@@ -1,15 +1,14 @@
 ## The synthetic test fixture must run the WHOLE workflow, not just the plots.
 ##
 ## It once carried originType = "Estimate". The raising and allocation
-## engines - and the app's originType picker - accept only "WGEstimate" or
-## "Official", so a raising run on it found no estimates and returned every
+## engines accept only "WGEstimate" or "Official", so a raising run on it found no estimates and returned every
 ## row as imported: no error, no warning. Every table and plot worked, which
 ## is why it went unnoticed. These checks push the example through discard
-## raising (automatic and manual groups), length and age allocation and both
+## raising (hand-written groups), length and age allocation and both
 ## aggregations.
 ##
-## They use nothing but library(rcef). The app attaches tidyr, and that hid
-## a missing importFrom(tidyr, replace_na): headless, the numbers-at-length
+## They use nothing but library(rcef): attaching tidyr as well once hid a
+## missing importFrom(tidyr, replace_na), and the numbers-at-length
 ## aggregation failed with 'could not find function "replace_na"'.
 
 source("dev/tests/fixture.R")
@@ -53,47 +52,45 @@ ok(!any(duplicated(dd)),
 
 ## ---- 2. discard raising, one year -------------------------------------
 c23 <- subset(cc, year == 2023); d23 <- subset(dd, year == 2023)
-dims <- c("metier4", "ICESDivision", "seasonValue")
 n_to_raise <- sum(c23$catchCategory == "Lan" & !nzchar(c23$domainCatchDis))
 
-grp <- quiet(define_raising_groups_auto(c23, hierarchy = dims, thresholds = c(50, 40, 30)))
-raised <- quiet(run_native_raising(c23, dims, grp, type = "discards", log_file = lf))
+grp <- fx_groups("own")
+raised <- quiet(fx_raise(c23, grp, type = "discards", log_file = lf))
 rr <- raised[raised$importedOrRaised %in% "raised", ]
 ok(nrow(rr) == n_to_raise,
-   sprintf("automatic groups: one raised discard row for each of the %d landings without an estimate (%d)",
+   sprintf("one group per metier: one raised discard row for each of the %d landings without an estimate (%d)",
            n_to_raise, nrow(rr)))
 ok(all(rr$catchCategory == "Dis") && all(is.finite(rr$total)) && all(rr$total >= 0),
-   "automatic groups: raised rows are discards with finite, non-negative totals")
+   "one group per metier: raised rows are discards with finite, non-negative totals")
 ok(sum(raised$importedOrRaised %in% "imported") > 0 &&
      sum(rr$total) > 0,
-   "automatic groups: imported rows kept, and something was raised")
+   "one group per metier: imported rows kept, and something was raised")
 
-rules <- list(new_rule("PS",  raise = list(list(var = "metier4", values = "PS"))),
-              new_rule("MPT", raise = list(list(var = "metier4", values = "MPT"))),
-              new_rule("REST"))
-grp_m <- quiet(define_raising_groups_manual(build_strata(c23, dims), rules))
-raised_m <- quiet(run_native_raising(c23, dims, grp_m, type = "discards", log_file = lf))
+## groups written by hand, as in the TAF scripts: two metiers each on their own, the rest together
+grp_m <- list(strataCond = list(PS   = rlang::quo(metier4 == "PS"),
+                                MPT  = rlang::quo(metier4 == "MPT"),
+                                REST = rlang::quo(!metier4 %in% c("PS", "MPT"))),
+              matchedDataCond = list(PS   = rlang::quo(metier4 == "PS"),
+                                     MPT  = rlang::quo(metier4 == "MPT"),
+                                     REST = rlang::quo(TRUE)))
+raised_m <- quiet(fx_raise(c23, grp_m, type = "discards", log_file = lf))
 rm <- raised_m[raised_m$importedOrRaised %in% "raised", ]
 ok(nrow(rm) == n_to_raise && all(is.finite(rm$total)),
    "manual groups: the same landings are raised, all totals finite")
 
-err <- tryCatch({ quiet(run_native_raising(cc, dims, grp, type = "discards", log_file = lf)); "" },
+err <- tryCatch({ quiet(fx_raise(cc, grp, type = "discards", log_file = lf)); "" },
                 error = function(e) conditionMessage(e))
 ok(grepl("Several years", err),
    "all four years at once: the engine refuses (one stock and year at a time)")
 
 ## ---- 3. length and age allocation ------------------------------------
-groups_alloc <- list(ALL = list(alloc = "TRUE", matched = "TRUE"))
 for (ty in c("LengthTotal", "Age")) {
-  al <- quiet(run_allocation(raised, d23, groups_alloc, app_type = ty, verbose = FALSE, log_file = lf))
-  ok(!inherits(al, "alloc_error") && nrow(al$distribution) > 0,
-     sprintf("%s: the raised catch is allocated", ty))
-  if (inherits(al, "alloc_error")) { cat("        ", al$message, "\n"); next }
-  nn <- agg_numbers(al); mw <- agg_meanweight(al)
-  ok(!is.null(nn) && nrow(nn) > 0 && sum(nn[[grep("^N_", names(nn))[1]]], na.rm = TRUE) > 0,
+  al <- quiet(fx_allocate(raised, d23, ty, log_file = lf))
+  ok(nrow(al$distribution) > 0, sprintf("%s: the raised catch is allocated", ty))
+  nn <- fx_numbers(al); mw <- fx_meanweight(al)
+  ok(nrow(nn) > 0 && sum(nn[[grep("^N_", names(nn))[1]]], na.rm = TRUE) > 0,
      sprintf("%s: numbers at class aggregate", ty))
-  ok(!is.null(mw) && nrow(mw) > 0,
-     sprintf("%s: mean weight at class aggregates", ty))
+  ok(nrow(mw) > 0, sprintf("%s: mean weight at class aggregates", ty))
 }
 
 cat(sprintf("\nDONE  %d failure(s)\n", FAIL))

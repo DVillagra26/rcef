@@ -114,8 +114,8 @@ ok(grepl("cannot be a stratum column", err(
      build_coverage_strata(cd, c("catchCategory", "metier4")))),
    "catchCategory as a stratum column is an error for discards")
 ok(grepl("needs the CEF catch columns", err(
-     build_coverage_strata(build_strata(cd, c("metier4", "vesselFlagCountry")), "metier4"))),
-   "an already-aggregated build_strata() table is refused, not silently 'nothing to describe'")
+     build_coverage_strata(build_coverage_strata(cd, c("metier4", "vesselFlagCountry")), "metier4"))),
+   "an already-aggregated table is refused, not silently 'nothing to describe'")
 ok(grepl("needs `distributions`", err(
      build_coverage_strata(cd, "metier4", what = "length"))),
    "length without distributions says what is missing")
@@ -148,8 +148,8 @@ ok(all(l_lan$catchCategory == "Lan") &&
      near(l_lan$total, l_all$total[l_all$catchCategory == "Lan"]),
    "catchCategory = 'Lan' is exactly the Lan rows of 'All'")
 ok(near(sum(l_lan$total),
-        sum(to_tonnes(ac$total[ac$catchCategory == "Lan"],
-                      ac$variableUnit[ac$catchCategory == "Lan"]))),
+        sum(convert_units(ac$total[ac$catchCategory == "Lan"],
+                          ac$variableUnit[ac$catchCategory == "Lan"], "t"))),
    "the Lan totals add up to the catch's landings, in tonnes")
 ok(all(l_all$coverage[!is.na(l_all$coverage)] >= 0 &
          l_all$coverage[!is.na(l_all$coverage)] <= 100 + 1e-9) &&
@@ -178,9 +178,9 @@ ok(identical(coverage_table_what(t1), "discard") &&
    "coverage_table_what() tells the three kinds apart")
 ok(is.na(coverage_table_what(cd)) && is.na(coverage_table_what(ac)),
    "raw catch is not mistaken for a coverage table")
-withcov <- add_stratum_metrics(ac, c("metier4", "vesselFlagCountry"))
+withcov <- ac; withcov$coverage <- 50
 ok("coverage" %in% names(withcov) && is.na(coverage_table_what(withcov)),
-   "even raw catch that carries a row-level coverage column (add_stratum_metrics)")
+   "even raw catch that carries a row-level coverage column")
 
 cat(sprintf("\nDONE  %d failure(s)\n", FAIL))
 if (FAIL) quit(status = 1L)

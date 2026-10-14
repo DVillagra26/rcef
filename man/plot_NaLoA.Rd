@@ -2,7 +2,7 @@
 % Please edit documentation in R/viz_plots.R
 \name{plot_NaLoA}
 \alias{plot_NaLoA}
-\title{Numbers at length or age}
+\title{Numbers at length or age, before or after the allocation}
 \usage{
 plot_NaLoA(
   data,
@@ -11,6 +11,7 @@ plot_NaLoA(
   catchCategory = "All",
   fill = NULL,
   facet = NULL,
+  alpha = "sampledOrEstimated",
   stacked = TRUE,
   plus_group = NULL,
   bin_width = NULL,
@@ -20,10 +21,10 @@ plot_NaLoA(
 )
 }
 \arguments{
-\item{data}{Raw CEF catch data.}
+\item{data}{Raw CEF catch data; after the allocation, its \verb{$catch}.}
 
 \item{distributions}{A CEF distributions table, linked to the catch through
-\code{domainBiology}.}
+\code{domainBiology}; after the allocation, its \verb{$distribution}.}
 
 \item{distributionType}{\code{"LengthTotal"} (default) or \code{"Age"}.}
 
@@ -31,9 +32,15 @@ plot_NaLoA(
 titled "catch"), \code{"Lan"}, \code{"Dis"} or \code{"BMS"}. Only used with
 \code{distributions}.}
 
-\item{fill}{Column mapped to the bar fill.}
+\item{fill}{Column mapped to the bar fill; \code{"sampledOrEstimated"} included.}
 
-\item{facet}{Up to two facet columns: \code{"col"} or \code{c("row", "col")}.}
+\item{facet}{Up to two facet columns: \code{"col"} or \code{c("row", "col")};
+\code{"sampledOrEstimated"} included.}
+
+\item{alpha}{\code{"sampledOrEstimated"} (default) draws the shade: solid for
+sampled, transparent for estimated. \code{NULL} draws none. Left out when
+\code{sampledOrEstimated} is the \code{fill} or a \code{facet}, and when nothing was
+estimated.}
 
 \item{stacked}{Stack the bars on \code{fill} (default) rather than dodge them.}
 
@@ -59,23 +66,59 @@ A ggplot object, or \code{NULL} when there is nothing to draw.
 \description{
 The catch numbers spread over the length (or age) classes, as a stacked or
 dodged histogram. Numbers are in thousands, length in cm and age in years.
+Given the result of the allocation (\code{\link[=catchAllocationAoL]{catchAllocationAoL()}}) it shows what
+the allocation did: \code{sampledOrEstimated} says whether a number was sampled
+or estimated for a stratum nobody sampled, and it is drawn as the shade
+(solid = sampled, transparent = estimated), as the \code{fill} or as a \code{facet},
+as you choose. The arguments are the same before and after, and so is the
+plot; the title says which it is.
 }
 \details{
-\code{data} is raw CEF catch and \code{distributions} the CEF distributions: they are
+\code{data} is the catch and \code{distributions} the CEF distributions: they are
 linked through \code{domainBiology} and the country and summed inside, with
 \code{catchCategory} choosing the landings, the discards, BMS or the catch as a
 whole. The catch part goes in the plot title. A
 distributions row that repeats another exactly is dropped, with a warning:
 a repeat is not a second sample.
+\subsection{After the allocation}{
+
+Give both tables of the allocation's result: its \verb{$catch} as \code{data} and its
+\verb{$distribution} as \code{distributions}, \code{plot_NaLoA(alloc$catch, alloc$distribution)}. The distributions it estimated for a stratum with no
+biological domain carry a domain the allocation made up, and only its own
+\verb{$catch} knows it - the catch that went into the allocation cannot find
+them, which the plot warns about.
+
+The allocation adds \code{sampledOrEstimated} to the distributions, and from then
+on it is a variable like any other. By default it is the shade
+(\code{alpha = "sampledOrEstimated"}): solid where the numbers were sampled,
+transparent where the allocation estimated them. Name it in \code{fill} to give
+the two a colour each, or in \code{facet} to give each its own panel; it is then
+not drawn as a shade as well. \code{alpha = NULL} draws no shade, and unless it
+is also the fill or a facet the sampled and the estimated numbers are added
+together - the numbers the allocation finally reports.
+
+The title says what the distributions drawn are: \emph{sampled + estimated} when
+the allocation estimated some of them, \emph{only sampled} when it did not -
+distributions as they were sampled, or an allocation that estimated none of
+the ones drawn - and then there is no shade, because there is nothing to
+tell apart.
+
+Like the allocation itself, the numbers count a distribution once for every
+stratum of the catch that names its \code{domainBiology}, so they assume the
+catch has one row per domain, catch category and country - which CEF files
+built from InterCatch have. Where there are several, the numbers come out
+inflated, though the shapes still read.
+}
+
+\subsection{Fill, facets and classes}{
 
 \code{fill} colours (and stacks) the bars by a column of the catch. \code{facet}
 takes one column (a wrapped set of panels) or two (\code{c("row", "col")}, a
-grid).
-
-\code{plus_group} (ages) and \code{bin_width} (lengths) pool the classes exactly as
-in \code{\link[=plot_MWaLoA]{plot_MWaLoA()}} - see that function's \emph{The plus group} and \emph{Length
+grid). \code{plus_group} (ages) and \code{bin_width} (lengths) pool the classes exactly
+as in \code{\link[=plot_MWaLoA]{plot_MWaLoA()}} - see that function's \emph{The plus group} and \emph{Length
 bins} - except numbers simply add rather than being averaged, so there is
 no per-distribution weighting step to speak of.
+}
 }
 \examples{
 \dontrun{
@@ -95,15 +138,28 @@ plot_NaLoA(catch, distributions,
 
 # length classes pooled into 2cm bins
 plot_NaLoA(catch, distributions, fill = "vesselFlagCountry", bin_width = 2)
+
+# after the allocation: both tables of its result. Landings by country,
+# solid = sampled, transparent = estimated
+alloc <- catchAllocationAoL(raised, distributions,
+                            condition_alloc_st_list = list(ALL = rlang::quo(TRUE)),
+                            distributionType = "LengthTotal", verbose = FALSE,
+                            logFile = tempfile(fileext = ".txt"))
+plot_NaLoA(alloc$catch, alloc$distribution,
+          catchCategory = "Lan", fill = "vesselFlagCountry")
+
+# sampled and estimated as the fill instead, and the countries as panels
+plot_NaLoA(alloc$catch, alloc$distribution, catchCategory = "Lan",
+          fill = "sampledOrEstimated", facet = "vesselFlagCountry")
 }
 }
 \seealso{
 \code{\link[=plot_MWaLoA]{plot_MWaLoA()}} for the mean weight in the same classes;
-\link{coverage-plots} for whether the strata have a distribution at all.
+\link{coverage-plots} for whether the strata have a distribution at all;
+\code{\link[=catchAtAoLAggregation]{catchAtAoLAggregation()}} for the same numbers as a table;
+\code{\link[=plot_catches]{plot_catches()}} for the same sampled / raised contrast on the weights.
 
 Other distribution plots: 
-\code{\link{plot_MWaLoA}()},
-\code{\link{plot_allocated_MWaLoA}()},
-\code{\link{plot_allocated_NaLoA}()}
+\code{\link{plot_MWaLoA}()}
 }
 \concept{distribution plots}

@@ -101,7 +101,7 @@ catchAtAoLAggregation(alloc$distribution, alloc$catch,
 }
 \seealso{
 \code{\link[=meanWoLatAoLAggregation]{meanWoLatAoLAggregation()}} for the mean weights;
-\code{\link[=catchAllocationAoL]{catchAllocationAoL()}} for the allocation; \code{\link[=plot_allocated_NaLoA]{plot_allocated_NaLoA()}} to look
+\code{\link[=catchAllocationAoL]{catchAllocationAoL()}} for the allocation; \code{\link[=plot_NaLoA]{plot_NaLoA()}} to look
 at it.
 }
 \author{

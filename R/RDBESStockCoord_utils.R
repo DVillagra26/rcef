@@ -16,8 +16,9 @@
 #    - cross-package calls namespace-qualified
 #    - CRLF -> LF
 #    - roxygen @family / @source added for provenance
+#    - fieldsToStrata() removed: nothing in the package called it
 #
-#  Exported: check_group_conditions(), convert_field(), unit2ratio(), fieldsToStrata()
+#  Exported: check_group_conditions(), convert_field(), unit2ratio()
 # =====================================================================
 
 #-*- coding: utf-8 -*-
@@ -383,29 +384,6 @@ convert_field <- function(data, valueField,
     return(data)
 }
 
-
-#' @noRd
-#' @export
-fieldsToStrata <- function(.data, ...)
-{
-    ## Purpose:
-    ## ----------------------------------------------------------------------
-    ## Arguments:
-    ## ----------------------------------------------------------------------
-    ## Author: Yves Reecht, Date: 23 Oct 2025, 15:08
-    ## [pkg] require(dplyr) -> Imports: dplyr
-    
-    key <- .data %>%
-        dplyr::select(...) %>%
-        dplyr::rowwise() %>%
-        dplyr::mutate(.key = paste(dplyr::c_across(dplyr::everything()),
-                                   collapse = "+")) %>%
-        dplyr::pull(.key)
-
-    return(sapply(unique(key),
-                  function(k){key %in% k},
-                  simplify = FALSE))
-}
 
 
 

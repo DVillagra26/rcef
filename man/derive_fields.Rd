@@ -37,6 +37,12 @@ native keys joined. Country and season are not among them -
 columns are left untouched, so it is safe to call more than once.
 }
 \details{
+An ICES area code is a nested path (`27.4.b.1`), so it is split into
+subarea, division and subdivision. A code already coarser than the level
+asked for REPEATS rather than becoming `NA`: `27.4` is its own division and
+subdivision as far as the data goes, so a stratum reported at that
+resolution is never silently dropped from a finer grouping.
+
 With `what = "distribution"` the same fields come back on the distributions
 table instead: `derive_fields(catch_data, distribution_data, what =
 "distribution")`. `derive_fields(catch_data)` is the catch, as it always was.

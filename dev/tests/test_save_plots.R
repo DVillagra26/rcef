@@ -146,15 +146,11 @@ ok(nzchar(err(plot_DR(c23, x = "nope", save = d11))) && n_files(d11) == 0L,
    "an error on the way: the error comes through and no file is written")
 
 ## ---- 6. every plot function takes it, and writes ---------------------------------------
-dims <- c("metier4", "ICESDivision", "seasonValue")
-grp   <- quiet(define_raising_groups_auto(c23, hierarchy = dims, thresholds = c(50, 40, 30)))
-grp2  <- quiet(define_raising_groups_auto(c23, hierarchy = dims, thresholds = c(80, 60, 40)))
-raised  <- quiet(run_native_raising(c23, dims, grp,  type = "discards", log_file = lf))
-raised2 <- quiet(run_native_raising(c23, dims, grp2, type = "discards", log_file = lf))
+raised  <- quiet(fx_raise(c23, fx_groups("own"),   type = "discards", log_file = lf))
+raised2 <- quiet(fx_raise(c23, fx_groups("mixed"), type = "discards", log_file = lf))
 alloc <- quiet(catchAllocationAoL(raised, d23, condition_alloc_st_list = list(ALL = rlang::quo(TRUE)),
                                   distributionType = "LengthTotal", verbose = FALSE, logFile = lf))
-rec <- quiet(recommend_raising(c23, hierarchy = dims, thresholds = 50))
-dc  <- quiet(build_discard_clusters(c23, dims = dims, k = 3, seed = 7))
+dc  <- quiet(build_discard_clusters(c23, dims = c("metier4", "ICESDivision", "seasonValue"), k = 3, seed = 7))
 
 plots <- list(
   plot_coverage_heat      = function(s) plot_coverage_heat(c23, y = "metier4", x = "vesselFlagCountry", save = s),
@@ -163,12 +159,9 @@ plots <- list(
   plot_DR                 = function(s) plot_DR(c23, x = "metier4", save = s),
   plot_NaLoA              = function(s) plot_NaLoA(c23, d23, fill = "vesselFlagCountry", save = s),
   plot_MWaLoA             = function(s) plot_MWaLoA(c23, d23, colour = "vesselFlagCountry", save = s),
-  plot_raised_catches     = function(s) plot_raised_catches(raised, x = "metier4", save = s),
-  plot_raised_DR          = function(s) plot_raised_DR(raised, x = "metier4", save = s),
+  plot_catches            = function(s) plot_catches(raised, x = "metier4", save = s),
   plot_compare_raised     = function(s) plot_compare_raised(c(raised, raised2), x = "metier4", save = s),
-  plot_allocated_NaLoA    = function(s) plot_allocated_NaLoA(alloc, catchCategory = "Lan", fill = "vesselFlagCountry", save = s),
-  plot_allocated_MWaLoA   = function(s) plot_allocated_MWaLoA(alloc, catchCategory = "Lan", colour = "vesselFlagCountry", save = s),
-  plot_river              = function(s) plot_river(rec, left_var = "metier4", save = s),
+  plot_river              = function(s) plot_river(raised, left_var = "metier4", right_var = "DrGroup", value_var = "total", save = s),
   plot_discard_clusters   = function(s) plot_discard_clusters(dc, save = s),
   plot_discard_cluster_variables = function(s) plot_discard_cluster_variables(dc, save = s))
 if (requireNamespace("maps", quietly = TRUE))
@@ -179,6 +172,20 @@ for (nm in names(plots)) {
      sprintf("%s(): has a `save` argument, NULL by default", nm))
   d <- fresh(nm)
   p <- suppressWarnings(quiet(plots[[nm]](list(path = d, width = 4, height = 3, dpi = 50))))
+  ok(inherits(p, "ggplot") && n_files(d) == 1L && identical(unname(png_size(file.path(d, list.files(d)))), c(200, 150)),
+     sprintf("%s(): writes one 200 x 150 png and still returns the plot", nm))
+}
+
+## the same functions on a raised catch and on an allocation write a file just the same
+variants <- list(
+  plot_DR_raised        = function(s) plot_DR(raised, x = "metier4", save = s),
+  plot_NaLoA_allocated  = function(s) plot_NaLoA(alloc$catch, alloc$distribution, catchCategory = "Lan",
+                                                 fill = "vesselFlagCountry", save = s),
+  plot_MWaLoA_allocated = function(s) plot_MWaLoA(alloc$catch, alloc$distribution, catchCategory = "Lan",
+                                                  colour = "vesselFlagCountry", save = s))
+for (nm in names(variants)) {
+  d <- fresh(nm)
+  p <- suppressWarnings(quiet(variants[[nm]](list(path = d, width = 4, height = 3, dpi = 50))))
   ok(inherits(p, "ggplot") && n_files(d) == 1L && identical(unname(png_size(file.path(d, list.files(d)))), c(200, 150)),
      sprintf("%s(): writes one 200 x 150 png and still returns the plot", nm))
 }

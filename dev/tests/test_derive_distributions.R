@@ -204,13 +204,6 @@ ok(identical(!is.na(dd23$seasonValue), as.vector(one_season[k])),
    "fixture: seasonValue is there exactly where the domain has one season")
 
 ## ---- deriving the distributions changes nothing downstream ----------------------------------------
-dims <- c("metier4", "ICESDivision")
-l0 <- link_dist_to_strata(c23, d23, dims)
-l1 <- link_dist_to_strata(c23, dd23, dims)
-ok(!any(grepl("\\.[xy]$", names(l1))) && all(dims %in% names(l1)),
-   "link_dist_to_strata(): a distributions table with the fields does not get .x / .y copies of them")
-ok(identical(l1[names(l0)], l0),
-   "link_dist_to_strata(): and links the same rows to the same strata")
 cv0 <- build_coverage_strata(c23, c("metier4", "vesselFlagCountry"), distributions = d23, what = "length")
 cv1 <- build_coverage_strata(c23, c("metier4", "vesselFlagCountry"), distributions = dd23, what = "length")
 ok(identical(cv0, cv1), "build_coverage_strata(what = \"length\"): the same table")
@@ -223,41 +216,34 @@ q1 <- plot_MWaLoA(c23, dd23, colour = "metier4")
 ok(isTRUE(all.equal(as.data.frame(q0$data), as.data.frame(q1$data))),
    "plot_MWaLoA(): the same data")
 
-hier <- c("metier4", "ICESDivision", "seasonValue")
-grp <- quiet(define_raising_groups_auto(c23, hierarchy = hier, thresholds = c(50, 40, 30)))
-raised <- quiet(run_native_raising(c23, hier, grp, type = "discards", log_file = lf))
-galloc <- list(ALL = list(alloc = "TRUE", matched = "TRUE"))
-alloc <- function(dist, ty)
-  quiet(run_allocation(raised, dist, galloc, app_type = ty, verbose = FALSE, log_file = lf))
+raised <- quiet(fx_raise(c23, fx_groups("own"), type = "discards", log_file = lf))
+alloc <- function(dist, ty) quiet(fx_allocate(raised, dist, ty, log_file = lf))
 for (ty in c("LengthTotal", "Age")) {
   a0 <- alloc(d23, ty)
   a1 <- alloc(dd23, ty)
-  ok(!inherits(a1, "alloc_error") && identical(a1$distribution, a0$distribution) &&
+  ok(nrow(a1$distribution) > 0 && identical(a1$distribution[names(a0$distribution)], a0$distribution) &&
        identical(a1$catch, a0$catch),
      sprintf("allocation (%s): derived distributions give exactly what plain ones give", ty))
-  ok(isTRUE(all.equal(as.data.frame(agg_numbers(a0)), as.data.frame(agg_numbers(a1)))) &&
-       isTRUE(all.equal(as.data.frame(agg_meanweight(a0)), as.data.frame(agg_meanweight(a1)))),
+  ok(isTRUE(all.equal(fx_numbers(a0), fx_numbers(a1))) &&
+       isTRUE(all.equal(fx_meanweight(a0), fx_meanweight(a1))),
      sprintf("allocation (%s): and the same numbers and mean weights", ty))
 }
 
-## ... also once a csv round trip, which is how they reach a TAF script, has retyped one of
-## them: "87.1" is read back as the number 87.1, where the allocation derives the catch's
-## ICESSubArea as text again - and the engine cannot combine the two
+## ... but not once a csv round trip has retyped one of them: "87.1" is read back as the number 87.1,
+## and the raised catch, still in memory, has it as text - the engine cannot combine the two. A catch and
+## its distributions are written and read the same way (both to csv, or neither).
 dd_num <- dd23
 dd_num$ICESSubArea <- as.numeric(dd_num$ICESSubArea)
-ok(!anyNA(dd_num$ICESSubArea) && is.character(derive_fields(as.data.frame(raised))$ICESSubArea),
-   "fixture: ICESSubArea is a number on the distributions and text on the catch the allocation derives")
-a_len <- alloc(d23, "LengthTotal")
-a_num <- alloc(dd_num, "LengthTotal")
-ok(!inherits(a_num, "alloc_error") && identical(a_num$distribution, a_len$distribution) &&
-     identical(a_num$catch, a_len$catch),
-   "allocation: derived columns the csv retyped are kept out of the engine - the same result")
+ok(!anyNA(dd_num$ICESSubArea) && is.character(raised$ICESSubArea),
+   "fixture: ICESSubArea is a number on the distributions and text on the raised catch")
+ok(grepl("ICESSubArea", err(alloc(dd_num, "LengthTotal")), fixed = TRUE),
+   "allocation: the engine names the column it cannot combine")
 
 ## ---- the fields that are derived -----------------------------------------------------
-ok(identical(distribution_fields(dist), added_cols) &&
-     identical(distribution_fields(no_cty), c("fleetValue", "areaValue", "vesselFlagCountry",
-                                              "seasonValue", derived_cols)),
-   "distribution_fields(): what derive_fields() adds - the country only where the distributions lack it")
+ok(identical(setdiff(names(suppressWarnings(suppressMessages(derive_fields(catch, no_cty, what = "distribution")))),
+                     names(no_cty)),
+             c("fleetValue", "areaValue", "vesselFlagCountry", "seasonValue", derived_cols)),
+   "derive_fields(what = \"distribution\"): adds what it adds to a catch - the country only where the distributions lack it")
 
 cat(sprintf("\nDONE  %d failure(s)\n", FAIL))
 if (FAIL) quit(status = 1L)

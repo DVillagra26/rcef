@@ -2,7 +2,7 @@
 % Please edit documentation in R/viz_plots.R
 \name{plot_MWaLoA}
 \alias{plot_MWaLoA}
-\title{Mean weight at length or age}
+\title{Mean weight at length or age, before or after the allocation}
 \usage{
 plot_MWaLoA(
   data,
@@ -12,6 +12,7 @@ plot_MWaLoA(
   colour = NULL,
   facet = NULL,
   shape = NULL,
+  alpha = "sampledOrEstimated",
   plus_group = NULL,
   bin_width = NULL,
   show_samples = FALSE,
@@ -21,10 +22,10 @@ plot_MWaLoA(
 )
 }
 \arguments{
-\item{data}{Raw CEF catch data.}
+\item{data}{Raw CEF catch data; after the allocation, its \verb{$catch}.}
 
 \item{distributions}{A CEF distributions table, linked to the catch through
-\code{domainBiology}.}
+\code{domainBiology}; after the allocation, its \verb{$distribution}.}
 
 \item{distributionType}{\code{"LengthTotal"} (default) or \code{"Age"}.}
 
@@ -32,12 +33,19 @@ plot_MWaLoA(
 titled "catch"), \code{"Lan"}, \code{"Dis"} or \code{"BMS"}. Only used with
 \code{distributions}.}
 
-\item{colour}{Column mapped to the line colour.}
+\item{colour}{Column mapped to the line colour; \code{"sampledOrEstimated"}
+included.}
 
-\item{facet}{Up to two facet columns: \code{"col"} or \code{c("row", "col")}.}
+\item{facet}{Up to two facet columns: \code{"col"} or \code{c("row", "col")};
+\code{"sampledOrEstimated"} included.}
 
 \item{shape}{Column drawn as separate series with their own point shapes;
 opens the averaged group back up and drops the band.}
+
+\item{alpha}{\code{"sampledOrEstimated"} (default) draws the shade: solid for
+sampled, transparent for estimated. \code{NULL} draws none. Left out when
+\code{sampledOrEstimated} is the \code{colour}, the \code{shape} or a \code{facet}, and when
+nothing was estimated.}
 
 \item{plus_group}{The first age of the plus group: \code{7} pools ages 7 and
 older into one class, shown as \verb{7+}. \code{NULL} (default): no plus group.
@@ -69,10 +77,15 @@ strata are averaged (no \code{shape}) and a spread is available, a +/- 1 sd
 band is drawn as well. Two options help to judge how far to trust the
 curve: a plus group pools the oldest ages into one class, and
 semi-transparent bars behind the lines show how many fish stand behind
-each point.
+each point. Given the result of the allocation (\code{\link[=catchAllocationAoL]{catchAllocationAoL()}}) it
+shows what the allocation did: \code{sampledOrEstimated} says whether a mean
+weight was sampled or estimated for a stratum nobody sampled, and it is
+drawn as the shade (solid = sampled, transparent = estimated), as the
+\code{colour} or as a \code{facet}, as you choose. The arguments are the same before
+and after, and so is the plot; the title says which it is.
 }
 \details{
-\code{data} is raw CEF catch and \code{distributions} the CEF distributions: they are
+\code{data} is the catch and \code{distributions} the CEF distributions: they are
 linked through \code{domainBiology} and the country and summarised inside, with
 \code{catchCategory} choosing the landings, the discards, BMS or the catch as a
 whole. The catch part goes in the plot title. A
@@ -90,8 +103,28 @@ series per level, each drawn separately - and drops the band. \code{facet}
 takes one column (a wrapped set of panels) or two (\code{c("row", "col")}, a
 grid). Live weight and a line are the only options, so there is no
 \code{variableType} or \code{type} argument. The legend sits inside the panel like
-the other plots', except with \code{show_samples} or \code{plus_group}, where it moves
-outside so it cannot cover the right-hand end of the curve.
+the other plots', except with \code{show_samples}, \code{plus_group} or the shade,
+where it moves outside so it cannot cover the right-hand end of the curve.
+\subsection{After the allocation}{
+
+As in \code{\link[=plot_NaLoA]{plot_NaLoA()}}: give both tables of the allocation's result, its
+\verb{$catch} as \code{data} and its \verb{$distribution} as \code{distributions}. The
+allocation adds \code{sampledOrEstimated} to the distributions, and it is a
+variable like any other: by default the shade (\code{alpha = "sampledOrEstimated"}), or named in \code{colour} (a colour each) or in \code{facet}
+(a panel each), where it is not drawn as a shade as well. With the shade,
+every combination of the plotted columns is one line per sampled /
+estimated, so the sampled curve and the curve the allocation estimated for
+the unsampled strata sit side by side. \code{alpha = NULL} draws no shade, and
+unless it is also the colour or a facet the sampled and the estimated
+weights are averaged together, weighted by their numbers.
+
+The title says what the distributions drawn are: \emph{sampled + estimated} when
+the allocation estimated some of them, \emph{only sampled} when it did not, and
+then there is no shade, because there is nothing to tell apart. A
+distribution the allocation estimated has no measured fish to count, so it
+has no bar with \code{show_samples}.
+}
+
 \subsection{The plus group}{
 
 \code{plus_group = 7} pools every age from 7 upward into one class, labelled
@@ -157,15 +190,23 @@ plot_MWaLoA(catch, distributions, colour = "vesselFlagCountry",
 plot_MWaLoA(catch, distributions,
            distributionType = "Age", colour = "vesselFlagCountry",
            show_samples = TRUE)
+
+# after the allocation: both tables of its result. Landings by country,
+# solid = sampled, transparent = estimated
+plot_MWaLoA(alloc$catch, alloc$distribution,
+           catchCategory = "Lan", colour = "vesselFlagCountry")
+
+# sampled and estimated as the colour instead
+plot_MWaLoA(alloc$catch, alloc$distribution, catchCategory = "Lan",
+           colour = "sampledOrEstimated")
 }
 }
 \seealso{
 \code{\link[=plot_NaLoA]{plot_NaLoA()}} for the numbers in the same classes;
-\link{coverage-plots} for whether the strata have a distribution at all.
+\link{coverage-plots} for whether the strata have a distribution at all;
+\code{\link[=meanWoLatAoLAggregation]{meanWoLatAoLAggregation()}} for the same mean weights as a table.
 
 Other distribution plots: 
-\code{\link{plot_NaLoA}()},
-\code{\link{plot_allocated_MWaLoA}()},
-\code{\link{plot_allocated_NaLoA}()}
+\code{\link{plot_NaLoA}()}
 }
 \concept{distribution plots}

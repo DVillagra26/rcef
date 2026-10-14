@@ -3,17 +3,13 @@
 #
 #  ORIGIN: this project (ILVO / RCEF Workbench). Freely refactorable.
 #  Was: R_development/0_Functions_plots.R
-#  No shiny in this file. If it needs `input`, `session` or a tag,
-#  it belongs in app/, not here.
 # =====================================================================
 
 # ============================================================
 #  Exploratory plots for the RCEF / discard-raising workflow.
 # ------------------------------------------------------------
-#  ggplot2 only. Nothing here reads app state: every function takes a
-#  prepared data frame and returns a ggplot object (or NULL when there
-#  is nothing to draw), so the same call works at the console and in
-#  the app.
+#  ggplot2 only. Every function takes a prepared data frame and returns
+#  a ggplot object (or NULL when there is nothing to draw).
 #
 #  PUBLIC API (one function per view, one exploratory question each):
 #    plot_coverage_heat/_bubble/_bar/_map  how well a set of strata is
@@ -21,8 +17,15 @@
 #                                age, `catchCategory` the landings / discards
 #                                part for length & age.
 #    plot_DR()                   per-stratum discard-rate points.
+#    plot_catches()              catch weight (stacked bars).
 #    plot_NaLoA()                numbers at length/age (histogram).
 #    plot_MWaLoA()               mean weight at length/age (line + points).
+#
+#  The last four look at the data before a step and after it with the same
+#  arguments: the raising adds importedOrRaised to the catch and the
+#  allocation adds sampledOrEstimated to the distributions, and that
+#  variable - the shade, by default - and the title say which it is
+#  (status_shade() in R/viz_helpers.R).
 #
 #  The coverage and discard-rate plots draw the table that
 #  build_coverage_strata() (R/rcef_coverage.R) returns. Given raw CEF
@@ -33,19 +36,18 @@
 #  worked out here, at plot time, from the thresholds - it is not a
 #  column of the table.
 #
-#  The shared plumbing (facet layers, status legend, catch-part wording,
-#  the biology distribution front half) lives in R/viz_helpers.R; the
-#  raising flow diagrams (plot_river(), plot_river_level(),
-#  plot_compare_raised()) live in R/viz_raising.R.
+#  The shared plumbing (facet layer, category columns, grouping sentence,
+#  catch-part wording, the class axis of the distribution plots) lives in
+#  R/viz_helpers.R, the data half of the distribution plots in R/rcef_length.R; the
+#  raising flow diagram (plot_river()) and the comparison of raised catches
+#  (plot_compare_raised()) live in R/viz_raising.R.
 #
 #  PACKAGE DEPENDENCIES
 #    Imports: ggplot2, dplyr, tidyr, ggrepel, scales, rlang, stats, tools
 #    Provided by the rest of the package (not redefined here, so nothing is
-#    duplicated): build_coverage_strata() and the coverage_cells() /
-#    coverage_status() that pool and judge it, cat_lookup() /
-#    status_palette() for the status colours; app_theme() for the shared
-#    look; var_palette(), scale_fill_var(), scale_colour_var(), PAL_BASE for
-#    the per-level colour scheme.
+#    duplicated): build_coverage_strata() and the coverage_cells() that
+#    pools it; app_theme() for the shared look; plot_colours() for every
+#    colour.
 # ============================================================
 
 #' @keywords internal
@@ -97,6 +99,8 @@ NULL
 #'   title comes from `what` and `catchCategory`.
 #' @param scale Multiplies every pie radius (and, when grouped, the size of
 #'   the box's grid cell).
+#' @param palette `"default"`, `"colorblind"` or `"gradual"`: the colour of the
+#'   sampled slice.
 #' @inheritParams saving-plots
 #' @return A ggplot object, or `NULL` (with a message) when nothing can be
 #'   mapped.
@@ -114,13 +118,68 @@ NULL
 #' @export
 plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
                               group = NULL, what = "discard",
-                              catchCategory = NULL, scale = 1, save = NULL) {
+                              catchCategory = NULL, scale = 1,
+                              palette = c("default", "colorblind", "gradual"),
+                              save = NULL) {
   save_on_exit(save, "plot_coverage_map")
   fn <- "plot_coverage_map"
+  palette <- match.arg(palette)
   area_var <- area; group_var <- group; bubble_scale <- scale
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
   if (!requireNamespace("maps", quietly = TRUE))
     stop("plot_coverage_map() needs the 'maps' package: install.packages(\"maps\")")
+  # Approximate centroids (decimal degrees) of the ICES divisions and subdivisions a
+  # stock assessment in the NE Atlantic normally uses - enough to place one pie per
+  # area. Codes are looked up with or without the leading "27."; one with no
+  # centroid is named in a warning and left off the map.
+  centroid <- function(codes) {
+    tab <- data.frame(
+      area = c("1", "2.a", "2.b",
+               "3.a", "3.a.20", "3.a.21",
+               "3.b.23", "3.c.22", "3.d.24", "3.d.25", "3.d.26", "3.d.27",
+               "3.d.28", "3.d.29", "3.d.30", "3.d.31", "3.d.32",
+               "4", "4.a", "4.b", "4.c",
+               "5.a", "5.b",
+               "6", "6.a", "6.b", "6.b.1", "6.b.2",
+               "7", "7.a", "7.b", "7.c", "7.d", "7.e", "7.f", "7.g", "7.h",
+               "7.j", "7.k",
+               "8", "8.a", "8.b", "8.c", "8.d", "8.e",
+               "9", "9.a", "9.b",
+               "10.a", "12", "14.a", "14.b"),
+      lon = c(20.0, 5.0, 0.0,
+              10.5, 10.2, 11.6,
+              10.7, 12.5, 12.0, 16.5, 19.0, 18.5,
+              20.0, 20.5, 20.0, 23.0, 25.0,
+              2.5, 1.0, 2.5, 3.2,
+              -19.0, -7.0,
+              -8.5, -8.0, -13.0, -14.5, -11.0,
+              -8.0, -5.3, -10.5, -14.0, 0.5, -4.0, -5.2, -7.7, -7.7,
+              -11.0, -14.0,
+              -5.0, -3.0, -2.5, -4.2, -6.0, -10.0,
+              -10.0, -9.5, -11.0,
+              -28.0, -10.0, -35.0, -25.0),
+      lat = c(73.0, 68.0, 64.0,
+              57.5, 58.2, 56.9,
+              55.2, 55.5, 55.0, 55.6, 55.6, 58.0,
+              57.5, 59.5, 62.0, 64.5, 60.0,
+              56.5, 58.6, 55.6, 53.6,
+              64.0, 62.0,
+              57.5, 57.5, 57.5, 57.5, 56.8,
+              51.0, 53.6, 53.6, 52.0, 50.2, 49.8, 51.3, 51.0, 49.6,
+              50.6, 49.6,
+              45.5, 46.4, 45.0, 44.0, 45.6, 45.5,
+              39.0, 40.0, 38.0,
+              46.0, 74.0, 60.0, 62.0),
+      stringsAsFactors = FALSE)
+    key <- sub("^27\\.", "", trimws(as.character(codes)))
+    m <- tab[match(key, tab$area), c("lon", "lat")]
+    bad <- unique(key[is.na(m$lon) & nzchar(key)])
+    if (length(bad))
+      warning("no centroid for ICES area(s): ", paste(bad, collapse = ", "),
+              " - dropped from the map", call. = FALSE)
+    data.frame(area = as.character(codes), lon = m$lon, lat = m$lat,
+               stringsAsFactors = FALSE)
+  }
   keys <- c(area_var, if (has(group_var)) group_var)
   cv <- coverage_cells(catch, distributions, keys, what, !missing(what),
                        catchCategory, fn)
@@ -136,7 +195,7 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
                     cov = if (identical(what, "discard")) sc$weightingTotal else sc$covered,
                     stringsAsFactors = FALSE)
   agg <- agg[!is.na(agg$w) & agg$w > 0, , drop = FALSE]
-  cen <- ices_area_centroid(agg[[area_var]])
+  cen <- centroid(agg[[area_var]])
   agg$lon <- cen$lon; agg$lat <- cen$lat
   agg <- agg[!is.na(agg$lon), , drop = FALSE]
   if (!nrow(agg)) { message("plot_coverage_map(): no mappable areas."); return(invisible(NULL)) }
@@ -144,8 +203,8 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 
   lev <- NULL; ngrp <- 1L
   if (has(group_var)) {
-    lev  <- mesh_var_levels(group_var, agg[[group_var]]) %||%
-            sort(unique(as.character(agg[[group_var]])))
+    lev  <- mesh_var_levels(group_var, agg[[group_var]])
+    if (is.null(lev)) lev <- sort(unique(as.character(agg[[group_var]])))
     ngrp <- length(lev)
     if (ngrp <= 1)
       warning("plot_coverage_map(): group_var = \"", group_var,
@@ -156,13 +215,14 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
   max_rad <- bubble_scale * 0.95
   min_rad <- max_rad * 0.28
   boxed <- has(group_var) && ngrp > 1
-  fills <- c(sampled = "#41AE76", unsampled = "grey80")
+  fills <- c(sampled = plot_colours("safe", palette = palette, type = "status")[[1]],
+             unsampled = "grey80")
   gmax  <- max(agg$w, na.rm = TRUE)
   # Without a group it is one pie at the centroid. With a group the
   # area's pies go in a tidy grid inside a labelled box: one cell per
   # level, left to right then top to bottom. Pie radius is sqrt(weight)
   # scaled so the busiest (area x level) cell anywhere fills its cell.
-  ac <- ices_area_centroid(unique(agg[[area_var]]))
+  ac <- centroid(unique(agg[[area_var]]))
   ac <- ac[!is.na(ac$lon), , drop = FALSE]
   cs  <- 0.46 * bubble_scale                 # half a grid cell, lat-deg
   nc  <- if (boxed) ceiling(sqrt(ngrp)) else 1L
@@ -218,8 +278,8 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
   allx <- c(agg$cx, if (boxed) c(boxes$x0, boxes$x1) else agg$lon)
   ally <- c(agg$cy, if (boxed) c(boxes$y0, boxes$y1 + 0.5) else agg$lat)
   xlim <- pad(allx, 2.5); ylim <- pad(ally, 1.8)
-  ttl  <- cov_title(what, weight_label,
-                    by = c(area_var, if (has(group_var)) group_var))
+  ttl  <- paste0(cv$title, " by ",
+                 paste(c(area_var, if (has(group_var)) group_var), collapse = " and "))
   # the area level itself is never "grouped over" - it is the unit each pie
   # is drawn at - so it goes in the sentence's own vars, group first
   grp_keys <- c(if (has(group_var)) group_var, area_var)
@@ -227,7 +287,7 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
     strata_sentence(grp_keys, catch),
     sprintf("area = %s.", area_var),
     sprintf("bubble size = %s weight (t).", weight_label),
-    sprintf("coverage slice (green) = %s.", share_phrase(what, weight_label)),
+    sprintf("coverage slice = %s.", cv$share),
     width = 110)
 
   slice_xy <- function(cx, cy, r, a0, a1) {
@@ -311,7 +371,7 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #'
 #' The colour of a cell is its sampling status against the thresholds:
 #'
-#' | Colour | Status |
+#' | Colour (default palette) | Status |
 #' |:-------|:-------|
 #' | dark green | 100% covered (and, when trips are active, more than `min_trip` trips) |
 #' | green | covered at least `min_cov`, and passing every active threshold |
@@ -320,6 +380,8 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #' | dark orange | three missed: only for length / age, with both `min_trip` and `min_fish` active |
 #' | red | no discard estimate / no linked distribution at all - never a threshold miss |
 #' | blue | discards only, no landings (discard coverage) |
+#'
+#' The other palettes keep the same scale, from best to worst sampled.
 #'
 #' A cell with no weight at all draws nothing. The legend always lists every
 #' reachable status, including those no cell falls in, so the same figure
@@ -363,8 +425,8 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #'
 #' The bar chart shows sampled versus unsampled weight, which no threshold
 #' changes, so it takes none: passing `min_cov` or `min_trip` is an error.
-#' `palette` recolours the bars; the status colours are a fixed scale, so
-#' any `palette` other than `"default"` on the heatmap or bubbles warns.
+#' `palette` recolours the bars, and the status scale of the heatmap and the
+#' bubbles.
 #'
 #' ## Argument order
 #'
@@ -399,8 +461,7 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #'   An error with `what = "discard"` (no fish are measured for a discard
 #'   estimate).
 #' @param palette `"default"`, `"colorblind"` or `"gradual"`. Recolours the bar
-#'   fill; on the heatmap and bubbles the status colours are fixed, and asking
-#'   for anything but `"default"` warns.
+#'   fill, or the status colours of the heatmap and the bubbles.
 #' @inheritParams saving-plots
 #' @return A ggplot object, or `NULL` when there is nothing to draw.
 #' @seealso [build_coverage_strata()] for the table, [plot_coverage_map()],
@@ -438,72 +499,8 @@ plot_coverage_heat <- function(catch, distributions = NULL, y, x = NULL,
                                palette = c("default", "colorblind",
                                           "gradual"), save = NULL) {
   save_on_exit(save, "plot_coverage_heat")
-  fn <- "plot_coverage_heat"
-  palette <- match.arg(palette)
-  if (is.null(y) || !nzchar(y)) stop(fn, "(): `y` is required", call. = FALSE)
-  if (!identical(palette, "default"))
-    warning(fn, "(): palette does not recolour a status heatmap / bubble grid ",
-            "(the cells use a fixed semantic scale)", call. = FALSE)
-
-  cv <- coverage_cells(catch, distributions, c(y, x, facet), what,
-                       !missing(what), catchCategory, fn)
-  if (is.null(cv)) return(NULL)
-  what <- cv$what; weight_label <- cv$weight_label
-  if (identical(what, "discard") && thr_active(min_fish))
-    stop(fn, "(): min_fish does not apply to what = \"discard\" (no fish ",
-         "are measured for a discard estimate - min_fish is for length / ",
-         "age)", call. = FALSE)
-  y_var <- y; x_var <- x; facet_var <- facet; threshold <- min_cov
-  min_meas <- min_fish; min_trips <- min_trip
-
-  # A cell with no landed/caught weight at all draws no tile - it has
-  # nothing to judge, so it stays a blank hole rather than a "no
-  # landings" placeholder.
-  d <- coverage_status(cv$cells, what, threshold, min_trips, min_meas)
-  d <- d[d$cat_key != "none", , drop = FALSE]
-  if (!nrow(d)) return(NULL)
-  d <- reorder_mesh(d, c(y_var, x_var, facet_var))
-  d <- discrete_cols(d, c(y_var, x_var, facet_var))
-  if (is.null(x_var) || !nzchar(x_var)) { d$.x <- "All"; x_var <- ".x" }
-  fmt <- function(v) ifelse(is.na(v) | v <= 0, "",
-                     ifelse(v > 99, sprintf("%.0f", v),
-                     ifelse(v >= 10, sprintf("%.1f", v), sprintf("%.2f", v))))
-  # the shortfall a warning cell missed, same helper the bubble grid uses -
-  # one line under the tile number, so nudge the number up to make room
-  d$lab <- shortfall_label(d, sep = ", ")
-  d$.num_vjust <- ifelse(nzchar(d$lab), -0.2, 0.5)
-  # "none" never draws a tile, so it is dropped from the legend too.
-  lk_no_none <- cat_lookup(threshold, what, min_meas, min_trips)
-  stat_all <- lk_no_none$status[lk_no_none$cat_key != "none"]
-  d$Status <- factor(as.character(d$Status), levels = stat_all)
-  p <- ggplot(d, aes(x = factor(.data[[x_var]]), y = .data[[y_var]], fill = Status)) +
-    geom_tile(colour = OUTLINE, alpha = 0.9) +
-    geom_text(aes(label = fmt(landings), vjust = .data$.num_vjust), size = 2.6,
-              fontface = "bold", colour = OUTLINE) +
-    geom_text(aes(label = lab), vjust = 1.3, size = 2.2, fontface = "bold",
-              colour = "red3") +
-    # a zero-size mark per status, so the legend carries a filled key for
-    # categories that no cell in this particular figure lands in - added
-    # last so the real tiles stay layer 1
-    status_key_layer(d, stat_all, "tile") +
-    scale_fill_manual(values = status_palette(threshold, what, min_meas, min_trips),
-                      limits = stat_all,
-                      labels = status_abbr(threshold, what, min_meas, min_trips),
-                      drop = FALSE, name = "Sampling status") +
-    maybe_facet(facet_var) +
-    labs(title = cov_title(what, weight_label),
-         caption = sub_wrap(strata_sentence(c(y, x, facet), catch),
-                            sprintf("tile number = %s weight (t).", weight_label),
-                            width = 110),
-         x = if (x_var == ".x") NULL else x_var, y = y_var) +
-    app_theme() + theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-    thr_guide(thr_lines(threshold, min_trips, min_meas, what, weight_label))
-  # lets a caller rebuild the complete-status legend (see status_legend_plot).
-  # key = "tile": the legend swatches should be squares, like the cells.
-  attr(p, "status_legend") <- list(threshold = threshold, what = what,
-                                   min_meas = min_meas, min_trips = min_trips,
-                                   key = "tile")
-  p
+  coverage_grid("heat", catch, distributions, y, x, facet, what, !missing(what),
+                catchCategory, min_cov, min_trip, min_fish, match.arg(palette))
 }
 
 
@@ -516,98 +513,266 @@ plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
                                  palette = c("default", "colorblind",
                                             "gradual"), save = NULL) {
   save_on_exit(save, "plot_coverage_bubble")
-  fn <- "plot_coverage_bubble"
-  palette <- match.arg(palette)
-  if (is.null(y) || !nzchar(y)) stop(fn, "(): `y` is required", call. = FALSE)
-  if (!identical(palette, "default"))
-    warning(fn, "(): palette does not recolour a status heatmap / bubble grid ",
-            "(the cells use a fixed semantic scale)", call. = FALSE)
+  coverage_grid("bubble", catch, distributions, y, x, facet, what, !missing(what),
+                catchCategory, min_cov, min_trip, min_fish, match.arg(palette))
+}
 
-  cv <- coverage_cells(catch, distributions, c(y, x, facet), what,
-                       !missing(what), catchCategory, fn)
+
+#' The grid behind the heatmap and the bubble plot
+#'
+#' The two plots are one figure drawn with two marks: the same cells, the same
+#' status, the same legend, the same thresholds box and shortfall labels. Only
+#' the mark differs - a tile carrying the weight as a number, or a bubble sized
+#' by it - so the body is written once.
+#'
+#' @param kind `"heat"` or `"bubble"`.
+#' @param what_given Whether the caller typed `what` (a coverage table brings
+#'   its own).
+#' @inheritParams coverage-plots
+#' @return A ggplot object, or `NULL` when there is nothing to draw.
+#' @keywords internal
+#' @noRd
+#' @export
+coverage_grid <- function(kind, catch, distributions, y, x, facet, what,
+                          what_given, catchCategory, min_cov, min_trip,
+                          min_fish, palette) {
+  fn <- paste0("plot_coverage_", kind)
+  heat <- identical(kind, "heat")
+  y_var <- y
+  if (is.null(y) || !nzchar(y)) stop(fn, "(): `y` is required", call. = FALSE)
+  cv <- coverage_cells(catch, distributions, c(y, x, facet), what, what_given,
+                       catchCategory, fn)
   if (is.null(cv)) return(NULL)
-  what <- cv$what; weight_label <- cv$weight_label
-  if (identical(what, "discard") && thr_active(min_fish))
+  what <- cv$what
+  is_bio <- !identical(what, "discard")
+  on <- function(v) !is.null(v) && !(length(v) == 1 && is.na(v))
+  if (!is_bio && on(min_fish))
     stop(fn, "(): min_fish does not apply to what = \"discard\" (no fish ",
          "are measured for a discard estimate - min_fish is for length / ",
          "age)", call. = FALSE)
-  y_var <- y; x_var <- x; facet_var <- facet; threshold <- min_cov
-  min_meas <- min_fish; min_trips <- min_trip
+  trip_on <- on(min_trip)
+  meas_on <- is_bio && on(min_fish)
 
-  # A cell with no landed/caught weight at all draws no bubble - it has
-  # nothing to judge, so it stays a blank hole rather than a "no
-  # landings" placeholder. One bubble per cell: the cells are already
-  # pooled to the plotted columns, so no two bubbles share a point.
-  d <- coverage_status(cv$cells, what, threshold, min_trips, min_meas)
+  # ---- the sampling status a cell can have, best to worst ---------------------------
+  # The colour of a cell is its status against the thresholds, worked out here, at
+  # plot time: the status is a colour on a figure, not a column of the coverage
+  # table (the table reports numbers; the thresholds are a plotting choice).
+  # Coverage is always part of the verdict. min_trip (discards, length / age) and
+  # min_fish (length / age) are each independently optional - NULL drops that
+  # question entirely rather than giving it an always-passing threshold. A cell is:
+  #   full       100% covered, with more than min_trip trips and at least min_fish
+  #              measurements, for the thresholds that are active
+  #   safe       every active threshold met
+  #   warn_...   one status per specific combination of missed thresholds (warn_cov,
+  #              warn_trip, warn_cov_trip, ...); only the combinations of the active
+  #              thresholds exist, and the colour counts how many were missed
+  #   no_dist    no discard estimate (or no linked length / age distribution) at all:
+  #              nothing to judge against a threshold
+  #   disc_only  discards only, no landings (discards only)
+  #   none       no catch: the cell has nothing to judge, so it draws nothing
+  # A cell with no reported trip count fails an active trips test however low
+  # min_trip is set - unknown is not the same as adequate.
+  #
+  # One entry per ACTIVE threshold, in the fixed (cov, trip, meas) order, with the
+  # short phrase it shows when it passes and when it fails (and in the "full" row).
+  defs <- list(cov = c(full = "100% cov", pass = sprintf(">=%s%% cov", min_cov),
+                       fail = sprintf("<%s%% cov", min_cov)))
+  if (trip_on) defs$trip <- c(full = sprintf(">%st", min_trip),
+                              pass = sprintf(">=%st", min_trip),
+                              fail = sprintf("<%st", min_trip))
+  if (meas_on) defs$meas <- c(full = sprintf(">=%sm", min_fish),
+                              pass = sprintf(">=%sm", min_fish),
+                              fail = sprintf("<%sm", min_fish))
+  combos <- unlist(lapply(seq_along(defs), function(k)
+    utils::combn(names(defs), k, simplify = FALSE)), recursive = FALSE)
+  says <- function(ms) paste(vapply(names(defs), function(nm)
+    defs[[nm]][[if (nm %in% ms) "fail" else "pass"]], ""), collapse = ", ")
+  key <- data.frame(
+    cat_key = c("full", "safe",
+                paste0("warn_", vapply(combos, paste, "", collapse = "_")),
+                "no_dist", if (!is_bio) "disc_only"),
+    abbr = c(paste(vapply(defs, `[[`, "", "full"), collapse = ", "),
+             paste(vapply(defs, `[[`, "", "pass"), collapse = ", "),
+             vapply(combos, says, ""),
+             if (is_bio) sprintf("no %s dist", what) else "no discard estimate",
+             if (!is_bio) "discards only, no landings"),
+    stringsAsFactors = FALSE)
+  key$colour <- unname(plot_colours(key$cat_key, palette = palette,
+                                    type = "status"))
+
+  # ---- the verdict on each cell ------------------------------------------------------
+  d <- cv$cells
+  if (is.null(d$numTrips)) d$numTrips <- NA_real_
+  if (is_bio) {
+    d$landings <- d$total                    # the weight the plots label and size by
+    d$n_measurements <- ifelse(is.na(d$numMeasurements), 0, d$numMeasurements)
+    no_catch  <- is.na(d$total) | d$total <= 0
+    disc_only <- rep(FALSE, nrow(d))
+    has_est   <- !is.na(d$covered) & d$covered > 0
+  } else {
+    d$n_measurements <- NA_real_
+    no_catch  <- d$landings <= 0 & (is.na(d$total) | d$total <= 0)
+    disc_only <- d$landings <= 0 & !no_catch
+    has_est   <- !is.na(d$total)
+  }
+  if (trip_on && nrow(d) && all(is.na(d$numTrips)))
+    warning(fn, "(): min_trip is active but every stratum's numTrips is ",
+            "unknown (NA) - none of them can pass the trips test, at any ",
+            "min_trip value including 0. Pass min_trip = NULL to drop trips ",
+            "from the classification, or check that the data actually ",
+            "carries a trip count.", call. = FALSE)
+  if (meas_on && isTRUE(min_fish > 0) && nrow(d) && all(d$n_measurements == 0))
+    warning(fn, "(): min_fish is active but every stratum's numMeasurements ",
+            "is 0 - none of them can pass the measurements test, at any ",
+            "min_fish value above 0. Pass min_fish = NULL to drop ",
+            "measurements from the classification, or check that the data ",
+            "actually carries measurement counts.", call. = FALSE)
+  cov_ok  <- !is.na(d$coverage) & d$coverage >= min_cov
+  # a cell with no reported trip count is taken to fail the trips test
+  trips   <- if (trip_on) ifelse(is.na(d$numTrips), min_trip - 1, d$numTrips)
+  trip_ok <- if (trip_on) trips >= min_trip else rep(TRUE, nrow(d))
+  meas_ok <- if (meas_on) d$n_measurements >= min_fish else rep(TRUE, nrow(d))
+  n_miss  <- (!cov_ok) + (!trip_ok) + (!meas_ok)
+  is_full <- cov_ok & trip_ok & meas_ok & d$coverage >= 100 &
+    (if (trip_on) trips > min_trip else TRUE)
+  d$cat_key <- dplyr::case_when(
+    no_catch    ~ "none",
+    disc_only   ~ "disc_only",
+    !has_est    ~ "no_dist",
+    is_full     ~ "full",
+    n_miss == 0 ~ "safe",
+    TRUE        ~ paste0("warn", ifelse(!cov_ok, "_cov", ""),
+                         ifelse(!trip_ok, "_trip", ""),
+                         ifelse(!meas_ok, "_meas", "")))
+  # a cell with no weight at all has nothing to judge: it draws nothing
   d <- d[d$cat_key != "none", , drop = FALSE]
   if (!nrow(d)) return(NULL)
-  d <- reorder_mesh(d, c(y_var, x_var, facet_var))
-  d <- discrete_cols(d, c(y_var, x_var, facet_var))
+  d$Status <- factor(d$cat_key, levels = key$cat_key)
+
+  # the text of the thresholds box: what each active threshold means
+  behind <- switch(what, length = "length distributions", age = "age distributions",
+                   "discard estimates")
+  thr_lines <- c(sprintf("coverage >= %s%%: %s.", min_cov, cv$share),
+                 if (trip_on)
+                   sprintf("trips >= %s: sampled trips behind the %s, summed across strata.",
+                           min_trip, behind),
+                 if (meas_on)
+                   sprintf("measured fish >= %s: fish measured for %s estimates, summed across strata.",
+                           format(min_fish, big.mark = ",", trim = TRUE),
+                           if (identical(what, "age")) "NaA/MWaA" else "NaL/MWaL"),
+                 "labels: each unmet threshold is shown as a label.")
+  d <- category_cols(d, c(y, x, facet))
+  x_var <- x
   if (is.null(x_var) || !nzchar(x_var)) { d$.x <- "All"; x_var <- ".x" }
-  smallest <- suppressWarnings(min(d$landings[d$landings > 0], na.rm = TRUE))
-  if (!is.finite(smallest)) smallest <- 1
-  d$plot_size <- ifelse(d$cat_key == "disc_only", smallest, d$landings)
-  # the shortfall a warning cell missed, same helper the heatmap uses;
-  # "100%\nDisc" is discard-only and has no threshold to miss
-  d$lab <- ifelse(d$cat_key == "disc_only", "100%\nDisc", shortfall_label(d, "\n"))
-  # A bubble plot says two things at once: status in the colour, weight in
-  # the diameter. The second is guesswork without a scale bar, so the
-  # breaks are pinned here (smallest / median / largest actually drawn) and
-  # handed to the plot AND to the pulled-out legend, which rebuilds the key
-  # with the same limits and range so a key circle is literally the size
-  # that value has in the panel.
-  sz_vals <- d$plot_size[is.finite(d$plot_size) & d$plot_size > 0]
-  SZ <- list(range = c(4, 14), name = sprintf("%s (t)",
-                                              tools::toTitleCase(weight_label)))
-  if (length(sz_vals)) {
-    SZ$limits <- range(sz_vals)
-    SZ$breaks <- unique(c(SZ$limits[1], stats::median(sz_vals), SZ$limits[2]))
-    SZ$labels <- format(signif(SZ$breaks, 3), big.mark = ",", trim = TRUE,
-                        scientific = FALSE)
+
+  # What a warning cell missed, read off its status key (so the label always
+  # agrees with the colour): blank for every cell that is not a warning. The
+  # heatmap puts it on one line under the tile number, the bubble grid on
+  # repelled lines of its own.
+  miss <- function(t) grepl(paste0("^warn_.*", t), d$cat_key)
+  s_cov  <- ifelse(miss("cov"), paste0(round(d$coverage, 1), "%"), "")
+  s_meas <- ifelse(miss("meas"), paste0("n=", format(round(d$n_measurements),
+                                                     big.mark = ",", trim = TRUE)), "")
+  s_trip <- ifelse(miss("trip"),
+                   ifelse(is.na(d$numTrips), "trips n/a",
+                          paste0(round(d$numTrips), " trip",
+                                 ifelse(round(d$numTrips) == 1, "", "s"))), "")
+  d$lab <- vapply(seq_len(nrow(d)), function(i) {
+    b <- c(s_cov[i], s_meas[i], s_trip[i])
+    paste(b[nzchar(b)], collapse = if (heat) ", " else "\n")
+  }, character(1))
+
+  # One zero-size mark per status, so the legend carries a filled key for the
+  # statuses no cell of this particular figure lands in - added last so the
+  # real marks stay layer 1. A discrete scale can list an unused level (drop =
+  # FALSE + limits), but a geom has no data row to draw its swatch from.
+  dummy <- d[rep(1L, nrow(key)), , drop = FALSE]
+  dummy$Status <- factor(key$cat_key, levels = key$cat_key)
+  dummy$landings <- NA_real_
+  if (!heat) dummy$plot_size <- NA_real_
+  key_layer <- if (heat)
+    geom_tile(data = dummy, aes(fill = .data$Status), width = 0, height = 0,
+              na.rm = TRUE, show.legend = TRUE)
+  else geom_point(data = dummy, aes(fill = .data$Status), size = 0, shape = 21,
+                  stroke = 0, na.rm = TRUE, show.legend = TRUE)
+  fill_scale <- do.call(scale_fill_manual, c(
+    list(values = setNames(key$colour, key$cat_key), limits = key$cat_key,
+         labels = setNames(key$abbr, key$cat_key), drop = FALSE,
+         name = "Sampling status"),
+    if (!heat) list(guide = guide_legend(override.aes = list(size = 5)))))
+
+  if (heat) {
+    fmt <- function(v) ifelse(is.na(v) | v <= 0, "",
+                       ifelse(v > 99, sprintf("%.0f", v),
+                       ifelse(v >= 10, sprintf("%.1f", v), sprintf("%.2f", v))))
+    # the shortfall is one line under the tile number: nudge the number up to
+    # make room for it
+    d$.num_vjust <- ifelse(nzchar(d$lab), -0.2, 0.5)
+    p <- ggplot(d, aes(x = factor(.data[[x_var]]), y = .data[[y_var]], fill = Status)) +
+      geom_tile(colour = OUTLINE, alpha = 0.9) +
+      geom_text(aes(label = fmt(landings), vjust = .data$.num_vjust), size = 2.6,
+                fontface = "bold", colour = OUTLINE) +
+      geom_text(aes(label = lab), vjust = 1.3, size = 2.2, fontface = "bold",
+                colour = "red3")
+    mark_txt <- sprintf("tile number = %s weight (t).", cv$weight_label)
   } else {
-    SZ$limits <- NULL; SZ$breaks <- ggplot2::waiver(); SZ$labels <- ggplot2::waiver()
+    # one bubble per cell: the cells are already pooled to the plotted columns,
+    # so no two bubbles share a point. A discards-only cell has no landings to
+    # size it by, so it is drawn as small as the smallest bubble and crossed.
+    smallest <- suppressWarnings(min(d$landings[d$landings > 0], na.rm = TRUE))
+    if (!is.finite(smallest)) smallest <- 1
+    d$plot_size <- ifelse(d$cat_key == "disc_only", smallest, d$landings)
+    d$lab[d$cat_key == "disc_only"] <- "100%\nDisc"
+    # A bubble plot says two things at once: status in the colour, weight in the
+    # diameter. The second is guesswork without a scale bar, so the breaks are
+    # pinned here (smallest / median / largest actually drawn): a key circle is
+    # literally the size that value has in the panel.
+    sz_vals <- d$plot_size[is.finite(d$plot_size) & d$plot_size > 0]
+    sz <- list(limits = NULL, breaks = ggplot2::waiver(), labels = ggplot2::waiver())
+    if (length(sz_vals)) {
+      sz$limits <- range(sz_vals)
+      sz$breaks <- unique(c(sz$limits[1], stats::median(sz_vals), sz$limits[2]))
+      sz$labels <- format(signif(sz$breaks, 3), big.mark = ",", trim = TRUE,
+                          scientific = FALSE)
+    }
+    p <- ggplot(d, aes(x = factor(.data[[x_var]]), y = .data[[y_var]])) +
+      geom_point(aes(size = plot_size, fill = Status), shape = 21,
+                 colour = OUTLINE, stroke = 0.8) +
+      geom_point(data = filter(d, cat_key == "disc_only"),
+                 shape = 4, colour = OUTLINE, size = 2, stroke = 1) +
+      ggrepel::geom_text_repel(aes(label = lab), size = 2.8, fontface = "bold",
+                               colour = "red3", box.padding = 0.6,
+                               min.segment.length = 0, segment.size = 0.2,
+                               segment.colour = "grey40", max.overlaps = Inf)
+    mark_txt <- sprintf("bubble size = %s weight (t).", cv$weight_label)
   }
-  # "none" never draws a bubble, so it is dropped from the legend too.
-  lk_no_none <- cat_lookup(threshold, what, min_meas, min_trips)
-  stat_all <- lk_no_none$status[lk_no_none$cat_key != "none"]
-  d$Status <- factor(as.character(d$Status), levels = stat_all)
-  p <- ggplot(d, aes(x = factor(.data[[x_var]]), y = .data[[y_var]])) +
-    geom_point(aes(size = plot_size, fill = Status), shape = 21,
-               colour = OUTLINE, stroke = 0.8) +
-    geom_point(data = filter(d, cat_key == "disc_only"),
-               shape = 4, colour = OUTLINE, size = 2, stroke = 1) +
-    ggrepel::geom_text_repel(aes(label = lab), size = 2.8, fontface = "bold",
-                             colour = "red3", box.padding = 0.6,
-                             min.segment.length = 0, segment.size = 0.2,
-                             segment.colour = "grey40", max.overlaps = Inf) +
-    # a zero-size mark per status, so the legend carries a filled key for
-    # categories no bubble in this particular figure lands in - added
-    # last so the real points stay layer 1
-    status_key_layer(d, stat_all, "point") +
-    scale_size_continuous(range = SZ$range, limits = SZ$limits,
-                          breaks = SZ$breaks, labels = SZ$labels,
-                          name = SZ$name) +
-    scale_fill_manual(values = status_palette(threshold, what, min_meas, min_trips),
-                      limits = stat_all,
-                      labels = status_abbr(threshold, what, min_meas, min_trips),
-                      drop = FALSE, name = "Sampling status",
-                      guide = guide_legend(override.aes = list(size = 5))) +
-    scale_x_discrete(expand = expansion(0.2)) +
-    maybe_facet(facet_var) +
-    labs(title = cov_title(what, weight_label),
-         caption = sub_wrap(strata_sentence(c(y, x, facet), catch),
-                            sprintf("bubble size = %s weight (t).", weight_label),
+  p <- p + key_layer
+  if (!heat)
+    p <- p +
+      scale_size_continuous(range = c(4, 14), limits = sz$limits,
+                            breaks = sz$breaks, labels = sz$labels,
+                            name = sprintf("%s (t)", tools::toTitleCase(cv$weight_label))) +
+      scale_x_discrete(expand = expansion(0.2))
+
+  # The thresholds, in a boxed guide of their own under the panel, right-
+  # justified under the in-panel status legend: a detail section of it, not a
+  # caption about the plot. Added after app_theme(), whose complete theme resets
+  # the legend justification.
+  thr_box <- grid::textGrob(paste(thr_lines, collapse = "\n"), x = 0, y = 1,
+                            hjust = 0, vjust = 1,
+                            gp = grid::gpar(fontsize = 8, col = "grey25",
+                                            lineheight = 1.1))
+  p + fill_scale +
+    facet_layer(facet, scales = "free_y") +
+    labs(title = cv$title,
+         caption = sub_wrap(strata_sentence(c(y, x, facet), catch), mark_txt,
                             width = 110),
          x = if (x_var == ".x") NULL else x_var, y = y_var) +
     app_theme() + theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-    thr_guide(thr_lines(threshold, min_trips, min_meas, what, weight_label))
-  # key = "point": circles in the legend, like the bubbles in the panel.
-  # size = SZ: a second key giving the weight each diameter stands for.
-  attr(p, "status_legend") <- list(
-    threshold = threshold, what = what, min_meas = min_meas,
-    min_trips = min_trips, key = "point",
-    size = if (length(sz_vals)) SZ else NULL)
-  p
+    guides(thresholds = guide_custom(
+      thr_box, title = "Thresholds", position = "bottom", order = 99,
+      theme = theme(legend.title = element_text(face = "bold", size = 8)))) +
+    theme(legend.justification.bottom = "right")
 }
 
 
@@ -654,8 +819,8 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
   facet_lev <- mesh_var_levels(facet_var, d$.facet)
   if (!is.null(facet_lev)) d$.facet <- factor(d$.facet, levels = facet_lev)
 
-  wi <- paste("With", samp_word(what), "sampling")
-  wo <- paste("Without", samp_word(what), "sampling")
+  wi <- paste("With", what, "sampling")
+  wo <- paste("Without", what, "sampling")
 
   # Split each stratum's weight into the part that carries a <what>
   # estimate (landings_with_discards) and the part that does not
@@ -737,12 +902,12 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
                                            name = sprintf("Cumulative %% of %s weight",
                                                           weight_label),
                                            breaks = c(0, 25, 50, 75, 100))) +
-    scale_fill_var(if (has(fill_var)) fill_var else y_var, d$.fill,
-                   name = if (has(fill_var)) fill_var else y_var,
-                   palette = palette) +
-    (if (has(facet_var)) facet_wrap(vars(.facet), scales = "free_y", ncol = 2)
-     else NULL) +
-    labs(title = cov_title(what, weight_label),
+    scale_fill_manual(values = plot_colours(d$.fill, if (has(fill_var)) fill_var else y_var,
+                                            palette),
+                      name = if (has(fill_var)) fill_var else y_var,
+                      na.value = "grey85") +
+    facet_layer(if (has(facet_var)) ".facet", scales = "free_y") +
+    labs(title = cv$title,
          caption = sub_wrap(
            strata_sentence(c(y, fill, facet), catch),
            sprintf("staircase = cumulative %% of %s weight (top axis).", weight_label),
@@ -755,31 +920,71 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 }
 
 # ----------------------------------------------------------
-#  Discard rate
+#  Discard rate and catch weight, before and after the raising
 # ----------------------------------------------------------
 
-#' Discard rate per stratum
+#' Discard rate per stratum, before or after the raising
 #'
 #' @description
 #' One point per stratum, its discard rate on the y axis and its landings as
 #' the point size - the finest a stratum gets, never an average of finer ones.
-#' A thin line behind the points marks the mean rate of each `x` level,
-#' weighted by landings, and an optional `reference` draws a dashed line and
-#' names the strata above it.
+#' Given raw catch it shows the rates as they were reported, with a thin line
+#' behind the points marking the mean rate of each `x` level, weighted by
+#' landings, and an optional `reference` that draws a dashed line and names the
+#' strata above it. Given the raised catch (the output of [catchRaising()]) it
+#' shows what the raising did: a stratum whose discards came with the data
+#' (*imported*) is drawn solid, one whose discards the raising added
+#' (*raised*) is drawn transparent. The arguments are the same either way, and
+#' so is the plot; the title says which it is.
 #'
 #' @details
 #' ## What a point is
 #'
 #' A stratum is one row of the discard coverage table
 #' ([build_coverage_strata()]). Given a discard coverage table, its rows are
-#' drawn exactly as they are - one point per row. Given raw catch, the table
-#' is built at the finest resolution the catch carries (`fleetValue`,
-#' `areaValue`, `vesselFlagCountry`, `seasonValue`, whichever are present) *together with*
-#' `x` / `colour` / `shape` / `facet`, so a point is always an individual,
-#' un-pooled stratum: several points can share one `x` level. `strata_vars`
-#' (the columns behind a point's label, see below) is exactly this set.
-#' Strata with no discard estimate have no rate and are not drawn: a rate is
-#' a property of sampled strata only.
+#' drawn exactly as they are - one point per row. Given catch, raw or raised,
+#' the table is built at the finest resolution the catch carries (`fleetValue`,
+#' `areaValue`, `vesselFlagCountry`, `seasonValue`, whichever are present)
+#' *together with* `x` / `colour` / `shape` / `facet`, so a point is always an
+#' individual, un-pooled stratum: several points can share one `x` level.
+#' `strata_vars` (the columns behind a point's label, see below) is exactly this
+#' set. Strata with no discard estimate have no rate and are not drawn: a rate
+#' is a property of sampled strata only.
+#'
+#' ## Before and after the raising
+#'
+#' The raising adds `importedOrRaised` to the catch, and with it the plot knows
+#' what the raising did. `importedOrRaised` is a variable like any other. By
+#' default it is the shade (`alpha = "importedOrRaised"`): solid for imported
+#' strata, transparent for raised ones. Name it in `x`, `colour`, `shape` or
+#' `facet` to draw it there instead - a colour each, a panel each, two columns
+#' of points - and it is then not drawn as a shade as well. `alpha = NULL` draws
+#' no shade, and unless it is named elsewhere imported and raised strata are
+#' drawn alike. Whichever way, it is worked out per stratum (a stratum is raised
+#' when its discard rows were), never from the landings rows next to them, which
+#' are always imported; a stratum that holds both kinds of discard row is raised.
+#'
+#' The title says what the strata drawn are: *imported + raised* when the
+#' raising added some of them, *only imported* when it did not - a raw catch,
+#' or a raised catch in which nothing needed raising - and then there is no
+#' shade, because there is nothing to tell apart.
+#'
+#' Put the raising group on `x` (`"DrGroup"`): a group's transparent points all
+#' sit on one line, the rate it was raised at, and its solid points show how
+#' far the strata it was built from scatter around that line - a group whose
+#' solid points are spread far from it is a guess dressed up as a group. Only
+#' the strata of the raised catch are drawn, so the donors of a group wider
+#' than its own strata (a REST group raised from every gear, say) appear under
+#' the groups they themselves belong to.
+#'
+#' A raised stratum whose group had no donor to draw a rate from comes out of
+#' the raising as `NaN`: it has no rate to plot and is left out, with a message
+#' saying how many.
+#'
+#' Once strata are raised the transparent points are themselves the reference,
+#' so the weighted-mean line, the reference line's label and the per-point
+#' labels, which help to read the rates as they were reported, are left out;
+#' the dashed `reference` line stays.
 #'
 #' ## The rate
 #'
@@ -802,15 +1007,15 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 #' stratum counts for more than a small one. For `"ratio"` it equals the rate
 #' of the `x` level built directly, `build_coverage_strata(catch, x)`. It sits
 #' behind the points, thin and muted, so it reads as a reference, not the
-#' headline.
+#' headline. Before the raising only.
 #'
 #' ## The reference line
 #'
 #' `reference` is a rate on the same scale as the axis, as a fraction (`0.3` is
 #' 30%; with `rate = "rate"` it must lie between 0 and 1). A dashed line marks
-#' it, and the strata above it are labelled with their identity - the finest
-#' column of each stratum family present (so a coarser alias already
-#' determined by a finer one you also plotted, `metier4` alongside
+#' it and, before the raising, the strata above it are labelled with their
+#' identity - the finest column of each stratum family present (so a coarser
+#' alias already determined by a finer one you also plotted, `metier4` alongside
 #' `fleetValue` say, is not repeated), bare values joined by `"|"`
 #' (`"PS_SPF_0_0_0|87.1.2|Chile|1"`) - a point is an individual stratum, so
 #' its label identifies it fully, not just by the columns you happened to
@@ -825,17 +1030,25 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 #' ggplot2::scale_y_continuous()` to the returned plot to replace it with an
 #' ordinary one. `"rate"` is bounded, so its axis is an ordinary 0-100% one.
 #'
-#' @param catch Raw CEF catch data, or a discard coverage table from
-#'   [build_coverage_strata()].
+#' @param catch Raw CEF catch data, the raised catch ([catchRaising()]), or a
+#'   discard coverage table from [build_coverage_strata()].
 #' @param x Column on the x axis: one point per level (times `colour`,
-#'   `shape` and `facet`). Required.
-#' @param colour Column mapped to the point fill.
-#' @param shape Column mapped to the point shape.
-#' @param facet Optional facet column.
+#'   `shape` and `facet`). Can be `"DrGroup"` or `"importedOrRaised"`.
+#'   Required.
+#' @param colour Column mapped to the point fill; `"importedOrRaised"`
+#'   included.
+#' @param shape Column mapped to the point shape; `"importedOrRaised"`
+#'   included.
+#' @param facet Optional facet column; `"importedOrRaised"` included.
+#' @param alpha `"importedOrRaised"` (default) draws the shade: solid for
+#'   imported, transparent for raised. `NULL` draws none. Left out when
+#'   `importedOrRaised` is the `x`, `colour`, `shape` or `facet`, and when
+#'   nothing was raised.
 #' @param rate `"ratio"` (default, discards / landings) or `"rate"` (discards
 #'   / catch): which discard rate is the y variable. See *The rate*.
 #' @param reference Optional single rate, as a fraction (`0.3` = 30%), on the
-#'   scale of `rate`. Draws a dashed line and labels the strata above it.
+#'   scale of `rate`. Draws a dashed line and, before the raising, labels the
+#'   strata above it.
 #' @param jitter Jitter the points horizontally. Cosmetic only - one point is
 #'   still one stratum.
 #' @param palette `"default"`, `"colorblind"` or `"gradual"`: the point
@@ -843,7 +1056,8 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 #' @inheritParams saving-plots
 #' @return A ggplot object, or `NULL` when no stratum has a discard rate.
 #' @seealso [build_coverage_strata()] for the table behind the points;
-#'   [coverage-plots] for how well those strata are sampled.
+#'   [coverage-plots] for how well those strata are sampled; [plot_catches()]
+#'   for the weight itself, before or after the raising.
 #' @family discard-rate plots
 #' @md
 #' @examples
@@ -858,19 +1072,28 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
 #' plot_DR(catch, x = "metier4", colour = "vesselFlagCountry",
 #'        rate = "rate", reference = 0.2)
 #'
+#' # the same plot of the raised catch: imported solid, raised transparent
+#' raised <- catchRaising(catch, strataCond, logFile = tempfile(fileext = ".txt"))
+#' plot_DR(raised, x = "DrGroup", colour = "metier4")
+#'
+#' # imported against raised as the panels instead of the shade
+#' plot_DR(raised, x = "metier4", colour = "vesselFlagCountry",
+#'        facet = "importedOrRaised")
+#'
 #' # the table behind the points
 #' cov <- build_coverage_strata(catch, c("metier4", "vesselFlagCountry"))
 #' head(cov[!is.na(cov$rate), c("metier4", "vesselFlagCountry", "total", "rate",
 #'                              "discardRate")])
 #' }
 #' @export
-plot_DR <- function(catch, x, colour = NULL, shape = NULL,
-                    facet = NULL, rate = c("ratio", "rate"),
+plot_DR <- function(catch, x, colour = NULL, shape = NULL, facet = NULL,
+                    alpha = "importedOrRaised", rate = c("ratio", "rate"),
                     reference = NULL, jitter = TRUE,
                     palette = c("default", "colorblind", "gradual"), save = NULL) {
   save_on_exit(save, "plot_DR")
   palette <- match.arg(palette)
   rate_type <- match.arg(rate)
+  S <- "importedOrRaised"
   if (!is.null(reference) && !(is.numeric(reference) && length(reference) == 1 &&
                                is.finite(reference) && reference >= 0))
     stop("plot_DR(): `reference` must be a single number, a rate ",
@@ -888,14 +1111,15 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL,
 
   tw <- coverage_table_what(catch)
   if (is.na(tw)) {
-    # Raw catch: build at the finest the catch carries, together with
+    # Raw or raised catch: build at the finest the catch carries, together with
     # whatever is plotted - not pooled to just the plotted columns, or a
     # point (and its label) could be many different areas and seasons
     # wearing one name. A minimal catch with none of the four keeps the old
     # pooled-to-plotted-columns behaviour (nothing finer to build at).
+    # importedOrRaised is no stratum column: it is the table's own, per stratum.
     base_dims <- intersect(c("fleetValue", "areaValue", "vesselFlagCountry", "seasonValue"),
                            names(as.data.frame(catch)))
-    d <- build_coverage_strata(catch, dims = unique(c(base_dims, keys)))
+    d <- build_coverage_strata(catch, dims = unique(c(base_dims, setdiff(keys, S))))
   } else if (identical(tw, "discard")) {
     d <- catch
   } else {
@@ -907,15 +1131,30 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL,
   miss <- setdiff(keys, names(d))
   if (length(miss))
     stop("plot_DR(): column(s) not in the coverage table: ",
-         paste(miss, collapse = ", "), call. = FALSE)
+         paste(miss, collapse = ", "),
+         if (S %in% miss) " - importedOrRaised comes with the output of catchRaising()",
+         call. = FALSE)
 
   # rate is NA for a stratum with no discard estimate (nobody looked -
   # not the same as looked and found none), so those simply are not drawn -
-  # whichever rate is plotted, so the two show the same strata
+  # whichever rate is plotted, so the two show the same strata. A raised
+  # stratum is another matter: it was meant to have one, and its group had no
+  # donor to draw it from.
+  n_none <- if (S %in% names(d)) sum(d[[S]] %in% "raised" & is.na(d$total)) else 0L
+  if (n_none)
+    message("plot_DR(): ", n_none, " raised ",
+            if (n_none == 1) "stratum has" else "strata have",
+            " no rate (their group had no donor to draw one from) and ",
+            if (n_none == 1) "is" else "are", " left out.")
   d <- d[!is.na(d$rate), , drop = FALSE]
   if (!nrow(d)) return(NULL)
-  d <- reorder_mesh(d, c(x_var, colour_var, shape_var, facet_var))
-  d <- discrete_cols(d, c(x_var, colour_var, shape_var, facet_var))
+  # what is drawn - the strata that have a rate - is what the title speaks of
+  present <- if (S %in% names(d)) unique(as.character(d[[S]]))
+  st <- status_shade(S, alpha, keys, present, "plot_DR(): ",
+                     override = list(fill = "grey30", shape = 21, size = 3.5))
+  raised <- "raised" %in% present
+  d <- category_cols(d, keys)
+  if (S %in% names(d)) d$.status <- st$status(d[[S]])
   # The y variable, in percent. Both rates are columns of the coverage
   # table; one built before `discardRate` existed gets it worked out here
   # from the two weights it does carry.
@@ -937,6 +1176,10 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL,
   # bubble a little bigger than the last, all the way down.
   if (has_landings)
     d$landings <- d$landings + max(d$landings, na.rm = TRUE) * 0.1
+  # Raised points go down first and the big bubbles before the small ones, so
+  # a solid point is never buried under a transparent bubble.
+  if (".status" %in% names(d))
+    d <- d[order(d$.status == "Imported", -d$landings), , drop = FALSE]
 
   # What a point is: every stratum column the table carries - the table's
   # own dims, drawn as they are. This is the finest available (see above),
@@ -944,9 +1187,9 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL,
   # "Stratum" is excluded outright: it is fleetValue/vesselFlagCountry/
   # areaValue/seasonValue already joined into one string, a composite of
   # four OTHER columns rather than a nested level of any one of them, so
-  # finest_per_family() has no family to ever drop it from - it would just
+  # strata_families() has no family to ever drop it from - it would just
   # repeat the same four values again, pasted together. A
-  # coverage_extra_cols() column that is NOT reliably defined here (NA on
+  # derived column that rides along on the table but is NOT reliably defined here (NA on
   # some point) is also excluded - it is not part of what THIS table's
   # strata are, just a bonus that happened to ride along, and a label or a
   # grouping sentence showing "NA" for it would say nothing true.
@@ -954,16 +1197,23 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL,
                                      "weightingCategory", "total",
                                      "weightingTotal", "rate",
                                      "discardRate", "landings", "coverage",
-                                     "numTrips", ".y", "Stratum"))
+                                     "numTrips", ".y", "Stratum", S, ".status"))
   strata_vars <- strata_vars[!vapply(strata_vars,
                                      function(v) anyNA(d[[v]]), logical(1))]
-  # The mean of each x level (per panel), weighted by the landings behind
-  # each rate - for the ratio exactly the rate of that level built directly.
-  wkeys <- unique(c(x_var, if (has(facet_var)) facet_var))
-  wm <- d %>%
-    group_by(across(all_of(wkeys))) %>%
-    summarise(.y = stats::weighted.mean(.y, weightingTotal), .groups = "drop") %>%
-    filter(is.finite(.y))
+  # The rates as they were reported get a backdrop: the mean of each x level
+  # (per panel), weighted by the landings behind each rate - for the ratio
+  # exactly the rate of that level built directly - and, over a reference, the
+  # strata named. Once strata are raised the transparent points are the
+  # reference, and these only crowd them.
+  backdrop <- !raised
+  wm <- NULL
+  if (backdrop) {
+    wkeys <- unique(c(x_var, if (has(facet_var)) facet_var))
+    wm <- d %>%
+      group_by(across(all_of(wkeys))) %>%
+      summarise(.y = stats::weighted.mean(.y, weightingTotal), .groups = "drop") %>%
+      filter(is.finite(.y))
+  }
   # Labels for the strata above the reference: bare values, only the finest
   # column of each family (a coarser alias already determined by a finer one
   # you also plotted - metier4 alongside fleetValue, say - says nothing extra
@@ -971,48 +1221,57 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL,
   # shares some of its columns. Blank for every other point, so the label
   # layer has exactly the rows of the point layer and the same jitter puts
   # each label on its point.
-  lab_vars <- finest_per_family(strata_vars)
+  coarser <- unlist(lapply(strata_families(), function(m) {
+    s <- intersect(strata_vars, names(m))
+    if (length(s) > 1) s[m[s] > min(m[s])]
+  }))
+  lab_vars <- setdiff(strata_vars, coarser)
   ref_y <- if (is.null(reference)) NULL else reference * 100
   lab_all <- do.call(paste, c(lapply(lab_vars, function(v) d[[v]]), sep = "|"))
-  d$.lab <- if (is.null(ref_y)) "" else ifelse(d$.y > ref_y, lab_all, "")
+  d$.lab <- if (is.null(ref_y) || !backdrop) "" else ifelse(d$.y > ref_y, lab_all, "")
 
   pos <- if (jitter) position_jitter(width = 0.18, height = 0, seed = 1) else "identity"
   ae <- aes(x = .data[[x_var]], y = .y)
   if (has(colour_var)) ae <- modifyList(ae, aes(fill = .data[[colour_var]]))
   if (has(shape_var))  ae <- modifyList(ae, aes(shape = .data[[shape_var]]))
   if (has_landings)    ae <- modifyList(ae, aes(size = landings))
+  if (st$on)           ae <- modifyList(ae, aes(alpha = .status))
 
   # only shapes 21-25 take a fill, so pin shape 21 when nothing maps to shape.
   # size is either mapped (added to ae above, scaled below) or fixed at the
   # old constant - never both, which is what a geom_point(size = ...) call
   # alongside an aes(size = ...) mapping would otherwise silently conflict on.
-  pt_args <- list(alpha = 0.85, colour = OUTLINE, stroke = 0.5, position = pos)
+  # The same for alpha: mapped to imported / raised, or fixed.
+  pt_args <- list(colour = OUTLINE, stroke = 0.5, position = pos)
   if (!has(shape_var))  pt_args$shape <- 21
   if (!has_landings)    pt_args$size  <- 3
+  if (!st$on)           pt_args$alpha <- 0.85
   p <- ggplot(d, ae)
   # the reference goes first, so the points sit on top of the line
   if (!is.null(ref_y))
     p <- p + geom_hline(yintercept = ref_y, linetype = "dashed",
-                        colour = "red3", linewidth = 0.5) +
-      annotate("text", x = -Inf, y = ref_y, hjust = -0.05, vjust = -0.5,
-               size = 3, colour = "red3",
-               label = sprintf("reference %s%%", format(round(reference * 100, 1),
-                                                        trim = TRUE)))
+                        colour = "red3", linewidth = 0.5)
+  if (!is.null(ref_y) && backdrop)
+    p <- p + annotate("text", x = -Inf, y = ref_y, hjust = -0.05, vjust = -0.5,
+                      size = 3, colour = "red3",
+                      label = sprintf("reference %s%%", format(round(reference * 100, 1),
+                                                               trim = TRUE)))
   # the weighted mean sits behind the strata: a thin, muted line - no
   # whiskers, since geom_errorbar's top and bottom cap coincide at
   # ymin = ymax - and no marker at its centre, so it reads as a backdrop
   # the points sit on, not a headline of its own.
-  p <- p +
-    geom_errorbar(data = wm, aes(x = .data[[x_var]], ymin = .y, ymax = .y),
-                 inherit.aes = FALSE, width = 0.6, colour = "grey45",
-                 linewidth = 0.4) +
-    do.call(geom_point, pt_args)
-  if (!is.null(ref_y))
+  if (backdrop)
+    p <- p + geom_errorbar(data = wm, aes(x = .data[[x_var]], ymin = .y, ymax = .y),
+                           inherit.aes = FALSE, width = 0.6, colour = "grey45",
+                           linewidth = 0.4)
+  p <- p + do.call(geom_point, pt_args)
+  if (!is.null(ref_y) && backdrop)
     p <- p + ggrepel::geom_text_repel(
       data = d, aes(x = .data[[x_var]], y = .y, label = .lab),
       inherit.aes = FALSE, position = pos, size = 2.6, fontface = "bold",
       colour = "red3", box.padding = 0.4, min.segment.length = 0,
       segment.size = 0.2, segment.colour = "grey40", max.overlaps = Inf)
+  if (st$on) p <- p + st$scale
   if (has(shape_var))
     p <- p + scale_shape_manual(values = c(21, 22, 23, 24, 25, 8, 3, 4))
   # the fill legend keys inherit the default shape (19), which takes no
@@ -1024,8 +1283,8 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL,
     p <- p + guides(shape = guide_legend(
       override.aes = list(fill = "grey45", size = 3.5, alpha = 1)))
   if (has(colour_var))
-    p <- p + scale_fill_var(colour_var, d[[colour_var]], name = colour_var,
-                            palette = palette)
+    p <- p + scale_fill_manual(values = plot_colours(d[[colour_var]], colour_var, palette),
+                               name = colour_var, na.value = "grey85")
   # area-, not radius-, proportional - the honest way to size a point by
   # a weight, and the same convention the coverage bubble plots already use.
   if (has_landings)
@@ -1038,6 +1297,10 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL,
   # (zero stays zero), logarithmic above ~5%, so the bulk and the extremes
   # are both readable. The rate stays within 0-100%, so it gets an ordinary
   # axis.
+  grouping <- strata_sentence(strata_vars, catch)
+  if (raised)
+    grouping <- sub("as in CEF (CN) data", "per strata including imported and raised",
+                    grouping, fixed = TRUE)
   p <- p +
     (if (identical(rate_type, "ratio"))
        scale_y_continuous(
@@ -1047,18 +1310,22 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL,
      else
        scale_y_continuous(limits = c(0, 100), breaks = seq(0, 100, 20),
                           labels = function(z) paste0(round(z), "%"))) +
-    maybe_facet(facet_var, free_y = FALSE, ncol = 2) +
-    labs(title = sprintf("Discard %s per stratum", rate_type),
+    facet_layer(facet_var) +
+    labs(title = sprintf("Discard %s per stratum, %s", rate_type, st$word),
          caption = sub_wrap(
-           strata_sentence(strata_vars, catch),
+           grouping,
            if (identical(rate_type, "ratio")) "Discard ratio = discard/landings weight."
            else "Discard rate = discard/catch weight.",
-           sprintf("bubbles = estimated discard %s.", rate_type),
+           sprintf("bubbles = estimated discard %s%s.", rate_type,
+                   if (raised) ", imported and raised" else ""),
            if (has_landings) "bubble size = landings weight (t).",
-           sprintf("horizontal line = landings weighted average per %s.", x_var),
+           if (st$on) "solid = imported from the data, transparent = added by raising.",
+           if (raised && !st$on && !st$shown) "imported and raised strata are drawn alike.",
+           if (backdrop)
+             sprintf("horizontal line = landings weighted average per %s.", x_var),
            if (!is.null(ref_y))
              "dashed line = reference arbitrary threshold in the same units as y axis.",
-           if (!is.null(ref_y))
+           if (!is.null(ref_y) && backdrop)
              sprintf("labels = strata ID exceeding reference line (%s).",
                      paste(lab_vars, collapse = "|")),
            width = 110),
@@ -1074,291 +1341,235 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL,
   p
 }
 
-#' Discard rate after raising: every stratum of the raised catch
+#' Catch weight per stratum, before or after the raising
 #'
 #' @description
-#' [plot_DR()] for after raising, from the raised catch alone: one point per
-#' raw stratum - its discards over its landings (or over its catch). A stratum
-#' whose discards came with the data (imported, i.e. sampled) is drawn solid; a
-#' stratum whose discards were added by the raising is drawn transparent, the
-#' same imported / raised shading as in [plot_raised_catches()]. Put the
-#' raising group on `x` (`"DrGroup"`): a group's transparent points all sit on
-#' one line, the rate it was raised at, and its solid points show how far the
-#' strata it was built from scatter around that line - a group whose solid
-#' points are spread far from it is a guess dressed up as a group.
+#' A stacked bar of catch weight at any aggregation: bars are landings,
+#' discards (and BMS), or just the one, via `catchCategory`. Given the raised
+#' catch (the output of [catchRaising()]) it shows what the raising added -
+#' `importedOrRaised`, imported from the data versus added by the raising - as
+#' the shade, as the `fill` or as a `facet`, as you choose. Given raw catch
+#' it is the weight as it was reported. The arguments are the same either way,
+#' and so is the plot; the title says which it is.
 #'
 #' @details
-#' ## Raw strata
-#'
-#' A stratum here is one fleet x area x country x season of the raised catch
-#' (plus whatever else `x`, `colour`, `shape` and `facet` name), never an
-#' average of several, so it is either imported or raised - there is no
-#' in-between to show. If a stratum does carry both kinds of discard row it is
-#' drawn as raised. A raised stratum whose group had no donor to draw a rate
-#' from comes out of the raising as `NaN`; it has no rate to plot and is left
-#' out, with a message saying how many.
-#'
-#' Only the raised catch is needed, so only the strata in it are drawn: the
-#' donors of a group wider than its own strata (a REST group raised from
-#' every gear, say) appear under the groups they themselves belong to.
-#'
-#' ## Where imported / raised goes
-#'
 #' `importedOrRaised` is a variable like any other. By default it is the shade
-#' (`alpha = "importedOrRaised"`): solid for imported strata, transparent for
-#' raised ones. Name it in `x`, `colour`, `shape` or `facet` to draw it there
-#' instead - a colour each, a panel each, two columns of points - and it is
-#' then not drawn as a shade as well. `alpha = NULL` draws no shade, and
-#' unless it is named elsewhere imported and raised strata are drawn alike.
-#' Whichever way, it is worked out per stratum (a stratum is raised when its
-#' discard rows were), never from the landings rows next to them.
+#' (`alpha = "importedOrRaised"`): solid for what was imported, transparent for
+#' what raising added. Name it in `fill` to give the two a colour each (the bars
+#' are then no longer coloured landings / discards: say which they are with
+#' `catchCategory`, or with `facet = "catchCategory"`), in `facet` to give each
+#' its own panel, or in `x` for a bar each; it is then not drawn as a shade as
+#' well. `alpha = NULL` draws no shade, and unless it is named elsewhere the
+#' imported and the raised weights are added together.
 #'
-#' ## The rate, and the reference line
+#' The title says what the rows drawn are: *imported + raised* when the raising
+#' added some of them, *only imported* when it did not - a raw catch, a raised
+#' catch in which nothing needed raising, or the landings of a raised catch,
+#' which are always imported - and then there is no shade, because there is
+#' nothing to tell apart.
 #'
-#' Both work exactly as in [plot_DR()]: `rate` chooses `"ratio"`
-#' (discards / landings, the default) or `"rate"` (discards / catch), and
-#' `reference` draws a dashed line at a fixed threshold. Unlike
-#' [plot_DR()], there is no weighted-mean line - the transparent points
-#' themselves are the reference here - and no per-point labels.
-#'
-#' @param raised_catch Output of [catchRaising()].
-#' @param x Column on the x axis: one point per level (times `colour`,
-#'   `shape` and `facet`). Can be `"DrGroup"` or `"importedOrRaised"`.
-#'   Required.
-#' @param colour Column mapped to the point fill; `"importedOrRaised"`
-#'   included.
-#' @param shape Column mapped to the point shape; `"importedOrRaised"`
-#'   included.
+#' @param catch Raw CEF catch data, or the raised catch ([catchRaising()]):
+#'   `catchCategory` and `total`, and for the shade `importedOrRaised`.
+#' @param x Column on the x axis: one bar (or bar segment) per level;
+#'   `"importedOrRaised"` included.
 #' @param facet Optional facet column; `"importedOrRaised"` included.
+#' @param fill Column mapped to the bar fill. `NULL` (default) colours the bars
+#'   by catch category - landings, discards, BMS; `"importedOrRaised"` is
+#'   allowed.
 #' @param alpha `"importedOrRaised"` (default) draws the shade: solid for
 #'   imported, transparent for raised. `NULL` draws none. Left out when
-#'   `importedOrRaised` is the `x`, `colour`, `shape` or `facet`.
-#' @param rate `"ratio"` (default, discards / landings) or `"rate"` (discards
-#'   / catch): which discard rate is the y variable. See
-#'   [plot_DR()].
-#' @param reference Optional single rate, as a fraction (`0.3` = 30%), on the
-#'   scale of `rate`. Draws a dashed line.
-#' @param jitter Jitter the points horizontally. Cosmetic only.
-#' @param palette `"default"`, `"colorblind"` or `"gradual"`: the point
-#'   colours.
+#'   `importedOrRaised` is the `x`, the `fill` or the `facet`, and when nothing
+#'   was raised.
+#' @param catchCategory Optional filter to just `"Lan"`, `"Dis"` or `"BMS"`
+#'   (matched case-insensitively), so discards are readable on their own when
+#'   landings would otherwise dominate the scale. `NULL` (default) keeps all
+#'   the catch parts, stacked.
+#' @param ncol Facet columns, when `facet` is set.
+#' @param palette `"default"`, `"colorblind"` or `"gradual"`: the bar colours.
 #' @inheritParams saving-plots
-#' @return A ggplot object, or `NULL` when no stratum has a discard rate.
-#' @seealso [plot_DR()] for the pre-raising counterpart;
-#'   [plot_raised_catches()] for the raised weight itself.
-#' @family discard-rate plots
+#' @return A ggplot object.
+#' @seealso [plot_DR()] for the discard rate of the same catch, before or after
+#'   the raising; [raised_overview_table()] for the weights as a table.
 #' @family raising plots
 #' @md
+#' @examples
+#' \dontrun{
+#'
+#' # the catch as reported, by metier
+#' plot_catches(catch, x = "metier4")
+#'
+#' # the same of the raised catch: solid = imported, transparent = raised
+#' raised <- catchRaising(catch, strataCond, logFile = tempfile(fileext = ".txt"))
+#' plot_catches(raised, x = "metier4", facet = "vesselFlagCountry")
+#'
+#' # only the discards, imported and raised side by side
+#' plot_catches(raised, x = "metier4", catchCategory = "Dis",
+#'              fill = "importedOrRaised")
+#' }
 #' @export
-plot_raised_DR <- function(raised_catch, x, colour = NULL, shape = NULL,
-                           facet = NULL, alpha = "importedOrRaised",
-                           rate = c("ratio", "rate"),
-                           reference = NULL, jitter = TRUE,
-                           palette = c("default", "colorblind", "gradual"), save = NULL) {
-  save_on_exit(save, "plot_raised_DR")
+plot_catches <- function(catch, x = NULL, facet = NULL, fill = NULL,
+                         alpha = "importedOrRaised", catchCategory = NULL,
+                         ncol = 2,
+                         palette = c("default", "colorblind", "gradual"),
+                         save = NULL) {
+  save_on_exit(save, "plot_catches")
   palette <- match.arg(palette)
-  rate_type <- match.arg(rate)
-  S <- "importedOrRaised"
-  if (!is.null(alpha) && !identical(alpha, S))
-    stop("plot_raised_DR(): `alpha` is \"", S, "\" (solid = imported, ",
-         "transparent = raised) or NULL for no shade", call. = FALSE)
-  if (!is.null(reference) && !(is.numeric(reference) && length(reference) == 1 &&
-                               is.finite(reference) && reference >= 0))
-    stop("plot_raised_DR(): `reference` must be a single number, a rate ",
-         "as a fraction (0.3 = 30%)", call. = FALSE)
-  if (!is.null(reference) && identical(rate_type, "rate") && reference > 1)
-    stop("plot_raised_DR(): with rate = \"rate\" the reference line is a ",
-         "fraction between 0 and 1 (0.3 = 30%), not a percent", call. = FALSE)
   has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
-  if (!has(x)) stop("plot_raised_DR(): `x` is required", call. = FALSE)
-  x_var <- x; colour_var <- colour; shape_var <- shape; facet_var <- facet
-  # imported / raised is drawn once: as the shade, unless it is already the x,
-  # the colour, the shape or a facet
-  shown    <- S %in% c(x_var, colour_var, shape_var, facet_var)
-  alpha_on <- !is.null(alpha) && !shown
-  # The strata are grouped by what the plot shows - but not by importedOrRaised:
-  # it belongs to the discard rows of a stratum, which sit next to landings
-  # rows that are always imported, so it is worked out per stratum below.
-  keys <- setdiff(unique(c(x_var, if (has(facet_var)) facet_var,
-                           if (has(colour_var)) colour_var,
-                           if (has(shape_var)) shape_var)), S)
-  need <- c("catchCategory", "total", "importedOrRaised")
-  miss <- setdiff(c(need, keys), names(raised_catch))
+  S <- "importedOrRaised"
+  miss <- setdiff(c("catchCategory", "total", if (has(x)) x,
+                    if (has(facet)) facet, if (has(fill)) fill),
+                  names(catch))
   if (length(miss))
-    stop("plot_raised_DR(): `raised_catch` has no column ",
+    stop("plot_catches(): `catch` has no column ",
          paste0("'", miss, "'", collapse = ", "),
-         if (any(miss %in% need)) " - it takes the output of catchRaising()",
+         if (S %in% miss) " - importedOrRaised comes with the output of catchRaising()",
          call. = FALSE)
-
-  # ---- one point per raw stratum ------------------------------------------
-  # Not build_coverage_strata(): its rate needs a Dis row's domainCatchDis to
-  # link to the Lan row it belongs to, and a raised Dis row's domain key is a
-  # synthetic one nothing else shares (RDBESStockCoord's own convention, and
-  # rcef's native engine follows the same one) - so a raised stratum's rate
-  # never links and always comes back NA. Landings and discards are instead
-  # summed directly off the rows of each stratum, which needs no linking and
-  # treats a sampled stratum and a raised one the same way. Rows of another
-  # origin or variable type (an "Official" 0 passed through, say) are not the
-  # discards that were raised and are left out.
-  rc <- raised_catch
-  if ("originType" %in% names(rc))
-    rc <- rc[rc$originType %in% "WGEstimate", , drop = FALSE]
-  if ("variableType" %in% names(rc))
-    rc <- rc[rc$variableType %in% "WeightLive", , drop = FALSE]
-  rc$.t <- to_tonnes(rc$total, if ("variableUnit" %in% names(rc)) rc$variableUnit)
-  rc$.lan <- rc$catchCategory %in% "Lan"
-  rc$.dis <- rc$catchCategory %in% "Dis"
-  base_dims <- intersect(c("fleetValue", "areaValue", "vesselFlagCountry", "seasonValue"),
-                         names(rc))
-  rd <- rc %>%
-    group_by(across(all_of(unique(c(base_dims, keys))))) %>%
-    summarise(landings  = sum(.t[.lan], na.rm = TRUE),
-              .discards = sum(.t[.dis], na.rm = TRUE),
-              .raised   = any(importedOrRaised[.dis] %in% "raised"),
-              .no_rate  = any(is.nan(.t[.dis])),
-              .groups = "drop")
-  rd <- rd[rd$landings > 0, , drop = FALSE]
-  n_none <- sum(rd$.no_rate)
-  if (n_none) {
-    message("plot_raised_DR(): ", n_none, " raised ",
-            if (n_none == 1) "stratum has" else "strata have",
-            " no rate (their group had no donor to draw one from) and ",
-            if (n_none == 1) "is" else "are", " left out.")
-    rd <- rd[!rd$.no_rate, , drop = FALSE]
+  # the catch parts, by the words the plot uses
+  part_of <- function(v) {
+    m <- unname(c(LAN = "Landings", LANDINGS = "Landings", DIS = "Discards",
+                  DISCARDS = "Discards", BMS = "BMS")[toupper(as.character(v))])
+    ifelse(is.na(m), as.character(v), m)
   }
-  if (!nrow(rd)) return(NULL)
-  if (shown)
-    rd[[S]] <- factor(ifelse(rd$.raised, "raised", "imported"),
-                      levels = c("imported", "raised"))
-  rd <- reorder_mesh(rd, c(x_var, colour_var, shape_var, facet_var))
-  rd <- discrete_cols(rd, c(x_var, colour_var, shape_var, facet_var))
-  rd$.status <- factor(ifelse(rd$.raised, "Raised", "Imported"),
-                       levels = c("Imported", "Raised"))
-  rd$.y <- (if (identical(rate_type, "ratio")) rd$.discards / rd$landings
-           else rd$.discards / (rd$landings + rd$.discards)) * 100
-  has_landings <- any(is.finite(rd$landings) & rd$landings > 0)
-  # Shifted up by 10% of the largest landings in THIS plot, as in plot_DR():
-  # an additive shift, not a floor that clamps every small stratum to the
-  # same number and so to the same, indistinguishable bubble.
-  if (has_landings)
-    rd$landings <- rd$landings + max(rd$landings, na.rm = TRUE) * 0.1
-  # Raised points go down first and the big bubbles before the small ones, so
-  # a solid point is never buried under a transparent bubble.
-  rd <- rd[order(rd$.status == "Imported", -rd$landings), , drop = FALSE]
+  d <- as.data.frame(catch)
+  d$.t   <- convert_units(d$total, if ("variableUnit" %in% names(d)) d$variableUnit, "t")
+  d$.cat <- part_of(d$catchCategory)
+  cc_label <- "Catch"
+  if (has(catchCategory)) {
+    cc_label <- part_of(catchCategory)
+    if (!cc_label %in% c("Landings", "Discards", "BMS"))
+      stop("plot_catches(): `catchCategory` is \"Lan\", \"Dis\" or \"BMS\" ",
+           "(or NULL for all of them)", call. = FALSE)
+    d <- d[d$.cat == cc_label, , drop = FALSE]
+    if (identical(cc_label, "BMS")) cc_label <- "BMS catch"
+  }
+  # what is drawn - the rows left after the catch part - is what the title
+  # speaks of: the landings of a raised catch were all imported
+  present <- if (S %in% names(d)) unique(as.character(d[[S]]))
+  st <- status_shade(S, alpha, c(x, fill, facet), present, "plot_catches(): ")
+  raised <- "raised" %in% present
+  # what the bars are coloured by when nothing else says: the catch parts there are
+  parts <- c(Landings = "landings", Discards = "discards", BMS = "BMS")
+  parts <- parts[names(parts) %in% d$.cat]
+  d <- category_cols(d, c(x, fill, facet))
+  d$.x <- if (has(x)) d[[x]] else "All"
+  if (st$on) d$.status <- st$status(d[[S]])
+  fill_col <- if (has(fill)) fill else ".cat"
+  keys <- unique(c(".x", fill_col, if (has(facet)) facet, if (st$on) ".status"))
+  d <- d %>% group_by(across(all_of(keys))) %>%
+    summarise(t = sum(.t, na.rm = TRUE), .groups = "drop")
 
-  pos <- if (jitter) position_jitter(width = 0.18, height = 0, seed = 1) else "identity"
-  ref_y <- if (is.null(reference)) NULL else reference * 100
-
-  p <- ggplot(rd, aes(x = .data[[x_var]], y = .y))
-  if (!is.null(ref_y))
-    p <- p + geom_hline(yintercept = ref_y, linetype = "dashed",
-                        colour = "red3", linewidth = 0.5)
-
-  ae <- aes(x = .data[[x_var]], y = .y)
-  if (alpha_on)        ae <- modifyList(ae, aes(alpha = .status))
-  if (has(colour_var)) ae <- modifyList(ae, aes(fill = .data[[colour_var]]))
-  if (has(shape_var))  ae <- modifyList(ae, aes(shape = .data[[shape_var]]))
-  if (has_landings)    ae <- modifyList(ae, aes(size = landings))
-  pt_args <- list(data = rd, mapping = ae, colour = OUTLINE, stroke = 0.5,
-                  position = pos)
-  if (!has(shape_var))  pt_args$shape <- 21
-  if (!has_landings)    pt_args$size  <- 3
-  p <- p + do.call(geom_point, pt_args)
-  if (alpha_on)
-    p <- p + scale_alpha_manual(values = c(Imported = 1, Raised = 0.45), name = NULL,
-                                guide = guide_legend(override.aes = list(
-                                  fill = "grey30", shape = 21, size = 3.5)))
-
-  if (has(shape_var))
-    p <- p + scale_shape_manual(values = c(21, 22, 23, 24, 25, 8, 3, 4))
-  if (has(colour_var))
-    p <- p + guides(fill = guide_legend(
-      override.aes = list(shape = 21, size = 3.5, alpha = 1)))
-  if (has(shape_var))
-    p <- p + guides(shape = guide_legend(
-      override.aes = list(fill = "grey45", size = 3.5, alpha = 1)))
-  if (has(colour_var))
-    p <- p + if (identical(colour_var, S))
-      scale_fill_manual(values = c(imported = PAL_BASE[1], raised = PAL_BASE[2]),
-                        name = S)
-    else scale_fill_var(colour_var, rd[[colour_var]], name = colour_var,
-                        palette = palette)
-  if (has_landings)
-    p <- p + scale_size_area(max_size = 10, labels = scales::comma,
-                             name = "Landings (t)")
-
-  p <- p +
-    (if (identical(rate_type, "ratio"))
-       scale_y_continuous(
-         transform = scales::transform_pseudo_log(sigma = 5),
-         breaks = c(0, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000),
-         labels = function(z) paste0(round(z), "%"))
-     else
-       scale_y_continuous(limits = c(0, 100), breaks = seq(0, 100, 20),
-                          labels = function(z) paste0(round(z), "%"))) +
-    maybe_facet(facet_var, free_y = FALSE, ncol = 2) +
-    labs(title = sprintf("Discard %s per stratum, raised", rate_type),
+  ae <- aes(x = .x, y = t, fill = .data[[fill_col]])
+  if (st$on) ae <- modifyList(ae, aes(alpha = .status))
+  p <- ggplot(d, ae) +
+    geom_col(position = position_stack(reverse = TRUE), width = 0.72,
+             colour = "grey25", linewidth = 0.25)
+  p <- p + if (!has(fill)) {
+    # every catch part, so landings keep their colour when only they are drawn
+    cols <- c(plot_colours(c("Dis", "Lan"), "catchCategory", palette),
+              plot_colours("BMS", "catchCategory", palette))
+    scale_fill_manual(values = setNames(cols, c("Discards", "Landings", "BMS")),
+                      name = NULL)
+  } else scale_fill_manual(values = plot_colours(d[[fill]], fill, palette), name = fill,
+                           na.value = "grey85")
+  if (st$on) p <- p + st$scale
+  p +
+    scale_y_continuous(labels = scales::comma) +
+    facet_layer(facet, ncol = ncol, scales = "free_y") +
+    labs(title = sprintf("%s per stratum, %s", cc_label, st$word),
          caption = sub_wrap(
-           "grouping = no grouping, raw data per strata including imported and raised.",
-           if (identical(rate_type, "ratio")) "Discard ratio = discard/landings weight."
-           else "Discard rate = discard/catch weight.",
-           sprintf("bubbles = estimated discard %s, imported and raised.", rate_type),
-           if (has_landings) "bubble size = landings weight (t).",
-           if (alpha_on)
-             "solid = imported from the data, transparent = added by raising.",
-           if (!alpha_on && !shown)
-             "imported and raised strata are drawn alike.",
-           if (!is.null(ref_y))
-             "dashed line = reference arbitrary threshold in the same units as y axis.",
+           strata_sentence(setdiff(c(x, fill, facet), S), catch),
+           sprintf("bars = %s weight (t), summed over strata.", tolower(cc_label)),
+           if (!has(fill) && length(parts) > 1)
+             sprintf("color = %s or %s.", paste(utils::head(parts, -1), collapse = ", "),
+                     utils::tail(parts, 1)),
+           if (has(fill)) sprintf("color = %s.", fill),
+           if (st$on)
+             "shade = imported from the data, or added by raising.",
+           if (raised && !st$on && !st$shown)
+             "imported and raised weights added together.",
            width = 110),
-         y = sprintf("Discard %s (%s)", rate_type,
-                    if (identical(rate_type, "ratio")) "D/L" else "D/(L+D)"),
-         x = x_var,
-         fill = if (has(colour_var)) colour_var else NULL,
-         shape = if (has(shape_var)) shape_var else NULL) +
+         x = if (has(x)) x else NULL, y = sprintf("%s (t)", cc_label)) +
     app_theme() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1),
-          legend.text = element_text(size = 11),
-          legend.key.size = unit(1.1, "lines"))
-  p
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
 }
 
-
 # ----------------------------------------------------------
-#  Length / age distribution plots
+#  Length / age distribution plots, before and after the allocation
 # ----------------------------------------------------------
 
-#' Numbers at length or age
+#' Numbers at length or age, before or after the allocation
 #'
 #' @description
 #' The catch numbers spread over the length (or age) classes, as a stacked or
 #' dodged histogram. Numbers are in thousands, length in cm and age in years.
+#' Given the result of the allocation ([catchAllocationAoL()]) it shows what
+#' the allocation did: `sampledOrEstimated` says whether a number was sampled
+#' or estimated for a stratum nobody sampled, and it is drawn as the shade
+#' (solid = sampled, transparent = estimated), as the `fill` or as a `facet`,
+#' as you choose. The arguments are the same before and after, and so is the
+#' plot; the title says which it is.
 #'
 #' @details
-#' `data` is raw CEF catch and `distributions` the CEF distributions: they are
+#' `data` is the catch and `distributions` the CEF distributions: they are
 #' linked through `domainBiology` and the country and summed inside, with
 #' `catchCategory` choosing the landings, the discards, BMS or the catch as a
 #' whole. The catch part goes in the plot title. A
 #' distributions row that repeats another exactly is dropped, with a warning:
 #' a repeat is not a second sample.
 #'
+#' ## After the allocation
+#'
+#' Give both tables of the allocation's result: its `$catch` as `data` and its
+#' `$distribution` as `distributions`, `plot_NaLoA(alloc$catch,
+#' alloc$distribution)`. The distributions it estimated for a stratum with no
+#' biological domain carry a domain the allocation made up, and only its own
+#' `$catch` knows it - the catch that went into the allocation cannot find
+#' them, which the plot warns about.
+#'
+#' The allocation adds `sampledOrEstimated` to the distributions, and from then
+#' on it is a variable like any other. By default it is the shade
+#' (`alpha = "sampledOrEstimated"`): solid where the numbers were sampled,
+#' transparent where the allocation estimated them. Name it in `fill` to give
+#' the two a colour each, or in `facet` to give each its own panel; it is then
+#' not drawn as a shade as well. `alpha = NULL` draws no shade, and unless it
+#' is also the fill or a facet the sampled and the estimated numbers are added
+#' together - the numbers the allocation finally reports.
+#'
+#' The title says what the distributions drawn are: *sampled + estimated* when
+#' the allocation estimated some of them, *only sampled* when it did not -
+#' distributions as they were sampled, or an allocation that estimated none of
+#' the ones drawn - and then there is no shade, because there is nothing to
+#' tell apart.
+#'
+#' Like the allocation itself, the numbers count a distribution once for every
+#' stratum of the catch that names its `domainBiology`, so they assume the
+#' catch has one row per domain, catch category and country - which CEF files
+#' built from InterCatch have. Where there are several, the numbers come out
+#' inflated, though the shapes still read.
+#'
+#' ## Fill, facets and classes
+#'
 #' `fill` colours (and stacks) the bars by a column of the catch. `facet`
 #' takes one column (a wrapped set of panels) or two (`c("row", "col")`, a
-#' grid).
-#'
-#' `plus_group` (ages) and `bin_width` (lengths) pool the classes exactly as
-#' in [plot_MWaLoA()] - see that function's *The plus group* and *Length
+#' grid). `plus_group` (ages) and `bin_width` (lengths) pool the classes exactly
+#' as in [plot_MWaLoA()] - see that function's *The plus group* and *Length
 #' bins* - except numbers simply add rather than being averaged, so there is
 #' no per-distribution weighting step to speak of.
 #'
-#' @param data Raw CEF catch data.
+#' @param data Raw CEF catch data; after the allocation, its `$catch`.
 #' @param distributions A CEF distributions table, linked to the catch through
-#'   `domainBiology`.
+#'   `domainBiology`; after the allocation, its `$distribution`.
 #' @param distributionType `"LengthTotal"` (default) or `"Age"`.
 #' @param catchCategory `"All"` (default: landings and discards together,
 #'   titled "catch"), `"Lan"`, `"Dis"` or `"BMS"`. Only used with
 #'   `distributions`.
-#' @param fill Column mapped to the bar fill.
-#' @param facet Up to two facet columns: `"col"` or `c("row", "col")`.
+#' @param fill Column mapped to the bar fill; `"sampledOrEstimated"` included.
+#' @param facet Up to two facet columns: `"col"` or `c("row", "col")`;
+#'   `"sampledOrEstimated"` included.
+#' @param alpha `"sampledOrEstimated"` (default) draws the shade: solid for
+#'   sampled, transparent for estimated. `NULL` draws none. Left out when
+#'   `sampledOrEstimated` is the `fill` or a `facet`, and when nothing was
+#'   estimated.
 #' @param stacked Stack the bars on `fill` (default) rather than dodge them.
 #' @param plus_group The first age of the plus group: `7` pools ages 7 and
 #'   older into one class, shown as `7+`. `NULL` (default): no plus group.
@@ -1371,7 +1582,9 @@ plot_raised_DR <- function(raised_catch, x, colour = NULL, shape = NULL,
 #' @inheritParams saving-plots
 #' @return A ggplot object, or `NULL` when there is nothing to draw.
 #' @seealso [plot_MWaLoA()] for the mean weight in the same classes;
-#'   [coverage-plots] for whether the strata have a distribution at all.
+#'   [coverage-plots] for whether the strata have a distribution at all;
+#'   [catchAtAoLAggregation()] for the same numbers as a table;
+#'   [plot_catches()] for the same sampled / raised contrast on the weights.
 #' @family distribution plots
 #' @md
 #' @examples
@@ -1392,12 +1605,26 @@ plot_raised_DR <- function(raised_catch, x, colour = NULL, shape = NULL,
 #'
 #' # length classes pooled into 2cm bins
 #' plot_NaLoA(catch, distributions, fill = "vesselFlagCountry", bin_width = 2)
+#'
+#' # after the allocation: both tables of its result. Landings by country,
+#' # solid = sampled, transparent = estimated
+#' alloc <- catchAllocationAoL(raised, distributions,
+#'                             condition_alloc_st_list = list(ALL = rlang::quo(TRUE)),
+#'                             distributionType = "LengthTotal", verbose = FALSE,
+#'                             logFile = tempfile(fileext = ".txt"))
+#' plot_NaLoA(alloc$catch, alloc$distribution,
+#'           catchCategory = "Lan", fill = "vesselFlagCountry")
+#'
+#' # sampled and estimated as the fill instead, and the countries as panels
+#' plot_NaLoA(alloc$catch, alloc$distribution, catchCategory = "Lan",
+#'           fill = "sampledOrEstimated", facet = "vesselFlagCountry")
 #' }
 #' @export
 plot_NaLoA <- function(data, distributions = NULL,
                        distributionType = c("LengthTotal", "Age"),
                        catchCategory = "All",
                        fill = NULL, facet = NULL,
+                       alpha = "sampledOrEstimated",
                        stacked = TRUE,
                        plus_group = NULL, bin_width = NULL,
                        scales = "fixed",
@@ -1405,7 +1632,6 @@ plot_NaLoA <- function(data, distributions = NULL,
   save_on_exit(save, "plot_NaLoA")
   fn <- "plot_NaLoA(): "
   typed_dt <- !missing(distributionType); typed_cc <- !missing(catchCategory)
-  dims <- NULL
   distributionType <- match.arg(distributionType)
   palette <- match.arg(palette)
   catchCategory <- match.arg(catchCategory, c("Lan", "Dis", "BMS", "All"))
@@ -1413,129 +1639,94 @@ plot_NaLoA <- function(data, distributions = NULL,
     stop(fn, "`facet` takes at most two columns", call. = FALSE)
   facet1 <- if (length(facet) >= 1) facet[1] else NULL
   facet2 <- if (length(facet) >= 2) facet[2] else NULL
-  has_ <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+  S <- "sampledOrEstimated"
   if (is.null(distributions) && (typed_dt || typed_cc))
     warning(fn, "distributionType / catchCategory ",
             "only matter when `distributions` is supplied (building from ",
             "raw catch)", call. = FALSE)
-  # A plus group (ages) and length bins (lengths) - see plot_MWaLoA()'s own
-  # versions of these two, which this mirrors exactly.
-  plus_from <- NULL
-  if (!is.null(plus_group)) {
-    if (!(is.numeric(plus_group) && length(plus_group) == 1 &&
-          is.finite(plus_group) && plus_group >= 0))
-      stop(fn, "`plus_group` is the first age of the plus group - a single ",
-           "number (plus_group = 7 pools ages 7 and older) - or NULL for ",
-           "none", call. = FALSE)
-    if (is.null(distributions))
-      warning(fn, "plus_group only applies when `distributions` is supplied ",
-              "(a summarised table cannot be pooled again)", call. = FALSE)
-    else if (!identical(distributionType, "Age"))
-      stop(fn, "plus_group only applies to ages (distributionType = ",
-           "\"Age\"): lengths have no plus group", call. = FALSE)
-    else plus_from <- plus_group
+  # sampled / estimated is grouped by whenever the distributions carry it and a
+  # shade is asked for (or it is a fill or a facet): the table then says which
+  # numbers were which, and the plot decides what to do with that
+  grp <- unique(c(if (has(fill)) fill, if (has(facet1)) facet1,
+                  if (has(facet2)) facet2,
+                  if (!is.null(alpha) && S %in% names(distributions)) S))
+  catch0 <- if (!is.null(distributions)) data
+  pr <- biology_dist_prep(data, distributions, distributionType, catchCategory,
+                          "numbers", grp, plus_group, bin_width, fn)
+  d <- pr$data
+  if (is.null(d) || !nrow(d)) return(NULL)
+  plus_from <- pr$plus_from; bin_from <- pr$bin_from
+  st <- status_shade(S, alpha, c(fill, facet1, facet2), pr$status, fn)
+  estimated <- "estimated" %in% pr$status
+  if (S %in% names(d)) {
+    if (st$on) d$.status <- st$status(d[[S]])
+    else if (!st$shown) d[[S]] <- NULL     # nothing estimated: one value, nothing to tell apart
   }
-  bin_from <- NULL
-  if (!is.null(bin_width)) {
-    if (!(is.numeric(bin_width) && length(bin_width) == 1 &&
-          is.finite(bin_width) && bin_width > 0))
-      stop(fn, "`bin_width` is a single positive number - a bin width in cm ",
-           "(bin_width = 5 groups length into 5cm bins) - or NULL for none",
-           call. = FALSE)
-    if (is.null(distributions))
-      warning(fn, "bin_width only applies when `distributions` is supplied ",
-              "(a summarised table cannot be pooled again)", call. = FALSE)
-    else if (!identical(distributionType, "LengthTotal"))
-      stop(fn, "bin_width only applies to lengths (distributionType = ",
-           "\"LengthTotal\"): ages use plus_group instead", call. = FALSE)
-    else bin_from <- bin_width
-  }
-  grp <- unique(c(if (has_(fill)) fill, if (has_(facet1)) facet1,
-                  if (has_(facet2)) facet2))
-  catch0 <- if (!is.null(distributions)) data   # `data` is summarised below
-  pr <- biology_dist_prep(data, distributions, distributionType,
-                          catch_category_parts(catchCategory),
-                          "numbers", grp, dims, plus_from = plus_from,
-                          bin_from = bin_from)
-  data <- pr$data
-  cl <- pr$class_label
-  vl <- pr$value_label
-  cc_word  <- switch(catchCategory, Lan = "Landings", Dis = "Discards",
-                     BMS = "BMS Catch", All = "Catch")
-  cc_title <- if (!is.null(distributions)) paste0(cc_word, " - ") else ""
-  d <- data; fill_var <- fill; group_var <- fill
-  class_label <- cl; value_label <- vl
-  # A summary built from a link that pool_plus_group() / pool_length_bins()
-  # pooled says so in its `plus` / `bin_width` column (how the app draws it).
-  if (is.null(plus_from) && !is.null(d) && "plus" %in% names(d) &&
-      any(d$plus %in% TRUE)) {
-    pc <- unique(d$.class[d$plus %in% TRUE])
-    if (length(pc) == 1) plus_from <- pc
-  }
-  if (is.null(bin_from) && !is.null(d) && "bin_width" %in% names(d) &&
-      any(is.finite(d$bin_width))) {
-    bwv <- unique(d$bin_width[is.finite(d$bin_width)])
-    if (length(bwv) == 1) bin_from <- bwv
-  }
+  d <- category_cols(d, c(fill, facet1, facet2))
+  plus_on <- !is.null(plus_from) && plus_from %in% d$.class
+  if (!is.null(plus_from) && !plus_on)
+    warning(fn, "no age reaches plus_group = ", plus_from,
+            ", so there is no plus group", call. = FALSE)
+  bin_on <- !is.null(bin_from)
+  bw <- { u <- sort(unique(d$.class)); if (length(u) > 1) min(diff(u)) else 1 }
+  pos <- if (!stacked) position_dodge(width = bw)
+         else if (st$on) position_stack(reverse = TRUE) else "stack"
 
-  p <- {
-      if (is.null(d) || !nrow(d)) return(NULL)
-      d <- reorder_mesh(d, c(fill_var, facet1, facet2))
-      has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
-      plus_on <- !is.null(plus_from) && plus_from %in% d$.class
-      if (!is.null(plus_from) && !plus_on)
-        warning(fn, "no age reaches plus_group = ", plus_from,
-                ", so there is no plus group", call. = FALSE)
-      bin_on <- !is.null(bin_from)
-      bw <- { u <- sort(unique(d$.class)); if (length(u) > 1) min(diff(u)) else 1 }
+  ae <- aes(x = .class, y = number)
+  if (st$on) ae <- modifyList(ae, aes(alpha = .status))
+  p <- ggplot(d, ae)
+  p <- p + if (has(fill))
+    geom_col(aes(fill = factor(.data[[fill]])), width = bw * 0.95, position = pos,
+             colour = OUTLINE, linewidth = OUTLINE_LW)
+  else geom_col(width = bw * 0.95, position = pos, fill = plot_colours(palette = palette),
+                colour = OUTLINE, linewidth = OUTLINE_LW)
+  if (has(fill))
+    p <- p + scale_fill_manual(values = plot_colours(d[[fill]], fill, palette),
+                               name = fill, na.value = "grey85")
+  if (st$on) p <- p + st$scale
 
-      p <- ggplot(d, aes(x = .class, y = number))
-      p <- p + if (has(fill_var))
-        geom_col(aes(fill = factor(.data[[fill_var]])), width = bw * 0.95,
-                 position = if (stacked) "stack" else position_dodge(width = bw),
-                 colour = OUTLINE, linewidth = OUTLINE_LW)
-      else geom_col(width = bw * 0.95, fill = PAL_BASE[1], colour = OUTLINE,
-                    linewidth = OUTLINE_LW)
-
-      if (has(fill_var))
-        p <- p + scale_fill_var(fill_var, d[[fill_var]], name = fill_var,
-                                palette = palette)
-
-      # what a bar is: the numbers of every sampled stratum that shares the
-      # plotted columns, summed - everything else is grouped into it
-      cc_lead <- if (is.null(distributions)) ""
-                 else switch(catchCategory, Lan = "Landings ", Dis = "Discards ",
-                            BMS = "BMS catch ", All = "Catch ")
-      cls_word <- if (identical(distributionType, "Age")) "NaA" else "NaL"
-      plus_txt <- if (plus_on)
-        sprintf("%s+ = ages %s+ pooled.", format(plus_from), format(plus_from))
-      bin_txt <- if (bin_on)
-        sprintf("length classes pooled into %scm bins.",
-                format(bin_from, trim = TRUE))
-      cap <- sub_wrap(
-        if (is.null(distributions)) NULL else strata_sentence(grp, catch0),
-        sprintf("bars = %s%s summed over strata.", cc_lead, cls_word),
-        if (has(fill_var))
-          sprintf("%s by %s.", if (stacked) "stacked" else "dodged", fill_var),
-        plus_txt, bin_txt,
-        width = 110)
-      p <- p + class_axis_scale(d$.class, plus_from = if (plus_on) plus_from,
-                                bin_from = if (bin_on) bin_from)
-      p +
-        scale_y_continuous(labels = scales::comma) +
-        facet_two(facet1, facet2, ncol = 2, scales = scales) +
-        labs(title = paste0(cc_title, sprintf("Numbers at %s",
-                                              sub(" .*", "", class_label))),
-             caption = cap,
-             x = class_label, y = value_label, fill = fill_var) +
-        app_theme() + theme(plot.title = element_text(size = 11))
-  }
+  # what a bar is: the numbers of every sampled stratum that shares the
+  # plotted columns, summed - everything else is grouped into it
+  with_dist <- !is.null(distributions)
+  cc_word <- switch(catchCategory, Lan = "Landings", Dis = "Discards",
+                    BMS = "BMS Catch", All = "Catch")
+  cc_lead <- if (!with_dist) ""
+             else switch(catchCategory, Lan = "Landings ", Dis = "Discards ",
+                         BMS = "BMS catch ", All = "Catch ")
+  cls_word <- if (identical(distributionType, "Age")) "NaA" else "NaL"
+  cap <- sub_wrap(
+    if (with_dist) strata_sentence(setdiff(grp, S), catch0),
+    sprintf("bars = %s%s summed over strata.", cc_lead, cls_word),
+    if (has(fill))
+      sprintf("%s by %s.", if (stacked) "stacked" else "dodged", fill),
+    if (st$on) "shade = sampled (solid), or estimated by the allocation (transparent).",
+    if (estimated && !st$on && !st$shown)
+      "sampled and estimated numbers added together.",
+    if (plus_on) sprintf("%s+ = ages %s+ pooled.", format(plus_from), format(plus_from)),
+    if (bin_on) sprintf("length classes pooled into %scm bins.",
+                        format(bin_from, trim = TRUE)),
+    width = 110)
+  p <- p +
+    class_axis_scale(d$.class, plus_from = if (plus_on) plus_from,
+                     bin_from = if (bin_on) bin_from) +
+    scale_y_continuous(labels = scales::comma) +
+    facet_layer(facet1, facet2, 2, scales) +
+    labs(title = paste0(if (with_dist) paste0(cc_word, " - "),
+                        sprintf("Numbers at %s", sub(" .*", "", pr$class_label)),
+                        if (with_dist) paste0(", ", st$word)),
+         caption = cap, x = pr$class_label, y = pr$value_label, fill = fill) +
+    app_theme() + theme(plot.title = element_text(size = 11))
+  # after an allocation the legends - the shade, the status, the fill - are
+  # tall: outside the panel, where they cannot sit on the bars
+  if (estimated)
+    p <- p + theme(legend.position = "right", legend.justification = "center")
   p
 }
 
 
 
-#' Mean weight at length or age
+#' Mean weight at length or age, before or after the allocation
 #'
 #' @description
 #' The number-weighted mean weight in each length (or age) class, as a line
@@ -1544,10 +1735,15 @@ plot_NaLoA <- function(data, distributions = NULL,
 #' band is drawn as well. Two options help to judge how far to trust the
 #' curve: a plus group pools the oldest ages into one class, and
 #' semi-transparent bars behind the lines show how many fish stand behind
-#' each point.
+#' each point. Given the result of the allocation ([catchAllocationAoL()]) it
+#' shows what the allocation did: `sampledOrEstimated` says whether a mean
+#' weight was sampled or estimated for a stratum nobody sampled, and it is
+#' drawn as the shade (solid = sampled, transparent = estimated), as the
+#' `colour` or as a `facet`, as you choose. The arguments are the same before
+#' and after, and so is the plot; the title says which it is.
 #'
 #' @details
-#' `data` is raw CEF catch and `distributions` the CEF distributions: they are
+#' `data` is the catch and `distributions` the CEF distributions: they are
 #' linked through `domainBiology` and the country and summarised inside, with
 #' `catchCategory` choosing the landings, the discards, BMS or the catch as a
 #' whole. The catch part goes in the plot title. A
@@ -1565,8 +1761,28 @@ plot_NaLoA <- function(data, distributions = NULL,
 #' takes one column (a wrapped set of panels) or two (`c("row", "col")`, a
 #' grid). Live weight and a line are the only options, so there is no
 #' `variableType` or `type` argument. The legend sits inside the panel like
-#' the other plots', except with `show_samples` or `plus_group`, where it moves
-#' outside so it cannot cover the right-hand end of the curve.
+#' the other plots', except with `show_samples`, `plus_group` or the shade,
+#' where it moves outside so it cannot cover the right-hand end of the curve.
+#'
+#' ## After the allocation
+#'
+#' As in [plot_NaLoA()]: give both tables of the allocation's result, its
+#' `$catch` as `data` and its `$distribution` as `distributions`. The
+#' allocation adds `sampledOrEstimated` to the distributions, and it is a
+#' variable like any other: by default the shade (`alpha =
+#' "sampledOrEstimated"`), or named in `colour` (a colour each) or in `facet`
+#' (a panel each), where it is not drawn as a shade as well. With the shade,
+#' every combination of the plotted columns is one line per sampled /
+#' estimated, so the sampled curve and the curve the allocation estimated for
+#' the unsampled strata sit side by side. `alpha = NULL` draws no shade, and
+#' unless it is also the colour or a facet the sampled and the estimated
+#' weights are averaged together, weighted by their numbers.
+#'
+#' The title says what the distributions drawn are: *sampled + estimated* when
+#' the allocation estimated some of them, *only sampled* when it did not, and
+#' then there is no shade, because there is nothing to tell apart. A
+#' distribution the allocation estimated has no measured fish to count, so it
+#' has no bar with `show_samples`.
 #'
 #' ## The plus group
 #'
@@ -1605,17 +1821,23 @@ plot_NaLoA <- function(data, distributions = NULL,
 #' (`numMeasurements` 0) adds none - a point with no bar is a point whose
 #' sample size is unknown, not zero, and the caption says so.
 #'
-#' @param data Raw CEF catch data.
+#' @param data Raw CEF catch data; after the allocation, its `$catch`.
 #' @param distributions A CEF distributions table, linked to the catch through
-#'   `domainBiology`.
+#'   `domainBiology`; after the allocation, its `$distribution`.
 #' @param distributionType `"LengthTotal"` (default) or `"Age"`.
 #' @param catchCategory `"All"` (default: landings and discards together,
 #'   titled "catch"), `"Lan"`, `"Dis"` or `"BMS"`. Only used with
 #'   `distributions`.
-#' @param colour Column mapped to the line colour.
-#' @param facet Up to two facet columns: `"col"` or `c("row", "col")`.
+#' @param colour Column mapped to the line colour; `"sampledOrEstimated"`
+#'   included.
+#' @param facet Up to two facet columns: `"col"` or `c("row", "col")`;
+#'   `"sampledOrEstimated"` included.
 #' @param shape Column drawn as separate series with their own point shapes;
 #'   opens the averaged group back up and drops the band.
+#' @param alpha `"sampledOrEstimated"` (default) draws the shade: solid for
+#'   sampled, transparent for estimated. `NULL` draws none. Left out when
+#'   `sampledOrEstimated` is the `colour`, the `shape` or a `facet`, and when
+#'   nothing was estimated.
 #' @param plus_group The first age of the plus group: `7` pools ages 7 and
 #'   older into one class, shown as `7+`. `NULL` (default): no plus group.
 #'   Ages only. See *The plus group*.
@@ -1630,7 +1852,8 @@ plot_NaLoA <- function(data, distributions = NULL,
 #' @inheritParams saving-plots
 #' @return A ggplot object, or `NULL` when there is nothing to draw.
 #' @seealso [plot_NaLoA()] for the numbers in the same classes;
-#'   [coverage-plots] for whether the strata have a distribution at all.
+#'   [coverage-plots] for whether the strata have a distribution at all;
+#'   [meanWoLatAoLAggregation()] for the same mean weights as a table.
 #' @family distribution plots
 #' @md
 #' @examples
@@ -1658,12 +1881,22 @@ plot_NaLoA <- function(data, distributions = NULL,
 #' plot_MWaLoA(catch, distributions,
 #'            distributionType = "Age", colour = "vesselFlagCountry",
 #'            show_samples = TRUE)
+#'
+#' # after the allocation: both tables of its result. Landings by country,
+#' # solid = sampled, transparent = estimated
+#' plot_MWaLoA(alloc$catch, alloc$distribution,
+#'            catchCategory = "Lan", colour = "vesselFlagCountry")
+#'
+#' # sampled and estimated as the colour instead
+#' plot_MWaLoA(alloc$catch, alloc$distribution, catchCategory = "Lan",
+#'            colour = "sampledOrEstimated")
 #' }
 #' @export
 plot_MWaLoA <- function(data, distributions = NULL,
                         distributionType = c("LengthTotal", "Age"),
                         catchCategory = "All",
                         colour = NULL, facet = NULL, shape = NULL,
+                        alpha = "sampledOrEstimated",
                         plus_group = NULL,
                         bin_width = NULL,
                         show_samples = FALSE,
@@ -1672,7 +1905,6 @@ plot_MWaLoA <- function(data, distributions = NULL,
   save_on_exit(save, "plot_MWaLoA")
   fn <- "plot_MWaLoA(): "
   typed_dt <- !missing(distributionType); typed_cc <- !missing(catchCategory)
-  dims <- NULL
   distributionType <- match.arg(distributionType)
   palette <- match.arg(palette)
   catchCategory <- match.arg(catchCategory, c("Lan", "Dis", "BMS", "All"))
@@ -1680,627 +1912,210 @@ plot_MWaLoA <- function(data, distributions = NULL,
     stop(fn, "`facet` takes at most two columns", call. = FALSE)
   facet1 <- if (length(facet) >= 1) facet[1] else NULL
   facet2 <- if (length(facet) >= 2) facet[2] else NULL
-  has_ <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
   flag <- function(v) is.logical(v) && length(v) == 1 && !is.na(v)
+  S <- "sampledOrEstimated"
   if (!flag(show_samples))
     stop(fn, "`show_samples` is TRUE or FALSE", call. = FALSE)
   if (is.null(distributions) && (typed_dt || typed_cc))
     warning(fn, "distributionType / catchCategory only matter when ",
             "`distributions` is supplied (building from raw catch)",
             call. = FALSE)
-  # The plus group pools ages, and pooling needs the distributions
-  # themselves: a table that is already summarised cannot be pooled again.
-  plus_from <- NULL
-  if (!is.null(plus_group)) {
-    if (!(is.numeric(plus_group) && length(plus_group) == 1 &&
-          is.finite(plus_group) && plus_group >= 0))
-      stop(fn, "`plus_group` is the first age of the plus group - a single ",
-           "number (plus_group = 7 pools ages 7 and older) - or NULL for ",
-           "none", call. = FALSE)
-    if (is.null(distributions))
-      warning(fn, "plus_group only applies when `distributions` is supplied ",
-              "(a summarised table cannot be pooled again)", call. = FALSE)
-    else if (!identical(distributionType, "Age"))
-      stop(fn, "plus_group only applies to ages (distributionType = ",
-           "\"Age\"): lengths have no plus group", call. = FALSE)
-    else plus_from <- plus_group
-  }
-  # Length classes pooled into fixed-width bins - the length counterpart of
-  # a plus group, so the same rules apply: needs raw catch with
-  # distributions, and only for LengthTotal (ages take a plus group instead).
-  bin_from <- NULL
-  if (!is.null(bin_width)) {
-    if (!(is.numeric(bin_width) && length(bin_width) == 1 &&
-          is.finite(bin_width) && bin_width > 0))
-      stop(fn, "`bin_width` is a single positive number - a bin width in cm ",
-           "(bin_width = 5 groups length into 5cm bins) - or NULL for none",
-           call. = FALSE)
-    if (is.null(distributions))
-      warning(fn, "bin_width only applies when `distributions` is supplied ",
-              "(a summarised table cannot be pooled again)", call. = FALSE)
-    else if (!identical(distributionType, "LengthTotal"))
-      stop(fn, "bin_width only applies to lengths (distributionType = ",
-           "\"LengthTotal\"): ages use plus_group instead", call. = FALSE)
-    else bin_from <- bin_width
-  }
-  grp <- unique(c(if (has_(colour)) colour, if (has_(facet1)) facet1,
-                  if (has_(facet2)) facet2, if (has_(shape)) shape))
-  grp_vars <- grp
-  catch0 <- if (!is.null(distributions)) data   # `data` is summarised below
-  pr <- biology_dist_prep(data, distributions, distributionType,
-                          catch_category_parts(catchCategory),
-                          "meanweight", grp, dims, plus_from = plus_from,
-                          bin_from = bin_from)
-  data <- pr$data
-  cl <- pr$class_label
-  cc_word  <- switch(catchCategory, Lan = "Landings", Dis = "Discards",
-                     BMS = "BMS Catch", All = "Catch")
-  cc_title <- if (!is.null(distributions)) paste0(cc_word, " - ") else ""
-  d <- data; colour_var <- colour; shape_var <- shape
-  class_label <- cl
-  cls <- tolower(sub(" .*", "", class_label))   # "age" or "length"
-  # A summary built from a link that pool_plus_group() / pool_length_bins()
-  # pooled says so in its `plus` / `bin_width` column, so the class is
-  # labelled without being told (which is how the app draws it).
-  if (is.null(plus_from) && !is.null(d) && "plus" %in% names(d) &&
-      any(d$plus %in% TRUE)) {
-    pc <- unique(d$.class[d$plus %in% TRUE])
-    if (length(pc) == 1) plus_from <- pc
-  }
-  if (is.null(bin_from) && !is.null(d) && "bin_width" %in% names(d) &&
-      any(is.finite(d$bin_width))) {
-    bwv <- unique(d$bin_width[is.finite(d$bin_width)])
-    if (length(bwv) == 1) bin_from <- bwv
-  }
-
-  p <- {
-      if (is.null(d) || !nrow(d)) return(NULL)
-      d <- reorder_mesh(d, c(colour_var, shape_var, facet1, facet2))
-      has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
-      # the plus class only exists when some age reached it
-      plus_on <- !is.null(plus_from) && plus_from %in% d$.class
-      if (!is.null(plus_from) && !plus_on)
-        warning(fn, "no age reaches plus_group = ", plus_from,
-                ", so there is no plus group", call. = FALSE)
-      bin_on <- !is.null(bin_from)
-      # the fish behind each point, when the data can say
-      n_ok <- "n_fish" %in% names(d) && any(is.finite(d$n_fish) & d$n_fish > 0)
-      bars <- show_samples && n_ok
-      if (show_samples && !n_ok)
-        warning(fn, "show_samples has nothing to draw: no fish counts ",
-                "(the distributions carry no numMeasurements, or the table ",
-                "has no n_fish column)", call. = FALSE)
-      # the band only means something when strata were actually collapsed
-      band <- !has(shape_var) && "sd_weight" %in% names(d) &&
-        any(!is.na(d$sd_weight))
-
-      grp <- if (has(colour_var)) rlang::sym(colour_var) else NULL
-      p <- if (has(colour_var))
-        ggplot(d, aes(x = .class, y = mean_weight,
-                      colour = factor(!!grp), group = factor(!!grp)))
-      else ggplot(d, aes(x = .class, y = mean_weight, group = 1))
-
-      # Bars first, so they sit behind everything. They live on the weight
-      # axis, scaled so the tallest stack reaches 75% of the tallest line -
-      # tall enough that a small sample still shows, not just the big ones -
-      # and a second axis on the right reads them back as fish.
-      facet_on <- has(facet1) || has(facet2)
-      kbar <- NULL
-      if (bars) {
-        top <- max(c(d$mean_weight, if (band) d$mean_weight + d$sd_weight),
-                   na.rm = TRUE)
-        if (!is.finite(top) || top <= 0) top <- 1
-        tot <- d %>%
-          group_by(across(all_of(c(".class", facet1, facet2)))) %>%
-          summarise(n = sum(n_fish, na.rm = TRUE), .groups = "drop")
-        # the global kbar is what the right axis itself is drawn to (one
-        # secondary axis cannot vary per panel), so it stays exact for
-        # whichever facet has the most fish measured
-        kbar <- 0.75 * top / max(tot$n)
-        bw <- { u <- sort(unique(d$.class)); if (length(u) > 1) min(diff(u)) else 1 }
-        bd <- d[is.finite(d$n_fish), , drop = FALSE]
-        if (facet_on) {
-          # each facet's own max reaches 75% of the panel height too, not
-          # just the biggest facet's - so a low-sample panel still shows a
-          # bar. Boosted beyond what the (necessarily shared) right axis
-          # reads for every facet but the biggest - see the caption note.
-          fmax <- tot %>% group_by(across(all_of(c(facet1, facet2)))) %>%
-            summarise(fmax = max(n), .groups = "drop")
-          bd <- bd %>%
-            left_join(fmax, by = intersect(c(facet1, facet2), names(fmax))) %>%
-            mutate(.kbar = 0.75 * top / fmax)
-        } else bd$.kbar <- kbar
-        p <- p + if (has(colour_var))
-          geom_col(data = bd, aes(y = n_fish * .kbar, fill = factor(!!grp)),
-                   width = bw * 0.9, alpha = 0.25, colour = OUTLINE,
-                   linewidth = OUTLINE_LW)
-        else geom_col(data = bd, aes(y = n_fish * .kbar), width = bw * 0.9,
-                      alpha = 0.25, fill = PAL_BASE[1], colour = OUTLINE,
-                      linewidth = OUTLINE_LW)
-      }
-
-      if (band) {
-        p <- p + if (has(colour_var))
-          geom_ribbon(aes(ymin = pmax(0, mean_weight - sd_weight),
-                          ymax = mean_weight + sd_weight,
-                          fill = factor(!!grp)),
-                      alpha = 0.18, colour = NA)
-        else geom_ribbon(aes(ymin = pmax(0, mean_weight - sd_weight),
-                             ymax = mean_weight + sd_weight),
-                         alpha = 0.18, fill = PAL_BASE[1], colour = NA)
-      }
-
-      p <- p + geom_line(linewidth = 0.65, alpha = 0.9)
-      p <- p + if (has(shape_var))
-        geom_point(aes(shape = factor(.data[[shape_var]])), size = 2.3,
-                   stroke = 0.5, fill = "white")
-      else if (has(colour_var))
-        geom_point(aes(fill = factor(!!grp)), shape = 21, size = 2.2,
-                   colour = OUTLINE, stroke = 0.4)
-      else geom_point(shape = 21, size = 2.2, fill = PAL_BASE[1],
-                      colour = OUTLINE, stroke = 0.4)
-      if (has(shape_var))
-        p <- p + scale_shape_manual(values = c(16, 17, 15, 18, 4, 3, 8, 7),
-                                    name = shape_var)
-
-      if (has(colour_var)) {
-        p <- p + scale_colour_var(colour_var, d[[colour_var]],
-                                  name = colour_var, palette = palette)
-        # fill is mapped by the band, the colour-fill points and the bars;
-        # once `shape` opens the strata up only the bars are left
-        if (!has(shape_var) || bars)
-          p <- p + scale_fill_var(colour_var, d[[colour_var]],
-                                  name = colour_var, palette = palette)
-      }
-
-      # what a point is: the mean weight of every sampled stratum that
-      # shares the plotted columns, weighted by numbers - everything else is
-      # grouped into it, and the ribbon is the spread across exactly those
-      # strata. Kept to a short, formula-like line each - the grouping
-      # sentence already says what is shown and grouped, so this is only
-      # how the marks are built.
-      cc_lead <- if (is.null(distributions)) ""
-                 else switch(catchCategory, Lan = "Landings ", Dis = "Discards ",
-                            BMS = "BMS catch ", All = "Catch ")
-      mw_word <- if (identical(cls, "age")) "MWaA" else "MWaL"
-      n_word  <- if (identical(cls, "age")) "NaA" else "NaL"
-      dots_txt <- sprintf("dots and lines = %s%s weight averaged by %s%s.",
-                          cc_lead, mw_word, n_word, if (bars) " (left axis)" else "")
-      ribbon_txt <- if (has(shape_var))
-        sprintf("each %s drawn separately (no ribbon).", shape_var)
-      else if (band) "ribbon = +/- 1sd across grouped strata."
-      plus_txt <- if (plus_on)
-        sprintf("%s+ = ages %s+ pooled (per-distribution mean).",
-                format(plus_from), format(plus_from))
-      bin_txt <- if (bin_on)
-        sprintf("length classes pooled into %scm bins (per-distribution mean).",
-                format(bin_from, trim = TRUE))
-      # a point with no bar is not "no fish": its distributions report no count
-      no_count <- bars && any(is.na(d$n_fish) | d$n_fish == 0)
-      bars_txt <- if (bars)
-        sprintf("bars = fish measured (right axis)%s.",
-                if (no_count) "; no bar = count unknown" else "")
-      scaled_txt <- if (bars && facet_on)
-        "bars scaled per panel (right axis exact for the panel with the most fish)."
-      cap <- sub_wrap(
-        if (is.null(distributions)) NULL else strata_sentence(grp_vars, catch0),
-        dots_txt, ribbon_txt, plus_txt, bin_txt, bars_txt, scaled_txt, width = 110)
-
-      # the bars read back as fish on the right; they start on the panel floor
-      p <- p + (if (bars)
-        scale_y_continuous(labels = scales::comma,
-                           expand = expansion(mult = c(0, 0.05)),
-                           sec.axis = sec_axis(~ . / kbar, name = "Fish measured (n)",
-                                               labels = scales::comma))
-        else scale_y_continuous(labels = scales::comma))
-      # the pooled class is named for what it holds: "7+", not "10-15"
-      p <- p + class_axis_scale(d$.class, plus_from = if (plus_on) plus_from,
-                                bin_from = if (bin_on) bin_from)
-
-      p <- p +
-        facet_two(facet1, facet2, ncol = 2, scales = scales) +
-        labs(title = paste0(cc_title, sprintf("Mean Weight at %s",
-                                              sub(" .*", "", class_label))),
-             caption = cap,
-             x = class_label, y = "Mean weight (g)",
-             colour = colour_var,
-             fill = if (has(shape_var) && !bars) NULL else colour_var,
-             shape = shape_var) +
-        app_theme() + theme(plot.title = element_text(size = 11))
-      # The theme keeps the legend inside the panel, bottom right. With bars
-      # that is where the second axis is, and with a plus group it is the
-      # right-hand end of the curve the eye is on - so it moves outside.
-      if (bars || plus_on)
-        p <- p + theme(legend.position = "right",
-                       legend.justification = "center")
-      p
-  }
-  p
-}
-
-
-# ----------------------------------------------------------
-#  Length / age distribution plots after the allocation
-# ----------------------------------------------------------
-
-#' Numbers at length or age after the allocation
-#'
-#' @description
-#' [plot_NaLoA()] for the result of the allocation: the catch numbers spread
-#' over the length (or age) classes, as a stacked or dodged histogram. What the
-#' allocation added is one column away: `sampledOrEstimated` says whether a
-#' number was sampled or estimated by the allocation, and it is drawn as the
-#' shade (solid = sampled, transparent = estimated), as the `fill` or as a
-#' `facet`, as you choose. Numbers are in thousands, length in cm and age in
-#' years.
-#'
-#' @details
-#' `allocated` is the allocation result and nothing else is needed: the list
-#' with `$distribution` and `$catch` that `catchAllocationAoL()` returns. Both
-#' are taken from the result rather
-#' than from the data that went into the allocation, because the distributions
-#' it estimates for a stratum with no biological domain carry a domain the
-#' allocation made up, and only its own `$catch` knows it. The numbers are the
-#' framework's own aggregation of the result, `catchAtAoLAggregation()`,
-#' grouped by the columns the plot shows, so the plot and the aggregated tables
-#' cannot disagree. The catch rows it joins are the ones the allocation ran on
-#' (their origin and variable type).
-#'
-#' Like that aggregation, it counts a distribution once for every catch row
-#' that names its `domainBiology`, so it assumes one catch row per domain,
-#' catch category and country - which CEF files built from InterCatch have.
-#' Where there are several, the allocated numbers come out inflated, though
-#' the shapes and the sampled / estimated contrast still read.
-#'
-#' ## Where sampled / estimated goes
-#'
-#' `sampledOrEstimated` is a variable like any other. By default it is the
-#' shade (`alpha = "sampledOrEstimated"`): solid where the numbers were
-#' sampled, transparent where the allocation estimated them. Name it in `fill`
-#' to give the two a colour each, or in `facet` to give each its own panel; it
-#' is then not drawn as a shade as well. `alpha = NULL` draws no shade, and
-#' unless it is also the fill or a facet the sampled and the estimated numbers
-#' are added together - the numbers the allocation finally reports.
-#'
-#' `fill` colours (and stacks) the bars by a column of the catch. `facet` takes
-#' one column (a wrapped set of panels) or two (`c("row", "col")`, a grid).
-#' `plus_group` (ages) pools the oldest ages into one class, shown as `7+`;
-#' `bin_width` (lengths) pools the length classes into bins of that width, as
-#' in [plot_NaLoA()].
-#'
-#' @param allocated The result of the allocation: a list with `$distribution`
-#'   and `$catch`.
-#' @param distributionType `"LengthTotal"` (default) or `"Age"`.
-#' @param catchCategory `"All"` (default: landings and discards together,
-#'   titled "catch"), `"Lan"`, `"Dis"` or `"BMS"`.
-#' @param fill Column mapped to the bar fill, `"sampledOrEstimated"` included.
-#' @param facet Up to two facet columns: `"col"` or `c("row", "col")`;
-#'   `"sampledOrEstimated"` included.
-#' @param alpha `"sampledOrEstimated"` (default) draws the shade: solid for
-#'   sampled, transparent for estimated. `NULL` draws none. Left out when
-#'   `sampledOrEstimated` is the `fill` or a `facet`.
-#' @param stacked Stack the bars on `fill` (default) rather than dodge them.
-#' @param plus_group The first age of the plus group: `7` pools ages 7 and
-#'   older into one class, shown as `7+`. `NULL` (default): no plus group.
-#'   Ages only.
-#' @param bin_width Width, in cm, of the length bins every class is pooled
-#'   into. `NULL` (default): no binning. Lengths only.
-#' @param scales Facet scales: `"fixed"` (default), `"free_x"`, `"free_y"` or
-#'   `"free"`.
-#' @param palette `"default"`, `"colorblind"` or `"gradual"`.
-#' @inheritParams saving-plots
-#' @return A ggplot object, or `NULL` when there is nothing to draw.
-#' @seealso [plot_NaLoA()] for the numbers before the allocation;
-#'   [plot_allocated_MWaLoA()] for the mean weight in the same classes;
-#'   [plot_raised_catches()] for the same sampled / raised contrast on the
-#'   discard weights.
-#' @family distribution plots
-#' @md
-#' @examples
-#' \dontrun{
-#' cef  <- subset(catch, year == 2023)
-#' dist <- subset(distributions, year == 2023)
-#' dims <- c("metier4", "ICESDivision", "seasonValue")
-#' groups <- define_raising_groups_auto(cef, hierarchy = dims,
-#'                                      thresholds = c(50, 40, 30))
-#' raised <- run_native_raising(cef, dims, groups, type = "discards",
-#'                              log_file = tempfile(fileext = ".txt"))
-#' alloc  <- catchAllocationAoL(raised, dist,
-#'                              condition_alloc_st_list = list(ALL = rlang::quo(TRUE)),
-#'                              distributionType = "LengthTotal", verbose = FALSE,
-#'                              logFile = tempfile(fileext = ".txt"))
-#'
-#' # landings numbers at length by country: solid = sampled, transparent = estimated
-#' plot_allocated_NaLoA(alloc, catchCategory = "Lan", fill = "vesselFlagCountry")
-#'
-#' # sampled and estimated as the fill instead, and the countries as panels
-#' plot_allocated_NaLoA(alloc, catchCategory = "Lan", fill = "sampledOrEstimated",
-#'                      facet = "vesselFlagCountry")
-#'
-#' # one panel each for sampled and estimated
-#' plot_allocated_NaLoA(alloc, catchCategory = "Lan", fill = "vesselFlagCountry",
-#'                      facet = "sampledOrEstimated")
-#' }
-#' @export
-plot_allocated_NaLoA <- function(allocated,
-                                 distributionType = c("LengthTotal", "Age"),
-                                 catchCategory = "All",
-                                 fill = NULL, facet = NULL,
-                                 alpha = "sampledOrEstimated",
-                                 stacked = TRUE,
-                                 plus_group = NULL, bin_width = NULL,
-                                 scales = "fixed",
-                                 palette = c("default", "colorblind", "gradual"), save = NULL) {
-  save_on_exit(save, "plot_allocated_NaLoA")
-  fn <- "plot_allocated_NaLoA(): "
-  distributionType <- match.arg(distributionType)
-  palette <- match.arg(palette)
-  catchCategory <- match.arg(catchCategory, c("Lan", "Dis", "BMS", "All"))
-  if (length(facet) > 2)
-    stop(fn, "`facet` takes at most two columns", call. = FALSE)
-  facet1 <- if (length(facet) >= 1) facet[1] else NULL
-  facet2 <- if (length(facet) >= 2) facet[2] else NULL
-  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
-  S <- "sampledOrEstimated"
-  if (!is.null(alpha) && !identical(alpha, S))
-    stop(fn, "`alpha` is \"", S, "\" (solid = sampled, transparent = ",
-         "estimated) or NULL for no shade", call. = FALSE)
-  # sampled / estimated is drawn once: as the shade, unless it is already
-  # the fill or a facet
-  shown    <- S %in% c(fill, facet1, facet2)
-  alpha_on <- !is.null(alpha) && !shown
-  grp <- unique(c(if (has(fill)) fill, if (has(facet1)) facet1,
-                  if (has(facet2)) facet2, if (alpha_on) S))
-  tab <- alloc_class_table(allocated, "numbers", distributionType, catchCategory,
-                           grp, plus_group, bin_width, fn)
-  if (is.null(tab)) return(NULL)
-  d <- tab$data; plus_from <- tab$plus_from; bin_from <- tab$bin_from
-  lab <- biology_axis_labels(distributionType, "numbers")
-  if (alpha_on)
-    d$.status <- factor(ifelse(d[[S]] == "estimated", "Estimated", "Sampled"),
-                        levels = c("Sampled", "Estimated"))
-  d <- reorder_mesh(d, c(fill, facet1, facet2))
-  d <- discrete_cols(d, c(fill, facet1, facet2))
-  fill_var <- fill
-  bw <- { u <- sort(unique(d$.class)); if (length(u) > 1) min(diff(u)) else 1 }
-  pos <- if (stacked) position_stack(reverse = TRUE) else position_dodge(width = bw)
-
-  p <- if (alpha_on) ggplot(d, aes(x = .class, y = number, alpha = .status))
-       else ggplot(d, aes(x = .class, y = number))
-  p <- p + if (has(fill_var))
-    geom_col(aes(fill = factor(.data[[fill_var]])), width = bw * 0.95,
-             position = pos, colour = OUTLINE, linewidth = OUTLINE_LW)
-  else geom_col(width = bw * 0.95, position = pos, fill = PAL_BASE[1],
-                colour = OUTLINE, linewidth = OUTLINE_LW)
-  if (has(fill_var))
-    p <- p + if (identical(fill_var, S))
-      scale_fill_manual(values = c(sampled = PAL_BASE[1], estimated = PAL_BASE[2]),
-                        name = S)
-    else scale_fill_var(fill_var, d[[fill_var]], name = fill_var,
-                        palette = palette)
-  if (alpha_on)
-    p <- p + scale_alpha_manual(
-      values = c(Sampled = 1, Estimated = 0.45), name = NULL,
-      guide = guide_legend(override.aes = list(fill = "grey30")))
-
-  cc_word <- switch(catchCategory, Lan = "Landings", Dis = "Discards",
-                    BMS = "BMS Catch", All = "Catch")
-  cc_lead <- switch(catchCategory, Lan = "Landings ", Dis = "Discards ",
-                    BMS = "BMS catch ", All = "Catch ")
-  cls_word <- if (identical(distributionType, "Age")) "NaA" else "NaL"
-  plus_on <- !is.null(plus_from)
-  bin_on  <- !is.null(bin_from)
-  cap <- sub_wrap(
-    strata_sentence(setdiff(grp, if (alpha_on) S), allocated$catch),
-    sprintf("bars = %s%s summed over strata.", cc_lead, cls_word),
-    if (has(fill_var))
-      sprintf("%s by %s.", if (stacked) "stacked" else "dodged", fill_var),
-    if (alpha_on)
-      "shade = sampled (solid), or estimated by the allocation (transparent).",
-    if (!alpha_on && !shown)
-      "sampled and estimated numbers added together.",
-    if (plus_on) sprintf("%s+ = ages %s+ pooled.", format(plus_from), format(plus_from)),
-    if (bin_on) sprintf("length classes pooled into %scm bins.",
-                        format(bin_from, trim = TRUE)),
-    width = 110)
-  p +
-    class_axis_scale(d$.class, plus_from = plus_from, bin_from = bin_from) +
-    scale_y_continuous(labels = scales::comma) +
-    facet_two(facet1, facet2, ncol = 2, scales = scales) +
-    labs(title = sprintf("%s - Numbers at %s, after the allocation", cc_word,
-                         sub(" .*", "", lab$class_label)),
-         caption = cap, x = lab$class_label, y = lab$value_label,
-         fill = fill_var) +
-    app_theme() + theme(plot.title = element_text(size = 11),
-                        # the shade legend and the fill legend are tall: outside
-                        # the panel, where they cannot sit on the bars
-                        legend.position = "right", legend.justification = "center")
-}
-
-
-#' Mean weight at length or age after the allocation
-#'
-#' @description
-#' [plot_MWaLoA()] for the result of the allocation: the number-weighted mean
-#' weight in each length (or age) class, as a line with points. What the
-#' allocation added is one column away: `sampledOrEstimated` says whether a mean
-#' weight was sampled or estimated by the allocation, and it is drawn as the
-#' shade (solid = sampled, transparent = estimated), as the `colour` or as a
-#' `facet`, as you choose. Weight is in grams, length in cm and age in years.
-#'
-#' @details
-#' `allocated` is the allocation result and nothing else is needed - see
-#' [plot_allocated_NaLoA()] for what is taken from it and why. The mean weights
-#' are the framework's own aggregation of it, `meanWoLatAoLAggregation()`,
-#' weighted by the numbers at each class and grouped by the columns the plot
-#' shows. With the shade, every combination of those columns is one line per
-#' sampled / estimated, so the sampled curve and the curve the allocation
-#' estimated for the unsampled strata sit side by side.
-#'
-#' `sampledOrEstimated` is a variable like any other, as in
-#' [plot_allocated_NaLoA()]: the shade by default
-#' (`alpha = "sampledOrEstimated"`), or named in `colour` (a colour each) or in
-#' `facet` (a panel each), where it is not drawn as a shade as well.
-#' `alpha = NULL` draws no shade, and unless it is also the colour or a facet
-#' the sampled and the estimated weights are averaged together, weighted by
-#' their numbers.
-#'
-#' Unlike [plot_MWaLoA()] there is no +/- 1 sd band and no sample-size bars:
-#' the aggregation returns one weighted mean per group, not the strata behind
-#' it, and a distribution the allocation estimated has no measured fish to
-#' count.
-#'
-#' `colour` groups the lines. `facet` takes one column (a wrapped set of
-#' panels) or two (`c("row", "col")`, a grid). `plus_group` (ages) and
-#' `bin_width` (lengths) pool the classes as in [plot_allocated_NaLoA()], the
-#' mean weight of a pooled class weighted by the numbers in it.
-#'
-#' @param allocated The result of the allocation: a list with `$distribution`
-#'   and `$catch`.
-#' @param distributionType `"LengthTotal"` (default) or `"Age"`.
-#' @param catchCategory `"All"` (default: landings and discards together,
-#'   titled "catch"), `"Lan"`, `"Dis"` or `"BMS"`.
-#' @param colour Column mapped to the line colour, `"sampledOrEstimated"`
-#'   included.
-#' @param facet Up to two facet columns: `"col"` or `c("row", "col")`;
-#'   `"sampledOrEstimated"` included.
-#' @param alpha `"sampledOrEstimated"` (default) draws the shade: solid for
-#'   sampled, transparent for estimated. `NULL` draws none. Left out when
-#'   `sampledOrEstimated` is the `colour` or a `facet`.
-#' @param plus_group The first age of the plus group: `7` pools ages 7 and
-#'   older into one class, shown as `7+`. `NULL` (default): no plus group.
-#'   Ages only.
-#' @param bin_width Width, in cm, of the length bins every class is pooled
-#'   into. `NULL` (default): no binning. Lengths only.
-#' @param scales Facet scales: `"fixed"` (default), `"free_x"`, `"free_y"` or
-#'   `"free"`.
-#' @param palette `"default"`, `"colorblind"` or `"gradual"`.
-#' @inheritParams saving-plots
-#' @return A ggplot object, or `NULL` when there is nothing to draw.
-#' @seealso [plot_MWaLoA()] for the mean weight before the allocation;
-#'   [plot_allocated_NaLoA()] for the numbers in the same classes.
-#' @family distribution plots
-#' @md
-#' @examples
-#' \dontrun{
-#' cef  <- subset(catch, year == 2023)
-#' dist <- subset(distributions, year == 2023)
-#' dims <- c("metier4", "ICESDivision", "seasonValue")
-#' groups <- define_raising_groups_auto(cef, hierarchy = dims,
-#'                                      thresholds = c(50, 40, 30))
-#' raised <- run_native_raising(cef, dims, groups, type = "discards",
-#'                              log_file = tempfile(fileext = ".txt"))
-#' alloc  <- catchAllocationAoL(raised, dist,
-#'                              condition_alloc_st_list = list(ALL = rlang::quo(TRUE)),
-#'                              distributionType = "LengthTotal", verbose = FALSE,
-#'                              logFile = tempfile(fileext = ".txt"))
-#'
-#' # landings mean weight at length by country: solid = sampled, transparent = estimated
-#' plot_allocated_MWaLoA(alloc, catchCategory = "Lan", colour = "vesselFlagCountry")
-#'
-#' # sampled and estimated as the colour instead
-#' plot_allocated_MWaLoA(alloc, catchCategory = "Lan", colour = "sampledOrEstimated")
-#' }
-#' @export
-plot_allocated_MWaLoA <- function(allocated,
-                                  distributionType = c("LengthTotal", "Age"),
-                                  catchCategory = "All",
-                                  colour = NULL, facet = NULL,
-                                  alpha = "sampledOrEstimated",
-                                  plus_group = NULL, bin_width = NULL,
-                                  scales = "fixed",
-                                  palette = c("default", "colorblind", "gradual"), save = NULL) {
-  save_on_exit(save, "plot_allocated_MWaLoA")
-  fn <- "plot_allocated_MWaLoA(): "
-  distributionType <- match.arg(distributionType)
-  palette <- match.arg(palette)
-  catchCategory <- match.arg(catchCategory, c("Lan", "Dis", "BMS", "All"))
-  if (length(facet) > 2)
-    stop(fn, "`facet` takes at most two columns", call. = FALSE)
-  facet1 <- if (length(facet) >= 1) facet[1] else NULL
-  facet2 <- if (length(facet) >= 2) facet[2] else NULL
-  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
-  S <- "sampledOrEstimated"
-  if (!is.null(alpha) && !identical(alpha, S))
-    stop(fn, "`alpha` is \"", S, "\" (solid = sampled, transparent = ",
-         "estimated) or NULL for no shade", call. = FALSE)
-  shown    <- S %in% c(colour, facet1, facet2)
-  alpha_on <- !is.null(alpha) && !shown
+  # sampled / estimated is grouped by whenever the distributions carry it and a
+  # shade is asked for (or it is a colour, shape or facet), as in plot_NaLoA()
   grp <- unique(c(if (has(colour)) colour, if (has(facet1)) facet1,
-                  if (has(facet2)) facet2, if (alpha_on) S))
-  tab <- alloc_class_table(allocated, "meanweight", distributionType,
-                           catchCategory, grp, plus_group, bin_width, fn)
-  if (is.null(tab)) return(NULL)
-  d <- tab$data; plus_from <- tab$plus_from; bin_from <- tab$bin_from
-  lab <- biology_axis_labels(distributionType, "meanweight")
-  if (alpha_on)
-    d$.status <- factor(ifelse(d[[S]] == "estimated", "Estimated", "Sampled"),
-                        levels = c("Sampled", "Estimated"))
-  d <- reorder_mesh(d, c(colour, facet1, facet2))
-  d <- discrete_cols(d, c(colour, facet1, facet2))
-  colour_var <- colour
-  # one line per colour level, and per sampled / estimated when that is the shade
-  d$.line <- if (has(colour_var) && alpha_on)
-               interaction(d[[colour_var]], d$.status, drop = TRUE)
-             else if (has(colour_var)) d[[colour_var]]
-             else if (alpha_on) d$.status
-             else 1L
-
-  ae <- aes(x = .class, y = mean_weight, group = .line)
-  if (has(colour_var)) ae <- modifyList(ae, aes(colour = factor(.data[[colour_var]])))
-  if (alpha_on)        ae <- modifyList(ae, aes(alpha = .status))
-  p <- ggplot(d, ae)
-  p <- p + if (has(colour_var)) geom_line(linewidth = 0.65)
-           else geom_line(linewidth = 0.65, colour = PAL_BASE[1])
-  p <- p + if (has(colour_var))
-    geom_point(aes(fill = factor(.data[[colour_var]])), shape = 21, size = 2.2,
-               colour = OUTLINE, stroke = 0.4)
-  else geom_point(shape = 21, size = 2.2, fill = PAL_BASE[1], colour = OUTLINE,
-                  stroke = 0.4)
-  if (has(colour_var)) {
-    if (identical(colour_var, S)) {
-      cols <- c(sampled = PAL_BASE[1], estimated = PAL_BASE[2])
-      p <- p + scale_colour_manual(values = cols, name = S) +
-        scale_fill_manual(values = cols, name = S)
-    } else
-      p <- p + scale_colour_var(colour_var, d[[colour_var]], name = colour_var,
-                                palette = palette) +
-        scale_fill_var(colour_var, d[[colour_var]], name = colour_var,
-                       palette = palette)
+                  if (has(facet2)) facet2, if (has(shape)) shape,
+                  if (!is.null(alpha) && S %in% names(distributions)) S))
+  catch0 <- if (!is.null(distributions)) data
+  pr <- biology_dist_prep(data, distributions, distributionType, catchCategory,
+                          "meanweight", grp, plus_group, bin_width, fn)
+  d <- pr$data
+  if (is.null(d) || !nrow(d)) return(NULL)
+  plus_from <- pr$plus_from; bin_from <- pr$bin_from
+  st <- status_shade(S, alpha, c(colour, facet1, facet2, shape), pr$status, fn,
+                     override = list(colour = "grey30", fill = "grey30"))
+  estimated <- "estimated" %in% pr$status
+  if (S %in% names(d)) {
+    if (st$on) d$.status <- st$status(d[[S]])
+    else if (!st$shown) d[[S]] <- NULL     # nothing estimated: one value, nothing to tell apart
   }
-  if (alpha_on)
-    p <- p + scale_alpha_manual(
-      values = c(Sampled = 1, Estimated = 0.45), name = NULL,
-      guide = guide_legend(override.aes = list(colour = "grey30", fill = "grey30")))
-
+  d <- category_cols(d, c(colour, shape, facet1, facet2))
+  # one line per colour level, per shape level and per sampled / estimated when
+  # that is the shade: the series each is a line of its own
+  line_by <- c(if (has(colour)) colour, if (has(shape)) shape, if (st$on) ".status")
+  d$.line <- if (length(line_by)) interaction(d[line_by], drop = TRUE) else 1L
+  with_dist <- !is.null(distributions)
   cc_word <- switch(catchCategory, Lan = "Landings", Dis = "Discards",
                     BMS = "BMS Catch", All = "Catch")
-  cc_lead <- switch(catchCategory, Lan = "Landings ", Dis = "Discards ",
-                    BMS = "BMS catch ", All = "Catch ")
-  is_age  <- identical(distributionType, "Age")
-  plus_on <- !is.null(plus_from)
-  bin_on  <- !is.null(bin_from)
+  cls <- tolower(sub(" .*", "", pr$class_label))   # "age" or "length"
+
+  # the plus class only exists when some age reached it
+  plus_on <- !is.null(plus_from) && plus_from %in% d$.class
+  if (!is.null(plus_from) && !plus_on)
+    warning(fn, "no age reaches plus_group = ", plus_from,
+            ", so there is no plus group", call. = FALSE)
+  bin_on <- !is.null(bin_from)
+  # the fish behind each point, when the data can say
+  n_ok <- "n_fish" %in% names(d) && any(is.finite(d$n_fish) & d$n_fish > 0)
+  bars <- show_samples && n_ok
+  if (show_samples && !n_ok)
+    warning(fn, "show_samples has nothing to draw: no fish counts ",
+            "(the distributions carry no numMeasurements, or the table ",
+            "has no n_fish column)", call. = FALSE)
+  # the band only means something when strata were actually collapsed
+  band <- !has(shape) && "sd_weight" %in% names(d) && any(!is.na(d$sd_weight))
+
+  p <- ggplot(d, if (has(colour))
+                   aes(x = .class, y = mean_weight, group = .line,
+                       colour = factor(.data[[colour]]))
+                 else aes(x = .class, y = mean_weight, group = .line))
+
+  # Bars first, so they sit behind everything. They live on the weight
+  # axis, scaled so the tallest stack reaches 75% of the tallest line -
+  # tall enough that a small sample still shows, not just the big ones -
+  # and a second axis on the right reads them back as fish.
+  facet_on <- has(facet1) || has(facet2)
+  kbar <- NULL
+  if (bars) {
+    top <- max(c(d$mean_weight, if (band) d$mean_weight + d$sd_weight),
+               na.rm = TRUE)
+    if (!is.finite(top) || top <= 0) top <- 1
+    tot <- d %>%
+      group_by(across(all_of(c(".class", facet1, facet2)))) %>%
+      summarise(n = sum(n_fish, na.rm = TRUE), .groups = "drop")
+    # the global kbar is what the right axis itself is drawn to (one
+    # secondary axis cannot vary per panel), so it stays exact for
+    # whichever facet has the most fish measured
+    kbar <- 0.75 * top / max(tot$n)
+    bw <- { u <- sort(unique(d$.class)); if (length(u) > 1) min(diff(u)) else 1 }
+    bd <- d[is.finite(d$n_fish), , drop = FALSE]
+    if (facet_on) {
+      # each facet's own max reaches 75% of the panel height too, not
+      # just the biggest facet's - so a low-sample panel still shows a
+      # bar. Boosted beyond what the (necessarily shared) right axis
+      # reads for every facet but the biggest - see the caption note.
+      fmax <- tot %>% group_by(across(all_of(c(facet1, facet2)))) %>%
+        summarise(fmax = max(n), .groups = "drop")
+      bd <- bd %>%
+        left_join(fmax, by = intersect(c(facet1, facet2), names(fmax))) %>%
+        mutate(.kbar = 0.75 * top / fmax)
+    } else bd$.kbar <- kbar
+    p <- p + if (has(colour))
+      geom_col(data = bd, aes(y = n_fish * .kbar, fill = factor(.data[[colour]])),
+               width = bw * 0.9, alpha = 0.25, colour = OUTLINE,
+               linewidth = OUTLINE_LW)
+    else geom_col(data = bd, aes(y = n_fish * .kbar), width = bw * 0.9,
+                  alpha = 0.25, fill = plot_colours(palette = palette),
+                  colour = OUTLINE, linewidth = OUTLINE_LW)
+  }
+
+  # a point made of one stratum has no spread: no ribbon there, and no warning
+  # about the rows it skips (na.rm)
+  if (band) {
+    p <- p + if (has(colour))
+      geom_ribbon(aes(ymin = pmax(0, mean_weight - sd_weight),
+                      ymax = mean_weight + sd_weight,
+                      fill = factor(.data[[colour]])),
+                  alpha = 0.18, colour = NA, na.rm = TRUE)
+    else geom_ribbon(aes(ymin = pmax(0, mean_weight - sd_weight),
+                         ymax = mean_weight + sd_weight),
+                     alpha = 0.18, fill = plot_colours(palette = palette), colour = NA,
+                     na.rm = TRUE)
+  }
+
+  # the shade is a mapping of the line and its points, a fixed alpha otherwise
+  line_args <- list(linewidth = 0.65)
+  if (st$on) line_args$mapping <- aes(alpha = .status) else line_args$alpha <- 0.9
+  p <- p + do.call(geom_line, line_args)
+  shade <- if (st$on) aes(alpha = .status) else aes()
+  p <- p + if (has(shape))
+    geom_point(modifyList(aes(shape = factor(.data[[shape]])), shade), size = 2.3,
+               stroke = 0.5, fill = "white")
+  else if (has(colour))
+    geom_point(modifyList(aes(fill = factor(.data[[colour]])), shade), shape = 21,
+               size = 2.2, colour = OUTLINE, stroke = 0.4)
+  else geom_point(shade, shape = 21, size = 2.2, fill = plot_colours(palette = palette),
+                  colour = OUTLINE, stroke = 0.4)
+  if (has(shape))
+    p <- p + scale_shape_manual(values = c(16, 17, 15, 18, 4, 3, 8, 7),
+                                name = shape)
+
+  if (has(colour)) {
+    cols <- plot_colours(d[[colour]], colour, palette)
+    p <- p + scale_colour_manual(values = cols, name = colour, na.value = "grey70")
+    # fill is mapped by the band, the colour-fill points and the bars;
+    # once `shape` opens the strata up only the bars are left
+    if (!has(shape) || bars)
+      p <- p + scale_fill_manual(values = cols, name = colour, na.value = "grey85")
+  }
+  if (st$on) p <- p + st$scale
+
+  # what a point is: the mean weight of every sampled stratum that
+  # shares the plotted columns, weighted by numbers - everything else is
+  # grouped into it, and the ribbon is the spread across exactly those
+  # strata. Kept to a short, formula-like line each - the grouping
+  # sentence already says what is shown and grouped, so this is only
+  # how the marks are built.
+  cc_lead <- if (!with_dist) ""
+             else switch(catchCategory, Lan = "Landings ", Dis = "Discards ",
+                         BMS = "BMS catch ", All = "Catch ")
+  mw_word <- if (identical(cls, "age")) "MWaA" else "MWaL"
+  n_word  <- if (identical(cls, "age")) "NaA" else "NaL"
+  dots_txt <- sprintf("dots and lines = %s%s weight averaged by %s%s.",
+                      cc_lead, mw_word, n_word, if (bars) " (left axis)" else "")
+  ribbon_txt <- if (has(shape))
+    sprintf("each %s drawn separately (no ribbon).", shape)
+  else if (band) "ribbon = +/- 1sd across grouped strata."
+  shade_txt <- if (st$on)
+    "shade = sampled (solid), or estimated by the allocation (transparent)."
+  else if (estimated && !st$shown)
+    "sampled and estimated weights averaged together (weighted by numbers)."
+  plus_txt <- if (plus_on)
+    sprintf("%s+ = ages %s+ pooled (per-distribution mean).",
+            format(plus_from), format(plus_from))
+  bin_txt <- if (bin_on)
+    sprintf("length classes pooled into %scm bins (per-distribution mean).",
+            format(bin_from, trim = TRUE))
+  # a point with no bar is not "no fish": its distributions report no count
+  no_count <- bars && any(is.na(d$n_fish) | d$n_fish == 0)
+  bars_txt <- if (bars)
+    sprintf("bars = fish measured (right axis)%s.",
+            if (no_count) "; no bar = count unknown" else "")
+  scaled_txt <- if (bars && facet_on)
+    "bars scaled per panel (right axis exact for the panel with the most fish)."
   cap <- sub_wrap(
-    strata_sentence(setdiff(grp, if (alpha_on) S), allocated$catch),
-    sprintf("dots and lines = %s%s weight averaged by %s.", cc_lead,
-            if (is_age) "MWaA" else "MWaL", if (is_age) "NaA" else "NaL"),
-    if (alpha_on)
-      "shade = sampled (solid), or estimated by the allocation (transparent).",
-    if (!alpha_on && !shown)
-      "sampled and estimated weights averaged together (weighted by numbers).",
-    if (plus_on) sprintf("%s+ = ages %s+ pooled (weighted by numbers).",
-                         format(plus_from), format(plus_from)),
-    if (bin_on) sprintf("length classes pooled into %scm bins (weighted by numbers).",
-                        format(bin_from, trim = TRUE)),
+    if (with_dist) strata_sentence(setdiff(grp, S), catch0),
+    dots_txt, ribbon_txt, shade_txt, plus_txt, bin_txt, bars_txt, scaled_txt,
     width = 110)
-  p +
-    class_axis_scale(d$.class, plus_from = plus_from, bin_from = bin_from) +
-    scale_y_continuous(labels = scales::comma) +
-    facet_two(facet1, facet2, ncol = 2, scales = scales) +
-    labs(title = sprintf("%s - Mean Weight at %s, after the allocation", cc_word,
-                         sub(" .*", "", lab$class_label)),
-         caption = cap, x = lab$class_label, y = lab$value_label,
-         colour = colour_var, fill = colour_var) +
-    app_theme() + theme(plot.title = element_text(size = 11),
-                        legend.position = "right", legend.justification = "center")
+
+  # the bars read back as fish on the right; they start on the panel floor
+  p <- p + (if (bars)
+    scale_y_continuous(labels = scales::comma,
+                       expand = expansion(mult = c(0, 0.05)),
+                       sec.axis = sec_axis(~ . / kbar, name = "Fish measured (n)",
+                                           labels = scales::comma))
+    else scale_y_continuous(labels = scales::comma))
+  # the pooled class is named for what it holds: "7+", not "10-15"
+  p <- p + class_axis_scale(d$.class, plus_from = if (plus_on) plus_from,
+                            bin_from = if (bin_on) bin_from)
+
+  p <- p +
+    facet_layer(facet1, facet2, 2, scales) +
+    labs(title = paste0(if (with_dist) paste0(cc_word, " - "),
+                        sprintf("Mean Weight at %s", sub(" .*", "", pr$class_label)),
+                        if (with_dist) paste0(", ", st$word)),
+         caption = cap,
+         x = pr$class_label, y = "Mean weight (g)",
+         colour = colour,
+         fill = if (has(shape) && !bars) NULL else colour,
+         shape = shape) +
+    app_theme() + theme(plot.title = element_text(size = 11))
+  # The theme keeps the legend inside the panel, bottom right. With bars
+  # that is where the second axis is, with a plus group it is the right-hand
+  # end of the curve the eye is on, and after an allocation the legends - the
+  # shade, the status, the colour - are tall - so it moves outside.
+  if (bars || plus_on || estimated)
+    p <- p + theme(legend.position = "right",
+                   legend.justification = "center")
+  p
 }

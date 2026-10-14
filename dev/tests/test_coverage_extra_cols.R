@@ -2,7 +2,7 @@
 ## every other derive_fields() column (mesh, metier5, metier6, target, the
 ## ICES area levels, ...) even when a stratum pinned one to a
 ## single value - so a caller could never filter the table on a column
-## they had not also named as part of the aggregation. coverage_extra_cols()
+## they had not also named as part of the aggregation. The extra-column rule
 ## now carries those along, NA where the stratum genuinely spans more than
 ## one value.
 
@@ -59,12 +59,18 @@ covL <- build_coverage_strata(c23, c("metier4", "vesselFlagCountry"), test_dist,
 ok(all(c("mesh", "metier5") %in% names(covL)),
   "build_coverage_strata(): length/age branch also keeps the derived columns")
 
-## ---- coverage_extra_cols() directly: NULL when nothing applies -----------
-all_cand <- intersect(c(DIMS_ALL_CANDIDATES, "Stratum"), names(c23))
-ok(is.null(coverage_extra_cols(c23, all_cand)),
-  "coverage_extra_cols(): NULL once dims already covers every candidate")
-ok(is.null(coverage_extra_cols(data.frame(x = 1), "x")),
-  "coverage_extra_cols(): NULL when none of the candidate columns are present")
+## ---- nothing extra when nothing applies -----------------------------------
+value_cols <- c("catchCategory", "variableUnit", "total", "weightingCategory", "weightingTotal",
+                "rate", "discardRate", "landings", "coverage", "numTrips")
+all_cand <- intersect(c("metier4", "metier5", "metier6", "vesselFlagCountry", "ICESSubArea", "ICESDivision",
+                        "ICESSubdivision", "seasonValue", "FleetType", "target", "mesh", "metier4_mesh",
+                        "Stratum"), names(c23))
+ok(identical(names(build_coverage_strata(c23, all_cand)), c(all_cand, value_cols)),
+  "build_coverage_strata(): no extra column once dims already names every candidate")
+mini <- data.frame(catchCategory = c("Lan", "Dis"), total = c(100, 10), domainCatchDis = "a", x = "k",
+                   stringsAsFactors = FALSE)
+ok(identical(names(build_coverage_strata(mini, "x")), c("x", value_cols)),
+  "build_coverage_strata(): no extra column when the catch carries none of the candidate columns")
 
 ## ---- an all-NA extra column does not fake out coverage_cells() ----------
 ## A column that rides along but is NA on every row of THIS table (its dims
@@ -84,7 +90,7 @@ ok(grepl("not in the coverage table: seasonValue", err(
 ## ---- plot_DR() does not let Stratum (or an NA extra) into a label -------
 ## Stratum is fleetValue/vesselFlagCountry/areaValue/seasonValue already
 ## joined into one string - a composite of four other columns, not a
-## nested level of any one of them, so finest_per_family() never drops it
+## nested level of any one of them, so the label columns of plot_DR() never drop it
 ## the way it drops metier6/metier5/metier4 once fleetValue is present. It
 ## has to be kept out of a point's label by name, or a label repeats the
 ## same four values again, pasted together, under a different format.

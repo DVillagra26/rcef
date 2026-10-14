@@ -1,13 +1,13 @@
-## Length bins (pool_length_bins(), plot_MWaLoA()'s bin_width) and
-## plot_NaLoA()'s new plus_group / bin_width - plus the title wording both
-## plot_NaLoA() and plot_MWaLoA() now share ("<CatchCategory> - <Metric> at
-## <Length|Age>") and the smaller title font.
+## Length bins (plot_NaLoA()'s and plot_MWaLoA()'s bin_width) and plot_NaLoA()'s
+## plus_group - plus the title wording both plots share ("<CatchCategory> -
+## <Metric> at <Length|Age>") and the smaller title font.
 ##
-## pool_length_bins() mirrors pool_plus_group() (numbers add, mean weights
-## are number-weighted, pooled per distribution first) but applies to every
-## class along the axis, not just a tail - these checks mirror
-## test_meanweight_plus_samples.R's own plus-group section 3/4/5 closely, so
-## a reader already familiar with those can see the two are siblings.
+## Length bins pool like a plus group (numbers add, mean weights are number-weighted,
+## pooled per distribution first) but apply to every class along the axis, not just
+## a tail - these checks mirror test_meanweight_plus_samples.R's own plus-group
+## section closely, so a reader already familiar with those can see the two are
+## siblings. Everything is read from the data the plots draw (`p$data`: numbers
+## in thousands, mean weights in g), on a hand-made catch and distributions.
 
 source("dev/tests/fixture.R")
 FAIL <- 0L
@@ -42,21 +42,20 @@ dist_rows <- function(country, domain, classes, numbers, weights, nmeas,
         cbind(base, variableType = "WeightLive", variableUnit = "g",
               valueType = "Mean", value = weights))
 }
-dims_c <- c("catchCategory", "vesselFlagCountry")
 
-## ---- 1. pool_length_bins(), on a hand-made fixture -----------------------
+## ---- 1. binning, on a hand-made fixture ----------------------------------------
 ## classes 10..19 (cm), bin_width = 5 -> bins at 10 and 15
 d10 <- dist_rows("A", "d1", 10:19, c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
                  c(100, 110, 120, 130, 140, 150, 160, 170, 180, 190), 55)
-lk10 <- link_dist_to_strata(catch_row("A", "d1"), d10, dims_c, "Lan", "LengthTotal")
-pb5 <- pool_length_bins(lk10, 5, dims_c)
-ok(identical(sort(unique(pb5$.class)), c(10, 15)),
+c1 <- catch_row("A", "d1")
+nb5 <- plot_NaLoA(c1, d10, catchCategory = "Lan", bin_width = 5)$data
+n0  <- plot_NaLoA(c1, d10, catchCategory = "Lan")$data
+ok(identical(sort(unique(nb5$.class)), c(10, 15)),
    "bin_width = 5 on classes 10-19 gives two bins, at 10 and 15")
-nb5 <- length_numbers(pb5, character(0))
-ok(near(nb5$number[nb5$.class == 10], sum(1:5)) &&
-     near(nb5$number[nb5$.class == 15], sum(6:10)),
+ok(near(nb5$number[nb5$.class == 10] * 1e3, sum(1:5)) &&
+     near(nb5$number[nb5$.class == 15] * 1e3, sum(6:10)),
    "numbers add up within each bin (1+2+3+4+5 = 15, 6+7+8+9+10 = 40)")
-mb5 <- length_meanweight(pb5, character(0))
+mb5 <- plot_MWaLoA(c1, d10, catchCategory = "Lan", bin_width = 5)$data
 w10 <- sum((1:5) * c(100, 110, 120, 130, 140)) / sum(1:5)
 w15 <- sum((6:10) * c(150, 160, 170, 180, 190)) / sum(6:10)
 ok(near(mb5$mean_weight[mb5$.class == 10], w10) &&
@@ -64,16 +63,16 @@ ok(near(mb5$mean_weight[mb5$.class == 10], w10) &&
    "each bin's mean weight is number-weighted over its own original classes")
 ok(near(mb5$n_fish, c(sum(1:5), sum(6:10))),
    "and the bin holds the fish of its classes (55 shared out over the numbers)")
-ok(!".bin_width" %in% names(lk10) && all(pb5$.bin_width == 5),
-   "the pooled rows are marked with the bin width used")
-ok(identical(mb5$bin_width, c(5, 5)) &&
-     !"bin_width" %in% names(length_meanweight(lk10, character(0))),
-   "the summary keeps the mark as a `bin_width` column, none for an unbinned link")
-ok(near(sum(length_numbers(pb5, character(0))$number),
-        sum(length_numbers(lk10, character(0))$number)),
+ok(identical(mb5$bin_width, c(5, 5)) && identical(nb5$bin_width, c(5, 5)) &&
+     !"bin_width" %in% names(plot_MWaLoA(c1, d10, catchCategory = "Lan")$data) &&
+     !"bin_width" %in% names(n0),
+   "the summary carries the bin width used as a `bin_width` column, none when unbinned")
+ok(near(sum(nb5$number), sum(n0$number)),
    "binning conserves the numbers")
+ok(identical(sort(unique(n0$.class)), as.numeric(10:19)),
+   "unbinned, every class is there")
 
-## ---- 2. plot_MWaLoA(bin_width = ...) --------------------------------------
+## ---- 2. plot_MWaLoA(bin_width = ...) --------------------------------------------
 test_catch <- fx_catch()
 test_dist <- fx_dist()
 cd <- test_catch; dd <- test_dist
@@ -101,21 +100,12 @@ ok(grepl("bin_width", err(plot_MWaLoA(cd, dd, bin_width = 0))),
    "bin_width = 0 is not a single positive number")
 ok(grepl("bin_width", err(plot_MWaLoA(cd, dd, bin_width = "5"))),
    "... and a width that is not numeric is one too")
-tab_len <- length_meanweight(link_dist_to_strata(cd, dd, dims_c, "Lan", "LengthTotal"),
-                             "vesselFlagCountry")
+tab_len <- p0$data                       # an already-summarised table
 ok(grepl("only applies when `distributions`", warn(plot_MWaLoA(
      tab_len, colour = "vesselFlagCountry", bin_width = 2))),
    "bin_width on an already-summarised table warns: it cannot be pooled again")
 
-## a summary built from a binned link says so in its `bin_width` column
-tab_bin <- length_meanweight(pool_length_bins(
-  link_dist_to_strata(cd, dd, dims_c, "Lan", "LengthTotal"), 2, dims_c), "vesselFlagCountry")
-pt_bin <- plot_MWaLoA(tab_bin, colour = "vesselFlagCountry")
-ok(all(diff(sort(unique(pt_bin$data$.class))) == 2) &&
-     says_cap(pt_bin, "length classes pooled into 2cm bins"),
-   "a pooled summary is labelled from its `bin_width` column, with no bin_width argument")
-
-## ---- 3. plot_NaLoA(): plus_group (new) and bin_width (new) ----------------
+## ---- 3. plot_NaLoA(): plus_group and bin_width -----------------------------------
 n0  <- plot_NaLoA(cd, dd, distributionType = "Age", fill = "vesselFlagCountry")
 np3 <- plot_NaLoA(cd, dd, distributionType = "Age", fill = "vesselFlagCountry",
                   plus_group = 3)
@@ -142,27 +132,26 @@ ok(near(sum(plot_NaLoA(cd, dd, fill = "vesselFlagCountry")$data$number),
         sum(nbw$data$number), tol = 1e-6),
    "plot_NaLoA(): binning conserves the total numbers")
 
-## ---- 4. title wording: "<CatchCategory> - <Metric> at <Length|Age>" ------
+## ---- 4. title wording: "<CatchCategory> - <Metric> at <Length|Age>, <the data>" --
+## the last words say what the data is: distributions as they were sampled, with no
+## estimate in them, are "only sampled" (an allocation with estimates says "sampled + estimated")
 ok(identical(plot_MWaLoA(cd, dd, catchCategory = "Lan",
                          colour = "vesselFlagCountry")$labels$title,
-             "Landings - Mean Weight at Length") &&
+             "Landings - Mean Weight at Length, only sampled") &&
      identical(plot_MWaLoA(cd, dd, catchCategory = "Dis", distributionType = "Age",
                            colour = "vesselFlagCountry")$labels$title,
-               "Discards - Mean Weight at Age"),
-   "plot_MWaLoA(): title is '<CatchCategory> - Mean Weight at <Length|Age>'")
-ok(identical(plot_NaLoA(cd, dd, catchCategory = "Lan",
-                        fill = "vesselFlagCountry")$labels$title,
-             "Landings - Numbers at Length") &&
+               "Discards - Mean Weight at Age, only sampled"),
+   "plot_MWaLoA(): title is '<CatchCategory> - Mean Weight at <Length|Age>, only sampled'")
+n_lan <- plot_NaLoA(cd, dd, catchCategory = "Lan", fill = "vesselFlagCountry")
+ok(identical(n_lan$labels$title, "Landings - Numbers at Length, only sampled") &&
      identical(plot_NaLoA(cd, dd, catchCategory = "Dis", distributionType = "Age",
                           fill = "vesselFlagCountry")$labels$title,
-               "Discards - Numbers at Age"),
-   "plot_NaLoA(): title is '<CatchCategory> - Numbers at <Length|Age>'")
+               "Discards - Numbers at Age, only sampled"),
+   "plot_NaLoA(): title is '<CatchCategory> - Numbers at <Length|Age>, only sampled'")
 ok(identical(plot_MWaLoA(tab_len, colour = "vesselFlagCountry")$labels$title,
              "Mean Weight at Length") &&
-     identical(plot_NaLoA(length_numbers(
-       link_dist_to_strata(cd, dd, dims_c, "Lan", "LengthTotal"), "vesselFlagCountry"),
-       fill = "vesselFlagCountry")$labels$title,
-       "Numbers at Length"),
+     identical(plot_NaLoA(n_lan$data, fill = "vesselFlagCountry")$labels$title,
+               "Numbers at Length"),
    "an already-summarised table (no distributions) drops the leading category")
 ok(identical(p0$theme$plot.title$size, 11) && identical(n0$theme$plot.title$size, 11),
    "the title font is smaller than app_theme()'s default")

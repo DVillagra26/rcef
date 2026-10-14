@@ -7,8 +7,8 @@
 #
 #  tidyr::replace_na is imported for R/RDBESStockCoord_allocation.R,
 #  which calls it inside across(~ replace_na(.x, 0)). A call inside a
-#  formula is invisible to codetools, and the shiny app attaches tidyr
-#  so it hid the gap: headless, catchAtAoLAggregation() failed with
+#  formula is invisible to codetools, and a session with tidyr attached
+#  hid the gap: without it, catchAtAoLAggregation() failed with
 #  'could not find function "replace_na"'.
 # =====================================================================
 
@@ -28,29 +28,27 @@
 #' | read InterCatch files into CEF | [funICoutCEF()], [funIntercatchCEF()], and [funMakeRelation()] for the stock relation they need |
 #' | add the strata-ready columns (`metier4`, `mesh`, ICES area levels, ...), to the catch or to its distributions | [derive_fields()] |
 #' | see discard rates and sampling coverage per stratum, as a table | [build_coverage_strata()] |
-#' | look at them | [coverage-plots] (heatmap, bubbles, bars), [plot_coverage_map()], [plot_DR()] |
-#' | look at numbers and mean weight at length or age | [plot_NaLoA()], [plot_MWaLoA()] |
+#' | look at them | [coverage-plots] (heatmap, bubbles, bars), [plot_coverage_map()] |
+#' | look at the catch weight and the discard rate per stratum, as reported or after the raising (imported against raised) | [plot_catches()], [plot_DR()] |
+#' | look at numbers and mean weight at length or age, as sampled or after the allocation (sampled against estimated) | [plot_NaLoA()], [plot_MWaLoA()] |
 #' | find strata with a similar discard rate | [build_discard_clusters()], [plot_discard_clusters()], [plot_discard_cluster_variables()] |
-#' | define raising groups automatically (a cascade that coarsens until coverage clears a bar) | [define_raising_groups_auto()] |
-#' | define them by hand | [define_raising_groups_manual()] |
-#' | check a group definition before raising or allocating | [check_group_conditions()] |
+#' | check the groups you wrote - the strata that are raised together, and the data each takes its discard ratio from - before raising or allocating | [check_group_conditions()] |
 #' | raise the discards | [catchRaising()] |
-#' | look at a raised catch, imported against raised | [plot_raised_catches()], [plot_raised_DR()], [plot_river()] |
+#' | see which strata were raised from which group | [plot_river()] |
 #' | compare two or more raised catches, as a table or a figure | [raised_overview_table()], [plot_compare_raised()] |
 #' | give every stratum a length or age distribution | [catchAllocationAoL()] |
 #' | add the allocation up into catch-at-length / -age and mean-weight tables | [catchAtAoLAggregation()], [meanWoLatAoLAggregation()] |
-#' | look at an allocation, sampled against estimated, at length or age | [plot_allocated_NaLoA()], [plot_allocated_MWaLoA()] |
+#' | change the colours of any plot | the `palette` argument they all take: `"default"`, `"colorblind"` or `"gradual"` |
 #' | save any of the plots to a file | the `save` argument they all take, see [saving-plots] |
 #'
 #' The package exports more functions than these. The others are plumbing
 #' between the ones above and have no help page.
 #'
-#' Four vignettes walk it through on real data, in this order:
+#' Three vignettes walk it through on real data, in this order:
 #' `"part1-explore-sampling-coverage"` (every exploratory plot),
-#' `"part2a-discard-raising-manual-groups"` and
-#' `"part2b-discard-raising-hierarchical-groups"` (group allocation and
-#' discard raising, and the CC, CAR and CAS tables) and
-#' `"part3-compare-allocation-schemes"`.
+#' `"part2-discard-raising"` (hand-written groups, discard raising, the CC,
+#' CAR and CAS tables, and comparing two ways of raising) and
+#' `"part3-length-age-allocation"` (from the raised catch to catch at length).
 #'
 #' ## The chain
 #'
@@ -58,7 +56,7 @@
 #'
 #' ```
 #' derive_fields() -> build_coverage_strata()
-#'   -> plot_coverage_heat() / _bubble() / _bar() / _map() | plot_DR()
+#'   -> plot_coverage_heat() / _bubble() / _bar() / _map() | plot_DR() | plot_catches()
 #' ```
 #'
 #' [build_coverage_strata()] is the discard-rate / sampling-coverage table
@@ -67,22 +65,17 @@
 #' as a figure. Raising and allocation then run:
 #'
 #' ```
-#' derive_fields() -> define_raising_groups_auto() | define_raising_groups_manual()
+#' derive_fields() -> your strataCond / matchedDataCond -> check_group_conditions()
 #'   -> catchRaising()          (discards)
 #'   -> catchAllocationAoL()    (lengths and ages)
 #'   -> catchAtAoLAggregation() / meanWoLatAoLAggregation()
 #' ```
 #'
-#' Both grouping methods return the same `strataCond` / `matchedDataCond`
-#' shape, which is what the two RDBESStockCoord engines consume, so one group
-#' definition drives either. Groups written by hand against the columns of the
-#' catch (`metier4 == "TBB"`, say) go to the engines as they are. The groups
-#' the two `define_raising_groups_*()` functions return select strata by
-#' `stratum_id` and may test `coverage` or `discard_rate`: columns of a
-#' stratum, which raw catch rows do not carry. The catch has to carry them
-#' before an engine evaluates the conditions row by row, and
-#' `run_native_raising(catch, dims, groups)` adds them and then calls
-#' `catchRaising()`.
+#' The groups are two named lists of conditions: `strataCond`, the strata that
+#' are raised together, and `matchedDataCond`, the data the discard ratio of
+#' each group is taken from. They are written against the columns of the catch
+#' (`metier4 == "TBB"`, say), and the same shape drives both RDBESStockCoord
+#' engines, [catchRaising()] and [catchAllocationAoL()].
 #'
 #' ## How the code is laid out
 #'
@@ -96,9 +89,10 @@
 #'   `## [pkg]`. The help pages of [catchRaising()], [catchAllocationAoL()]
 #'   and the two aggregation functions are written here. Do not refactor
 #'   these files; fix upstream and re-vendor.
-#' * `R/rcef_*.R`: written here - strata, classification, coverage, grouping,
-#'   summaries. Free to refactor.
-#' * `R/viz_*.R`: written here - the theme and the plots. Pure ggplot2;
+#' * `R/rcef_*.R`: written here - field derivation and units, the coverage
+#'   table, the distributions, the raised-catch summaries. Free to refactor.
+#' * `R/viz_*.R`: written here - the theme, the colours (one function, three
+#'   palettes) and the plots. Pure ggplot2;
 #'   separated so they can be dropped or split into their own package later
 #'   without touching the analysis code.
 #'

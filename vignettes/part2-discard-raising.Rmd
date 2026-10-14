@@ -1,12 +1,12 @@
 ---
-title: "2a. Group allocation and discard and BMS raising: manually defined groups, and the CC, CAR and CAS tables"
+title: "2. Discard and BMS raising: hand-written groups, the CC, CAR and CAS tables, and comparing ways of raising"
 output:
   rmarkdown::pdf_document:
     toc: true
     toc_depth: 3
     number_sections: true
 vignette: >
-  %\VignetteIndexEntry{2a. Group allocation and discard raising: manually defined groups, and the CC, CAR and CAS tables}
+  %\VignetteIndexEntry{2. Discard and BMS raising: hand-written groups, the CC, CAR and CAS tables, and comparing ways of raising}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -19,16 +19,14 @@ knitr::opts_chunk$set(
 )
 ```
 
-The discard **raising** side of the package, end to end, for the scheme
-actually in use: the **manual grouping**, where the groups of strata that are
-raised together - and the data each group's discard rate is estimated from -
-are written out by hand. It is a walkthrough, not a test: nothing here asserts
-pass or fail, and it is the script to run chunk by chunk in RStudio.
+The discard **raising** side of the package, end to end: the groups of strata
+that are raised together - and the data each group's discard rate is estimated
+from - are written out by hand. It is a walkthrough, not a test: nothing here
+asserts pass or fail, and it is the script to run chunk by chunk in RStudio.
 
-This is vignette **2a** of four. **2b** does the same with groups defined
-by the hierarchical cascade, and **3** compares the two, and other, schemes
-against each other. This one stays about producing the real deliverable, not
-about exploring alternatives to it.
+This is vignette **2** of three: **1** explored the data, and **3** allocates the
+raised catch to lengths and ages. The first sections produce the real
+deliverable; the last compares it with an alternative way of raising.
 
 It is driven directly with the vendored RDBESStockCoord functions -
 `check_group_conditions()` and `catchRaising()` - the same pattern ICES's own
@@ -60,10 +58,10 @@ repository). Only the catch table is needed for raising.
 library(dplyr)
 library(rcef)
 
-cef_dir <- file.path("..", "inst", "extdata", "data_CEF_format")
+cef_dir <- file.path("..", "inst", "extdata", "data_CEF_format" )
 
 # blank cells (no discard domain, no trip count ...) read as NA
-catch_data <- read.csv(file.path(cef_dir, "bll", "bll_2025_catches_CEF_v17.1.csv"),
+catch_data <- read.csv(file.path(cef_dir, "bll", "2024", "bll_2024_catches_CEF_v17.1.csv"),
                        na.strings = "")
 
 catch_data_BMS <- catch_data %>% 
@@ -86,13 +84,11 @@ catch_data <- derive_fields(catch_data)
 nrow(catch_data)
 ```
 
-There is no `build_strata()` or `add_stratum_metrics()` call here: the manual
-scheme's conditions are plain `metier4` / `catchCategory` / `fleetValue` tests
-against `catch_data` as loaded, and the output sections compute their own
-landings and discard sums directly off it. Nothing in this vignette reads a
-`stratum_id`.
+Nothing else is derived: the groups' conditions are plain `metier4` /
+`catchCategory` / `fleetValue` tests against `catch_data` as loaded, and the
+output sections compute their own landings and discard sums directly off it.
 
-# Manual grouping
+# The groups
 
 Hand-written quosures, checked and raised with `check_group_conditions()` and
 `catchRaising()` directly.
@@ -233,10 +229,14 @@ cat(sprintf("manual raising: %d rows (%d imported, %d raised)\n",
 
 # Overview of the raised weight
 
-Imported against raised, at any aggregation. `plot_raised_catches()` takes any
-catch-side column on `x` and an optional `facet`: landings / discards are
-always the fill, imported / raised is always the shading, and whatever you put
-on `x` or `facet` is the aggregation. `catchCategory` narrows it to just
+Imported against raised, at any aggregation. `plot_catches()` is the plot of
+the catch weight, for any catch - raw, or raised as here. It takes any
+catch-side column on `x` and an optional `facet`: landings / discards are the
+fill, imported / raised is the shading (solid = imported, transparent =
+raised), and whatever you put on `x` or `facet` is the aggregation. The title
+says what the catch holds: *imported + raised* here; a catch in which nothing
+was raised is titled *only imported* and has no shading, as in vignette 1.
+`catchCategory` narrows it to just
 `"Lan"` or `"Dis"`, useful whenever one of the two makes the other hard to see.
 
 ```{r overview-table}
@@ -246,38 +246,48 @@ raised_overview_table(raised_manual)
 By metier:
 
 ```{r overview-metier, fig.alt = "Imported and raised weight by metier"}
-plot_raised_catches(raised_catch = raised_manual, x = "metier4")
+plot_catches(catch = raised_manual, x = "vesselFlagCountry", facet = "metier4",catchCategory = "Dis", ncol = 5)
 ```
 
 By metier, faceted by country - a finer aggregation than the group
 definitions themselves ever used:
 
 ```{r overview-country, fig.height = 6.5, fig.alt = "Imported and raised weight by metier, one panel per country"}
-plot_raised_catches(raised_catch = raised_manual, x = "metier4", facet = "vesselFlagCountry")
+plot_catches(catch = raised_manual, x = "metier4", facet = "vesselFlagCountry")
 ```
 
 # Discard rate across the raising groups
 
 Not how much weight moved, but whether the *strata a group draws its rate
-from* agree with each other. `plot_raised_DR()` is `plot_DR()` for
-after raising, from the raised catch alone: one point per raw stratum,
-**solid** where its discards came with the data (imported, i.e. sampled) and
-**transparent** where the raising added them. Put the raising **group** on
+from* agree with each other. `plot_DR()` is the discard rate per stratum -
+the plot of vignette 1 for raw catch - and given the raised catch it draws one
+point per raw stratum, **solid** where its discards came with the data
+(imported, i.e. sampled) and **transparent** where the raising added them; the
+title says the strata are *imported + raised*. Put the raising **group** on
 `x` (`"DrGroup"`): a group's transparent points all sit on one line, the rate
 it was raised at, and its solid points show how far the strata it was built
 from scatter around that line - a group whose solid points run from 2% to
 40% is a guess dressed up as a group, no matter how plausible its raised
 rate looks.
 
-Unlike the pre-raising plot there is no weighted-mean line (the transparent
-points are the reference here) and no per-point labels. Only the strata of
-the raised catch are drawn, so a group raised from a pool wider than its own
+Once strata are raised the transparent points are the reference, so the
+weighted-mean line and the per-point labels of the raw plot are left out. Only
+the strata of the raised catch are drawn, so a group raised from a pool wider than its own
 strata - G4, the rest of the gears - shows its donors under the groups they
 belong to rather than under G4.
 
 ```{r donors-plot, fig.height = 5, fig.alt = "Discard rate of every stratum of the raised catch by raising group, solid where imported and transparent where raised, coloured by metier"}
-plot_raised_DR(raised_catch = raised_manual,
-               x = "DrGroup", colour = "metier4", rate = "rate")
+plot_DR(catch = raised_manual,
+        x = "DrGroup", colour = "metier4", rate = "rate")
+```
+
+Imported and raised side by side instead of as the shading: `importedOrRaised`
+is a variable like any other, so it can be a `facet` (or the `colour`, the
+`shape`, the `x`) - and is then not drawn as the shading as well.
+
+```{r dr-facet-status, fig.height = 5.5, fig.alt = "Discard rate of every stratum by metier, coloured by country, one panel for the imported strata and one for the raised"}
+plot_DR(catch = raised_manual, x = "metier4", colour = "vesselFlagCountry",
+        facet = "importedOrRaised", rate = "rate")
 ```
 
 # Output: CC (Catch Combined)
@@ -289,8 +299,8 @@ present in `raised_manual` - usually `Lan` and `Dis`, but `BMS` too if the
 stock reports it; nothing below is hardcoded to just those two.
 
 `car_version`, `car_version_desc` and `car_scheme_name` identify *this*
-allocation scheme's run - a different scheme (the hierarchical one, or a
-different manual rule set) would carry a different version, so several runs'
+allocation scheme's run - a different scheme (another set of groups) would
+carry a different version, so several runs'
 CC / CAR / CAS outputs can sit in the same downstream table without being
 confused for each other. All three are reused as they are in the next
 section - keep every use in sync if any of them changes.
@@ -505,3 +515,72 @@ if (!ok_linked) {
 
 `cc_out`, `car_out` and `cas_out` are plain data frames in this session;
 nothing was written to a file.
+
+# Comparing two ways of raising
+
+What does changing the groups change? The groups above are the stock-annex
+ones: G4, the rest of the gears, draws its discard rate on every gear. Write
+the same strata with every group drawing only on its **own** strata and raise
+again - `matchedDataCond` is the only thing that changes. (G5, the incidental
+bycatch, has no `WGEstimate` donor of its own, so it is raised on nothing in
+both: its raised rows come out as `NaN`.)
+
+```{r own-raise, results = "hide", message = FALSE}
+matchedDataCond_own <- strataCond_manual    # every group draws on its own strata only
+
+raised_own <- catchRaising(catch_data = catch_data,
+                           condition_raising_st_list = strataCond_manual,
+                           condition_matched_data_list = matchedDataCond_own,
+                           type = "discards",
+                           originType = "WGEstimate",
+                           variableType = "WeightLive",
+                           logFile = file.path(tempdir(), "raising_log.txt"))
+```
+
+`raised_overview_table()` and `plot_compare_raised()` compare raised catches
+directly: give them two or more, written `list(a, b)` or `c(a, b)`, and
+nothing else is needed. A scheme is called after its object unless you name it,
+as below. Imported against raised, by catch category, for both in one table -
+the schemes of one figure sit next to each other so it reads across. A raised
+row whose group had no donor to draw a rate from comes out of the raising as
+`NaN`; it raises to nothing and counts as no weight, and the `No donor (rows)`
+column counts those rows wherever there are any.
+
+```{r overview-compare}
+raised_overview_table(c(annex = raised_manual, own = raised_own))
+```
+
+Add `by` to aggregate at any other level - a season, a metier, an area, the
+raising group - and every figure, Total included, is split by it:
+
+```{r overview-compare-by}
+raised_overview_table(c(annex = raised_manual, own = raised_own), by = "DrGroup")
+```
+
+The same comparison drawn. For each level of `x` there is one bar per scheme
+(the colour), imported weight solid and raised weight transparent; `facet`
+splits it further and `catchCategory` keeps just the landings or the discards,
+which are otherwise dwarfed by the landings.
+
+```{r compare-metier, fig.height = 4.5, fig.alt = "Discards by metier, one bar per scheme, imported solid and raised transparent"}
+plot_compare_raised(c(annex = raised_manual, own = raised_own),
+                    x = "metier4", catchCategory = "Dis")
+```
+
+By country, one panel per season - a finer aggregation than the group
+definitions themselves ever used:
+
+```{r compare-country, fig.height = 6.5, fig.alt = "Discards by country, one panel per season, one bar per scheme"}
+plot_compare_raised(c(annex = raised_manual, own = raised_own),
+                    x = "vesselFlagCountry", facet = "seasonValue",
+                    catchCategory = "Dis")
+```
+
+And whether the strata a group draws its rate from agree with each other,
+for the alternative: with every group on its own strata, each group's solid
+points are exactly the strata it was raised from.
+
+```{r donors-own-plot, fig.height = 5, fig.alt = "Discard rate of every stratum of the own-strata raised catch by raising group, solid where imported and transparent where raised, coloured by metier"}
+plot_DR(catch = raised_own,
+        x = "DrGroup", colour = "metier4", rate = "rate")
+```

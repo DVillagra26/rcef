@@ -18,6 +18,8 @@
 #    - roxygen @family / @source added for provenance
 #    - help pages for catchAllocationAoL(), catchAtAoLAggregation() and
 #      meanWoLatAoLAggregation(), written here (upstream documents none)
+#    - meanWoLatAoLAggregation(weighting = "CATON") reads the CATON column (the catch's
+#      total weight) instead of `total`, which is not there
 #    - distributionType takes CEF's own value "LengthTotal" where upstream
 #      says "Length": the four argument defaults and the three match.arg()
 #      calls (seven places, each marked)
@@ -657,7 +659,7 @@ grp_AoL_alloc_condition <- function(catch_data,
 #' and marked as estimated. The result holds, for each stratum, the numbers and
 #' the mean weight at every length or age class - what [catchAtAoLAggregation()]
 #' and [meanWoLatAoLAggregation()] add up into catch-at-length / catch-at-age
-#' tables, and what [plot_allocated_NaLoA()] and [plot_allocated_MWaLoA()] draw.
+#' tables, and what [plot_NaLoA()] and [plot_MWaLoA()] draw.
 #'
 #' @details
 #' ## Groups
@@ -740,8 +742,8 @@ grp_AoL_alloc_condition <- function(catch_data,
 #'   check of the conditions is written.
 #' @return A list with `distribution` and `catch`, see *What comes back*.
 #' @seealso [catchAtAoLAggregation()] and [meanWoLatAoLAggregation()] to add the
-#'   allocation up; [define_raising_groups_auto()] for conditions made from the
-#'   data; [catchRaising()] for the discards.
+#'   allocation up; [check_group_conditions()] to check the groups;
+#'   [catchRaising()] for the discards.
 #' @author Yves Reecht
 #' @md
 #' @examples
@@ -1012,7 +1014,7 @@ catchAllocationAoL <- function(catch_data,
 #'   and one column per class, named `N_<distributionType>_<class>`:
 #'   `N_LengthTotal_300`, `N_Age_3`, `N_Age_7+`.
 #' @seealso [meanWoLatAoLAggregation()] for the mean weights;
-#'   [catchAllocationAoL()] for the allocation; [plot_allocated_NaLoA()] to look
+#'   [catchAllocationAoL()] for the allocation; [plot_NaLoA()] to look
 #'   at it.
 #' @author Yves Reecht
 #' @md
@@ -1141,8 +1143,8 @@ catchAtAoLAggregation <- function(distribution_data,
 #'
 #' @inheritParams catchAtAoLAggregation
 #' @param weighting How the mean weights are weighted: `"NumberAtAoL"` (default),
-#'   by the numbers at the class. `"CATON"` is accepted but currently stops with
-#'   the error `object 'total' not found`.
+#'   by the numbers at length or age of each distribution, or `"CATON"`, by the
+#'   total weight of the catch row each distribution belongs to.
 #' @param variableType_dist The variable of the distributions that is averaged;
 #'   only `"WeightLive"`.
 #' @param unit The unit to convert the weights to before averaging: `"g"`,
@@ -1153,7 +1155,7 @@ catchAtAoLAggregation <- function(distribution_data,
 #'   weights) and one column per class, named `W_<distributionType>_<class>`:
 #'   `W_LengthTotal_300`, `W_Age_3`, `W_Age_7+`.
 #' @seealso [catchAtAoLAggregation()] for the numbers;
-#'   [catchAllocationAoL()] for the allocation; [plot_allocated_MWaLoA()] to look
+#'   [catchAllocationAoL()] for the allocation; [plot_MWaLoA()] to look
 #'   at it.
 #' @author Yves Reecht
 #' @md
@@ -1255,8 +1257,11 @@ meanWoLatAoLAggregation <- function(distribution_data,
                          maxAoL)
     
     ## Field used for weighting, based on user choice:
+    ## [pkg] "CATON" weights by the total weight of the stratum's catch, which is held in the
+    ##   CATON column here: `total` is not among the columns selected below, so looking for it
+    ##   stopped with "object 'total' not found".
     wgField <- case_when(weighting == "NumberAtAoL" ~ "NaAoL",
-                         weighting == "CATON" ~ "total",
+                         weighting == "CATON" ~ "CATON",
                          TRUE ~ NA)
     if (is.na(wgField))
         stop("mean weighting \"", weighting,

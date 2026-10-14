@@ -30,7 +30,7 @@ run () {
   fi
 }
 
-for c in check_ascii check_cssquotes check_syntax check_exports check_sections check_app check_server; do
+for c in check_ascii check_syntax check_exports; do
   run "$c" "dev/$c.R"
 done
 for t in dev/tests/test_*.R; do
@@ -50,10 +50,6 @@ for t in dev/tests/test_*.R; do
     printf '%s\n' "$out" | tail -1
   fi
 done
-
-echo
-echo "--- parity report (informational, does not fail the run) ---"
-Rscript dev/check_parity.R || true
 
 echo
 if [ $fail -eq 0 ]; then echo "ALL CHECKS PASSED"; else echo "$fail CHECK(S) FAILED"; fi

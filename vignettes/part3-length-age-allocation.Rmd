@@ -1,0 +1,297 @@
+---
+title: "3. Allocating lengths and ages: from a raised catch to catch at length"
+output:
+  rmarkdown::pdf_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+vignette: >
+  %\VignetteIndexEntry{3. Allocating lengths and ages: from a raised catch to catch at length}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE, comment = "#>",
+  fig.width = 7, fig.height = 4.6, dpi = 110,
+  warning = FALSE
+)
+```
+
+After the raising (vignette **2**) every stratum has a weight of landings and
+of discards, but a length (or age) distribution only where somebody measured
+fish. The **allocation** gives every stratum one: a stratum without samples
+takes the distribution of the samples of its group. This vignette follows the
+whole step on the brill data - look at where the samples are, write the groups,
+check them, allocate, look at what the allocation did, add it up into catch
+at length. It is a walkthrough, not a test: nothing here asserts pass or fail,
+and it is the script to run chunk by chunk in RStudio.
+
+It is driven directly with the vendored RDBESStockCoord functions -
+`check_group_conditions()`, `catchAllocationAoL()`, `catchAtAoLAggregation()`
+and `meanWoLatAoLAggregation()` - the same pattern ICES's own scripts use. Ages
+are allocated exactly the same way with `distributionType = "Age"`.
+
+# Data and the raised catch
+
+Brill, `bll.27.3a47de`, 2025, from the CEF csv files under
+`inst/extdata/data_CEF_format` (local to this machine; the files are not in the
+repository). The incidental-bycatch strata and BMS are left out to keep the
+example short: the first has no discard estimate to raise from, the second has
+its own raising.
+
+```{r load, message = FALSE}
+library(dplyr)
+library(rcef)
+
+cef_dir <- file.path("..", "inst", "extdata", "data_CEF_format")
+
+# blank cells (no discard domain, no trip count ...) read as NA
+catch_data <- read.csv(file.path(cef_dir, "bll", "2025", "bll_2025_catches_CEF_v17.1.csv"),
+                       na.strings = "")
+distribution_data <- read.csv(file.path(cef_dir, "bll", "2025", "bll_2025_distributions_CEF_v17.1.csv"),
+                              na.strings = "")
+
+catch_data <- catch_data %>%
+  filter(catchCategory != "BMS", fleetValue != "MIS_MIS_0_0_0_IBC") %>%
+  derive_fields()
+```
+
+The groups below are written against columns of the catch (`metier4`). The
+distributions carry none of the stratum columns - the fleet, the area and the
+season belong to the catch - so `derive_fields()` hands them back with the same
+columns, linked to their catch rows through `domainBiology`:
+
+```{r derive-dist}
+distribution_data <- derive_fields(catch_data, distribution_data, what = "distribution")
+table(distribution_data$distributionType)   # lengths only
+```
+
+The raising is the one of vignette 2, with four groups by gear, each raised
+from its own strata:
+
+```{r raise, results = "hide", message = FALSE}
+strataCond <- list(
+  G1 = quo(metier4 == "TBB"),
+  G2 = quo(metier4 %in% c("GTR", "GNS")),
+  G3 = quo(metier4 %in% c("OTB", "SSC", "SDN")),
+  G4 = quo(!metier4 %in% c("TBB", "GTR", "GNS", "OTB", "SSC", "SDN")))
+
+raised <- catchRaising(catch_data = catch_data,
+                       condition_raising_st_list = strataCond,
+                       condition_matched_data_list = strataCond,
+                       type = "discards",
+                       originType = "WGEstimate",
+                       variableType = "WeightLive",
+                       logFile = file.path(tempdir(), "raising_log.txt"))
+```
+
+# Where are the length samples?
+
+The coverage plots take `what = "length"` and the distributions. Landings and
+discards are looked at separately (`catchCategory`): the share of the weight
+that has a length distribution linked, per metier and mesh, and which strata
+clear a floor on both the coverage and the number of fish measured.
+
+```{r cov-bar, fig.height = 4.5, fig.alt = "Length-sampled versus unsampled landed weight per metier, filled by mesh"}
+plot_coverage_bar(catch = raised, distributions = distribution_data, y = "metier4",
+                  fill = "mesh", what = "length", catchCategory = "Lan")
+```
+
+```{r cov-heat, fig.height = 5, fig.alt = "Length-sampling coverage of the discards by metier and mesh, with the thresholds in the box under the panel"}
+plot_coverage_heat(catch = raised, distributions = distribution_data, y = "metier4",
+                   x = "mesh", what = "length", catchCategory = "Dis",
+                   min_cov = 50, min_fish = 100)
+```
+
+The numbers at length that were sampled, with `plot_NaLoA()` - the plot the
+allocation will be looked at with, in the same call. Nothing is estimated yet,
+so the title says the distributions are *only sampled*:
+
+```{r sampled-numbers, fig.height = 5, fig.alt = "Numbers at length of the landings that were sampled, one panel per metier"}
+plot_NaLoA(data = raised, distributions = distribution_data, catchCategory = "Lan",
+           fill = "metier4", facet = "metier4", scales = "free")
+```
+
+A group whose strata are all well sampled can be allocated on its own data; one
+that is not has to borrow from a wider pool. That is what the two lists of
+conditions say.
+
+# The groups
+
+Like the raising, the allocation takes two named lists of conditions:
+`allocStrataCond`, the strata that are allocated together (a group), and
+`bioMatchedCond`, the distributions each group takes its shape from. The
+second can be wider than the first - a group with too few samples of its own
+borrows from a pool that contains them. Here the landings of the three main
+gear groups and the discards of the TBB are allocated on their own samples, and
+everything else takes all the samples of its catch category:
+
+```{r groups}
+allocStrataCond <- list(
+  GA1 = quo(catchCategory == "Lan" & metier4 == "TBB"),
+  GA2 = quo(catchCategory == "Lan" & metier4 %in% c("GTR", "GNS")),
+  GA3 = quo(catchCategory == "Lan" & !metier4 %in% c("TBB", "GTR", "GNS")),
+  GA4 = quo(catchCategory == "Dis" & metier4 == "TBB"),
+  GA5 = quo(catchCategory == "Dis" & metier4 != "TBB"))
+
+bioMatchedCond <- list(
+  GA1 = quo(catchCategory == "Lan" & metier4 == "TBB"),
+  GA2 = quo(catchCategory == "Lan" & metier4 %in% c("GTR", "GNS")),
+  GA3 = quo(catchCategory == "Lan"),                       # all the landings samples
+  GA4 = quo(catchCategory == "Dis" & metier4 == "TBB"),
+  GA5 = quo(catchCategory == "Dis"))                       # all the discards samples, TBB included
+```
+
+`check_group_conditions()` is what the allocation runs internally before it
+allocates anything; running it first is good practice - every stratum is
+checked for a gap (claimed by no group) and an overlap (claimed twice). The
+column sums say how many rows each group claims:
+
+```{r check, results = "hide", message = FALSE}
+cond_st <- check_group_conditions(catch_data = raised,
+                                  condition_list = allocStrataCond,
+                                  domain = "domainBiology",
+                                  logFile = NULL, append = TRUE)
+```
+
+```{r check-result}
+strata_matrix <- do.call(cbind, cond_st)
+cat(sprintf("%d rows in no group, %d rows in more than one (both should be 0)\n",
+            sum(rowSums(strata_matrix) == 0), sum(rowSums(strata_matrix) > 1)))
+colSums(strata_matrix)
+```
+
+# Allocating
+
+```{r allocate, results = "hide", message = FALSE}
+allocated <- catchAllocationAoL(catch_data = raised,
+                                distribution_data = distribution_data,
+                                condition_alloc_st_list = allocStrataCond,
+                                condition_matched_data_list = bioMatchedCond,
+                                originType_catch = "WGEstimate",
+                                variableType_catch = "WeightLive",
+                                distributionType = "LengthTotal",
+                                variableType_mean = "WeightLive",
+                                weighting = "NumberAtAoL",
+                                logFile = file.path(tempdir(), "allocation_log.txt"),
+                                verbose = FALSE,
+                                assembled_output = TRUE)
+```
+
+The result is a list: `$distribution`, every distribution of the catch -
+the sampled ones as they came, and the ones the allocation estimated for the
+strata without samples - and `$catch`, the catch the allocation ran on. A
+distribution the allocation estimated carries a domain it made up
+(`"[alloc]_..."`) that only this `$catch` knows, which is why both come
+together. `sampledOrEstimated` says which is which:
+
+```{r allocated-result}
+table(allocated$distribution$sampledOrEstimated, allocated$distribution$catchCategory)
+```
+
+# What the allocation did
+
+The plots are the ones that looked at the lengths before the allocation,
+`plot_NaLoA()` and `plot_MWaLoA()` (vignette 1), given the two tables of the
+result: its `$catch` as the catch and its `$distribution` as the
+distributions. It has to be this `$catch`, not the one that went in: the
+distributions the allocation estimated for a stratum without samples carry a
+domain it made up, and only this `$catch` knows it (the plot warns when it is
+missing).
+
+`sampledOrEstimated` is a variable like any other: by default it is the shade -
+solid where the numbers were sampled, transparent where the allocation
+estimated them - and it can be the `fill` or a `facet` instead. The title says
+what the distributions hold: *sampled + estimated* here; before the allocation,
+as in the plot above, *only sampled* and no shade, because there is nothing to
+tell apart. Numbers are in thousands and lengths in cm.
+
+```{r alloc-numbers, fig.height = 5, fig.alt = "Numbers at length of the landings, solid where sampled and transparent where estimated, one panel per metier"}
+plot_NaLoA(allocated$catch, allocated$distribution, catchCategory = "Lan",
+           fill = "metier4", facet = "metier4", scales = "free", stacked = TRUE)
+```
+
+Sampled against estimated as the colour, one panel per metier - the discards,
+where most of what is there is estimated:
+
+```{r alloc-numbers-dis, fig.height = 5.5, fig.alt = "Numbers at length of the discards, filled by sampled or estimated, one panel per metier"}
+plot_NaLoA(allocated$catch, allocated$distribution, catchCategory = "Dis",
+           fill = "sampledOrEstimated", facet = "metier4", scales = "free",
+           stacked = TRUE)
+```
+
+The mean weight at length, the number-weighted mean of every stratum that
+shares the plotted columns - one line for what was sampled and one for what the
+allocation estimated, side by side:
+
+```{r alloc-mw, fig.height = 5, fig.alt = "Mean weight at length of the landings, one colour per metier, solid for sampled and transparent for estimated"}
+plot_MWaLoA(allocated$catch, allocated$distribution, catchCategory = "Lan",
+            colour = "metier4")
+```
+
+```{r alloc-mw-dis, fig.height = 5, fig.alt = "Mean weight at length of the discards, sampled against estimated, one panel per metier"}
+plot_MWaLoA(allocated$catch, allocated$distribution, catchCategory = "Dis",
+            colour = "sampledOrEstimated", facet = "metier4")
+```
+
+`bin_width` pools the length classes into wider bins (for ages `plus_group`
+pools the oldest ages into one class), as before the allocation:
+
+```{r alloc-bins, fig.height = 4.5, fig.alt = "Numbers at length of the landings in 5 cm bins"}
+plot_NaLoA(allocated$catch, allocated$distribution, catchCategory = "Lan",
+           fill = "metier4", bin_width = 5)
+```
+
+# Adding it up
+
+The plots and the framework's own aggregation, `catchAtAoLAggregation()`, read
+the same result, so they cannot disagree. Asked for directly the aggregation
+gives the catch-at-length table, one column per length class (as the file has
+them), here for the whole catch by category and by what was sampled:
+
+```{r aggregate-n}
+numbers <- catchAtAoLAggregation(distribution_data = allocated$distribution,
+                                 catch_data = allocated$catch,
+                                 grouping = c("catchCategory", "sampledOrEstimated"),
+                                 originType_catch = "WGEstimate",
+                                 variableType_catch = "WeightLive",
+                                 distributionType = "LengthTotal",
+                                 round = 0)
+dim(numbers)
+
+# six classes spread over the range, small fish (the discards) to large
+classes <- grep("^N_", names(numbers), value = TRUE)
+shown <- classes[round(seq(1, length(classes), length.out = 6))]
+numbers[, c("catchCategory", "sampledOrEstimated", shown)]
+```
+
+The plot draws the same numbers: the landings of the plots above, in thousands,
+against the landings of the table (which is rounded to whole fish):
+
+```{r agree}
+plotted <- plot_NaLoA(allocated$catch, allocated$distribution, catchCategory = "Lan")
+c(plot  = sum(plotted$data$number),
+  table = sum(numbers[numbers$catchCategory == "Lan", classes]) / 1000)
+```
+
+and `meanWoLatAoLAggregation()` the mean weight at length, weighted by those
+numbers:
+
+```{r aggregate-w}
+meanweight <- meanWoLatAoLAggregation(distribution_data = allocated$distribution,
+                                      catch_data = allocated$catch,
+                                      grouping = "catchCategory",
+                                      weighting = "NumberAtAoL",
+                                      originType_catch = "WGEstimate",
+                                      variableType_catch = "WeightLive",
+                                      variableType_dist = "WeightLive",
+                                      distributionType = "LengthTotal",
+                                      unit = "g", round = 1)
+meanweight[, c("catchCategory", sub("^N_", "W_", shown))]
+```
+
+Both take the groups you plot by in `grouping` - any column of the catch or of
+the distributions - and a plus group (`plusGroup = TRUE`, with `maxAoL`) for
+ages.

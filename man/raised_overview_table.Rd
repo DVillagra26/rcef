@@ -55,30 +55,29 @@ that simply raised little.
 }
 \examples{
 \dontrun{
-cef  <- subset(catch, year == 2023)
-dims <- c("metier4", "ICESDivision", "seasonValue")
-log  <- tempfile(fileext = ".txt")
-strict  <- define_raising_groups_auto(cef, hierarchy = dims,
-                                      thresholds = c(80, 60, 40))
-relaxed <- define_raising_groups_auto(cef, hierarchy = dims,
-                                      thresholds = c(50, 40, 30))
-raised_strict  <- run_native_raising(cef, dims, strict,
-                                     type = "discards", log_file = log)
-raised_relaxed <- run_native_raising(cef, dims, relaxed,
-                                     type = "discards", log_file = log)
+cef <- subset(catch, year == 2023)
+log <- tempfile(fileext = ".txt")
+
+# the groups, and the data each takes its discard ratio from: its own, or everything
+strataCond <- list(TBB  = rlang::quo(metier4 == "TBB"),
+                   REST = rlang::quo(metier4 != "TBB"))
+own <- strataCond
+all <- list(TBB = rlang::quo(TRUE), REST = rlang::quo(TRUE))
+raised_own <- catchRaising(cef, strataCond, own, logFile = log)
+raised_all <- catchRaising(cef, strataCond, all, logFile = log)
 
 # one raised catch
-raised_overview_table(raised_strict)
+raised_overview_table(raised_own)
 
 # two, side by side, named after the objects ...
-raised_overview_table(c(raised_strict, raised_relaxed))
+raised_overview_table(c(raised_own, raised_all))
 
 # ... or after you, split by season and metier
-raised_overview_table(c(strict = raised_strict, relaxed = raised_relaxed),
+raised_overview_table(c(own = raised_own, everything = raised_all),
                       by = c("seasonValue", "metier4"))
 }
 }
 \seealso{
 \code{\link[=plot_compare_raised]{plot_compare_raised()}} for the same comparison as a figure;
-\code{\link[=plot_raised_catches]{plot_raised_catches()}} for one raised catch.
+\code{\link[=plot_catches]{plot_catches()}} for one raised catch.
 }

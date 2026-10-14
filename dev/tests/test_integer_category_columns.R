@@ -1,10 +1,9 @@
 ## seasonValue is an integer quarter code in the CEF data. derive_fields()
 ## used to hide that behind a Season = as.character(seasonValue) alias; with
 ## the alias gone the raw column is used directly, so everything that takes a
-## categorical column has to cope with an integer one: the grouping
-## vocabulary has to offer it, and a plot has to treat it as a category (an
-## integer mapped straight onto a fill or shape scale errors, and on an axis
-## it is read as continuous).
+## categorical column has to cope with an integer one: a plot has to treat it
+## as a category (an integer mapped straight onto a fill or shape scale errors,
+## and on an axis it is read as continuous).
 
 source("dev/tests/fixture.R")
 FAIL <- 0L
@@ -29,26 +28,16 @@ ok(is.integer(c23$seasonValue) && !"Season" %in% names(c23) &&
      !"Country" %in% names(c23),
    "fixture: seasonValue is an integer, and there is no Season / Country alias")
 
-## ---- discrete_cols() -----------------------------------------------------
+## ---- category_cols() -----------------------------------------------------
 d <- data.frame(n = c(10L, 2L, 10L, 2L), s = c("b", "a", "b", "a"),
                 f = factor(c("x", "y", "x", "y")), stringsAsFactors = FALSE)
-dd <- discrete_cols(d, c("n", "s", "f", "missing", NA, ""))
+dd <- category_cols(d, c("n", "s", "f", "missing", NA, ""))
 ok(is.factor(dd$n) && identical(levels(dd$n), c("2", "10")),
-   "discrete_cols(): a numeric column becomes a factor, in numeric order (2 before 10)")
+   "category_cols(): a numeric column becomes a factor, in numeric order (2 before 10)")
 ok(identical(dd$s, d$s) && identical(dd$f, d$f),
-   "discrete_cols(): character and factor columns are left as they are")
-ok(identical(discrete_cols(d, NULL), d) && identical(discrete_cols(d, "nope"), d),
-   "discrete_cols(): nothing named, or a column the data lacks, is a no-op")
-
-## ---- the vocabulary offers it ---------------------------------------------
-gv <- grouping_vars(c23)
-ok("seasonValue" %in% gv && "vesselFlagCountry" %in% gv,
-   "grouping_vars(): the integer seasonValue is offered, like the character vesselFlagCountry")
-ok(!"total" %in% gv && !"numTrips" %in% gv,
-   "grouping_vars(): ... while measurements still are not")
-kv <- key_vocab_grouped(c23)
-ok(identical(names(kv), c("Fleet", "Country", "Area", "Season")),
-   "key_vocab_grouped(): the Season family is there, with its optgroup title unchanged")
+   "category_cols(): character and factor columns are left as they are")
+ok(identical(category_cols(d, NULL), d) && identical(category_cols(d, "nope"), d),
+   "category_cols(): nothing named, or a column the data lacks, is a no-op")
 
 ## ---- every plot takes it in every role -------------------------------------
 ok(drawable(plot_DR(c23, x = "metier4", colour = "seasonValue")),
@@ -79,16 +68,16 @@ ok(drawable(plot_discard_clusters(dc)) && drawable(plot_discard_cluster_variable
    "build_discard_clusters(): seasonValue among the dims")
 
 ## ---- after raising ------------------------------------------------------
-dims <- c("metier4", "ICESDivision", "seasonValue")
-grp <- quiet(define_raising_groups_auto(c23, hierarchy = dims, thresholds = c(50, 40, 30)))
-raised <- quiet(run_native_raising(c23, dims, grp, type = "discards",
-                                   log_file = tempfile(fileext = ".txt")))
-ok(drawable(plot_raised_catches(raised, x = "seasonValue")),
-   "plot_raised_catches(): x = seasonValue")
-ok(drawable(plot_raised_DR(raised, x = "metier4", colour = "seasonValue")),
-   "plot_raised_DR(): colour = seasonValue")
-ok(drawable(plot_raised_DR(raised, x = "seasonValue")),
-   "plot_raised_DR(): x = seasonValue")
+raised <- quiet(fx_raise(c23, fx_groups("own"), type = "discards",
+                         log_file = tempfile(fileext = ".txt")))
+ok(drawable(plot_catches(raised, x = "seasonValue")),
+   "plot_catches(): x = seasonValue, of a raised catch")
+ok(drawable(plot_catches(c23, x = "seasonValue")),
+   "plot_catches(): x = seasonValue, of a raw catch")
+ok(drawable(plot_DR(raised, x = "metier4", colour = "seasonValue")),
+   "plot_DR(): colour = seasonValue, of a raised catch")
+ok(drawable(plot_DR(raised, x = "seasonValue")),
+   "plot_DR(): x = seasonValue, of a raised catch")
 
 cat(sprintf("\nDONE  %d failure(s)\n", FAIL))
 if (FAIL) quit(status = 1L)

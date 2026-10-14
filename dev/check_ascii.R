@@ -13,7 +13,7 @@
 ##
 ##  Usage:  Rscript dev/check_ascii.R
 ## ---------------------------------------------------------------
-files <- list.files(c("R", "inst/app", "vignettes", "man"),
+files <- list.files(c("R", "vignettes", "man"),
                     pattern = "\\.(R|r|Rmd|md|Rd)$", full.names = TRUE,
                     recursive = TRUE)
 files <- c(files, "DESCRIPTION", "NAMESPACE")

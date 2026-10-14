@@ -2,12 +2,9 @@
 ##
 ## Both take the raised catches themselves - nothing else - written list(a, b)
 ## or c(a, b), name the scenarios after the objects unless told otherwise, and
-## sum each raised catch at whatever x / facet / by the caller names. The
-## stratum-level pair the application uses (compare_scenarios() +
-## plot_scenario_comparison()) is the former plot_comparison(), renamed; its
-## drawing is pinned at the end.
+## sum each raised catch at whatever x / facet / by the caller names.
 ##
-## Uses the synthetic test fixture and run_native_raising(), as the other
+## Uses the synthetic test fixture and fx_raise(), as the other
 ## after-raising tests do, so it runs anywhere.
 
 source("dev/tests/fixture.R")
@@ -31,16 +28,13 @@ drawable <- function(p)
 
 test_catch <- fx_catch()
 c23  <- subset(test_catch, year == 2023)
-dims <- c("metier4", "ICESDivision", "seasonValue")
 lf   <- tempfile(fileext = ".txt")
-raise_with <- function(th) {
-  grp <- quiet(define_raising_groups_auto(c23, hierarchy = dims, thresholds = th))
-  quiet(run_native_raising(c23, dims, grp, type = "discards", log_file = lf))
-}
-raised_strict  <- raise_with(c(95, 90, 85))
-raised_relaxed <- raise_with(c(10, 10, 10))
-raised_third   <- raise_with(c(60, 50, 40))
-dis_t <- function(r) sum(to_tonnes(r$total, r$variableUnit)[r$catchCategory == "Dis"],
+raise_with <- function(scheme)
+  quiet(fx_raise(c23, fx_groups(scheme), type = "discards", log_file = lf))
+raised_strict  <- raise_with("own")      # every metier from its own discard estimates
+raised_relaxed <- raise_with("all")      # everything from everything
+raised_third   <- raise_with("mixed")    # PS on its own, the others together
+dis_t <- function(r) sum(convert_units(r$total, r$variableUnit, "t")[r$catchCategory == "Dis"],
                          na.rm = TRUE)
 ok(abs(dis_t(raised_strict) - dis_t(raised_relaxed)) > 1e-6,
    "fixture: the two ways of raising give different discards")
@@ -115,11 +109,11 @@ ok(setequal(round(unique(ggplot_build(p)$data[[1]]$alpha), 2), c(1, 0.45)),
    "imported is solid (alpha 1), raised transparent (0.45)")
 ok(all(p$data$t >= 0) && nrow(p$data) == nrow(unique(p$data[c(".x", "scenario", "src")])),
    "one bar part per x, scenario and imported / raised")
-# the two plots agree: a scenario's bars add up to what plot_raised_catches() draws
-rc <- function(r) sum(plot_raised_catches(r, x = "metier4")$data$t)
+# the two plots agree: a scenario's bars add up to what plot_catches() draws
+rc <- function(r) sum(plot_catches(r, x = "metier4")$data$t)
 ok(isTRUE(all.equal(sum(p$data$t[p$data$scenario == "raised_strict"]), rc(raised_strict))) &&
      isTRUE(all.equal(sum(p$data$t[p$data$scenario == "raised_relaxed"]), rc(raised_relaxed))),
-   "a scenario's bars add up to the weight plot_raised_catches() draws for it")
+   "a scenario's bars add up to the weight plot_catches() draws for it")
 
 pd <- plot_compare_raised(c(raised_strict, raised_relaxed), x = "metier4", catchCategory = "Dis")
 pl <- plot_compare_raised(c(raised_strict, raised_relaxed), x = "metier4", catchCategory = "lan")
@@ -131,14 +125,21 @@ ok(isTRUE(all.equal(sum(pd$data$t[pd$data$scenario == "raised_strict"]), dis_t(r
    "discards only: the bars are the discards")
 ok(all(pl$data$src == "Imported"),
    "landings only: every landing is imported")
-# BMS (the example has some) is part of the catch, not of the discards
-t_of <- function(r, cc) sum(to_tonnes(r$total, r$variableUnit)[r$catchCategory %in% cc],
+# BMS is part of the catch, not of the discards. The raising keeps a stratum's BMS rows only
+# when it has no landings without a discard domain, so the example's are put back by hand.
+t_of <- function(r, cc) sum(convert_units(r$total, r$variableUnit, "t")[r$catchCategory %in% cc],
                             na.rm = TRUE)
-ok(t_of(raised_strict, "BMS") > 0 &&
-     isTRUE(all.equal(sum(p$data$t[p$data$scenario == "raised_strict"]),
-                      t_of(raised_strict, c("Lan", "Dis", "BMS")))) &&
-     isTRUE(all.equal(sum(pl$data$t[pl$data$scenario == "raised_strict"]),
-                      t_of(raised_strict, "Lan"))),
+bms <- c23[c23$catchCategory == "BMS", ]
+bms$importedOrRaised <- "imported"; bms$DrGroup <- raised_strict$DrGroup[1]
+with_bms <- dplyr::bind_rows(raised_strict, bms)
+pb <- plot_compare_raised(c(raised_strict = with_bms, raised_relaxed), x = "metier4")
+pbl <- plot_compare_raised(c(raised_strict = with_bms, raised_relaxed), x = "metier4",
+                           catchCategory = "lan")
+ok(t_of(with_bms, "BMS") > 0 &&
+     isTRUE(all.equal(sum(pb$data$t[pb$data$scenario == "raised_strict"]),
+                      t_of(with_bms, c("Lan", "Dis", "BMS")))) &&
+     isTRUE(all.equal(sum(pbl$data$t[pbl$data$scenario == "raised_strict"]),
+                      t_of(with_bms, "Lan"))),
    "the catch is every category (BMS included); landings are only the landings")
 
 pf <- plot_compare_raised(c(raised_strict, raised_relaxed), x = "metier4", facet = "ICESDivision")
@@ -171,7 +172,7 @@ with_mesh <- function(r) {
 }
 pm <- plot_compare_raised(c(with_mesh(raised_strict), with_mesh(raised_relaxed)), x = "mesh")
 ok(length(levels(pm$data$.x)) > 3 &&
-     identical(levels(pm$data$.x), mesh_levels(levels(pm$data$.x))),
+     identical(levels(pm$data$.x), mesh_var_levels("mesh", levels(pm$data$.x))),
    "x = mesh: the groups run by mesh size")
 
 ## ---- raised_overview_table(): one raised catch is the old table -----------
@@ -181,7 +182,7 @@ ok(identical(names(t1), c("Catch category", "Raised/Imported", "Caton (t)",
    "one raised catch: the four columns it always had, no Scenario column")
 ok(identical(t1$`Catch category`[nrow(t1)], "Total") && t1$`Percent of category`[nrow(t1)] == 100,
    "and a Total row at the end")
-tt <- to_tonnes(raised_strict$total, raised_strict$variableUnit)
+tt <- convert_units(raised_strict$total, raised_strict$variableUnit, "t")
 ok(isTRUE(all.equal(t1$`Caton (t)`[t1$`Catch category` == "Total"], round(sum(tt, na.rm = TRUE), 3))),
    "the Total is the whole catch in tonnes")
 ok(all(t1$`Percent of category`[t1$`Catch category` == "Lan"] == 100),
@@ -242,7 +243,7 @@ ok(identical(raised_overview_table(c(raised_strict, raised_relaxed), by = "catch
 
 # mesh in size order here too
 tm <- raised_overview_table(c(with_mesh(raised_strict), with_mesh(raised_relaxed)), by = "mesh")
-ok(identical(unique(tm$mesh), mesh_levels(unique(tm$mesh))) && length(unique(tm$mesh)) > 3,
+ok(identical(unique(tm$mesh), mesh_var_levels("mesh", unique(tm$mesh))) && length(unique(tm$mesh)) > 3,
    "by = mesh: the splits run by mesh size")
 tnum <- raised_overview_table(c(bump_a, bump_b), by = "seasonValue")
 ok(tail(unique(tnum$seasonValue), 1) == "10",
@@ -268,19 +269,6 @@ ok(all(tg$`No donor (rows)`[tg$Scenario == "nan_a" & tg$DrGroup %in% grp_hit &
 pn2 <- plot_compare_raised(c(nan_a, raised_relaxed), x = "metier4")
 ok(drawable(pn2) && all(is.finite(pn2$data$t)),
    "plot_compare_raised(): NaN rows count as no weight and do not break it")
-
-## ---- the stratum-level pair the application uses ---------------------------
-sca <- scenario_auto("A", c("metier4", "vesselFlagCountry"),
-                     c("metier4", "vesselFlagCountry"), c(50, 50), self_threshold = 50)
-scb <- scenario_auto("B", c("metier4", "vesselFlagCountry"), "metier4", 50,
-                     self_threshold = 50)
-runs <- quiet(lapply(list(A = sca, B = scb), run_scenario, catch_data = c23))
-cmp <- compare_scenarios(runs, c("metier4", "vesselFlagCountry"))
-ok(drawable(plot_scenario_comparison(cmp, "metier4")) &&
-     drawable(plot_scenario_comparison(cmp, "vesselFlagCountry", "metier4")),
-   "plot_scenario_comparison(): the stratum-level plot the app uses still draws")
-ok(is.data.frame(comparison_table(cmp, c("metier4", "vesselFlagCountry"))),
-   "and comparison_table() still reads compare_scenarios()")
 
 cat(sprintf("\nDONE  %d failure(s)\n", FAIL))
 if (FAIL) quit(status = 1L)

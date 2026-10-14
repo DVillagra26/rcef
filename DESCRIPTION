@@ -10,10 +10,10 @@ Authors@R: c(
     person("RDBESStockCoord contributors", role = "ctb", comment = "ICES WG"))
 Description: Implements the ICES discard-raising and length/age catch
     allocation workflows over CEF (RDBES) long-format data: discard-rate
-    and sampling-coverage tables with the plots that draw them, strata
-    construction, sampling-status classification, automatic and manual
-    definition of raising/allocation groups, and plots of the raised and
-    allocated catch. Wraps the RDBESStockCoord engines catchRaising() and
+    and sampling-coverage tables with the plots that draw them, plots of
+    the numbers and mean weight at length and age, and plots of the
+    raised and allocated catch, with one colour palette for all of them.
+    Wraps the RDBESStockCoord engines catchRaising() and
     catchAllocationAoL().
 License: file LICENSE
 URL: https://github.com/DVillagra26/rcef
@@ -27,7 +27,6 @@ Imports:
     dplyr,
     tidyr,
     rlang,
-    purrr,
     stringr,
     data.table,
     ggplot2 (>= 3.5.0),
@@ -35,8 +34,6 @@ Imports:
     ggrepel,
     FactoMineR,
     scales (>= 1.3.0),
-    jsonlite,
-    tibble,
     stats,
     utils,
     tools,
@@ -46,13 +43,10 @@ VignetteBuilder: knitr
 Suggests:
     knitr,
     rmarkdown,
-    shiny,
-    DT,
     icesVocab,
     icesSD,
     maps,
     units,
     pkgload,
     remotes,
-    rsconnect,
     testthat (>= 3.0.0)

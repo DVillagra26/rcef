@@ -33,8 +33,8 @@ table of the same allocation.}
 (\code{attributeType}, \code{attributeValue}).}
 
 \item{weighting}{How the mean weights are weighted: \code{"NumberAtAoL"} (default),
-by the numbers at the class. \code{"CATON"} is accepted but currently stops with
-the error \verb{object 'total' not found}.}
+by the numbers at length or age of each distribution, or \code{"CATON"}, by the
+total weight of the catch row each distribution belongs to.}
 
 \item{originType_catch}{\code{"WGEstimate"} or \code{"Official"}: the origin of the
 catch rows to link. Pass one.}
@@ -105,7 +105,7 @@ meanWoLatAoLAggregation(alloc$distribution, alloc$catch,
 }
 \seealso{
 \code{\link[=catchAtAoLAggregation]{catchAtAoLAggregation()}} for the numbers;
-\code{\link[=catchAllocationAoL]{catchAllocationAoL()}} for the allocation; \code{\link[=plot_allocated_MWaLoA]{plot_allocated_MWaLoA()}} to look
+\code{\link[=catchAllocationAoL]{catchAllocationAoL()}} for the allocation; \code{\link[=plot_MWaLoA]{plot_MWaLoA()}} to look
 at it.
 }
 \author{

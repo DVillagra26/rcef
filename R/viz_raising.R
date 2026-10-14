@@ -30,7 +30,8 @@ NULL
 #' @param left_var Column on the left axis, usually the stratum label.
 #' @param right_var Column on the right axis, usually the donor group.
 #' @param value_var Column giving each ribbon its width.
-#' @param pal Named colours for the groups; a default palette when `NULL`.
+#' @param palette `"default"`, `"colorblind"` or `"gradual"`: the colours of the
+#'   groups.
 #' @param title Plot title.
 #' @param left_label,right_label Axis labels.
 #' @param stratum_axis Label for the stratum axis.
@@ -39,11 +40,13 @@ NULL
 #' @family raising plots
 #' @export
 plot_river <- function(df, left_var, right_var = "raise_level",
-                       value_var = "landings", pal = NULL,
+                       value_var = "landings",
                        title = "Which strata are raised from which group",
                        left_label = NULL, right_label = NULL,
-                       stratum_axis = "Stratum", save = NULL) {
+                       stratum_axis = "Stratum",
+                       palette = c("default", "colorblind", "gradual"), save = NULL) {
   save_on_exit(save, "plot_river")
+  palette <- match.arg(palette)
   # left_label / right_label: optional character vectors (same length as
   # df) giving the text to show on each axis. When supplied they override
   # the raw left_var / right_var values - this is how a stratum is shown
@@ -64,7 +67,6 @@ plot_river <- function(df, left_var, right_var = "raise_level",
     summarise(w = sum(.w, na.rm = TRUE), .groups = "drop") %>%
     filter(w > 0)
   if (!nrow(d)) return(NULL)
-  if (is.null(pal)) pal <- group_palette(unique(d$.fill))
 
   # wrap long labels so tall boxes can hold the full text
   wrap <- function(x, width = 26)
@@ -78,12 +80,13 @@ plot_river <- function(df, left_var, right_var = "raise_level",
     ggalluvial::geom_stratum(width = 0.30, fill = "grey96", colour = "grey45") +
     # The stat object, not the string "stratum": ggplot2 resolves the string
     # from the search path, so it only worked once ggalluvial was attached
-    # (the app does) and failed headless with "Can't find stat called stratum".
+    # and failed otherwise with "Can't find stat called stratum".
     geom_text(stat = ggalluvial::StatStratum, aes(label = after_stat(stratum)),
               size = 2.7, lineheight = 0.82) +
     scale_x_discrete(limits = c(stratum_axis, "Raised from"),
                      expand = c(0.16, 0.05)) +
-    scale_fill_manual(values = pal, name = "Raising group") +
+    scale_fill_manual(values = plot_colours(d$.fill, "raising group", palette),
+                      name = "Raising group") +
     scale_y_continuous(labels = scales::comma) +
     labs(title = title, y = "Landings (t)", x = NULL) +
     app_theme() +
@@ -91,44 +94,10 @@ plot_river <- function(df, left_var, right_var = "raise_level",
           axis.text.x = element_text(size = 9, colour = "grey35"))
 }
 
-#' River plot for a single cascade step
-#'
-#' [plot_river()] restricted to the strata that left the cascade at one step, so
-#' a single rung of the ladder can be read on its own instead of competing with
-#' every other rung for space.
-#'
-#' @param rec_g A recommendation table.
-#' @param step_id The cascade step to show.
-#' @param dims The stratum dimensions.
-#' @param pal Named colours for the groups.
-#' @param value_var Column giving each ribbon its width.
-#' @return A ggplot object, or `NULL`.
-#' @seealso [plot_river()], [decision_tree()]
-#' @family raising plots
-#' @export
-#' @noRd
-plot_river_level <- function(rec_g, step_id, dims, pal,
-                             value_var = "landings") {
-  d <- rec_g[rec_g$raise_step == step_id, , drop = FALSE]
-  if (!nrow(d) || sum(d[[value_var]], na.rm = TRUE) <= 0) return(NULL)
-  # a title that says what the reader is looking at: the strata resolved
-  # at this step on the left, the donor pool they were raised from on the
-  # right, ribbon width = landings
-  lvl <- unique(d$raise_level)
-  ttl <- if (length(lvl) == 1)
-    sprintf("Step: %s -- strata raised here, and the data raising them", lvl)
-  else "Strata raised at this step, and the data raising them"
-  plot_river(d, left_var = NULL, right_var = "group_id",
-             value_var = value_var, pal = pal, title = ttl,
-             left_label = stratum_label(d, dims),
-             right_label = rule_label(d, dims),
-             stratum_axis = stratum_axis_label(dims))
-}
-
 #' Raised catch of several scenarios, side by side
 #'
 #' @description
-#' [plot_raised_catches()] for two or more raised catches at once - two ways of
+#' [plot_catches()] for two or more raised catches at once - two ways of
 #' defining the groups, say. For each level of `x` (and each panel of `facet`)
 #' one bar per scenario: its colour says which scenario, its shade whether the
 #' weight came with the data (imported, solid) or was added by the raising
@@ -166,28 +135,27 @@ plot_river_level <- function(rec_g, step_id, dims, pal,
 #' @inheritParams saving-plots
 #' @return A ggplot object, or `NULL` when there is nothing to draw.
 #' @seealso [raised_overview_table()] for the same comparison as a table;
-#'   [plot_raised_catches()] for one raised catch.
+#'   [plot_catches()] for one raised catch.
 #' @family raising plots
 #' @md
 #' @examples
 #' \dontrun{
-#' cef  <- subset(catch, year == 2023)
-#' dims <- c("metier4", "ICESDivision", "seasonValue")
-#' log  <- tempfile(fileext = ".txt")
-#' strict  <- define_raising_groups_auto(cef, hierarchy = dims,
-#'                                       thresholds = c(80, 60, 40))
-#' relaxed <- define_raising_groups_auto(cef, hierarchy = dims,
-#'                                       thresholds = c(50, 40, 30))
-#' raised_strict  <- run_native_raising(cef, dims, strict,
-#'                                      type = "discards", log_file = log)
-#' raised_relaxed <- run_native_raising(cef, dims, relaxed,
-#'                                      type = "discards", log_file = log)
+#' cef <- subset(catch, year == 2023)
+#' log <- tempfile(fileext = ".txt")
+#'
+#' # the groups, and the data each takes its discard ratio from: its own, or everything
+#' strataCond <- list(TBB  = rlang::quo(metier4 == "TBB"),
+#'                    REST = rlang::quo(metier4 != "TBB"))
+#' own <- strataCond
+#' all <- list(TBB = rlang::quo(TRUE), REST = rlang::quo(TRUE))
+#' raised_own <- catchRaising(cef, strataCond, own, logFile = log)
+#' raised_all <- catchRaising(cef, strataCond, all, logFile = log)
 #'
 #' # the scenarios are named after the objects ...
-#' plot_compare_raised(c(raised_strict, raised_relaxed), x = "metier4")
+#' plot_compare_raised(c(raised_own, raised_all), x = "metier4")
 #'
 #' # ... or after you; discards only, one panel per quarter
-#' plot_compare_raised(c(strict = raised_strict, relaxed = raised_relaxed),
+#' plot_compare_raised(c(own = raised_own, everything = raised_all),
 #'                     x = "metier4", facet = "seasonValue", catchCategory = "Dis")
 #' }
 #' @export
@@ -218,13 +186,13 @@ plot_compare_raised <- function(raised_catch_scenarios, scenarios_names = NULL,
   cc_label <- if (is.null(want)) "Catch" else want
 
   # one row per raised-catch row, in tonnes, tagged with its scenario and
-  # whether it was imported or raised - the same reading as plot_raised_catches()
+  # whether it was imported or raised - the same reading as plot_catches()
   d <- do.call(rbind, lapply(names(sc), function(nm) {
     r <- sc[[nm]]
     u <- if ("variableUnit" %in% names(r)) r$variableUnit else NULL
     out <- data.frame(
       scenario = rep(nm, nrow(r)),
-      .t = to_tonnes(r$total, u),
+      .t = convert_units(r$total, u, "t"),
       src = ifelse(r$importedOrRaised %in% "raised", "Raised", "Imported"),
       .cat = ifelse(toupper(r$catchCategory) %in% c("LAN", "LANDINGS"), "Landings",
              ifelse(toupper(r$catchCategory) %in% c("DIS", "DISCARDS"),
@@ -236,8 +204,8 @@ plot_compare_raised <- function(raised_catch_scenarios, scenarios_names = NULL,
   }))
   if (!is.null(want)) d <- d[d$.cat == want, , drop = FALSE]
   if (!nrow(d)) return(NULL)
-  d$.x <- level_factor(d$.x, if (has(x)) scenario_levels(sc, x) else "All")
-  if (has(facet)) d$.f <- level_factor(d$.f, scenario_levels(sc, facet))
+  d$.x <- scenario_factor(d$.x, sc, if (has(x)) x)
+  if (has(facet)) d$.f <- scenario_factor(d$.f, sc, facet)
   d$scenario <- factor(d$scenario, levels = names(sc))
   d$src <- factor(d$src, levels = c("Imported", "Raised"))
   d <- d %>%
@@ -257,13 +225,12 @@ plot_compare_raised <- function(raised_catch_scenarios, scenarios_names = NULL,
              colour = OUTLINE, linewidth = 0.25) +
     scale_x_continuous(breaks = seq_along(xl), labels = xl,
                        expand = expansion(add = 0.55)) +
-    scale_fill_var("scenario", levels(d$scenario), name = "Scenario",
-                   palette = palette) +
+    scale_fill_manual(values = plot_colours(levels(d$scenario), "scenario", palette),
+                      name = "Scenario", na.value = "grey85") +
     scale_alpha_manual(values = c(Imported = 1, Raised = 0.45), name = NULL,
                        guide = guide_legend(override.aes = list(fill = "grey30"))) +
     scale_y_continuous(labels = scales::comma) +
-    (if (has(facet)) facet_wrap(vars(.data[[".f"]]), ncol = ncol,
-                                scales = "free_y") else NULL) +
+    facet_layer(if (has(facet)) ".f", ncol = ncol, scales = "free_y") +
     labs(title = sprintf("Raised %s per stratum, by scenario", tolower(cc_label)),
          caption = sub_wrap(
            "grouping = no grouping, raw data per stratum.",
@@ -274,60 +241,4 @@ plot_compare_raised <- function(raised_catch_scenarios, scenarios_names = NULL,
          x = if (has(x)) x else NULL, y = sprintf("%s (t)", cc_label)) +
     app_theme() +
     theme(axis.text.x = element_text(angle = 45, hjust = 1))
-}
-
-#' Compare saved scenarios side by side, at stratum level
-#'
-#' Draws the raised result of several scenarios against each other, so the
-#' effect of a different threshold or hierarchy is visible per stratum rather
-#' than only in the totals. This is the stratum-level preview the application
-#' uses - the scenarios of [run_scenario()], lined up by
-#' [compare_scenarios()]; for the raised catches that [catchRaising()] returns
-#' use [plot_compare_raised()].
-#'
-#' @param cmp Output of [compare_scenarios()].
-#' @param x_var Column on the x axis.
-#' @param facet_var Optional facet column.
-#' @param ncol Facet columns.
-#' @return A ggplot object, or `NULL`.
-#' @seealso [compare_scenarios()], [comparison_table()], [plot_compare_raised()]
-#' @family raising plots
-#' @export
-#' @noRd
-plot_scenario_comparison <- function(cmp, x_var, facet_var = NULL, ncol = 2) {
-  if (!nrow(cmp)) return(NULL)
-  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
-
-  d <- cmp %>%
-    mutate(Imported = observed_discards,
-           Raised   = pmax(estimated_discards - observed_discards, 0)) %>%
-    tidyr::pivot_longer(c(Imported, Raised),
-                        names_to = "component", values_to = "value") %>%
-    mutate(component = factor(component, levels = c("Imported", "Raised")))
-
-  xl <- sort(unique(as.character(d[[x_var]])))
-  sc <- sort(unique(d$scenario))
-  n  <- length(sc)
-  w  <- 0.84 / n                       # slot width per scenario
-  d$.xi <- match(as.character(d[[x_var]]), xl)
-  d$.si <- match(d$scenario, sc)
-  d$.x  <- d$.xi + (d$.si - (n + 1) / 2) * w
-
-  ggplot(d, aes(x = .x, y = value, fill = scenario, alpha = component)) +
-    geom_col(width = w * 0.9, position = position_stack(reverse = TRUE),
-             colour = OUTLINE, linewidth = 0.25) +
-    scale_x_continuous(breaks = seq_along(xl), labels = xl,
-                       expand = expansion(add = 0.55)) +
-    scale_fill_var("scenario", d$scenario, name = "Allocation") +
-    scale_alpha_manual(values = c(Imported = 1, Raised = 0.45), name = NULL,
-                       guide = guide_legend(
-                         override.aes = list(fill = "grey30"))) +
-    scale_y_continuous(labels = scales::comma) +
-    (if (has(facet_var)) facet_wrap(vars(.data[[facet_var]]), ncol = ncol,
-                                    scales = "free_y") else NULL) +
-    labs(title = "Discards by raising scenario",
-         subtitle = paste("One bar per scenario. Solid = imported from the",
-                          "data, translucent = added by raising."),
-         x = x_var, y = "Discards (t)", fill = "Scenario") +
-    app_theme() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
 }

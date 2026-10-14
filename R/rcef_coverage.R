@@ -2,7 +2,6 @@
 #  rcef_coverage.R   (build_coverage_strata() and what the plots do with it)
 #
 #  ORIGIN: this project (ILVO / RCEF Workbench). Freely refactorable.
-#  No shiny in this file.
 # =====================================================================
 
 #' Sampling coverage and discard rate per stratum
@@ -47,14 +46,15 @@
 #' |:-------|:--------|
 #' | the `dims` columns | The stratum, as you named it. |
 #' | `catchCategory`, `variableUnit` | `"Dis"` and `"t"`: what `total` is. |
-#' | `total` | Discards. `NA` when the stratum has no discard estimate at all (nobody looked); `0` means it was looked at and none were found. |
+#' | `total` | Discards. `NA` when the stratum has no discard estimate at all (nobody looked), or when a raised estimate has no rate (`NaN`: its raising group had no donor to draw one from); `0` means it was looked at and none were found. |
 #' | `weightingCategory` | `"Lan"`. |
-#' | `weightingTotal` | The landings that carry a discard estimate (their `domainCatchDis` is filled): the weight `rate` is weighted by. |
+#' | `weightingTotal` | The landings that carry a discard estimate (their `domainCatchDis` is filled): the weight `rate` is weighted by. In a raised catch (see `importedOrRaised` below) all of its landings do, imported or raised. |
 #' | `rate` | `total / weightingTotal` (D/L): discards per tonne of covered landings, as the CAS output reports it. A ratio, so it can exceed 1. `NA` when `total` is missing or `weightingTotal` is 0. |
 #' | `discardRate` | `total / (weightingTotal + total)` (D/(L+D)): the discards as a share of the covered landings plus the discards - Between 0 and 1. `NA` when `total` is missing or the denominator is 0. |
 #' | `landings` | All landings in the stratum, covered or not. |
 #' | `coverage` | `weightingTotal / landings`, in percent; `NA` when there are no landings. |
 #' | `numTrips` | The trips behind the stratum; `NA` when the data does not report them. The largest count among the stratum's rows (one trip repeats across the rows of a sample), and summed when the plots pool strata into one cell. |
+#' | `importedOrRaised` | Only when `catch` is a raised catch (the output of [catchRaising()]): `"raised"` when the stratum's discard rows were added by the raising, `"imported"` when they came with the data. Worked out per stratum, never from the landings rows beside the discards, which are always imported - so it is a column of the result and cannot be one of `dims`. A raised catch is counted on the rows the raising ran on, those of the origin and variable type of the rows it raised. |
 #'
 #' ## Length and age tables (`what = "length"`, `what = "age"`)
 #'
@@ -181,16 +181,36 @@ build_coverage_strata <- function(catch, dims = NULL, distributions = NULL,
   if (length(miss))
     stop(fn, "(): column(s) not in `catch`: ", paste(miss, collapse = ", "),
          call. = FALSE)
-  # a build_strata() table (already one row per stratum) has none of these
-  # and would otherwise come back as "nothing to describe"
+  # a table already aggregated to strata has none of these and would
+  # otherwise come back as "nothing to describe"
   need <- setdiff(c("catchCategory", "total",
                     if (identical(what, "discard")) "domainCatchDis"),
                   names(catch))
   if (length(need))
     stop(fn, "(): `catch` needs the CEF catch columns ",
          paste(need, collapse = ", "), " - pass the catch data itself, not a ",
-         "table already aggregated to strata (build_strata() output)",
-         call. = FALSE)
+         "table already aggregated to strata", call. = FALSE)
+
+  # The other derive_fields() columns, kept where a stratum pins them: the
+  # columns `dims` does not already name - mesh, metier5, metier4_mesh,
+  # Stratum, the ICES area levels, ... - as the single value the stratum's
+  # rows share, or NA where it spans more than one (so picking one would
+  # misrepresent the row). NULL when none of them is there or all are in `dims`.
+  extras <- function(src) {
+    extra <- setdiff(intersect(c("metier4", "metier5", "metier6", "vesselFlagCountry",
+                                 "ICESSubArea", "ICESDivision", "ICESSubdivision",
+                                 "seasonValue", "FleetType", "target", "mesh",
+                                 "metier4_mesh", "Stratum"), names(src)), dims)
+    if (!length(extra)) return(NULL)
+    uniq_or_na <- function(x) {
+      u <- unique(x[!is.na(x)])
+      if (length(u) == 1) u else NA_character_
+    }
+    src %>%
+      group_by(across(all_of(dims))) %>%
+      summarise(across(all_of(extra), ~ uniq_or_na(as.character(.x))),
+                .groups = "drop")
+  }
 
   if (identical(what, "discard")) {
     if (!is.null(catchCategory))
@@ -201,37 +221,87 @@ build_coverage_strata <- function(catch, dims = NULL, distributions = NULL,
       stop(fn, "(): catchCategory cannot be a stratum column for discards - ",
            "the landings and discards of a stratum are its two halves",
            call. = FALSE)
+    if ("importedOrRaised" %in% dims)
+      stop(fn, "(): importedOrRaised cannot be a stratum column - whether ",
+           "the discards were raised is worked out per stratum, and is a ",
+           "column of the result", call. = FALSE)
     # landings and discards only: BMS is a third catch part with its own
-    # raising, not a discard, and build_strata() would otherwise count it
-    # as one (it treats every non-landing category as discards)
+    # raising, not a discard
     d <- catch[catch$catchCategory %in% c("Lan", "Dis"), , drop = FALSE]
+    has_status <- "importedOrRaised" %in% names(d)
+    if (has_status && any(d$importedOrRaised %in% "raised")) {
+      # A raised catch: its landings and discards are the rows the raising ran
+      # on - the origin and variable type of the rows it raised (WGEstimate and
+      # WeightLive by default). The Official 0 kg discards a stratum may carry
+      # beside them are not discards that were raised.
+      was  <- d$importedOrRaised %in% "raised"
+      keep <- rep(TRUE, nrow(d))
+      for (col in intersect(c("originType", "variableType"), names(d)))
+        keep <- keep & d[[col]] %in% unique(d[[col]][was])
+      d <- d[keep, , drop = FALSE]
+    }
     if (!nrow(d)) return(NULL)
-    st <- build_strata(d, dims)
+    # Per stratum, in tonnes: all the landings, the landings that carry a
+    # discard estimate (their domainCatchDis is filled; in a raised catch every
+    # landing has one, imported or raised, whether or not its domain is filled),
+    # the discards, and the trips. A stratum with no discard row at all has no
+    # discard estimate - nobody looked - which is not the same as 0. Nor is a
+    # raised row that came out of the raising as NaN, a group with no donor to
+    # draw a rate from: that stratum has no estimate either, however much else
+    # it holds.
+    d$.t   <- convert_units(d$total, if ("variableUnit" %in% names(d)) d$variableUnit, "t")
+    d$.lan <- d$catchCategory == "Lan"
+    d$.est <- d$.lan & (has_status | (!is.na(d$domainCatchDis) & d$domainCatchDis != ""))
+    has_trips  <- "numTrips" %in% names(d)
+    st <- d %>%
+      group_by(across(all_of(dims))) %>%
+      summarise(landings = sum(.t[.lan], na.rm = TRUE),
+                landings_with_discards = sum(.t[.est], na.rm = TRUE),
+                discards = sum(.t[!.lan], na.rm = TRUE),
+                has_disc_data = any(!.lan),
+                no_rate = any(is.nan(.t[!.lan])),
+                # a stratum is raised when its discard rows were, never judged
+                # from the landings rows next to them (those are always imported)
+                raised = has_status && any(importedOrRaised[!.lan] %in% "raised"),
+                # max(), not sum(): numTrips is reported per raw CEF row and the
+                # same trip count is often repeated across several rows of one
+                # sample (by catch category, by length class in the wide files);
+                # summing would count one trip several times over. NA where
+                # nothing in the stratum reports it: unknown, not zero.
+                numTrips = if (has_trips)
+                  suppressWarnings(max(numTrips, na.rm = TRUE)) else NA_real_,
+                .groups = "drop") %>%
+      as.data.frame()
+    st$numTrips[!is.finite(st$numTrips)] <- NA_real_
+    st$coverage <- ifelse(st$landings > 0,
+                          st$landings_with_discards / st$landings * 100, NA_real_)
+    looked <- st$has_disc_data & !st$no_rate
     out <- st[, dims, drop = FALSE]
     out$catchCategory     <- "Dis"
     out$variableUnit      <- "t"
-    out$total             <- ifelse(st$has_disc_data, st$discards, NA_real_)
+    out$total             <- ifelse(looked, st$discards, NA_real_)
     out$weightingCategory <- "Lan"
     out$weightingTotal    <- st$landings_with_discards
-    out$rate              <- ifelse(st$has_disc_data &
-                                      st$landings_with_discards > 0,
+    out$rate              <- ifelse(looked & st$landings_with_discards > 0,
                                     st$discards / st$landings_with_discards,
                                     NA_real_)
-    out$discardRate       <- ifelse(st$has_disc_data &
-                                      st$landings_with_discards + st$discards > 0,
+    out$discardRate       <- ifelse(looked & st$landings_with_discards + st$discards > 0,
                                     st$discards / (st$landings_with_discards +
                                                      st$discards),
                                     NA_real_)
     out$landings          <- st$landings
     out$coverage          <- st$coverage
     out$numTrips          <- st$numTrips
-    ex <- coverage_extra_cols(d, dims)
+    if (has_status)
+      out$importedOrRaised <- ifelse(st$raised, "raised", "imported")
+    ex <- extras(d)
     if (!is.null(ex)) out <- left_join(out, ex, by = dims)
     return(out)
   }
 
-  # length / age: the biology link, one catch part at a time so each row's
-  # measurement count is its own part's
+  # ---- length / age: how much of each catch part's weight has a distribution ----
+  # linked, and how many fish stand behind it; one catch part at a time so each
+  # row's measurement count is its own part's
   cc <- if (is.null(catchCategory)) "All"
         else match.arg(catchCategory, c("Lan", "Dis", "BMS", "All"))
   if (is.null(distributions))
@@ -245,15 +315,62 @@ build_coverage_strata <- function(catch, dims = NULL, distributions = NULL,
   dims  <- setdiff(dims, "catchCategory")
   key   <- function(x) if (length(dims))
     do.call(paste, c(unname(as.list(x[dims])), sep = "\r")) else rep("", nrow(x))
-  parts <- catch_category_parts(cc)
-  bl <- bind_rows(lapply(parts, function(p) {
-    b <- biology_link(catch, distributions, dims, p, type = dist_type)
-    if (is.null(b) || !nrow(b)) return(NULL)
-    m <- stratum_measurements(catch, distributions, dims, p, type = dist_type)
-    b$numMeasurements <- if (is.null(m)) 0 else
-      m$n_measurements[match(key(b), key(m))]
-    b$numMeasurements[is.na(b$numMeasurements)] <- 0
-    b
+
+  # The catch with its fields derived afresh, as text, and the distributions
+  # normalised. A catch row counts as measured only when its domainBiology is
+  # filled AND that key appears in the distributions for the same catch category
+  # and country: a filled key that matches nothing is a dangling reference, a
+  # data problem and not evidence of sampling.
+  d  <- derive_fields(catch)
+  pd <- prep_distributions(distributions, dist_type)
+  by <- biology_match_keys(d, pd)
+  d$.t <- convert_units(d$total, if ("variableUnit" %in% names(d)) d$variableUnit, "t")
+  d$.k <- biology_key(d, by)
+  d$.has_key <- if ("domainBiology" %in% names(d))
+    !is.na(d$domainBiology) & nzchar(as.character(d$domainBiology)) else FALSE
+  d$.measured <- d$.has_key & d$.k %in% (if (is.null(pd)) character(0)
+                                           else unique(biology_key(pd, by)))
+  # The measurements behind a distribution: numMeasurements repeats across the
+  # classes of a domain, so it is taken once per domain (of each country: two
+  # countries can use the same domain name, each with its own distribution)
+  # rather than summed over every length class.
+  n_meas <- NULL
+  if (!is.null(pd)) {
+    pn <- pd[pd$.var_kind == "numbers", , drop = FALSE]
+    pn$.k <- biology_key(pn, by)
+    n_meas <- pn %>% group_by(.k) %>%
+      summarise(.n = suppressWarnings(max(.n_meas, na.rm = TRUE)), .groups = "drop") %>%
+      mutate(.n = ifelse(is.finite(.n), .n, 0))
+  }
+  bl <- bind_rows(lapply(catch_category_parts(cc), function(p) {
+    dp <- d[d$catchCategory %in% p, , drop = FALSE]
+    if (!nrow(dp)) return(NULL)
+    cells <- dp %>%
+      group_by(across(all_of(dims)), catchCategory) %>%
+      summarise(weight          = sum(.t, na.rm = TRUE),
+                weight_measured = sum(.t[.measured], na.rm = TRUE),
+                # max(), not sum(): numTrips is reported per raw CEF row and the
+                # same trip count is routinely repeated across several rows of
+                # one sample (by length class in the wide files); summing would
+                # count one trip several times over.
+                numTrips = if ("numTrips" %in% names(dp))
+                  suppressWarnings(max(numTrips, na.rm = TRUE)) else NA_real_,
+                .groups = "drop") %>%
+      mutate(coverage = ifelse(weight > 0, weight_measured / weight * 100,
+                               NA_real_),
+             numTrips = ifelse(is.finite(numTrips), numTrips, NA_real_)) %>%
+      as.data.frame()
+    m <- NULL
+    if (!is.null(n_meas))
+      m <- dp[dp$.has_key, c(dims, ".k"), drop = FALSE] %>% distinct() %>%
+        inner_join(n_meas, by = ".k") %>%
+        group_by(across(all_of(dims))) %>%
+        summarise(.n = sum(.n, na.rm = TRUE), .groups = "drop") %>%
+        as.data.frame()
+    cells$numMeasurements <- if (is.null(m) || !nrow(m)) 0 else
+      m$.n[match(key(cells), key(m))]
+    cells$numMeasurements[is.na(cells$numMeasurements)] <- 0
+    cells
   }))
   if (!nrow(bl)) return(NULL)
   out <- bl[, dims, drop = FALSE]
@@ -264,48 +381,19 @@ build_coverage_strata <- function(catch, dims = NULL, distributions = NULL,
   out$coverage         <- bl$coverage
   out$numMeasurements  <- bl$numMeasurements
   out$numTrips         <- bl$numTrips
-  ex <- coverage_extra_cols(catch, dims)
-  if (!is.null(ex)) out <- left_join(out, ex, by = dims)
-  out
-}
-
-#' The other `derive_fields()` columns, kept where a stratum pins them
-#'
-#' The columns a stratum (`dims`) does not already name - `mesh`, `metier5`,
-#' `metier4_mesh`, `Stratum`, the ICES area levels, and so on
-#' ([DIMS_ALL_CANDIDATES], plus
-#' `Stratum` itself - the one [derive_fields()] column that constant leaves
-#' out, being the finest of all of them rather than a nested level of one) -
-#' computed as the single value they share, or `NA` where the stratum spans
-#' more than one (so picking one would misrepresent the row). `NULL` when
-#' none of those columns are present, or every one of them is already part
-#' of `dims`.
-#'
-#' @param src Catch data to read the extra columns from, carrying `dims`.
-#' @param dims The stratum columns already accounted for.
-#' @return A data frame of `dims` plus whichever extra columns apply, one
-#'   row per stratum - ready to [dplyr::left_join()] onto a strata table by
-#'   `dims` - or `NULL`.
-#' @seealso [build_coverage_strata()], [DIMS_ALL_CANDIDATES]
-#' @keywords internal
-#' @noRd
-#' @export
-coverage_extra_cols <- function(src, dims) {
-  # computed here, not as a top-level constant: a top-level
-  # c(DIMS_ALL_CANDIDATES, ...) would run at package-load time, when
-  # rcef_coverage.R (loaded before rcef_utils.R, alphabetically) cannot
-  # yet see DIMS_ALL_CANDIDATES
-  cand <- c(DIMS_ALL_CANDIDATES, "Stratum")
-  extra <- setdiff(intersect(cand, names(src)), dims)
-  if (!length(extra)) return(NULL)
-  uniq_or_na <- function(x) {
-    u <- unique(x[!is.na(x)])
-    if (length(u) == 1) u else NA_character_
+  # the extra columns are read off the catch with its fields derived afresh, as
+  # text: a column a csv gave back as a number (ICESSubArea 27.4) would
+  # otherwise meet its own text in the join below. Only the columns the
+  # caller's catch carries are kept.
+  ex <- extras(d)
+  if (!is.null(ex)) {
+    ex <- ex[, c(dims, intersect(setdiff(names(ex), dims), names(catch))), drop = FALSE]
+    # with no stratum column at all (only the catch parts) every row takes the one value
+    if (ncol(ex) > length(dims))
+      out <- if (length(dims)) left_join(out, ex, by = dims)
+             else cbind(out, ex[rep(1L, nrow(out)), , drop = FALSE])
   }
-  src %>%
-    group_by(across(all_of(dims))) %>%
-    summarise(across(all_of(extra), ~ uniq_or_na(as.character(.x))),
-             .groups = "drop")
+  out
 }
 
 # ---------------------------------------------------------------------
@@ -315,8 +403,8 @@ coverage_extra_cols <- function(src, dims) {
 #' Is this a coverage table?
 #'
 #' A [build_coverage_strata()] table is recognised by its own columns, so
-#' raw catch (which can carry a row-level `coverage` after
-#' [add_stratum_metrics()]) is never mistaken for one.
+#' raw catch (even one that carries a row-level `coverage`) is never mistaken
+#' for one.
 #'
 #' @param x Anything.
 #' @return `"discard"`, `"length"`, `"age"` or `NA` (not a coverage table).
@@ -339,7 +427,9 @@ coverage_table_what <- function(x) {
 #' plotted cell: builds the table at exactly the plotted columns when
 #' given raw catch, and sums a table that is finer than the plot's roles
 #' (weights and trips add up; coverage and rate are re-derived from the
-#' summed weights, never averaged).
+#' summed weights, never averaged). It also words what the cells are about,
+#' once, for every coverage plot: the weight they are judged against, the
+#' title and the phrase for what "covered" means.
 #'
 #' @param catch Raw CEF catch, or a [build_coverage_strata()] table.
 #' @param distributions Distributions table (raw length / age only).
@@ -348,7 +438,12 @@ coverage_table_what <- function(x) {
 #'   actually typed it (a table brings its own).
 #' @param catchCategory The `catchCategory` argument.
 #' @param fn The calling function's name, for messages.
-#' @return `NULL` (nothing to draw) or `list(cells, what, weight_label)`.
+#' @return `NULL` (nothing to draw) or `list(cells, what, weight_label, title,
+#'   share)`: the weight word (`"landings"`, `"discards"`, `"catch"`, `"BMS
+#'   catch"`; always landings for discards, which are judged against them),
+#'   the plot title ("Landings - Sampling of Length", "Sampling of
+#'   Discards") and the phrase for the covered share ("share of landed weight
+#'   with discard estimates").
 #' @keywords internal
 #' @noRd
 #' @export
@@ -383,10 +478,10 @@ coverage_cells <- function(catch, distributions, keys, what, what_given,
                                  catchCategory)
   }
   if (is.null(tbl) || !nrow(tbl)) return(NULL)
-  # A coverage_extra_cols() column rides along even where no stratum in the
-  # table pins it down at all - all `NA`, nothing to plot by. Treated the
-  # same as a column that is not there, so asking to plot by one still
-  # names it, instead of silently grouping everything into one NA level.
+  # A column that rides along from derive_fields() can be all `NA` where no
+  # stratum pins it down - nothing to plot by. Treated the same as a column
+  # that is not there, so asking to plot by one still names it, instead of
+  # silently grouping everything into one NA level.
   present <- intersect(keys, names(tbl))
   all_na  <- present[vapply(present, function(k) all(is.na(tbl[[k]])),
                             logical(1))]
@@ -430,42 +525,20 @@ coverage_cells <- function(catch, distributions, keys, what, what_given,
                 n_strata = dplyr::n(), .groups = "drop") %>%
       mutate(coverage = ifelse(total > 0, covered / total * 100, NA_real_))
   }
-  parts <- if (identical(what, "discard")) NULL else unique(tbl$catchCategory)
-  wl <- default_weight_label(what, if (length(parts) == 1) parts else "All")
-  list(cells = as.data.frame(cells), what = what, weight_label = wl)
-}
 
-#' Sampling status of each plotted cell
-#'
-#' Adds `cat_key` and `Status` to the cells of [coverage_cells()] against
-#' the thresholds, using [classify_strata()] - the one classifier, so a
-#' cell is judged exactly as the raising side judges a stratum. Only the
-#' coverage plots call this: the status is a colour on a figure, not a
-#' column of the coverage table.
-#'
-#' @param cells The `cells` of [coverage_cells()].
-#' @param what `"discard"`, `"length"` or `"age"`.
-#' @param min_cov,min_trip,min_fish Thresholds; `NULL` drops that
-#'   question from the classification.
-#' @return `cells` plus `cat_key` and `Status` (and the weight under the
-#'   name `landings`, whatever `what` is, which is what the plots label
-#'   and size by).
-#' @keywords internal
-#' @noRd
-#' @export
-coverage_status <- function(cells, what, min_cov, min_trip = NULL,
-                            min_fish = NULL) {
-  s <- cells
-  if (identical(what, "discard")) {
-    s$discards <- ifelse(is.na(cells$total), 0, cells$total)
-    s$has_disc_data <- !is.na(cells$total)
-    s$landings_with_discards <- cells$weightingTotal
-  } else {
-    s$weight <- cells$total
-    s$landings <- cells$total
-    s$landings_with_discards <- cells$covered
-    s$discards <- 0
-    s$n_measurements <- cells$numMeasurements
-  }
-  classify_strata(s, min_cov, what, min_fish, min_trip)
+  # The weight the cells are judged against, in words: discards always against
+  # the landings; length and age against the catch part(s) the table holds.
+  parts <- if (identical(what, "discard")) NULL else unique(tbl$catchCategory)
+  weight_label <- if (identical(what, "discard")) "landings"
+    else switch(if (length(parts) == 1) parts else "All",
+                Dis = "discards", BMS = "BMS catch", All = "catch", "landings")
+  adjective <- switch(weight_label, landings = "landed", discards = "discarded",
+                      weight_label)
+  list(cells = as.data.frame(cells), what = what, weight_label = weight_label,
+       title = if (identical(what, "discard")) "Sampling of Discards"
+               else paste0(tools::toTitleCase(weight_label), " - Sampling of ",
+                           if (identical(what, "age")) "Age" else "Length"),
+       share = sprintf("share of %s weight with %s", adjective,
+                       switch(what, length = "length distributions",
+                              age = "age distributions", "discard estimates")))
 }

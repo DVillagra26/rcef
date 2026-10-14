@@ -25,10 +25,9 @@ discard rate, and length and age distributions - each with a few options to
 compare against each other. It is ggplot2 only: every plot function returns
 a ggplot object (or `NULL` when there is nothing to draw).
 
-This is the first of four vignettes. Once the data has been explored here,
-**2a** and **2b** define groups of strata and raise the discards - by hand
-and with the hierarchical cascade - and **3** compares group allocation
-schemes.
+This is the first of three vignettes. Once the data has been explored here,
+**2** defines groups of strata and raises the discards, and **3** allocates
+the raised catch to lengths and ages.
 
 This is a walkthrough, not a test: nothing here asserts pass or fail. It is
 also the script to run chunk by chunk in RStudio; every figure is simply
@@ -48,10 +47,10 @@ whole picture - a coverage plot would look fully sampled when it is not, and
 a distribution plot would show a shape that has not been weighted up to what
 was actually discarded. So length and age views use `"Lan"` throughout.
 
-**Nothing is filtered first.** The app lets you narrow a figure to a subset
-(a country, a year, an area); here every plot uses everything in the loaded
-table. To plot a subset, filter the catch or the distributions yourself
-before the call - every function takes a plain data frame.
+**Nothing is filtered first.** Every plot uses everything in the loaded table.
+To plot a subset (a country, a year, an area), filter the catch or the
+distributions yourself before the call - every function takes a plain data
+frame.
 
 # Data
 
@@ -358,7 +357,10 @@ point is always an individual, un-pooled stratum: from raw catch the table is
 built at the finest columns the catch carries, together with whatever you
 plot (`x`, `colour`, `shape`, `facet`) - so several points can share one `x`
 level, never merged into it. A stratum with no discard estimate has no rate
-and gets no point; point size is the landings.
+and gets no point; point size is the landings. The title says the strata are
+*only imported*: this is the data as it was reported. Give it the raised catch
+(vignette 2) and the same plot, with the same arguments, shows what the raising
+did - imported solid, raised transparent, titled *imported + raised*.
 
 `rate` chooses the y variable and the word the title and axis use - both are
 columns of the table. The y axis names the formula too, right next to the
@@ -415,6 +417,26 @@ above[order(-above$discardRate),
         "total", "weightingTotal", "rate", "discardRate")]
 ```
 
+# Catch weight
+
+`plot_catches()` is the catch weight at any aggregation, stacked by catch part:
+landings and discards (and BMS, when the catch has it). `x` and `facet` are the
+aggregation, and `catchCategory` narrows it to the landings or to the
+discards, which the landings would otherwise dwarf. The title says the weight
+is *only imported* - the data as it was reported; the raised catch of vignette
+2 gives the same plot, with what the raising added drawn transparent.
+
+```{r catches, fig.alt = "Landings and discards per metier, stacked"}
+plot_catches(catch = catch_data, x = "metier4")
+```
+
+Only the discards, per country, one panel per metier:
+
+```{r catches-dis, fig.height = 6.5, fig.alt = "Discards per country, one panel per metier"}
+plot_catches(catch = catch_data, x = "vesselFlagCountry", facet = "metier4",
+             catchCategory = "Dis", ncol = 5)
+```
+
 # Discard-rate clusters
 
 A different question from the discard rate itself: which strata *share* a
@@ -454,8 +476,12 @@ plot_discard_cluster_variables(dc)
 
 `plot_NaLoA()` is a histogram (`variableType` is always `Number`);
 `plot_MWaLoA()` is a line, always - Numbers and Mean Weight at Length or
-Age. Both take a prepared table **or** raw catch plus `distributions` - then
-the link and the summary run inside, with `catchCategory` choosing the part.
+Age. Both take raw catch plus `distributions`: the link and the summary run
+inside, with `catchCategory` choosing the part. The titles say the distributions
+are *only sampled*: this is the data as it was reported. Give them the two
+tables of an allocation (vignette 3) and the same plots, with the same
+arguments, show what the allocation did - sampled solid, estimated
+transparent, titled *sampled + estimated*.
 Numbers are in thousands (N3), length in cm. The caption's first line names
 the stratum a bar or a line pools: the sampled strata that share the plotted
 columns (`fill` or `colour`, and `facet`); everything else is grouped into
@@ -500,14 +526,14 @@ sample raised by one factor, an estimate otherwise. The caption says so, and
 says when a point has no bar because its distributions report no count (a
 sample size that is unknown, not zero).
 
-`n_fish` is a column of the summary the plot is built from, so the counts can
-be read as numbers too - the thin ends of the curve are where they are small:
+`n_fish` is a column of the summary the plot is built from - the `data` of the
+returned plot - so the counts can be read as numbers too; the thin ends of the
+curve are where they are small:
 
 ```{r mw-len-n-tab}
-linked <- link_dist_to_strata(catches = catch_data, dist = distribution_data,
-                              dims = c("catchCategory", "vesselFlagCountry"),
-                              catch_category = "Lan", type = "LengthTotal")
-mw_len <- length_meanweight(linked = linked, group_vars = "vesselFlagCountry")
+mw_len <- plot_MWaLoA(data = catch_data, distributions = distribution_data,
+                      distributionType = "LengthTotal", catchCategory = "Lan",
+                      colour = "vesselFlagCountry")$data
 head(mw_len[order(mw_len$n_fish), c(".class", "vesselFlagCountry", "mean_weight", "n_strata", "n_fish")], 8)
 ```
 
@@ -523,14 +549,15 @@ call with no `min_trip` at all is coverage-only already.
 threshold, and a stratum with no reported trip count fails an active trips
 test no matter how low it is set - unknown is never treated as adequate.
 
-`cat_lookup()` shows exactly which categories are reachable for a given
-combination. It is a lower-level function than the plots and keeps its own
-default of `min_trips = 2` (active) when called directly:
+The status of every cell is the `cat_key` column of the data the plot is drawn
+from - the `data` of the returned plot - so it can be read as a table too, and
+the legend lists every status that is reachable for the thresholds you set:
 
 ```{r thr-lookup}
-cat_lookup(threshold = 50, what = "discard", min_trips = NULL)$cat_key   # coverage only
-cat_lookup(threshold = 50, what = "discard")$cat_key                     # + trips (its own default)
-cat_lookup(threshold = 50, what = "length", min_meas = 25)$cat_key       # + measurements too
+cells <- function(...) plot_coverage_heat(catch = catch_data, y = "metier4",
+                                          x = "vesselFlagCountry", ...)$data
+table(cells(min_trip = NULL)$cat_key)   # coverage only
+table(cells(min_trip = 2)$cat_key)      # + trips
 ```
 
 The colour is a straight count of how many *active* targets a stratum missed
@@ -561,11 +588,10 @@ crowds them into the worst-active warning shade instead. Red only ever comes
 from "no estimate / no distribution", never from a threshold comparison:
 
 ```{r thr-extreme}
-extreme <- classify_strata(s = build_strata(catch_data = catch_data, dims = c("metier4", "vesselFlagCountry")),
-                           threshold = 1500, min_trips = 1000)
+extreme <- cells(min_cov = 1500, min_trip = 1000)
 table(extreme$cat_key)
 # red ("no_dist") only where there really is no discard estimate
-all(!extreme$has_disc_data[extreme$cat_key == "no_dist"])
+all(is.na(extreme$total[extreme$cat_key == "no_dist"]))
 ```
 
 # Age distribution (saithe)
@@ -649,4 +675,29 @@ old ages, each on a few fish, into one point with many.
 plot_MWaLoA(data = age_catch, distributions = age_dist, distributionType = "Age",
            catchCategory = "Lan", show_samples = TRUE,
            plus_group = 7)
+```
+
+# Palettes
+
+Every plot takes the same `palette` argument - `"default"`, `"colorblind"`
+(the Okabe-Ito colours) or `"gradual"` (ColorBrewer's Paired, for levels that
+have an order) - and draws every one of its colours from it: bars, points,
+lines, ribbons, tiles, bubbles, pies and clusters alike. A level keeps its
+colour from plot to plot, under each palette - the same country is the same
+colour in the bars, the discard-rate points and the length lines - and levels
+beyond the palette's own colours take further ones rather than starting over.
+The status scale of the heatmap and the bubbles follows the palette too, from
+best sampled to worst.
+
+```{r palette-heat, fig.height = 4.5, fig.alt = "Coverage heatmap in the colourblind palette"}
+plot_coverage_heat(catch = catch_data, y = "metier4", x = "vesselFlagCountry",
+                   min_trip = 2, palette = "colorblind")
+```
+
+Mesh sizes are drawn in size order (`"16-31"` before `"100-119"`), so the gradual
+palette reads as a progression from the smallest mesh to the largest:
+
+```{r palette-gradual, fig.height = 4.5, fig.alt = "Numbers at length of the landings stacked by mesh size in the gradual palette"}
+plot_NaLoA(data = catch_data, distributions = distribution_data,
+           catchCategory = "Lan", fill = "mesh", palette = "gradual")
 ```

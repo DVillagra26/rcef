@@ -2,8 +2,6 @@
 #  viz_clusters.R   (which strata share a discard rate, and why)
 #
 #  ORIGIN: this project (ILVO / RCEF Workbench). Freely refactorable.
-#  No shiny in this file. If it needs `input`, `session` or a tag,
-#  it belongs in app/, not here.
 # =====================================================================
 
 # ------------------------------------------------------------
@@ -130,20 +128,18 @@ build_discard_clusters <- function(catch, dims, k = 3, seed = 1) {
 #' of the map or overlaps the rest.
 #'
 #' @param x Output of [build_discard_clusters()].
-#' @param palette `"default"` or `"colorblind"` -
-#'   unlike most of this package's colours, a cluster's own colour is not
-#'   kept stable across plots: which cluster is "1" depends on this run's
-#'   data and `k` alone.
+#' @param palette `"default"`, `"colorblind"` or `"gradual"`: the cluster colours.
+#'   Which cluster is "1" depends on this run's data and `k` alone, so a
+#'   cluster's colour means nothing outside its own plot.
 #' @inheritParams saving-plots
 #' @return A ggplot object.
 #' @seealso [build_discard_clusters()], [plot_discard_cluster_variables()].
 #' @md
 #' @export
-plot_discard_clusters <- function(x, palette = c("default", "colorblind"), save = NULL) {
+plot_discard_clusters <- function(x, palette = c("default", "colorblind", "gradual"), save = NULL) {
   save_on_exit(save, "plot_discard_clusters")
   palette <- match.arg(palette)
   d <- x$strata
-  pal <- group_palette(levels(d$cluster))
   has_landings <- "landings" %in% names(d) &&
     any(is.finite(d$landings) & d$landings > 0)
 
@@ -156,7 +152,8 @@ plot_discard_clusters <- function(x, palette = c("default", "colorblind"), save 
   if (has_landings)
     p <- p + scale_size_area(max_size = 7, labels = scales::comma, name = "Landings (t)")
   p +
-    scale_fill_manual(values = pal, name = "Discard-rate\ncluster") +
+    scale_fill_manual(values = plot_colours(levels(d$cluster), palette = palette),
+                      name = "Discard-rate\ncluster") +
     labs(title = "Which strata share a discard rate",
          caption = sub_wrap(
            sprintf("grouping = %s, clustered into %d groups by discard rate.",
@@ -178,17 +175,20 @@ plot_discard_clusters <- function(x, palette = c("default", "colorblind"), save 
 #' clustering, 1 means it alone determines it.
 #'
 #' @param x Output of [build_discard_clusters()].
+#' @param palette `"default"`, `"colorblind"` or `"gradual"`: the bar colour.
 #' @inheritParams saving-plots
 #' @return A ggplot object.
 #' @seealso [build_discard_clusters()], [plot_discard_clusters()].
 #' @md
 #' @export
-plot_discard_cluster_variables <- function(x, save = NULL) {
+plot_discard_cluster_variables <- function(x, palette = c("default", "colorblind", "gradual"),
+                                           save = NULL) {
   save_on_exit(save, "plot_discard_cluster_variables")
+  palette <- match.arg(palette)
   imp <- x$importance
   imp$variable <- factor(imp$variable, levels = rev(imp$variable))
   ggplot(imp, aes(x = variable, y = cramers_v)) +
-    geom_col(fill = "#2a78d6", width = 0.6) +
+    geom_col(fill = plot_colours(palette = palette), width = 0.6) +
     coord_flip() +
     scale_y_continuous(limits = c(0, 1)) +
     labs(title = "Which variable best predicts the discard-rate cluster",

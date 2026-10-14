@@ -4,7 +4,7 @@
 ##
 ## What is pinned here: the value itself (including the fleet codes that have
 ## no mesh part), that every list that has to know about a derived column
-## does, that the emitted script derives it the same way, and that every plot
+## does, and that every plot
 ## that orders `mesh` by size orders `metier4_mesh` the same way - gear by
 ## gear, each gear's meshes small to large - instead of falling back to the
 ## alphabetical order that puts "TBB_100-119" before "TBB_70-99".
@@ -62,39 +62,31 @@ ok(identical(sort(unique(cc$metier4_mesh)), c("LHP_0", "MPT_0", "PS_0", "PS_16-3
    "test_catch: LHP_0 / MPT_0 / PS_0 / PS_16-31")
 
 ## ---- every list that has to know about a derived column ----------------
-ok("metier4_mesh" %in% FILTER_VARS && "metier4_mesh" %in% DIMS_ALL_CANDIDATES &&
-     "metier4_mesh" %in% PALETTE_VARS,
-   "metier4_mesh is in FILTER_VARS, DIMS_ALL_CANDIDATES and PALETTE_VARS")
-gv <- grouping_vars(cc)
-ok("metier4_mesh" %in% gv && names(gv)[gv == "metier4_mesh"] == "metier4_mesh (gear_mesh)",
-   "grouping_vars(): offered, labelled 'metier4_mesh (gear_mesh)'")
-ok(which(gv == "metier5") < which(gv == "metier4_mesh") &&
-     which(gv == "metier4_mesh") < which(gv == "metier4"),
-   "grouping_vars(): sits between metier5 and metier4, with the other fleet levels")
-fl <- explore_filter_levels(cc)
-ok(identical(fl$metier4_mesh, c("LHP_0", "MPT_0", "PS_0", "PS_16-31")),
-   "explore_filter_levels(): the filter lens offers it, with its levels")
-ok(identical(unique(apply_filters(cc, list(metier4_mesh = "PS_16-31"))$metier4_mesh),
-             "PS_16-31"),
-   "apply_filters(): filtering on it keeps just that gear and mesh")
-# Deliberately NOT a cascade key: the cascade's Fleet family is a strict
-# chain (fleetValue > metier6 > metier5 > metier4) whose widening warnings
-# assume every level determines the next, and gear_mesh is not on that
-# chain - metier5 (gear_target) is its equal, neither determines the other.
-ok(!"metier4_mesh" %in% unlist(key_vocab_grouped(cc)),
-   "key_vocab_grouped(): not a cascade key (the Fleet chain is strictly nested)")
-
+# Deliberately not on the strict chain fleetValue > metier6 > metier5 > metier4: gear_mesh is
+# metier5's (gear_target) equal, neither determines the other.
 fam <- strata_families()$fleet
 ok(fam[["metier4_mesh"]] == fam[["metier5"]] &&
      fam[["metier6"]] < fam[["metier4_mesh"]] && fam[["metier4_mesh"]] < fam[["metier4"]],
    "strata_families(): level 3 beside metier5, between metier6 and metier4")
-ok(identical(finest_per_family(c("metier5", "metier4_mesh")), c("metier5", "metier4_mesh")),
-   "finest_per_family(): metier5 and metier4_mesh each say something the other does not - both kept")
-ok(identical(finest_per_family(c("metier4", "metier4_mesh")), "metier4_mesh") &&
-     identical(finest_per_family(c("mesh", "metier4_mesh")), "metier4_mesh"),
-   "finest_per_family(): metier4_mesh makes metier4 and mesh redundant")
-ok(identical(finest_per_family(c("metier6", "metier4_mesh")), "metier6"),
-   "finest_per_family(): metier6 makes metier4_mesh redundant")
+## which stratum columns a point's label names in plot_DR(): a discard coverage table with just those
+## columns, each holding its own name, and a reference below its point so that the point is labelled
+label_cols <- function(cols) {
+  tb <- data.frame(catchCategory = "Dis", variableUnit = "t", total = 1, weightingCategory = "Lan",
+                   weightingTotal = 10, rate = 0.1, discardRate = 0.09, landings = 10, coverage = 100,
+                   numTrips = 3, stringsAsFactors = FALSE)
+  for (cl in cols) tb[[cl]] <- cl
+  strsplit(plot_DR(tb, x = cols[1], reference = 0.001)$data$.lab, "|", fixed = TRUE)[[1]]
+}
+ok(identical(label_cols(c("metier5", "metier4_mesh")), c("metier5", "metier4_mesh")),
+   "plot_DR() labels: metier5 and metier4_mesh each say something the other does not - both named")
+ok(identical(label_cols(c("metier4", "metier4_mesh")), "metier4_mesh") &&
+     identical(label_cols(c("mesh", "metier4_mesh")), "metier4_mesh"),
+   "plot_DR() labels: metier4_mesh makes metier4 and mesh redundant")
+ok(identical(label_cols(c("metier6", "metier4_mesh")), "metier6"),
+   "plot_DR() labels: metier6 makes metier4_mesh redundant")
+ok(identical(label_cols(c("metier4", "gear", "vesselFlagCountry")), c("metier4", "gear", "vesselFlagCountry")) &&
+     identical(label_cols(c("ICESDivision", "areaValue")), "areaValue"),
+   "plot_DR() labels: columns of one level (metier4 / gear) are both named; a coarser area level is dropped for a finer one")
 s <- strata_sentence(c("metier4_mesh", "vesselFlagCountry"), cc)
 ok(grepl("finer fleet levels (fleetValue)", s, fixed = TRUE) &&
      !grepl("over fleet (", s, fixed = TRUE),
@@ -116,46 +108,32 @@ ok(all(is.na(cvg$metier4_mesh[cvg$metier4 == "PS"])) &&
      identical(cvg$metier4_mesh[cvg$metier4 == "LHP"], "LHP_0"),
    "build_coverage_strata(): a metier4-only table has it only where one mesh is all there is")
 
-## ---- the emitted script derives it the same way ---------------------------
-code <- c(emit_area_helper(), emit_derive_code())
-ok(any(grepl("metier4_mesh", code, fixed = TRUE)),
-   "emit_derive_code(): writes the metier4_mesh line")
-env <- new.env()
-env$catch_data <- x
-env$mutate <- dplyr::mutate
-env$`%>%` <- dplyr::`%>%`
-eval(parse(text = code), envir = env)
-ok(identical(env$catch_data$metier4_mesh, d$metier4_mesh),
-   "emit_derive_code(): the script it writes gives the same metier4_mesh as derive_fields()")
-ok(any(grepl("metier4_mesh", taf_derive(), fixed = TRUE)),
-   "taf_derive(): the script header lists it among the derived columns")
-
 ## ---- the size order: gear by gear, each gear's meshes small to large ------
-lv <- metier4_mesh_levels(c("TBB_100-119", "TBB_70-99", "OTB_>=120", "OTB_16-31",
-                            "OTB_<16", "TBB_all", "TBB", "GNS_0", "OTB_90-99", NA,
-                            "OTB_16-31"))
+lv <- mesh_var_levels("metier4_mesh", c("TBB_100-119", "TBB_70-99", "OTB_>=120", "OTB_16-31",
+                                          "OTB_<16", "TBB_all", "TBB", "GNS_0", "OTB_90-99", NA,
+                                          "OTB_16-31"))
 ok(identical(lv, c("GNS_0", "OTB_<16", "OTB_16-31", "OTB_90-99", "OTB_>=120",
                    "TBB_70-99", "TBB_100-119", "TBB_all", "TBB")),
-   "metier4_mesh_levels(): gear alphabetical; meshes by size; 'all' then a bare gear last; NA and repeats dropped")
-ok(identical(metier4_mesh_levels(factor(c("B_2-3", "A_10-19", "A_2-3"))),
+   "mesh_var_levels(): metier4_mesh by gear alphabetically, meshes by size, 'all' then a bare gear last, NA and repeats dropped")
+ok(identical(mesh_var_levels("metier4_mesh", factor(c("B_2-3", "A_10-19", "A_2-3"))),
              c("A_2-3", "A_10-19", "B_2-3")),
-   "metier4_mesh_levels(): a factor is read by its labels, 10-19 after 2-3")
-ok(identical(metier4_mesh_levels(character(0)), character(0)) &&
-     identical(metier4_mesh_levels(NA_character_), character(0)),
-   "metier4_mesh_levels(): nothing to order is not an error")
+   "mesh_var_levels(): a factor is read by its labels, 10-19 after 2-3")
+ok(identical(mesh_var_levels("metier4_mesh", character(0)), character(0)) &&
+     identical(mesh_var_levels("metier4_mesh", NA_character_), character(0)),
+   "mesh_var_levels(): nothing to order is not an error")
 ok(identical(mesh_var_levels("mesh", c("100-119", "16-31")), c("16-31", "100-119")) &&
      identical(mesh_var_levels("metier4_mesh", c("B_2", "A_2")), c("A_2", "B_2")) &&
      is.null(mesh_var_levels("metier4", "TBB")) && is.null(mesh_var_levels(NULL, "x")),
    "mesh_var_levels(): knows mesh and metier4_mesh, and says NULL for anything else")
 rd <- data.frame(mesh = c("100-119", "16-31"), metier4_mesh = c("TBB_100-119", "TBB_16-31"),
                  stringsAsFactors = FALSE)
-r1 <- reorder_mesh(rd, "metier4_mesh")
+r1 <- category_cols(rd, "metier4_mesh")
 ok(identical(levels(r1$metier4_mesh), c("TBB_16-31", "TBB_100-119")) && is.character(r1$mesh),
-   "reorder_mesh(): releveling metier4_mesh leaves a mesh column it was not asked about alone")
-r2 <- reorder_mesh(rd, c("mesh", "metier4_mesh"))
+   "category_cols(): releveling metier4_mesh leaves a mesh column it was not asked about alone")
+r2 <- category_cols(rd, c("mesh", "metier4_mesh"))
 ok(identical(levels(r2$mesh), c("16-31", "100-119")) &&
      identical(levels(r2$metier4_mesh), c("TBB_16-31", "TBB_100-119")),
-   "reorder_mesh(): both named columns are releveled")
+   "category_cols(): both named columns are releveled")
 
 ## ---- the plots ---------------------------------------------------------------
 # A synthetic mesh per (fleet, area), chosen so natural and alphabetical order
@@ -174,7 +152,7 @@ c23$fleetValue <- vapply(seq_len(nrow(c23)), function(i) {
   paste(z, collapse = "_")
 }, "")
 c23 <- derive_fields(c23)
-natural <- metier4_mesh_levels(c23$metier4_mesh)
+natural <- mesh_var_levels("metier4_mesh", c23$metier4_mesh)
 # more than three levels, or "in order" could be alphabetical order by luck
 in_order <- function(lv) length(lv) > 3 && identical(lv, natural[natural %in% lv])
 ok(length(natural) >= 6 && !identical(natural, sort(unique(c23$metier4_mesh))),
@@ -200,7 +178,7 @@ ok(drawable(p4), "plot_coverage_map(): draws with group = metier4_mesh")
 glab <- p4$layers[[which(vapply(p4$layers,
   function(l) is.data.frame(l$data) && all(c("k", "glab") %in% names(l$data)),
   logical(1)))[1]]]$data
-present <- metier4_mesh_levels(unique(glab$glab))
+present <- mesh_var_levels("metier4_mesh", unique(glab$glab))
 ok(identical(glab$k[match(present, glab$glab)], seq_along(present)),
    "plot_coverage_map(): group = metier4_mesh places the grid cells in size order")
 p5 <- plot_DR(c23, x = "metier4_mesh")

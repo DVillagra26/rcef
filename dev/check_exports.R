@@ -3,13 +3,13 @@
 ##
 ##  NAMESPACE is roxygen-generated. The failure mode that costs a whole
 ##  debugging session is a top-level object with no @export tag: it
-##  vanishes from the NAMESPACE and the app dies at runtime with
+##  vanishes from the NAMESPACE and a call dies at runtime with
 ##  "object 'X' not found", far from the cause.
 ##
 ##  This compares every top-level object defined under R/ against what
 ##  the NAMESPACE actually exports. FUNCTIONS AND CONSTANTS BOTH - the
-##  constants are the ones that get forgotten (OUTPUT_DESC, CEF_ORDER,
-##  LEN_CLASS_TO_MM ...), because they carry no roxygen block by habit.
+##  constants are the ones that get forgotten (LEN_CLASS_TO_MM,
+##  WEIGHT_TO_TONNES ...), because they carry no roxygen block by habit.
 ##
 ##  parse() is used rather than regex: a backticked name like `%||%` or a
 ##  multi-line definition defeats pattern matching.

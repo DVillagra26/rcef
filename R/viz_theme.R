@@ -1,66 +1,26 @@
 # =====================================================================
-#  viz_theme.R   (app_theme(), stable colour per level)
+#  viz_theme.R   (plot_colours(), app_theme())
 #
 #  ORIGIN: this project (ILVO / RCEF Workbench). Freely refactorable.
 #  Was: R_development/0_Functions_theme.R
-#  No shiny in this file. If it needs `input`, `session` or a tag,
-#  it belongs in app/, not here.
 # =====================================================================
 
 # ============================================================
-#  0_Functions_theme.R
-#  The shared look: one theme, and stable colours per level.
+#  The shared look: one theme, one function for every colour.
 # ------------------------------------------------------------
-#  Package-ready plotting-support module. It is ggplot2 only (no shiny), and
-#  0_Functions_plots.R depends on it, so the plots can be built at the console
-#  exactly as they are in the app.
+#  Plotting-support module. It is ggplot2 only, and viz_plots.R depends on it.
 #
 #  WHY IT EXISTS
 #  A level must keep its colour everywhere it appears: if "TBB" is orange in
-#  the coverage heatmap it must be orange in the discard-rate plot and in the
-#  river plot too, or the reader compares the wrong things. var_palette()
+#  the coverage bars it must be orange in the discard-rate plot and in the
+#  river plot too, or the reader compares the wrong things. plot_colours()
 #  therefore remembers the colour it assigned to each level of each variable
-#  in a private environment, and hands the same one back next time.
+#  in a private environment, and hands the same one back next time. Every
+#  plot takes its colours from it, and every plot has the same `palette`
+#  argument, so one choice recolours a whole report.
 #
 #  DEPENDENCIES  Imports: ggplot2, scales.
 # ============================================================
-
-# ----------------------------------------------------------
-#  Per-level colours, stable across plots
-# ----------------------------------------------------------
-
-#' Base qualitative palette
-#'
-#' The colours levels are drawn from, in order.
-#'
-#' Chosen by farthest-point search in CIE Lab, so consecutive entries are as
-#' far apart as the space allows and the palette degrades gracefully as more
-#' levels appear. The previous palette held up to about eight levels and then
-#' collapsed: `#76B7B2` and `#86BCB6` sat 4.1 dE apart, which is not a
-#' difference anyone can see, and with a dozen countries on a plot two of
-#' them were simply the same colour. This one holds 36.8 dE at sixteen levels
-#' and 26.8 at twenty-eight.
-#'
-#' Lightness is capped below white and above black, and chroma below
-#' fluorescent, so the colours stay readable on a white panel with black
-#' outlines and do not look like a warning label in a working-group report.
-#'
-#' A caveat worth stating: this is optimised for normal colour vision.
-#' Optimising simultaneously for deuteranopia and protanopia costs about half
-#' the separation and pushes the palette into blues, greens and browns, which
-#' is a poor trade when the reported problem is two colours being
-#' indistinguishable to everyone. Where a figure must survive colour-blind
-#' readers, prefer a facet or a shape over a colour.
-#'
-#' @keywords internal
-#' @export
-#' @noRd
-PAL_BASE <- c(
-  "#4980B6", "#FFB649", "#00DB92", "#B60049", "#FF92FF", "#495B12",
-  "#EDB6B6", "#5B37A4", "#00DBED", "#A4C849", "#924912", "#80495B",
-  "#92B692", "#005B5B", "#FF6D5B", "#A41280", "#9292FF", "#128012",
-  "#FF80A4", "#C8B6ED", "#B6925B", "#A49200", "#00926D", "#5B4980",
-  "#92B6C8", "#005BB6", "#B66DB6", "#FFA480")
 
 #' The outline every filled mark is drawn with
 #'
@@ -81,7 +41,7 @@ OUTLINE <- "black"
 #' @noRd
 OUTLINE_LW <- 0.25
 
-#' Cache of colours already handed out, per variable
+#' Cache of colours already handed out, per variable and palette
 #'
 #' A private environment, so a level keeps its colour for the whole session.
 #'
@@ -89,196 +49,103 @@ OUTLINE_LW <- 0.25
 #' @noRd
 .LEVEL_COLOURS <- new.env(parent = emptyenv())
 
-#' Colourblind-safe categorical palette (Okabe-Ito)
+#' The colours of a plot: stable per level, or per sampling status
 #'
-#' The standard 8-colour palette recommended for red-green and
-#' blue-yellow colour vision deficiencies, distinct even in greyscale.
-#' An alternative to [PAL_BASE] for [var_palette()]'s `palette =
-#' "colorblind"`.
+#' @description
+#' The one place every rcef plot takes its colours from. Three palettes, the
+#' same `palette` argument on every plot:
 #'
+#' * `"default"`: 28 colours picked by a farthest-point search in CIE Lab, so
+#'   consecutive entries are as far apart as the space allows and the palette
+#'   degrades gracefully as more levels appear (16 levels still sit 36.8 dE
+#'   apart, 28 sit 26.8). Lightness is capped below white and above black,
+#'   and chroma below fluorescent, so the colours stay readable on a white
+#'   panel with black outlines. It is optimised for normal colour vision:
+#'   optimising for deuteranopia and protanopia as well costs about half the
+#'   separation, which is why the next palette exists.
+#' * `"colorblind"`: the 8-colour Okabe-Ito palette, distinct for red-green and
+#'   blue-yellow colour vision deficiencies and in greyscale.
+#' * `"gradual"`: ColorBrewer's 12-colour "Paired" palette, six hues each a
+#'   light and a dark step next to each other. Its steps read as a progression,
+#'   so it suits a variable whose levels have a real order (mesh size bins,
+#'   length or age classes grouped coarser): the colours follow the order of
+#'   a factor's levels.
+#'
+#' With `type = "levels"` (the default) it colours the levels of a variable.
+#' The assignment is remembered per variable and palette, so a level keeps its
+#' colour across every plot of the session; levels beyond the palette's own
+#' colours take further, distinct ones. With `type = "status"` it colours the
+#' sampling statuses of a coverage plot (`full`, `safe`, `warn_*`, `no_dist`,
+#' `disc_only`, `none`): a fixed scale per palette, best sampled to worst, the
+#' colour of a warning telling how many thresholds were missed.
+#'
+#' @param values The levels (or, for `type = "status"`, the status keys) to
+#'   colour. `NULL` returns the palette's first colour, for a plot with
+#'   nothing to tell apart.
+#' @param var Name of the variable being coloured; levels keep their colour
+#'   per variable. `NULL`: nothing is remembered.
+#' @param palette `"default"`, `"colorblind"` or `"gradual"`.
+#' @param type `"levels"` (default) or `"status"`.
+#' @return A character vector of colours, named by level (a single unnamed
+#'   colour when `values` is `NULL`).
 #' @keywords internal
 #' @export
 #' @noRd
-PAL_CB <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2",
-           "#D55E00", "#CC79A7", "#000000")
-
-#' Paired qualitative palette, for levels with a natural order
-#'
-#' ColorBrewer's 12-colour "Paired" palette: six hues, each a light and a
-#' dark step next to each other. [PAL_BASE] and [PAL_CB] are built so
-#' arbitrary, unordered levels are easy to tell apart, which is the
-#' opposite of what this one is for - its steps read as a gradual
-#' progression, so it suits a variable whose levels already have a real
-#' order and where that order is worth keeping visible in the colour
-#' itself (mesh size bins, length or age classes grouped coarser, ...).
-#' An alternative to [PAL_BASE] for [var_palette()]'s `palette =
-#' "gradual"`.
-#'
-#' @keywords internal
-#' @export
-#' @noRd
-PAL_GRADUAL <- c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99",
-                 "#E31A1C", "#FDBF6F", "#FF7F00", "#CAB2D6", "#6A3D9A",
-                 "#FFFF99", "#B15928")
-
-#' Stable colours for the levels of a variable
-#'
-#' Returns a named colour vector for `values`, reusing the colours already
-#' assigned to levels of `var` and extending the palette for any new level.
-#' Because the assignment is remembered, a level keeps its colour across every
-#' plot in the session.
-#'
-#' @param var Name of the variable being coloured.
-#' @param values The levels to colour.
-#' @param palette `"default"` ([PAL_BASE]), `"colorblind"` ([PAL_CB]) or
-#'   `"gradual"` ([PAL_GRADUAL]).
-#' @return A character vector of colours, named by level.
-#' @seealso [scale_fill_var()], [scale_colour_var()], [reset_palettes()]
-#' @keywords internal
-#' @export
-#' @noRd
-var_palette <- function(var, values,
-                        palette = c("default", "colorblind", "gradual")) {
+plot_colours <- function(values = NULL, var = NULL,
+                         palette = c("default", "colorblind", "gradual"),
+                         type = c("levels", "status")) {
   palette <- match.arg(palette)
-  pal_src <- switch(palette, colorblind = PAL_CB, gradual = PAL_GRADUAL,
-                    PAL_BASE)
-  # cached per (variable, palette) - not just per variable, or asking
-  # for "colorblind" after "default" already ran for this variable in
-  # this session returns the stale default colours instead of actually
-  # switching
-  cache_key <- paste0(var, "\r", palette)
-  vals <- sort(unique(as.character(values[!is.na(values)])))
+  type <- match.arg(type)
+  if (identical(type, "status")) {
+    # full / safe, then yellow -> orange -> dark orange for 1, 2, 3 missed
+    # thresholds, one reserved colour for "nothing to judge" (no estimate or
+    # no distribution), one for "discards only", near-white for "no catch"
+    ramp <- switch(palette,
+      colorblind = c(full = "#0072B2", safe = "#56B4E9", w1 = "#F0E442",
+                     w2 = "#E69F00", w3 = "#D55E00", no_dist = "#CC79A7",
+                     disc_only = "#009E73", none = "#F0F1F1"),
+      gradual    = c(full = "#440154", safe = "#3B528B", w1 = "#21908C",
+                     w2 = "#5DC863", w3 = "#FDE725", no_dist = "#D7191C",
+                     disc_only = "#7F7F7F", none = "#F0F1F1"),
+      c(full = "#00441B", safe = "#41AE76", w1 = "#FFD92F", w2 = "#F16913",
+        w3 = "#7F2704", no_dist = "#D7191C", disc_only = "#4292C6",
+        none = "#F0F1F1"))
+    role <- ifelse(grepl("^warn_", values),
+                   paste0("w", lengths(strsplit(sub("^warn_", "", values), "_"))),
+                   values)
+    return(setNames(unname(ramp[role]), values))
+  }
+  pal <- switch(palette,
+    colorblind = c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2",
+                   "#D55E00", "#CC79A7", "#000000"),
+    gradual    = c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99",
+                   "#E31A1C", "#FDBF6F", "#FF7F00", "#CAB2D6", "#6A3D9A",
+                   "#FFFF99", "#B15928"),
+    c("#4980B6", "#FFB649", "#00DB92", "#B60049", "#FF92FF", "#495B12",
+      "#EDB6B6", "#5B37A4", "#00DBED", "#A4C849", "#924912", "#80495B",
+      "#92B692", "#005B5B", "#FF6D5B", "#A41280", "#9292FF", "#128012",
+      "#FF80A4", "#C8B6ED", "#B6925B", "#A49200", "#00926D", "#5B4980",
+      "#92B6C8", "#005BB6", "#B66DB6", "#FFA480"))
+  if (is.null(values)) return(pal[[1]])
+  vals <- if (is.factor(values)) levels(droplevels(values))
+          else sort(unique(as.character(values[!is.na(values)])))
   if (!length(vals)) return(character(0))
-  cur <- if (exists(cache_key, envir = .LEVEL_COLOURS))
-    get(cache_key, envir = .LEVEL_COLOURS) else character(0)
+  # beyond the palette's own colours, a fixed run of further distinct ones
+  # rather than starting over (two levels in one colour read as one level)
+  src <- c(pal, grDevices::hcl.colors(60, "Dark 3"))
+  # cached per (variable, palette) - not just per variable, or asking for
+  # "colorblind" after "default" already ran for this variable in this
+  # session would return the stale default colours instead of switching
+  key <- if (!is.null(var)) paste0(var, "\r", palette)
+  cur <- if (!is.null(key) && exists(key, envir = .LEVEL_COLOURS, inherits = FALSE))
+    get(key, envir = .LEVEL_COLOURS) else character(0)
   new <- setdiff(vals, names(cur))
   if (length(new)) {
-    idx <- (length(cur) + seq_along(new) - 1L) %% length(pal_src) + 1L
-    cur <- c(cur, setNames(pal_src[idx], new))
-    assign(cache_key, cur, envir = .LEVEL_COLOURS)
+    idx <- (length(cur) + seq_along(new) - 1L) %% length(src) + 1L
+    cur <- c(cur, setNames(src[idx], new))
+    if (!is.null(key)) assign(key, cur, envir = .LEVEL_COLOURS)
   }
-  cur
-}
-
-#' Assign colours to every level of a variable up front
-#'
-#' [var_palette()] hands colours out on demand, which keeps a level's colour
-#' stable but makes the ASSIGNMENT depend on which plot was drawn first: open
-#' the discard tab before the length tab and a country can end up a different
-#' colour than the other way round. Nothing is wrong on screen - the colour
-#' is still consistent across that session - but two runs of the same
-#' analysis produce differently coloured figures, which is not a property a
-#' report should have.
-#'
-#' Seeding from the full data at load time removes the ordering entirely:
-#' every level present anywhere is coloured at once, in sorted order, so the
-#' assignment depends only on the data. Levels that turn up later - a
-#' derived column, a value only one plot computes - are still appended by
-#' [var_palette()] and keep their colour from then on.
-#'
-#' Seeding REPLACES the variable\'s assignment rather than extending it, so
-#' it must run when the data changes and not in the middle of a session.
-#'
-#' @param data A data frame.
-#' @param vars The columns to seed; those absent are skipped.
-#' @return Called for its side effect; invisibly the variables seeded.
-#' @seealso [var_palette()], [reset_palettes()]
-#' @export
-#' @noRd
-seed_palettes <- function(data, vars = PALETTE_VARS) {
-  if (is.null(data) || !nrow(data)) return(invisible(character(0)))
-  done <- character(0)
-  for (v in intersect(vars, names(data))) {
-    vals <- sort(unique(as.character(data[[v]][!is.na(data[[v]])])))
-    if (!length(vals)) next
-    # ASSIGN, do not top up. Calling var_palette() here would keep whatever
-    # colours a plot had already claimed and only fill in the rest, which
-    # leaves the assignment depending on which tab was opened first - the
-    # exact thing seeding exists to remove. Clearing the variable's entry
-    # first makes the result a function of the data alone.
-    idx <- (seq_along(vals) - 1L) %% length(PAL_BASE) + 1L
-    assign(v, setNames(PAL_BASE[idx], vals), envir = .LEVEL_COLOURS)
-    done <- c(done, v)
-  }
-  invisible(done)
-}
-
-#' Variables whose colours should be seeded from the whole data set
-#'
-#' The keys that appear as a fill or colour in more than one plot, and so
-#' have to look the same in all of them.
-#'
-#' @export
-#' @noRd
-PALETTE_VARS <- c("vesselFlagCountry", "seasonValue",
-                  "metier4", "metier5", "metier6", "gear", "target", "mesh",
-                  "metier4_mesh", "FleetType", "catchCategory",
-                  "ICESSubArea", "ICESDivision", "ICESSubdivision", "areaValue")
-
-#' Forget every colour assignment
-#'
-#' Clears the cache, so the next plot starts the palette again. Useful between
-#' unrelated stocks or in a test.
-#'
-#' @return Called for its side effect.
-#' @seealso [var_palette()]
-#' @export
-#' @noRd
-reset_palettes <- function() rm(list = ls(.LEVEL_COLOURS), envir = .LEVEL_COLOURS)
-
-#' Fill scale using the stable per-level colours
-#'
-#' @param var Name of the variable being coloured.
-#' @param values The levels present.
-#' @param name Legend title; defaults to `var`.
-#' @param palette "default", "colorblind" or "gradual" - passed to
-#'   [var_palette()].
-#' @param ... Passed to [ggplot2::scale_fill_manual()].
-#' @return A ggplot fill scale.
-#' @seealso [var_palette()]
-#' @export
-#' @noRd
-scale_fill_var <- function(var, values, name = var,
-                           palette = c("default", "colorblind", "gradual"),
-                           ...)
-  scale_fill_manual(values = var_palette(var, values, match.arg(palette)),
-                    name = name, na.value = "grey85", ...)
-
-#' Colour scale using the stable per-level colours
-#'
-#' The `colour` counterpart of [scale_fill_var()], so a level drawn as a line
-#' matches the same level drawn as a bar.
-#'
-#' @inheritParams scale_fill_var
-#' @return A ggplot colour scale.
-#' @seealso [var_palette()], [scale_fill_var()]
-#' @export
-#' @noRd
-scale_colour_var <- function(var, values, name = var,
-                             palette = c("default", "colorblind", "gradual"),
-                             ...)
-  scale_colour_manual(values = var_palette(var, values, match.arg(palette)),
-                      name = name, na.value = "grey70", ...)
-
-#' Distinct colours for a set of group ids
-#'
-#' Group ids (`G1`, `G2`, ...) are arbitrary labels rather than data levels, so
-#' they get their own palette rather than competing for the level colours.
-#'
-#' @param ids The group ids.
-#' @return A character vector of colours, named by id.
-#' @export
-#' @noRd
-group_palette <- function(ids) {
-  ids <- unique(ids[!is.na(ids)])
-  n <- length(ids)
-  if (!n) return(character(0))
-  base <- PAL_BASE
-  cols <- if (n <= length(base)) base[seq_len(n)]
-          else grDevices::hcl.colors(n, "Dark 3")
-  # the fallback pool is always grey
-  cols[ids %in% c("ALL", "Catch All by All", "no raising needed", "(none)")] <- "#BFBFBF"
-  setNames(cols, ids)
+  cur[vals]
 }
 
 # ----------------------------------------------------------

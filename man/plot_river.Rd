@@ -9,11 +9,11 @@ plot_river(
   left_var,
   right_var = "raise_level",
   value_var = "landings",
-  pal = NULL,
   title = "Which strata are raised from which group",
   left_label = NULL,
   right_label = NULL,
   stratum_axis = "Stratum",
+  palette = c("default", "colorblind", "gradual"),
   save = NULL
 )
 }
@@ -27,13 +27,14 @@ plot_river(
 
 \item{value_var}{Column giving each ribbon its width.}
 
-\item{pal}{Named colours for the groups; a default palette when `NULL`.}
-
 \item{title}{Plot title.}
 
 \item{left_label, right_label}{Axis labels.}
 
 \item{stratum_axis}{Label for the stratum axis.}
+
+\item{palette}{`"default"`, `"colorblind"` or `"gradual"`: the colours of the
+groups.}
 
 \item{save}{Where to write the plot as well, or \code{NULL} (default) to only
 return it: a folder, a file name, or a list of options - see
@@ -50,8 +51,7 @@ from each pool, and which strata were swept into the fallback.
 }
 \seealso{
 Other raising plots: 
-\code{\link{plot_compare_raised}()},
-\code{\link{plot_raised_DR}()},
-\code{\link{plot_raised_catches}()}
+\code{\link{plot_catches}()},
+\code{\link{plot_compare_raised}()}
 }
 \concept{raising plots}

@@ -4,15 +4,18 @@
 \alias{plot_discard_clusters}
 \title{Discard-rate clusters, shown on the map of \code{dims}}
 \usage{
-plot_discard_clusters(x, palette = c("default", "colorblind"), save = NULL)
+plot_discard_clusters(
+  x,
+  palette = c("default", "colorblind", "gradual"),
+  save = NULL
+)
 }
 \arguments{
 \item{x}{Output of \code{\link[=build_discard_clusters]{build_discard_clusters()}}.}
 
-\item{palette}{\code{"default"} or \code{"colorblind"} -
-unlike most of this package's colours, a cluster's own colour is not
-kept stable across plots: which cluster is "1" depends on this run's
-data and \code{k} alone.}
+\item{palette}{\code{"default"}, \code{"colorblind"} or \code{"gradual"}: the cluster colours.
+Which cluster is "1" depends on this run's data and \code{k} alone, so a
+cluster's colour means nothing outside its own plot.}
 
 \item{save}{Where to write the plot as well, or \code{NULL} (default) to only
 return it: a folder, a file name, or a list of options - see

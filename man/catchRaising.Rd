@@ -121,10 +121,9 @@ raised <- catchRaising(catch, strataCond,
 }
 }
 \seealso{
-\code{\link[=define_raising_groups_auto]{define_raising_groups_auto()}} and \code{\link[=define_raising_groups_manual]{define_raising_groups_manual()}}
-for conditions made from the data; \code{\link[=plot_raised_catches]{plot_raised_catches()}},
-\code{\link[=plot_raised_DR]{plot_raised_DR()}} and \code{\link[=raised_overview_table]{raised_overview_table()}} to look at the result;
-\code{\link[=catchAllocationAoL]{catchAllocationAoL()}} for the lengths and ages.
+\code{\link[=check_group_conditions]{check_group_conditions()}} to check the groups before raising;
+\code{\link[=plot_catches]{plot_catches()}}, \code{\link[=plot_DR]{plot_DR()}} and \code{\link[=raised_overview_table]{raised_overview_table()}}
+to look at the result; \code{\link[=catchAllocationAoL]{catchAllocationAoL()}} for the lengths and ages.
 }
 \author{
 Yves Reecht

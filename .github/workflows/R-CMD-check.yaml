@@ -20,7 +20,7 @@ jobs:
         with:
           extra-packages: any::rcmdcheck
           needs: check
-      # The four vignettes read real CEF csv files under inst/extdata, which is
+      # The three vignettes read real CEF csv files under inst/extdata, which is
       # git-ignored and only exists on the developer's machine, so they cannot
       # be built here.
       - uses: r-lib/actions/check-r-package@v2
@@ -33,5 +33,4 @@ jobs:
         run: |
           Rscript dev/check_syntax.R
           Rscript dev/check_exports.R
-          Rscript dev/check_sections.R
         shell: bash

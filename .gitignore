@@ -5,7 +5,6 @@
 .Ruserdata
 *.Rcheck/
 *.tar.gz
-rsconnect/
 inst/doc/
 docs/
 .DS_Store

@@ -83,14 +83,15 @@ counted: BMS is a third catch part with its own raising, not a discard.\tabular{
    Column \tab Meaning \cr
    the \code{dims} columns \tab The stratum, as you named it. \cr
    \code{catchCategory}, \code{variableUnit} \tab \code{"Dis"} and \code{"t"}: what \code{total} is. \cr
-   \code{total} \tab Discards. \code{NA} when the stratum has no discard estimate at all (nobody looked); \code{0} means it was looked at and none were found. \cr
+   \code{total} \tab Discards. \code{NA} when the stratum has no discard estimate at all (nobody looked), or when a raised estimate has no rate (\code{NaN}: its raising group had no donor to draw one from); \code{0} means it was looked at and none were found. \cr
    \code{weightingCategory} \tab \code{"Lan"}. \cr
-   \code{weightingTotal} \tab The landings that carry a discard estimate (their \code{domainCatchDis} is filled): the weight \code{rate} is weighted by. \cr
+   \code{weightingTotal} \tab The landings that carry a discard estimate (their \code{domainCatchDis} is filled): the weight \code{rate} is weighted by. In a raised catch (see \code{importedOrRaised} below) all of its landings do, imported or raised. \cr
    \code{rate} \tab \code{total / weightingTotal} (D/L): discards per tonne of covered landings, as the CAS output reports it. A ratio, so it can exceed 1. \code{NA} when \code{total} is missing or \code{weightingTotal} is 0. \cr
    \code{discardRate} \tab \code{total / (weightingTotal + total)} (D/(L+D)): the discards as a share of the covered landings plus the discards - Between 0 and 1. \code{NA} when \code{total} is missing or the denominator is 0. \cr
    \code{landings} \tab All landings in the stratum, covered or not. \cr
    \code{coverage} \tab \code{weightingTotal / landings}, in percent; \code{NA} when there are no landings. \cr
    \code{numTrips} \tab The trips behind the stratum; \code{NA} when the data does not report them. The largest count among the stratum's rows (one trip repeats across the rows of a sample), and summed when the plots pool strata into one cell. \cr
+   \code{importedOrRaised} \tab Only when \code{catch} is a raised catch (the output of \code{\link[=catchRaising]{catchRaising()}}): \code{"raised"} when the stratum's discard rows were added by the raising, \code{"imported"} when they came with the data. Worked out per stratum, never from the landings rows beside the discards, which are always imported - so it is a column of the result and cannot be one of \code{dims}. A raised catch is counted on the rows the raising ran on, those of the origin and variable type of the rows it raised. \cr
 }
 
 }

@@ -18,7 +18,7 @@ Provenance is encoded in the **file name prefix**, so it is visible in
 
 | new file | was | functions |
 |---|---|---|
-| `RDBESStockCoord_utils.R` | `R/0_Functions_other.R` | `check_group_conditions`, `convert_field`, `unit2ratio`, `fieldsToStrata` |
+| `RDBESStockCoord_utils.R` | `R/0_Functions_other.R` | `check_group_conditions`, `convert_field`, `unit2ratio` |
 | `RDBESStockCoord_raising.R` | `R/0_Functions_discards_raising.R` | `catchRaising`, `grp_catch_raising`, `grp_catch_raising_condition` |
 | `RDBESStockCoord_allocation.R` | `R/0_Functions_age-length_alloc.R` | `catchAllocationAoL`, `catchAtAoLAggregation`, `meanWoLatAoLAggregation`, `grp_AoL_alloc_N`, `grp_AoL_alloc_WL`, `grp_AoL_alloc_condition` |
 | `RDBESStockCoord_intercatch_in.R` | `R/funIntercatchCEF.R` | `funIntercatchCEF` |
@@ -41,69 +41,60 @@ Provenance is encoded in the **file name prefix**, so it is visible in
 4. CRLF → LF.
 5. Provenance banner + `@family RDBESStockCoord` on each file.
 
+Two later edits to the vendored files, also marked `## [pkg]`: `distributionType`
+takes CEF's own `"LengthTotal"` where upstream says `"Length"`, and
+`meanWoLatAoLAggregation(weighting = "CATON")` weights by the catch row's total weight
+(it looked for a `total` column the function had already dropped).
+
 **Not changed:** every function name, every argument name, every default,
 every return shape, every algorithm.
 
 ### Ours
 
-| new file | was | what |
+| file | was | what |
 |---|---|---|
-| `aaa-package.R` | *(new)* | package doc, `@import`, `globalVariables()` |
-| `rcef_utils.R` | `R_development/0_Functions_utils.R` | vocabulary, `derive_fields()`, units, labellers |
-| `rcef_classify.R` | `R_development/0_Functions_classify.R` | `build_strata()`, `classify_strata()`, `cat_lookup()`, `status_palette()` |
-| `rcef_coverage.R` | *(new)* | `build_coverage_strata()`: the discard-rate / sampling-coverage table (CAR / CAS-style columns, no status) the coverage and discard-rate plots draw, usable on its own |
-| `rcef_groups.R` | `R_development/0_Functions_groups.R` | auto cascade + manual rules → `strata_groups` → raising conditions |
-| `rcef_raising.R` | `R_development/0_Functions_raising.R` | `apply_raising()`, scenarios, comparison |
-| `rcef_raise_native.R` | `R_development/mod_native_raising.R` | CEF prepare/check + `run_native_raising()` |
-| `rcef_length.R` | `R_development/mod_length.R` | distributions prep, biology link, allocation steps/cascades |
-| `rcef_alloc.R` | `R_development/mod_alloc_raising.R` | `run_allocation()` + aggregation wrappers + `alloc_class_table()` (what the allocated plots draw) |
-| `rcef_intercatch.R` | `R_development/mod_intercatch.R` **minus `ic_ui()`** | IC staging, mapping, year detection, code emission |
-| `rcef_summaries.R` | `R_development/summaries.R` | catch / biology / effort summary tables |
-| `rcef_session.R` | `R_development/session_log.R` **minus `state_capture()`** | session log + code fragment builders |
-| `rcef_emit.R` | `R_development/0_Functions_emit.R` | reproducible single-script emitter |
-| `rcef_taf.R` | `R_development/0_Functions_taf.R` | the same session as an ICES TAF script set |
-| `viz_theme.R` | `R_development/0_Functions_theme.R` | `app_theme()`, stable colour per level |
-| `viz_plots.R` | `R_development/0_Functions_plots.R` | the public plot functions (ggplot only) |
-| `viz_helpers.R` | *(split from the plots)* | facet layers, status legend, catch-part wording, plot title / subtitle / caption wording (what is sampled, over which weight, what a stratum pools over), ICES-area centroids |
+| `aaa-package.R` | *(new)* | package doc, `@import`, `globals` |
+| `rcef_utils.R` | `R_development/0_Functions_utils.R` | `derive_fields()` (the nested fleet and area levels, on the catch or on its distributions), `convert_units()` (the one unit conversion: weights to tonnes, numbers to N, mean weights to g, length classes to mm) |
+| `rcef_coverage.R` | *(new)* | `build_coverage_strata()`: the discard-rate / sampling-coverage table (CAR / CAS-style columns, no status) the coverage and discard-rate plots draw, usable on its own - it also holds the link between the catch and the distributions that gives length and age coverage; `coverage_cells()`, which pools that table to the cells a coverage plot draws and words what the figure is about |
+| `rcef_length.R` | `R_development/mod_length.R` | the distributions: `prep_distributions()` (one unit, one class scale), the match between catch and distributions through `domainBiology` and the country, `biology_dist_prep()` (the link, the plus-group and length-bin pooling, numbers and mean weight at length / age, before the allocation and after it: the data half of `plot_NaLoA()` and `plot_MWaLoA()`) |
+| `rcef_summaries.R` | `R_development/summaries.R` | `raised_overview_table()` and the reading of `c(a, b)` raised catches |
+| `viz_theme.R` | `R_development/0_Functions_theme.R` | `plot_colours()` (every colour of every plot: three palettes, a level keeps its colour, one status scale), `app_theme()` |
+| `viz_plots.R` | `R_development/0_Functions_plots.R` | the public plot functions (ggplot only), the catch and the distributions each looked at before a step and after it by the same function (`plot_catches()`, `plot_DR()`, `plot_NaLoA()`, `plot_MWaLoA()`); `coverage_grid()`, the one body behind the heatmap and the bubble grid, including the sampling status of a cell |
+| `viz_helpers.R` | *(split from the plots)* | mesh size order, category columns, the imported / raised and sampled / estimated shade, the facet layer, the grouping sentence of a caption, catch-part wording, the class axis of the distribution plots |
+| `viz_raising.R` | *(split from the plots)* | `plot_river()`, `plot_compare_raised()` |
+| `viz_clusters.R` | *(new)* | `build_discard_clusters()` and its two plots |
+| `viz_save.R` | *(new)* | the `save` argument every plot takes |
 
 ---
 
-## app/ — NOT part of the package
+## The Shiny application — put apart
 
-| file | was | why it is here |
-|---|---|---|
-| `app.R` | `R_development/app.R` | the application |
-| `app_ui_helpers.R` | `R_development/app_ui_helpers.R` | icons, panel heights, legend panel — shiny only |
-| `app_mod_intercatch_ui.R` | split out of `mod_intercatch.R` | `ic_ui()` — `actionButton`, `selectInput` |
-| `app_state.R` | split out of `session_log.R` | `state_capture()` — reads `reactiveValuesToList(input)` |
-
-Two files were **split**, not moved. `mod_intercatch.R` and
-`session_log.R` each held one shiny-coupled function among otherwise pure
-ones; keeping them whole would have dragged shiny into `Imports`.
+`inst/app/`, `R/run_app.R` and the functions only the app used are not in the
+working tree. They are whole in the git tag `app-archive`; `DROPPED.md` says how
+to bring them back and lists what went.
 
 ## dev/ — not shipped (`.Rbuildignore`)
 
 `dev/tests/` (the suites), `dev/testdata/` (the synthetic CEF fixture they share),
-`dev/check_syntax.R`, `dev/load_all_sourced.R`.
+`dev/check_ascii.R`, `dev/check_syntax.R`, `dev/check_exports.R`, `dev/check_all.sh`.
 
 ## data/
 
-None: the package ships no data. The tests and the app checks run off the
-synthetic CEF fixture in `dev/testdata/` (`dev/tests/fixture.R` loads it); it
-carries `originType = "WGEstimate"` on every row - the value `catchRaising()`,
-`catchAllocationAoL()` and the app's picker select on - so it runs the whole
-workflow (coverage tables and plots, discard raising, length and age
-allocation, aggregation), one year at a time.
-`dev/tests/test_workflow_example.R` guards that, headless.
+None: the package ships no data. The tests run off the synthetic CEF fixture in
+`dev/testdata/` (`dev/tests/fixture.R` loads it); it carries
+`originType = "WGEstimate"` on every row - the value `catchRaising()` and
+`catchAllocationAoL()` select on - so it runs the whole workflow (coverage
+tables and plots, discard raising, length and age allocation, aggregation), one
+year at a time. `dev/tests/test_workflow_example.R` guards that.
 
 ## inst/extdata/ (local only)
 
 `inst/extdata/` is git-ignored: it holds real fleet data on this machine
-only, and the four vignettes read it:
+only, and the three vignettes read it:
 
 | file | what |
 |---|---|
-| `data_CEF_format/bll/bll_2025_{catches,distributions}_CEF_v17.1.csv` | brill `bll.27.3a47de` 2025 - discards and lengths, no ages. From the git history (removed in `4c1028c`). |
+| `data_CEF_format/bll/{2024,2025}/bll_{2024,2025}_{catches,distributions}_CEF_v17.1.csv` | brill `bll.27.3a47de` 2024 and 2025 - discards and lengths, no ages. From the git history (removed in `4c1028c`). |
 | `data_CEF_format/pok/pok_2022_{catches,distributions}_CEF_v17.1.csv` | saithe `pok.27.3a46` 2022 - with ages. Converted from `data_overviews_format/pok/2022` with `funICoutCEF(..., output_format = "to_file", file_prefix = "pok_2022_")`; the `pok_2022_*` csv files in the history were byte-copies of the bll ones. |
 | `data_overviews_format/{bll/2025,pok/2022}/` | the InterCatch overview files the CEF csv files came from. |
 
@@ -115,50 +106,16 @@ same reason.
 | vignette | reads |
 |---|---|
 | `part1-explore-sampling-coverage` | bll and pok, catches + distributions |
-| `part2a-discard-raising-manual-groups` | bll catches |
-| `part2b-discard-raising-hierarchical-groups` | bll catches |
-| `part3-compare-allocation-schemes` | bll catches |
+| `part2-discard-raising` | bll 2024 catches |
+| `part3-length-age-allocation` | bll 2025 catches and distributions |
 
 The file names start with `part`, not with the number: R drops a vignette
 whose file name does not start with a letter from the built package
 ("excluding invalid files"). The numbers are in the titles.
 
----
+## Repo scaffolding
 
-# Stage 2 — the app became part of the package
-
-| new | was | why |
-|---|---|---|
-| `inst/app/app.R` | `app/app.R` | `inst/` ships with the install, so `run_app()` finds it after `install_github()`. Never seen by `R CMD check`. |
-| `inst/app/app_ui_helpers.R` | `app/` | |
-| `inst/app/app_mod_intercatch_ui.R` | `app/` | |
-| `inst/app/app_state.R` | `app/` | |
-| `R/run_app.R` | *(new)* | `run_app()` — the only supported entry point. Guards `shiny`/`DT` (Suggests) with a named error. |
-| `R/rcef_status.R` | `R_development/external_loader.R` | `rcef_sources()` / `rcef_status()`. Nothing is sourced any more, but the **return shape is identical**, so the Availability panel and `taf_ctx` needed no edit — only `EXT <- rcef_sources(); EXT_STATUS <- rcef_status(EXT)`. |
-
-**`app.R` head rewritten.** Dropped: `APP_DIR` auto-detection over
-`0_Functions_utils.R`, ten `source()` calls into the data modules,
-`external_loader.R`, `EXT_DIR`. Kept: a three-line `source()` of the
-shiny-only helpers, because those are not package code. Everything below
-the head is byte-identical.
-
-**Two emitters had to change**, because they wrote `source()` calls
-naming files that no longer exist:
-
-| function | was | now |
-|---|---|---|
-| `code_setup()` | 5 `source(file.path(scriptPath, ...))` lines | `library(rcef)`; `external_dir` now optional and recorded as a comment |
-| `taf_sources()` | 2 `for`-loops sourcing 11 files | `library(rcef)`; `external_dir` ignored, argument kept so callers do not break |
-
-This is the substantive behaviour change of stage 2: **emitted scripts and
-TAF sets now reproduce via the installed package**, not via a folder of
-loose files. That is what makes a script generated on your machine runnable
-on a colleague's.
-
-## Repo scaffolding added
-
-`DESCRIPTION` (shiny/DT → Suggests; URL/BugReports), `NAMESPACE`
-(placeholder until `document()`), `.Rbuildignore`, `.gitignore`,
+`DESCRIPTION`, `NAMESPACE` (generated), `.Rbuildignore`, `.gitignore`,
 `rcef.Rproj`, `LICENSE` (**placeholder — settle this with the WG before the
-repo goes public**), `.github/workflows/R-CMD-check.yaml`,
-`dev/setup.R`, `dev/deploy_shinyapps.R`, `dev/README.md`.
+repo goes public**), `.github/workflows/R-CMD-check.yaml`, `dev/setup.R`,
+`dev/README.md`.

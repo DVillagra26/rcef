@@ -1,4 +1,4 @@
-## mesh_levels() / reorder_mesh() - natural size order for the `mesh` column
+## mesh_var_levels() / category_cols() - natural size order for the `mesh` column
 ## ("0", "<16", "16-31", ..., ">=220", "all"/"All" last), wired into every
 ## plot that can take `mesh` as an axis, fill, colour, shape, group or facet,
 ## so it never falls back to plain alphabetical order ("100-119" before
@@ -37,19 +37,19 @@ mesh_vals <- c("0", "16-31", "32-69", "70-99", "90-99", "100-119", ">=120")
 mesh_of <- function(fleet)
   mesh_vals[(as.integer(factor(fleet)) - 1) %% length(mesh_vals) + 1]
 c23$mesh <- mesh_of(c23$fleetValue)
-natural <- mesh_levels(c23$mesh)
+natural <- mesh_var_levels("mesh", c23$mesh)
 
-## ---- mesh_levels(): the ordering rule itself ------------------------------
+## ---- mesh_var_levels(): the ordering rule itself ------------------------------
 # mesh_vals is already in natural order by construction, so intersecting it
 # with whatever actually turned up (not every one of the 7 values is
 # guaranteed a fleetValue to land on) gives the same order a correct
-# mesh_levels() call must reproduce.
+# mesh_var_levels() call must reproduce.
 ok(length(natural) >= 4,
-  "mesh_levels(): the synthetic fixture produced enough distinct mesh values")
+  "mesh_var_levels(): the synthetic fixture produced enough distinct mesh values")
 ok(identical(natural, intersect(mesh_vals, natural)),
-  "mesh_levels(): the synthetic fixture sorts by size, not alphabetically")
+  "mesh_var_levels(): the synthetic fixture sorts by size, not alphabetically")
 ok(!identical(natural, sort(mesh_vals)),
-  "mesh_levels(): natural order actually differs from plain sort() here")
+  "mesh_var_levels(): natural order actually differs from plain sort() here")
 
 ## ---- plot_coverage_bar(): fill = \"mesh\" (the original request) ----------
 p1 <- plot_coverage_bar(c23, y = "metier4", fill = "mesh")
@@ -81,7 +81,7 @@ ok(drawable(p4), "plot_coverage_map(): draws with group = mesh")
 glab_layer <- p4$layers[[which(vapply(p4$layers,
   function(l) is.data.frame(l$data) && all(c("k", "glab") %in% names(l$data)),
   logical(1)))[1]]]$data
-present <- mesh_levels(unique(glab_layer$glab))
+present <- mesh_var_levels("mesh", unique(glab_layer$glab))
 ok(identical(glab_layer$k[match(present, glab_layer$glab)], seq_along(present)),
   "plot_coverage_map(): group = mesh places the grid cells in size order")
 
@@ -91,32 +91,29 @@ ok(drawable(p5), "plot_DR(): draws with x = mesh")
 ok(identical(levels(p5$data$mesh), natural),
   "plot_DR(): x = mesh orders the x axis by size")
 
-## ---- plot_raised_DR(): x = \"mesh\" ------------------------------------------
-dims <- c("metier4", "ICESDivision", "seasonValue")
-grp <- quiet(define_raising_groups_auto(c23, hierarchy = dims,
-                                        thresholds = c(50, 40, 30)))
-raised <- quiet(run_native_raising(c23, dims, grp, type = "discards",
-                                   log_file = tempfile(fileext = ".txt")))
+## ---- plot_DR(), of a raised catch: x = \"mesh\" ---------------------------------
+raised <- quiet(fx_raise(c23, fx_groups("own"), type = "discards",
+                         log_file = tempfile(fileext = ".txt")))
 # per (fleet, area) rather than per metier4: three metiers give three meshes
 # whose natural and alphabetical order agree, which would prove nothing
 raised$mesh <- mesh_of(paste(raised$fleetValue, raised$areaValue))
-p6 <- plot_raised_DR(raised_catch = raised, x = "mesh")
-ok(drawable(p6), "plot_raised_DR(): draws with x = mesh")
+p6 <- plot_DR(catch = raised, x = "mesh")
+ok(drawable(p6), "plot_DR(): a raised catch draws with x = mesh")
 ok(length(levels(p6$data$mesh)) > 3 &&
-     identical(levels(p6$data$mesh), mesh_levels(p6$data$mesh)) &&
+     identical(levels(p6$data$mesh), mesh_var_levels("mesh", p6$data$mesh)) &&
      !identical(levels(p6$data$mesh), sort(levels(p6$data$mesh))),
-  "plot_raised_DR(): x = mesh orders the points by size, not alphabetically")
+  "plot_DR(): a raised catch, x = mesh, orders the points by size, not alphabetically")
 
 ## ---- plot_NaLoA(): fill = \"mesh\" -------------------------------------------
 p7 <- plot_NaLoA(c23, test_dist, fill = "mesh")
 ok(drawable(p7), "plot_NaLoA(): draws with fill = mesh")
-ok(identical(levels(p7$data$mesh), mesh_levels(p7$data$mesh)),
+ok(identical(levels(p7$data$mesh), mesh_var_levels("mesh", p7$data$mesh)),
   "plot_NaLoA(): fill = mesh orders the legend by size")
 
 ## ---- plot_MWaLoA(): colour = \"mesh\" -----------------------------------------
 p8 <- plot_MWaLoA(c23, test_dist, colour = "mesh")
 ok(drawable(p8), "plot_MWaLoA(): draws with colour = mesh")
-ok(identical(levels(p8$data$mesh), mesh_levels(p8$data$mesh)),
+ok(identical(levels(p8$data$mesh), mesh_var_levels("mesh", p8$data$mesh)),
   "plot_MWaLoA(): colour = mesh orders the legend by size")
 
 cat(sprintf("\nDONE  %d failure(s)\n", FAIL))

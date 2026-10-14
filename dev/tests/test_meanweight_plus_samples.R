@@ -10,6 +10,10 @@
 ## 3. The plus group pools the ages from `plus_group` upward inside each
 ##    distribution (numbers add, mean weights are number-weighted), labelled
 ##    "7+", and the plot says so.
+##
+## All of it is read from what the plots draw (`p$data`: numbers in thousands,
+## mean weights in g, fish counts) and from the coverage table, on a tiny
+## hand-made catch and distributions.
 
 source("dev/tests/fixture.R")
 FAIL <- 0L
@@ -46,35 +50,36 @@ dist_rows <- function(country, domain, classes, numbers, weights, nmeas,
         cbind(base, variableType = "WeightLive", variableUnit = "g",
               valueType = "Mean", value = weights))
 }
+## what the plots draw, for ages of the landings
+numbers <- function(catch, dist, ...) plot_NaLoA(catch, dist, distributionType = "Age",
+                                                 catchCategory = "Lan", ...)$data
+mweight <- function(catch, dist, ...) plot_MWaLoA(catch, dist, distributionType = "Age",
+                                                 catchCategory = "Lan", ...)$data
 D <- "IC_1_27.4_TBB_DEF_70-99_0_0_all"
-dims_c <- c("catchCategory", "vesselFlagCountry")
 
 ## ---- 1. the link is country-aware ---------------------------------------
 cA <- catch_row("A", D); cB <- catch_row("B", D); cC <- catch_row("C", D)
 dist2 <- rbind(dist_rows("A", D, 1:3, c(10, 30, 60), c(100, 200, 300), 100),
                dist_rows("B", D, 1:3, c(1000, 1000, 1000), c(10, 20, 30), 50))
-lk <- link_dist_to_strata(rbind(cA, cB), dist2, dims_c, "Lan", "Age")
-tot <- function(l, cty) sum(l$.value_std[l$vesselFlagCountry == cty & l$.var_kind == "numbers"])
-ok(near(tot(lk, "A"), 100) && near(tot(lk, "B"), 3000),
+n2 <- numbers(rbind(cA, cB), dist2, fill = "vesselFlagCountry")
+by_cty <- tapply(n2$number * 1e3, n2$vesselFlagCountry, sum)
+ok(near(by_cty[["A"]], 100) && near(by_cty[["B"]], 3000),
    "a domain two countries share: each gets its own distribution, not the other's")
-bl <- biology_link(rbind(cA, cB, cC), dist2, "vesselFlagCountry", "Lan", "Age")
-ok(near(bl$coverage[bl$vesselFlagCountry == "A"], 100) &&
-     near(bl$coverage[bl$vesselFlagCountry == "B"], 100) &&
-     near(bl$coverage[bl$vesselFlagCountry == "C"], 0),
+cov3 <- build_coverage_strata(rbind(cA, cB, cC), "vesselFlagCountry", dist2, what = "age",
+                              catchCategory = "Lan")
+ok(near(cov3$coverage[cov3$vesselFlagCountry == "A"], 100) &&
+     near(cov3$coverage[cov3$vesselFlagCountry == "B"], 100) &&
+     near(cov3$coverage[cov3$vesselFlagCountry == "C"], 0),
    "coverage: a country with the domain but no distribution of its own is not 'measured' because others have one")
-extra <- rbind(dist2, dist_rows("C", D, 1:3, c(5, 5, 5), c(1, 2, 3), 15))
-orph <- dist_without_catch(rbind(cA, cB), extra, "Lan", "Age")
-ok(!is.null(orph) && identical(as.character(orph$vesselFlagCountry), "C"),
-   "a distribution from a country whose catch never names the domain is an orphan, though others use it")
-sm <- stratum_measurements(rbind(cA, cB), dist2, "catchCategory", "Lan", "Age")
-ok(near(sm$n_measurements, 150),
+ok(near(build_coverage_strata(rbind(cA, cB), "catchCategory", dist2, what = "age",
+                              catchCategory = "Lan")$numMeasurements, 150),
    "measurements: two countries' distributions of one domain add (100 + 50), not max")
 nocty <- dist2[, setdiff(names(dist2), "vesselFlagCountry")]
 ok(identical(biology_match_keys(cA, nocty), c("domainBiology", "catchCategory")) &&
      identical(biology_match_keys(cA, dist2),
                c("domainBiology", "catchCategory", "vesselFlagCountry")),
    "the country is matched on only when both tables carry it")
-ok(!is.null(link_dist_to_strata(cA, nocty, dims_c, "Lan", "Age")),
+ok(!is.null(numbers(cA, nocty)),
    "... so a distributions table without a country still links, by domain alone")
 
 ## the bundled example shares domain names across countries (Chile and China
@@ -82,15 +87,18 @@ ok(!is.null(link_dist_to_strata(cA, nocty, dims_c, "Lan", "Age")),
 test_catch <- fx_catch()
 test_dist <- fx_dist()
 cd <- test_catch; dd <- test_dist
-lkx <- link_dist_to_strata(cd, dd, dims_c, "Lan", "LengthTotal")
+nx <- plot_NaLoA(cd, dd, catchCategory = "Lan", fill = "vesselFlagCountry")$data
 own_keys <- unique(paste(cd$vesselFlagCountry, cd$domainBiology)[
   cd$catchCategory == "Lan" & !is.na(cd$domainBiology) & nzchar(cd$domainBiology)])
 pdx <- prep_distributions(dd, "LengthTotal")
 pdx <- pdx[pdx$.var_kind == "numbers" & pdx$catchCategory == "Lan" &
              paste(pdx$vesselFlagCountry, pdx$domainBiology) %in% own_keys, ]
-want <- tapply(pdx$.value_std, pdx$vesselFlagCountry, sum)
-got  <- tapply(lkx$.value_std[lkx$.var_kind == "numbers"],
-               lkx$vesselFlagCountry[lkx$.var_kind == "numbers"], sum)
+# a distribution counts once for every stratum (fleet x season) of its country that names it
+dom_tot <- tapply(pdx$.value_std, paste(pdx$vesselFlagCountry, pdx$domainBiology), sum)
+km <- unique(cd[cd$catchCategory == "Lan" & !is.na(cd$domainBiology) & nzchar(cd$domainBiology),
+                c("vesselFlagCountry", "domainBiology", "fleetValue", "seasonValue")])
+want <- tapply(dom_tot[paste(km$vesselFlagCountry, km$domainBiology)], km$vesselFlagCountry, sum, na.rm = TRUE)
+got  <- tapply(nx$number * 1e3, nx$vesselFlagCountry, sum)
 ok(length(want) > 1 && identical(sort(names(got)), sort(names(want))) &&
      near(as.numeric(got[names(want)]), as.numeric(want)),
    "on the bundled example, where countries share domain names, each country's numbers are its own distributions'")
@@ -98,76 +106,57 @@ ok(length(want) > 1 && identical(sort(names(got)), sort(names(want))) &&
 ## ---- 1b. a record repeated exactly is not a second sample ----------------
 d1 <- dist_rows("A", "d1", 1:3, c(10, 30, 60), c(100, 200, 300), 100)
 rep2 <- rbind(d1, d1)
-ok(grepl("repeat another row exactly", warn(
-     link_dist_to_strata(catch_row("A", "d1"), rep2, dims_c, "Lan", "Age"))),
+ok(grepl("repeat another row exactly", warn(numbers(catch_row("A", "d1"), rep2))),
    "a distributions table that repeats rows exactly warns")
-lkd <- suppressWarnings(link_dist_to_strata(catch_row("A", "d1"), rep2, dims_c,
-                                            "Lan", "Age"))
-ok(nrow(lkd) == nrow(d1) &&
-     near(length_numbers(lkd, character(0))$number, c(10, 30, 60)) &&
-     near(length_meanweight(lkd, character(0))$n_fish, c(10, 30, 60)),
+ok(near(suppressWarnings(numbers(catch_row("A", "d1"), rep2))$number * 1e3, c(10, 30, 60)) &&
+     near(suppressWarnings(mweight(catch_row("A", "d1"), rep2))$n_fish, c(10, 30, 60)),
    "... and the repeats are dropped: numbers and fish are counted once")
-ok(identical(warn(link_dist_to_strata(catch_row("A", "d1"), d1, dims_c, "Lan", "Age")),
-             "no warning"),
+ok(identical(warn(numbers(catch_row("A", "d1"), d1)), "no warning"),
    "no warning when nothing repeats")
 
 ## ---- 2. n_fish -----------------------------------------------------------
-lk1 <- link_dist_to_strata(catch_row("A", "d1"), d1, dims_c, "Lan", "Age")
-mw1 <- length_meanweight(lk1, character(0))
+mw1 <- mweight(catch_row("A", "d1"), d1)
 ok(near(mw1$n_fish, c(10, 30, 60)) && near(mw1$mean_weight, c(100, 200, 300)),
    "numMeasurements 100 shared over numbers 10 / 30 / 60: 10, 30 and 60 fish per class")
 two <- rbind(d1, dist_rows("A", "d2", 1:3, c(5, 5, 10), c(110, 210, 310), 20))
-lk2 <- link_dist_to_strata(rbind(catch_row("A", "d1"), catch_row("A", "d2")),
-                           two, dims_c, "Lan", "Age")
-ok(near(length_meanweight(lk2, character(0))$n_fish, c(10 + 5, 30 + 5, 60 + 10)),
+ok(near(mweight(rbind(catch_row("A", "d1"), catch_row("A", "d2")), two)$n_fish,
+        c(10 + 5, 30 + 5, 60 + 10)),
    "two distributions in one point: their fish add")
 seas <- rbind(catch_row("A", "d1", "1"), catch_row("A", "d1", "2"))
-lk3 <- link_dist_to_strata(seas, d1, c("catchCategory", "vesselFlagCountry", "seasonValue"),
-                           "Lan", "Age")
-ok(nrow(lk3) == 2 * nrow(d1) &&
-     near(length_meanweight(lk3, "vesselFlagCountry")$n_fish, c(10, 30, 60)),
+ok(near(mweight(seas, d1, colour = "vesselFlagCountry")$n_fish, c(10, 30, 60)),
    "a distribution linked to two stratum keys (two seasons) is counted once in a point that pools them")
-ok(near(length_meanweight(lk3, "seasonValue")$n_fish, rep(c(10, 30, 60), each = 2)),
+ok(near(mweight(seas, d1, colour = "seasonValue")$n_fish, rep(c(10, 30, 60), each = 2)),
    "... and once in each point that keeps them apart")
 z <- d1; z$numMeasurements <- 0
-lkz <- link_dist_to_strata(catch_row("A", "d1"), z, dims_c, "Lan", "Age")
-ok(all(length_meanweight(lkz, character(0))$n_fish == 0),
+ok(all(mweight(catch_row("A", "d1"), z)$n_fish == 0),
    "a distribution that reports 0 measurements adds no fish")
 nm <- d1[, setdiff(names(d1), "numMeasurements")]
-lkn <- link_dist_to_strata(catch_row("A", "d1"), nm, dims_c, "Lan", "Age")
-ok(all(is.na(length_meanweight(lkn, character(0))$n_fish)),
+ok(all(is.na(mweight(catch_row("A", "d1"), nm)$n_fish)),
    "no numMeasurements column: the count is unknown (NA), not 0")
 
 ## ---- 3. the plus group ---------------------------------------------------
 d5 <- dist_rows("A", "d1", 1:5, c(10, 20, 30, 40, 50),
                 c(100, 200, 300, 400, 500), 150)
-lk5 <- link_dist_to_strata(catch_row("A", "d1"), d5, dims_c, "Lan", "Age")
-pp <- pool_plus_group(lk5, 4, dims_c)
-n5 <- length_numbers(pp, character(0)); m5 <- length_meanweight(pp, character(0))
-ok(identical(sort(unique(pp$.class)), c(1, 2, 3, 4)) &&
-     near(n5$number, c(10, 20, 30, 90)),
+c5 <- catch_row("A", "d1")
+n5 <- numbers(c5, d5, plus_group = 4); m5 <- mweight(c5, d5, plus_group = 4)
+ok(identical(sort(unique(n5$.class)), c(1, 2, 3, 4)) &&
+     near(n5$number * 1e3, c(10, 20, 30, 90)),
    "ages 4 and 5 become class 4: numbers add up (40 + 50 = 90); ages below are untouched")
 ok(near(m5$mean_weight, c(100, 200, 300, (40 * 400 + 50 * 500) / 90)),
    "the plus class weighs the number-weighted mean of its ages")
 ok(near(m5$n_fish, c(10, 20, 30, 90)),
    "and holds the fish of its ages (150 shared out over the numbers)")
-ok(identical(pool_plus_group(lk5, 99, dims_c), lk5),
-   "no age reaches the start: nothing changes")
-ok(!".plus" %in% names(lk5) && all(pp$.plus == (pp$.class == 4)) &&
-     any(pp$.plus) && !all(pp$.plus),
-   "the pooled rows are marked (.plus): the class-4 rows and only those")
-ok(identical(m5$plus, c(FALSE, FALSE, FALSE, TRUE)) &&
-     !"plus" %in% names(length_meanweight(lk5, character(0))),
-   "the summary keeps the mark as a `plus` column, and has none for a link that was not pooled")
-ok(near(sum(length_numbers(pool_plus_group(lk5, 2, dims_c), character(0))$number),
-        sum(length_numbers(lk5, character(0))$number)),
+ok(identical(suppressWarnings(mweight(c5, d5, plus_group = 99)), mweight(c5, d5)) &&
+     grepl("no age reaches", warn(mweight(c5, d5, plus_group = 99))),
+   "no age reaches the start: nothing changes, and it says so")
+ok(identical(m5$plus, c(FALSE, FALSE, FALSE, TRUE)) && !"plus" %in% names(mweight(c5, d5)),
+   "the summary marks the pooled class in a `plus` column, and has none when nothing was pooled")
+ok(near(sum(numbers(c5, d5, plus_group = 2)$number), sum(numbers(c5, d5)$number)),
    "pooling conserves the numbers")
 ## two distributions: pooled inside each, then averaged over strata by numbers;
 ## the spread is across the strata (455.6 g and 45 g), not across the ages
 b5 <- dist_rows("A", "d2", 1:5, rep(100, 5), c(10, 20, 30, 40, 50), 300)
-lkb <- link_dist_to_strata(rbind(catch_row("A", "d1"), catch_row("A", "d2")),
-                           rbind(d5, b5), dims_c, "Lan", "Age")
-mb <- length_meanweight(pool_plus_group(lkb, 4, dims_c), character(0))
+mb <- mweight(rbind(catch_row("A", "d1"), catch_row("A", "d2")), rbind(d5, b5), plus_group = 4)
 plus <- mb[mb$.class == 4, ]
 v1 <- (40 * 400 + 50 * 500) / 90; v2 <- (100 * 40 + 100 * 50) / 200
 m_all <- (90 * v1 + 200 * v2) / 290
@@ -230,29 +219,13 @@ pl <- plot_MWaLoA(cd, dd, distributionType = "LengthTotal",
 ok(drawable(pl) && says_cap(pl, "bars = fish measured (right axis)"),
    "and on lengths, faceted")
 
-## a summary built from a pooled link says so in its `plus` column, so a plot
-## of it labels the class without being told (how the app draws a plus group)
-dims_a <- c("catchCategory", "vesselFlagCountry")
-tab_pp <- length_meanweight(pool_plus_group(
-  link_dist_to_strata(cd, dd, dims_a, "Lan", "Age"), 3, dims_a), "vesselFlagCountry")
-pt_pp <- plot_MWaLoA(tab_pp, colour = "vesselFlagCountry")
-ok(max(pt_pp$data$.class) == 3 && "3+" %in% xlab(pt_pp) &&
-     says_cap(pt_pp, "3+ = ages 3+ pooled (per-distribution mean)") &&
-     identical(pt_pp$theme$legend.position, "right"),
-   "a pooled summary is labelled 3+ from its `plus` column, with no plus_group argument")
-ok(!any(grepl("+", xlab(plot_MWaLoA(
-       length_meanweight(link_dist_to_strata(cd, dd, dims_a, "Lan", "Age"), "vesselFlagCountry"),
-       colour = "vesselFlagCountry")), fixed = TRUE)),
-   "and a summary that was not pooled shows no plus")
-
-## a summarised table carries n_fish (length_meanweight), so it can show the bars
-tab <- length_meanweight(link_dist_to_strata(cd, dd, c("catchCategory", "vesselFlagCountry"),
-                                             "Lan", "Age"), "vesselFlagCountry")
+## a summarised table (what a plot draws as `p$data`) carries n_fish, so it can show the bars
+tab <- p0$data
 pt <- plot_MWaLoA(tab, colour = "vesselFlagCountry", show_samples = TRUE)
 ok("n_fish" %in% names(tab) && drawable(pt) &&
      inherits(pt$layers[[1]]$geom, "GeomCol") &&
      says_cap(pt, "bars = fish measured (right axis)"),
-   "a length_meanweight() table draws the bars from its n_fish column")
+   "a summarised table draws the bars from its n_fish column")
 
 ## ---- 5. arguments that do not fit ----------------------------------------
 ok(grepl("plus_group", err(plot_MWaLoA(

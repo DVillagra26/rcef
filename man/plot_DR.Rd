@@ -2,7 +2,7 @@
 % Please edit documentation in R/viz_plots.R
 \name{plot_DR}
 \alias{plot_DR}
-\title{Discard rate per stratum}
+\title{Discard rate per stratum, before or after the raising}
 \usage{
 plot_DR(
   catch,
@@ -10,6 +10,7 @@ plot_DR(
   colour = NULL,
   shape = NULL,
   facet = NULL,
+  alpha = "importedOrRaised",
   rate = c("ratio", "rate"),
   reference = NULL,
   jitter = TRUE,
@@ -18,23 +19,32 @@ plot_DR(
 )
 }
 \arguments{
-\item{catch}{Raw CEF catch data, or a discard coverage table from
-\code{\link[=build_coverage_strata]{build_coverage_strata()}}.}
+\item{catch}{Raw CEF catch data, the raised catch (\code{\link[=catchRaising]{catchRaising()}}), or a
+discard coverage table from \code{\link[=build_coverage_strata]{build_coverage_strata()}}.}
 
 \item{x}{Column on the x axis: one point per level (times \code{colour},
-\code{shape} and \code{facet}). Required.}
+\code{shape} and \code{facet}). Can be \code{"DrGroup"} or \code{"importedOrRaised"}.
+Required.}
 
-\item{colour}{Column mapped to the point fill.}
+\item{colour}{Column mapped to the point fill; \code{"importedOrRaised"}
+included.}
 
-\item{shape}{Column mapped to the point shape.}
+\item{shape}{Column mapped to the point shape; \code{"importedOrRaised"}
+included.}
 
-\item{facet}{Optional facet column.}
+\item{facet}{Optional facet column; \code{"importedOrRaised"} included.}
+
+\item{alpha}{\code{"importedOrRaised"} (default) draws the shade: solid for
+imported, transparent for raised. \code{NULL} draws none. Left out when
+\code{importedOrRaised} is the \code{x}, \code{colour}, \code{shape} or \code{facet}, and when
+nothing was raised.}
 
 \item{rate}{\code{"ratio"} (default, discards / landings) or \code{"rate"} (discards
 / catch): which discard rate is the y variable. See \emph{The rate}.}
 
 \item{reference}{Optional single rate, as a fraction (\code{0.3} = 30\%), on the
-scale of \code{rate}. Draws a dashed line and labels the strata above it.}
+scale of \code{rate}. Draws a dashed line and, before the raising, labels the
+strata above it.}
 
 \item{jitter}{Jitter the points horizontally. Cosmetic only - one point is
 still one stratum.}
@@ -52,23 +62,64 @@ A ggplot object, or \code{NULL} when no stratum has a discard rate.
 \description{
 One point per stratum, its discard rate on the y axis and its landings as
 the point size - the finest a stratum gets, never an average of finer ones.
-A thin line behind the points marks the mean rate of each \code{x} level,
-weighted by landings, and an optional \code{reference} draws a dashed line and
-names the strata above it.
+Given raw catch it shows the rates as they were reported, with a thin line
+behind the points marking the mean rate of each \code{x} level, weighted by
+landings, and an optional \code{reference} that draws a dashed line and names the
+strata above it. Given the raised catch (the output of \code{\link[=catchRaising]{catchRaising()}}) it
+shows what the raising did: a stratum whose discards came with the data
+(\emph{imported}) is drawn solid, one whose discards the raising added
+(\emph{raised}) is drawn transparent. The arguments are the same either way, and
+so is the plot; the title says which it is.
 }
 \details{
 \subsection{What a point is}{
 
 A stratum is one row of the discard coverage table
 (\code{\link[=build_coverage_strata]{build_coverage_strata()}}). Given a discard coverage table, its rows are
-drawn exactly as they are - one point per row. Given raw catch, the table
-is built at the finest resolution the catch carries (\code{fleetValue},
-\code{areaValue}, \code{vesselFlagCountry}, \code{seasonValue}, whichever are present) \emph{together with}
-\code{x} / \code{colour} / \code{shape} / \code{facet}, so a point is always an individual,
-un-pooled stratum: several points can share one \code{x} level. \code{strata_vars}
-(the columns behind a point's label, see below) is exactly this set.
-Strata with no discard estimate have no rate and are not drawn: a rate is
-a property of sampled strata only.
+drawn exactly as they are - one point per row. Given catch, raw or raised,
+the table is built at the finest resolution the catch carries (\code{fleetValue},
+\code{areaValue}, \code{vesselFlagCountry}, \code{seasonValue}, whichever are present)
+\emph{together with} \code{x} / \code{colour} / \code{shape} / \code{facet}, so a point is always an
+individual, un-pooled stratum: several points can share one \code{x} level.
+\code{strata_vars} (the columns behind a point's label, see below) is exactly this
+set. Strata with no discard estimate have no rate and are not drawn: a rate
+is a property of sampled strata only.
+}
+
+\subsection{Before and after the raising}{
+
+The raising adds \code{importedOrRaised} to the catch, and with it the plot knows
+what the raising did. \code{importedOrRaised} is a variable like any other. By
+default it is the shade (\code{alpha = "importedOrRaised"}): solid for imported
+strata, transparent for raised ones. Name it in \code{x}, \code{colour}, \code{shape} or
+\code{facet} to draw it there instead - a colour each, a panel each, two columns
+of points - and it is then not drawn as a shade as well. \code{alpha = NULL} draws
+no shade, and unless it is named elsewhere imported and raised strata are
+drawn alike. Whichever way, it is worked out per stratum (a stratum is raised
+when its discard rows were), never from the landings rows next to them, which
+are always imported; a stratum that holds both kinds of discard row is raised.
+
+The title says what the strata drawn are: \emph{imported + raised} when the
+raising added some of them, \emph{only imported} when it did not - a raw catch,
+or a raised catch in which nothing needed raising - and then there is no
+shade, because there is nothing to tell apart.
+
+Put the raising group on \code{x} (\code{"DrGroup"}): a group's transparent points all
+sit on one line, the rate it was raised at, and its solid points show how
+far the strata it was built from scatter around that line - a group whose
+solid points are spread far from it is a guess dressed up as a group. Only
+the strata of the raised catch are drawn, so the donors of a group wider
+than its own strata (a REST group raised from every gear, say) appear under
+the groups they themselves belong to.
+
+A raised stratum whose group had no donor to draw a rate from comes out of
+the raising as \code{NaN}: it has no rate to plot and is left out, with a message
+saying how many.
+
+Once strata are raised the transparent points are themselves the reference,
+so the weighted-mean line, the reference line's label and the per-point
+labels, which help to read the rates as they were reported, are left out;
+the dashed \code{reference} line stays.
 }
 
 \subsection{The rate}{
@@ -95,16 +146,16 @@ that carry a discard estimate (\code{weightingTotal}, the CAS weight): a big
 stratum counts for more than a small one. For \code{"ratio"} it equals the rate
 of the \code{x} level built directly, \code{build_coverage_strata(catch, x)}. It sits
 behind the points, thin and muted, so it reads as a reference, not the
-headline.
+headline. Before the raising only.
 }
 
 \subsection{The reference line}{
 
 \code{reference} is a rate on the same scale as the axis, as a fraction (\code{0.3} is
 30\%; with \code{rate = "rate"} it must lie between 0 and 1). A dashed line marks
-it, and the strata above it are labelled with their identity - the finest
-column of each stratum family present (so a coarser alias already
-determined by a finer one you also plotted, \code{metier4} alongside
+it and, before the raising, the strata above it are labelled with their
+identity - the finest column of each stratum family present (so a coarser
+alias already determined by a finer one you also plotted, \code{metier4} alongside
 \code{fleetValue} say, is not repeated), bare values joined by \code{"|"}
 (\code{"PS_SPF_0_0_0|87.1.2|Chile|1"}) - a point is an individual stratum, so
 its label identifies it fully, not just by the columns you happened to
@@ -132,6 +183,14 @@ plot_DR(catch, x = "vesselFlagCountry", colour = "metier4",
 plot_DR(catch, x = "metier4", colour = "vesselFlagCountry",
        rate = "rate", reference = 0.2)
 
+# the same plot of the raised catch: imported solid, raised transparent
+raised <- catchRaising(catch, strataCond, logFile = tempfile(fileext = ".txt"))
+plot_DR(raised, x = "DrGroup", colour = "metier4")
+
+# imported against raised as the panels instead of the shade
+plot_DR(raised, x = "metier4", colour = "vesselFlagCountry",
+       facet = "importedOrRaised")
+
 # the table behind the points
 cov <- build_coverage_strata(catch, c("metier4", "vesselFlagCountry"))
 head(cov[!is.na(cov$rate), c("metier4", "vesselFlagCountry", "total", "rate",
@@ -140,9 +199,7 @@ head(cov[!is.na(cov$rate), c("metier4", "vesselFlagCountry", "total", "rate",
 }
 \seealso{
 \code{\link[=build_coverage_strata]{build_coverage_strata()}} for the table behind the points;
-\link{coverage-plots} for how well those strata are sampled.
-
-Other discard-rate plots: 
-\code{\link{plot_raised_DR}()}
+\link{coverage-plots} for how well those strata are sampled; \code{\link[=plot_catches]{plot_catches()}}
+for the weight itself, before or after the raising.
 }
 \concept{discard-rate plots}

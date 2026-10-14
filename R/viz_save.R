@@ -69,7 +69,8 @@ NULL
 
 # Validates a plot function's `save` argument and, when there is something to
 # write, registers the write to run as the calling function exits (see the
-# header). Returns the normalised options, invisibly, or NULL.
+# header): the writer is defined here and handed to the exit expression as the
+# function itself. Returns the normalised options, invisibly, or NULL.
 #' @noRd
 #' @export
 save_on_exit <- function(save, fn = "plot", frame = parent.frame()) {
@@ -131,48 +132,45 @@ save_on_exit <- function(save, fn = "plot", frame = parent.frame()) {
                height = if (is.null(save$height)) 7 else save$height,
                units = units, dpi = dpi, device = save$device,
                bg = if (is.null(save$bg)) "white" else save$bg)
+  # Writes the plot as normalised above. Called from the calling function's exit,
+  # so it must never fail a function that returned nothing: a plot that was not
+  # drawn is skipped.
+  write_plot <- function(p, spec, fn = "plot") {
+    if (is.null(spec) || !inherits(p, "ggplot")) return(invisible(p))
+    file <- spec$file
+    if (is.null(file)) {
+      # named after the title; the code is made from what the plot says and
+      # from what it draws (the built layers: positions, colours, sizes), so two
+      # plots with one title - another fill, another facet - get two files, and
+      # the same plot gets the same one again
+      lab  <- function(x) if (is.null(x)) "" else paste(unlist(x), collapse = " ")
+      built <- tryCatch(ggplot2::ggplot_build(p)$data, error = function(e) list())
+      lay  <- vapply(built, function(d) {
+        num <- sum(unlist(lapply(d, function(v) if (is.numeric(v)) sum(v, na.rm = TRUE) else 0)))
+        txt <- sort(unique(unlist(lapply(d, function(v)
+          if (is.character(v) || is.factor(v)) as.character(v) else NULL))))
+        paste(nrow(d), paste(names(d), collapse = ","), signif(num, 10),
+              paste(txt, collapse = ";"), sep = "/")
+      }, "")
+      desc <- paste(c(lab(p$labels), lay), collapse = "|")
+      a <- 1; s <- 0
+      for (v in utf8ToInt(desc)) { a <- (a + v) %% 65521; s <- (s + a) %% 65521 }
+      stem <- gsub("^-+|-+$", "", gsub("[^A-Za-z0-9]+", "-", tolower(lab(p$labels$title))))
+      if (!nzchar(stem)) stem <- gsub("_", "-", fn)
+      file <- sprintf("%s_%06x.%s", stem, (s * 65521 + a) %% 16777216,
+                      if (is.null(spec$device)) "png" else spec$device)
+    }
+    dir.create(spec$dir, recursive = TRUE, showWarnings = FALSE)
+    out <- file.path(spec$dir, file)
+    ggplot2::ggsave(out, plot = p, device = spec$device, width = spec$width,
+                    height = spec$height, units = spec$units, dpi = spec$dpi,
+                    bg = spec$bg)
+    message(fn, "(): saved ", out)
+    invisible(p)
+  }
   do.call(on.exit,
-          list(bquote({ .rcef_plot <- returnValue(); write_plot(.rcef_plot, .(spec), .(fn)) }),
+          list(bquote({ .rcef_plot <- returnValue(); .(write_plot)(.rcef_plot, .(spec), .(fn)) }),
                TRUE),
           envir = frame)
   invisible(spec)
-}
-
-# Writes a plot as save_on_exit() normalised the options. Called from the
-# calling function's exit, so it must never fail a function that returned
-# nothing: a plot that was not drawn is skipped.
-#' @noRd
-#' @export
-write_plot <- function(p, spec, fn = "plot") {
-  if (is.null(spec) || !inherits(p, "ggplot")) return(invisible(p))
-  file <- spec$file
-  if (is.null(file)) {
-    # named after the title; the code is made from what the plot says and
-    # from what it draws (the built layers: positions, colours, sizes), so two
-    # plots with one title - another fill, another facet - get two files, and
-    # the same plot gets the same one again
-    lab  <- function(x) if (is.null(x)) "" else paste(unlist(x), collapse = " ")
-    built <- tryCatch(ggplot2::ggplot_build(p)$data, error = function(e) list())
-    lay  <- vapply(built, function(d) {
-      num <- sum(unlist(lapply(d, function(v) if (is.numeric(v)) sum(v, na.rm = TRUE) else 0)))
-      txt <- sort(unique(unlist(lapply(d, function(v)
-        if (is.character(v) || is.factor(v)) as.character(v) else NULL))))
-      paste(nrow(d), paste(names(d), collapse = ","), signif(num, 10),
-            paste(txt, collapse = ";"), sep = "/")
-    }, "")
-    desc <- paste(c(lab(p$labels), lay), collapse = "|")
-    a <- 1; s <- 0
-    for (v in utf8ToInt(desc)) { a <- (a + v) %% 65521; s <- (s + a) %% 65521 }
-    stem <- gsub("^-+|-+$", "", gsub("[^A-Za-z0-9]+", "-", tolower(lab(p$labels$title))))
-    if (!nzchar(stem)) stem <- gsub("_", "-", fn)
-    file <- sprintf("%s_%06x.%s", stem, (s * 65521 + a) %% 16777216,
-                    if (is.null(spec$device)) "png" else spec$device)
-  }
-  dir.create(spec$dir, recursive = TRUE, showWarnings = FALSE)
-  out <- file.path(spec$dir, file)
-  ggplot2::ggsave(out, plot = p, device = spec$device, width = spec$width,
-                  height = spec$height, units = spec$units, dpi = spec$dpi,
-                  bg = spec$bg)
-  message(fn, "(): saved ", out)
-  invisible(p)
 }

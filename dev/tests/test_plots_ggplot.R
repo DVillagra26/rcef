@@ -38,13 +38,9 @@ ok(!any(vapply(fns, function(f) any(gone %in% names(formals(get(f)))),
    "none of the seven plot functions takes `engine` or `n_per_screen`")
 ok(grepl("unused argument", err(plot_coverage_heat(cd, y = "metier4", engine = "base"))),
    "engine = 'base' is now simply an unused argument")
-gone_fns <- c("split_facets_to_screens", "grid_base", "axis_x_cat", "axis_y_cat",
-              "legend_overlay", "legend_status_base", "facet_key_base",
-              "plot_arg_report", "sampled_for_discards", "collapse_cells",
-              "covered_phrase", "thr_caption",
-              "plot_numbers_at_length_age", "plot_meanweight_at_length_age")
+gone_fns <- c("plot_numbers_at_length_age", "plot_meanweight_at_length_age")
 ok(!any(vapply(gone_fns, exists, logical(1), where = asNamespace("rcef"))),
-   "the base-R plumbing, the old wording helpers and the old function names are gone")
+   "the old function names (plot_NaLoA / plot_MWaLoA are the names now) are gone")
 
 ## ---- 2. discard coverage: raw catch and the table draw the same figure --
 tab <- build_coverage_strata(cd, c("metier4", "vesselFlagCountry"))
@@ -101,12 +97,13 @@ ok(grepl("y", err(plot_coverage_heat(cd, x = "vesselFlagCountry"))), "no y is an
 ok(grepl("not in the coverage table: seasonValue", err(
      plot_coverage_heat(tab, y = "metier4", x = "seasonValue"))),
    "a plotted column the table lacks is named, with what it does have")
-ok(grepl("palette does not recolour", warn(
-     plot_coverage_heat(cd, y = "metier4", palette = "colorblind"))),
-   "a colourblind palette on the status heatmap warns (its colours are fixed)")
+ok(identical(warn(plot_coverage_heat(cd, y = "metier4", palette = "colorblind")), "no warning") &&
+     !identical(ggplot_build(plot_coverage_heat(cd, y = "metier4", palette = "colorblind"))$data[[1]]$fill,
+                ggplot_build(plot_coverage_heat(cd, y = "metier4"))$data[[1]]$fill),
+   "a colourblind palette recolours the status heatmap, silently")
 ok(drawable(plot_coverage_bar(cd, y = "metier4", fill = "vesselFlagCountry",
                               palette = "colorblind")),
-   "... but recolours the bars")
+   "... and the bars")
 ok(drawable(plot_coverage_heat(cd, y = "metier4", what = "discards")),
    "what = 'discards' (plural) is accepted")
 ok(grepl("min_fish does not apply to what = \"discard\"", err(
@@ -120,16 +117,7 @@ ok(grepl("min_fish does not apply", err(
 ok(drawable(plot_coverage_heat(cd, y = "metier4")),
    "min_fish left at its default (NULL) is fine on a discard plot")
 
-## ---- 4. legend spec the app rebuilds its status legend from -------------
-sl <- attr(h_raw, "status_legend")
-ok(is.list(sl) && identical(sl$what, "discard") && sl$threshold == 50 &&
-     is.null(sl$min_trips) && identical(sl$key, "tile"),
-   "the heatmap records its status legend spec (min_trips NULL by default)")
-ok(inherits(status_legend_plot(sl$threshold, sl$what, sl$min_meas,
-                               sl$key, sl$size, sl$min_trips), "ggplot"),
-   "and status_legend_plot() rebuilds the legend from it")
-
-## ---- 5. length / age coverage ------------------------------------------
+## ---- 4. length / age coverage ------------------------------------------
 lt <- build_coverage_strata(cd, c("metier4", "vesselFlagCountry"), dd, what = "length",
                             catchCategory = "Lan")
 lh_raw <- plot_coverage_heat(cd, dd, y = "metier4", x = "vesselFlagCountry", what = "length",
@@ -160,7 +148,7 @@ ok(drawable(plot_coverage_bar(cd, dd, y = "metier4", fill = "vesselFlagCountry",
                                    what = "age", min_cov = 50)),
    "length bars and age bubbles build from raw catch + distributions")
 
-## ---- 6. the map ---------------------------------------------------------
+## ---- 5. the map ---------------------------------------------------------
 if (requireNamespace("maps", quietly = TRUE)) {
   mp <- suppressWarnings(plot_coverage_map(cd))
   ok(inherits(mp, "ggplot"), "the coverage map returns a ggplot (no base version)")
@@ -171,7 +159,7 @@ if (requireNamespace("maps", quietly = TRUE)) {
      "the map takes no thresholds (it never used them)")
 }
 
-## ---- 7. discard rate ----------------------------------------------------
+## ---- 6. discard rate ----------------------------------------------------
 ## from raw catch the table is built at the finest resolution the catch
 ## carries, together with the plotted columns - so a point is one raw
 ## stratum, never several pooled under one shared (x, colour) name
@@ -211,14 +199,12 @@ ok("discardRate" %in% names(tab) &&
                       (tab$total / (tab$weightingTotal + tab$total))[has_ld])) &&
      all(tab$discardRate <= 1, na.rm = TRUE),
    "the table carries the rate as discardRate beside the ratio as rate, and it never exceeds 100%")
-fine_dr <- build_coverage_strata(cd, c("metier4", "vesselFlagCountry", "seasonValue"))
-pooled <- coverage_cells(fine_dr, NULL, c("metier4", "vesselFlagCountry"), "discard", FALSE,
-                         NULL, "test")$cells
-pooled <- pooled[match(paste(tab$metier4, tab$vesselFlagCountry),
-                       paste(pooled$metier4, pooled$vesselFlagCountry)), ]
-ok(isTRUE(all.equal(pooled$rate, tab$rate)) &&
-     isTRUE(all.equal(pooled$discardRate, tab$discardRate)),
-   "a finer table pooled to metier4 x vesselFlagCountry re-derives both rates from the summed weights")
+pooled <- h_fine$data[match(paste(tab$metier4, tab$vesselFlagCountry),
+                            paste(h_fine$data$metier4, h_fine$data$vesselFlagCountry)), ]
+has_cell <- !is.na(pooled$landings)
+ok(any(has_cell) && isTRUE(all.equal(pooled$rate[has_cell], tab$rate[has_cell])) &&
+     isTRUE(all.equal(pooled$discardRate[has_cell], tab$discardRate[has_cell])),
+   "a finer table pooled to metier4 x vesselFlagCountry (the heatmap's cells) re-derives both rates from the summed weights")
 
 ## the y variable
 d_ld <- plot_DR(cd, x = "metier4", colour = "vesselFlagCountry", rate = "rate")
@@ -276,14 +262,10 @@ ok(any(vapply(d_ref$layers, function(l) inherits(l$geom, "GeomHline"), logical(1
    "a reference draws a line; without one there is none")
 ok(any(lab) && all(d_ref$data$.y[lab] > ref * 100) && all(d_ref$data$.y[!lab] <= ref * 100),
    "exactly the strata above the reference are labelled")
-sv <- setdiff(names(tab_fine), c("catchCategory", "variableUnit", "weightingCategory",
-                                 "total", "weightingTotal", "rate", "discardRate",
-                                 "landings", "coverage", "numTrips", "Stratum"))
-lab_vars <- finest_per_family(sv)
+lab_vars <- c("fleetValue", "areaValue", "vesselFlagCountry", "seasonValue")   # metier4 is left out: fleetValue is finer
 exp_lab <- do.call(paste, c(lapply(lab_vars, function(v) d_ref$data[[v]]), sep = "|"))
 ok(identical(d_ref$data$.lab[lab], exp_lab[lab]) &&
-     !any(grepl("=", exp_lab[lab])) &&
-     identical(lab_vars, c("fleetValue", "areaValue", "vesselFlagCountry", "seasonValue")),
+     !any(grepl("=", exp_lab[lab])) && !any(grepl("metier4", d_ref$data$.lab[lab])),
    "a label is bare values, finest-per-family only (metier4 dropped for fleetValue), joined with '|'")
 ok(grepl("fraction between 0 and 1", err(plot_DR(
      cd, x = "metier4", rate = "rate", reference = 30))) &&
@@ -293,7 +275,7 @@ ok(grepl("fraction between 0 and 1", err(plot_DR(
                                                   reference = "a"))),
    "a reference that is not one fraction is an error (30 for the rate is named as such)")
 
-## ---- 8. distribution plots ---------------------------------------------
+## ---- 7. distribution plots ---------------------------------------------
 ok(drawable(plot_NaLoA(cd, dd, fill = "vesselFlagCountry")) &&
      drawable(plot_MWaLoA(cd, dd, colour = "vesselFlagCountry")),
    "numbers and mean weight build from raw catch + distributions")
@@ -310,7 +292,7 @@ gap <- data.frame(.class = c(20, 25, 30, 35, 40, 45, 50),
 ok(drawable(plot_MWaLoA(gap, colour = "fleetValue")),
    "a mean-weight ribbon with an NA gap in the middle builds")
 
-## ---- 9. titles, captions and the Thresholds box --------------------------
+## ---- 8. titles, captions and the Thresholds box --------------------------
 ## The title says what is sampled and over which weight. There is no
 ## subtitle any more: the caption's first line says what a stratum is
 ## (grouping = ..., grouped over ...), and the rest is a short, formula-like
@@ -372,14 +354,15 @@ if (requireNamespace("maps", quietly = TRUE)) {
        says_cap(mp, "grouping = areaValue, grouped over fleet (fleetValue), country, and season.") &&
        says_cap(mp, "area = areaValue.") &&
        says_cap(mp, "bubble size = landings weight (t).") &&
-       says_cap(mp, "coverage slice (green) = share of landed weight with discard estimates."),
+       says_cap(mp, "coverage slice = share of landed weight with discard estimates."),
      "map: no subtitle; the caption names the grouping, the area, the size and the coloured slice")
   mp_g <- suppressWarnings(plot_coverage_map(cd, group = "seasonValue"))
-  ok(says_cap(mp_g, "grouping = seasonValue x areaValue, grouped over fleet (fleetValue) and country."),
-     "a map group column is part of what each pie is, named before the area")
+  ok(says_cap(mp_g, "grouping = seasonValue x areaValue, grouped over fleet (fleetValue) and country.") &&
+       identical(ttl(mp_g), "Sampling of Discards by areaValue and seasonValue"),
+     "a map group column is part of what each pie is, named before the area (and in the title after it)")
 }
-ok(identical(ttl(d_raw), "Discard ratio per stratum") &&
-     identical(ttl(d_ld), "Discard rate per stratum") &&
+ok(identical(ttl(d_raw), "Discard ratio per stratum, only imported") &&
+     identical(ttl(d_ld), "Discard rate per stratum, only imported") &&
      says_cap(d_raw, "Discard ratio = discard/landings weight.") &&
      says_cap(d_ld, "Discard rate = discard/catch weight.") &&
      says_cap(d_raw, "grouping = no grouping, raw data as in CEF (CN) data.") &&
@@ -423,31 +406,26 @@ ok(identical(strata_sentence(c("donor_group", "domainCatchDis", "metier4")),
              "grouping = no grouping, raw data as in CEF (CN) data.") &&
      identical(strata_sentence("Stratum"), "grouping = no grouping, raw data as in CEF (CN) data."),
    "a domain (or Stratum) column already names fleet, area, country and season: nothing is grouped over")
-ok(identical(cov_title("age", "landings"), "Landings - Sampling of Age") &&
-     identical(cov_title("length", "catch"), "Catch - Sampling of Length") &&
-     identical(cov_title("discard", "landings", by = c("a", "b")),
-               "Sampling of Discards by a and b") &&
-     identical(share_phrase("age", "discards"),
-               "share of discarded weight with age distributions"),
-   "cov_title(): the weight first (dropped for discard coverage), then what is sampled / share_phrase()")
+ha <- plot_coverage_heat(cd, dd, y = "metier4", what = "age", catchCategory = "Dis")
+ok(identical(ttl(plot_coverage_heat(cd, dd, y = "metier4", what = "age", catchCategory = "Lan")),
+             "Landings - Sampling of Age") &&
+     identical(ttl(ha), "Discards - Sampling of Age") &&
+     grepl("^coverage >= 50%: share of discarded weight with age distributions\\.", box_text(ha)),
+   "the title puts the weight first, then what is sampled; the box words the covered share by the same weight and what is sampled")
 wrapped <- strsplit(sub_wrap(paste(rep("word", 60), collapse = " "), "short"), "\n")[[1]]
 ok(all(nchar(wrapped) <= 96) && identical(wrapped[length(wrapped)], "short"),
    "sub_wrap() wraps each paragraph on its own")
-ok(identical(thr_lines(50, 2, 1000, "length", "landings"),
-             c("coverage >= 50%: share of landed weight with length distributions.",
-               "trips >= 2: sampled trips behind the length distributions, summed across strata.",
-               "measured fish >= 1,000: fish measured for NaL/MWaL estimates, summed across strata.",
-               "labels: each unmet threshold is shown as a label.")) &&
-     identical(thr_lines(50, NULL, NULL, "discard", "landings"),
-               c("coverage >= 50%: share of landed weight with discard estimates.",
-                 "labels: each unmet threshold is shown as a label.")),
-   "thr_lines(): coverage always, trips and fish only when active, fish never for discard")
-ok(identical(finest_per_family(c("fleetValue", "areaValue", "vesselFlagCountry", "seasonValue", "metier4")),
-             c("fleetValue", "areaValue", "vesselFlagCountry", "seasonValue")) &&
-     identical(finest_per_family(c("metier4", "gear", "vesselFlagCountry")),
-               c("metier4", "gear", "vesselFlagCountry")) &&
-     identical(finest_per_family(c("ICESDivision", "areaValue")), "areaValue"),
-   "finest_per_family(): drops a coarser column when a finer one is present; ties (metier4/gear) both kept")
+ok(identical(box_text(suppressWarnings(plot_coverage_heat(cd, dd, y = "metier4", what = "length",
+                                                          catchCategory = "Lan", min_cov = 50,
+                                                          min_trip = 2, min_fish = 1000))),
+             paste("coverage >= 50%: share of landed weight with length distributions.",
+                   "trips >= 2: sampled trips behind the length distributions, summed across strata.",
+                   "measured fish >= 1,000: fish measured for NaL/MWaL estimates, summed across strata.",
+                   "labels: each unmet threshold is shown as a label.")) &&
+     identical(box_text(h_raw),
+               paste("coverage >= 50%: share of landed weight with discard estimates.",
+                     "labels: each unmet threshold is shown as a label.")),
+   "the box: coverage always, trips and fish only when active (fish never for discard coverage)")
 
 cat(sprintf("\nDONE  %d failure(s)\n", FAIL))
 if (FAIL) quit(status = 1L)

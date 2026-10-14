@@ -1,176 +1,14 @@
 # =====================================================================
-#  rcef_summaries.R   (catch / biology / effort summary tables)
+#  rcef_summaries.R   (raised catches: the overview table and the reading of c(a, b))
 #
 #  ORIGIN: this project (ILVO / RCEF Workbench). Freely refactorable.
 #  Was: R_development/summaries.R
-#  No shiny in this file. If it needs `input`, `session` or a tag,
-#  it belongs in app/, not here.
 # =====================================================================
 
 # ============================================================
-#  summaries.R
-#  Overview tables for the three CEF tables and for raised output.
+#  Overview tables and plots for raised output.
 #  All weights in tonnes (CEF WeightLive is kg).
 # ============================================================
-
-# ------------------------------------------------------------
-#  catches
-# ------------------------------------------------------------
-#' @noRd
-#' @export
-catches_summary <- function(catches) {
-  if (is.null(catches) || !nrow(catches))
-    return(data.frame(item = character(0), value = character(0)))
-  u <- if ("variableUnit" %in% names(catches)) catches$variableUnit else NULL
-  t_ <- to_tonnes(catches$total, u)
-  cc <- catches$catchCategory
-  sampled <- !is.na(catches$domainCatchDis) & catches$domainCatchDis != ""
-  lan <- cc == "Lan"
-  data.frame(
-    item = c("Rows", "Stocks", "Years", "Countries", "Fleets (fleetValue)",
-             "Areas", "Seasons", "Catch categories",
-             "Landings (t)", "Discards (t)",
-             "Landings rows linked to a discard estimate",
-             "Landings weight with a discard estimate (%)",
-             "Rows with domainBiology"),
-    value = c(
-      format(nrow(catches), big.mark = ","),
-      paste(unique(catches$stock), collapse = ", "),
-      paste(sort(unique(catches$year)), collapse = ", "),
-      length(unique(catches$vesselFlagCountry)),
-      length(unique(catches$fleetValue)),
-      length(unique(catches$areaValue)),
-      paste(sort(unique(catches$seasonValue)), collapse = ", "),
-      paste(sort(unique(cc)), collapse = ", "),
-      fmt_t3(sum(t_[lan], na.rm = TRUE)),
-      fmt_t3(sum(t_[!lan], na.rm = TRUE)),
-      sprintf("%s of %s", format(sum(lan & sampled), big.mark = ","),
-              format(sum(lan), big.mark = ",")),
-      round(sum(t_[lan & sampled], na.rm = TRUE) /
-              sum(t_[lan], na.rm = TRUE) * 100, 1),
-      if ("domainBiology" %in% names(catches))
-        format(sum(!is.na(catches$domainBiology) & catches$domainBiology != ""),
-               big.mark = ",") else "0"),
-    stringsAsFactors = FALSE)
-}
-
-# Catch weight by category, the shape people expect at the top of a report
-#' @noRd
-#' @export
-catches_by_category <- function(catches) {
-  u <- if ("variableUnit" %in% names(catches)) catches$variableUnit else NULL
-  d <- catches %>%
-    mutate(.t = to_tonnes(total, u)) %>%
-    group_by(catchCategory) %>%
-    summarise(rows = n(), tonnes = sum(.t, na.rm = TRUE), .groups = "drop") %>%
-    arrange(desc(tonnes))
-  bind_rows(d, data.frame(catchCategory = "Total", rows = sum(d$rows),
-                          tonnes = sum(d$tonnes))) %>%
-    mutate(tonnes = round(tonnes, 3))
-}
-
-# ------------------------------------------------------------
-#  distributions - biology sampling, seen through domainBiology
-# ------------------------------------------------------------
-# A catch stratum has biology only when its domainBiology key is filled
-# AND that key turns up in the distributions table. distributionType
-# says what was measured (LengthTotal / Age), variableType says what the
-# value is (Number / WeightLive).
-#' @noRd
-#' @export
-biology_coverage <- function(catches, distributions, dims) {
-  miss <- setdiff(dims, names(catches))
-  if (length(miss))
-    stop("biology_coverage(): run derive_fields() first - missing ",
-         paste(miss, collapse = ", "))
-  u <- if ("variableUnit" %in% names(catches)) catches$variableUnit else NULL
-  keys <- if (!is.null(distributions) && "domainBiology" %in% names(distributions))
-    unique(distributions$domainBiology[!is.na(distributions$domainBiology)]) else character(0)
-
-  # a catches table without domainBiology simply has no biology linkage
-  db <- if ("domainBiology" %in% names(catches))
-    as.character(catches$domainBiology) else rep(NA_character_, nrow(catches))
-  catches$.has_key <- !is.na(db) & db != ""
-  catches$.in_dist <- catches$.has_key & db %in% keys
-
-  catches %>%
-    mutate(.t = to_tonnes(total, u),
-           has_key = .has_key, in_dist = .in_dist) %>%
-    group_by(across(all_of(dims)), catchCategory) %>%
-    summarise(weight = sum(.t, na.rm = TRUE),
-              weight_with_biology = sum(.t[in_dist], na.rm = TRUE),
-              n_rows = n(), n_with_key = sum(has_key), n_in_dist = sum(in_dist),
-              .groups = "drop") %>%
-    mutate(biology_coverage = ifelse(weight > 0,
-                                     weight_with_biology / weight * 100, NA_real_),
-           sampled = n_in_dist > 0) %>%
-    as.data.frame()
-}
-
-#' @noRd
-#' @export
-distributions_summary <- function(distributions, catches = NULL) {
-  if (is.null(distributions) || !nrow(distributions))
-    return(data.frame(item = "Rows", value = "0", stringsAsFactors = FALSE))
-  linked <- if (!is.null(catches) && "domainBiology" %in% names(catches))
-    sum(unique(distributions$domainBiology) %in%
-          unique(catches$domainBiology[!is.na(catches$domainBiology)])) else NA
-  data.frame(
-    item = c("Rows", "Biology domains", "Domains matched in catches",
-             "distributionType", "variableType", "Catch categories",
-             "Class range", "Total measurements"),
-    value = c(
-      format(nrow(distributions), big.mark = ","),
-      length(unique(distributions$domainBiology)),
-      if (is.na(linked)) "-" else linked,
-      paste(sort(unique(distributions$distributionType)), collapse = ", "),
-      paste(sort(unique(distributions$variableType)), collapse = ", "),
-      paste(sort(unique(distributions$catchCategory)), collapse = ", "),
-      if ("distributionClass" %in% names(distributions))
-        paste(range(suppressWarnings(as.numeric(distributions$distributionClass)),
-                    na.rm = TRUE), collapse = " - ") else "-",
-      if ("numMeasurements" %in% names(distributions))
-        format(sum(as.numeric(distributions$numMeasurements), na.rm = TRUE),
-               big.mark = ",") else "-"),
-    stringsAsFactors = FALSE)
-}
-
-# What was measured, and for which catch category
-#' @noRd
-#' @export
-distributions_by_type <- function(distributions) {
-  distributions %>%
-    group_by(distributionType, variableType, catchCategory) %>%
-    summarise(rows = n(), domains = n_distinct(domainBiology),
-              .groups = "drop") %>%
-    arrange(distributionType, variableType, catchCategory)
-}
-
-# ------------------------------------------------------------
-#  effort
-# ------------------------------------------------------------
-#' @noRd
-#' @export
-effort_summary <- function(effort) {
-  if (is.null(effort) || !nrow(effort))
-    return(data.frame(item = "Rows", value = "0", stringsAsFactors = FALSE))
-  data.frame(
-    item = c("Rows", "Countries", "Fleets", "Areas", "Seasons",
-             "Effort units", "Total effort"),
-    value = c(format(nrow(effort), big.mark = ","),
-              length(unique(effort$vesselFlagCountry)),
-              length(unique(effort$fleetValue)),
-              length(unique(effort$areaValue)),
-              paste(sort(unique(effort$seasonValue)), collapse = ", "),
-              paste(unique(effort$variableType), collapse = ", "),
-              format(round(sum(as.numeric(effort$total), na.rm = TRUE), 1),
-                     big.mark = ",")),
-    stringsAsFactors = FALSE)
-}
-
-# ------------------------------------------------------------
-#  Raised output
-# ------------------------------------------------------------
 #' The raised catches handed to a comparison function, with their names
 #'
 #' [raised_overview_table()] and [plot_compare_raised()] take their raised catches
@@ -248,43 +86,36 @@ scenario_list <- function(expr, value, env, scenarios_names = NULL,
   list(data = vals, single = single)
 }
 
-#' One column's values across the raised catches, in a sensible order
+#' One category column of a raised catch, as a factor in a sensible order
 #'
-#' The union of what a column holds in any of the raised catches, as strings:
-#' by size for `mesh` and `metier4_mesh` ([mesh_var_levels()]), numerically for
-#' a numeric column (`seasonValue`: 2 before 10), in factor-level order for a
-#' factor, alphabetically for anything else.
+#' The levels are the union of what the column holds in any of the raised
+#' catches, as strings: by size for `mesh` and `metier4_mesh`
+#' ([mesh_var_levels()]), numerically for a numeric column (`seasonValue`: 2
+#' before 10), in factor-level order for a factor, alphabetically for anything
+#' else. Values missing from them are dropped from the levels; a missing value
+#' becomes its own last level, `"NA"`, rather than silently falling out of a plot
+#' or a table.
 #'
+#' @param x The values to turn into a factor.
 #' @param data A named list of raised catches.
-#' @param var The column.
-#' @return A character vector.
-#' @keywords internal
-#' @noRd
-#' @export
-scenario_levels <- function(data, var) {
-  vals <- lapply(data, function(r) r[[var]])
-  nat <- mesh_var_levels(var, unlist(lapply(vals, as.character)))
-  if (!is.null(nat)) return(nat)
-  if (all(vapply(vals, is.numeric, NA)))
-    return(as.character(sort(unique(unlist(vals)))))
-  if (all(vapply(vals, is.factor, NA)))
-    return(unique(unlist(lapply(vals, levels))))
-  sort(unique(as.character(unlist(vals))))
-}
-
-#' A category column as a factor with the given order
-#'
-#' Values missing from `levels` are dropped from it; a missing value becomes
-#' its own last level, `"NA"`, rather than silently falling out of a plot or a
-#' table.
-#'
-#' @param x The values.
-#' @param levels Their order.
+#' @param var The column the levels are taken from; `NULL` for no column (one
+#'   level, `"All"`).
 #' @return A factor.
 #' @keywords internal
 #' @noRd
 #' @export
-level_factor <- function(x, levels) {
+scenario_factor <- function(x, data, var = NULL) {
+  levels <- "All"
+  if (!is.null(var)) {
+    vals <- lapply(data, function(r) r[[var]])
+    levels <- mesh_var_levels(var, unlist(lapply(vals, as.character)))
+    if (is.null(levels))
+      levels <- if (all(vapply(vals, is.numeric, NA)))
+                  as.character(sort(unique(unlist(vals))))
+                else if (all(vapply(vals, is.factor, NA)))
+                  unique(unlist(lapply(vals, levels)))
+                else sort(unique(as.character(unlist(vals))))
+  }
   x <- as.character(x)
   if (anyNA(x)) {
     x[is.na(x)] <- "NA"
@@ -335,30 +166,29 @@ level_factor <- function(x, levels) {
 #'   category`, the `by` columns, `Raised/Imported`, `Caton (t)`, `Percent of
 #'   category` and, when any, `No donor (rows)`.
 #' @seealso [plot_compare_raised()] for the same comparison as a figure;
-#'   [plot_raised_catches()] for one raised catch.
+#'   [plot_catches()] for one raised catch.
 #' @md
 #' @examples
 #' \dontrun{
-#' cef  <- subset(catch, year == 2023)
-#' dims <- c("metier4", "ICESDivision", "seasonValue")
-#' log  <- tempfile(fileext = ".txt")
-#' strict  <- define_raising_groups_auto(cef, hierarchy = dims,
-#'                                       thresholds = c(80, 60, 40))
-#' relaxed <- define_raising_groups_auto(cef, hierarchy = dims,
-#'                                       thresholds = c(50, 40, 30))
-#' raised_strict  <- run_native_raising(cef, dims, strict,
-#'                                      type = "discards", log_file = log)
-#' raised_relaxed <- run_native_raising(cef, dims, relaxed,
-#'                                      type = "discards", log_file = log)
+#' cef <- subset(catch, year == 2023)
+#' log <- tempfile(fileext = ".txt")
+#'
+#' # the groups, and the data each takes its discard ratio from: its own, or everything
+#' strataCond <- list(TBB  = rlang::quo(metier4 == "TBB"),
+#'                    REST = rlang::quo(metier4 != "TBB"))
+#' own <- strataCond
+#' all <- list(TBB = rlang::quo(TRUE), REST = rlang::quo(TRUE))
+#' raised_own <- catchRaising(cef, strataCond, own, logFile = log)
+#' raised_all <- catchRaising(cef, strataCond, all, logFile = log)
 #'
 #' # one raised catch
-#' raised_overview_table(raised_strict)
+#' raised_overview_table(raised_own)
 #'
 #' # two, side by side, named after the objects ...
-#' raised_overview_table(c(raised_strict, raised_relaxed))
+#' raised_overview_table(c(raised_own, raised_all))
 #'
 #' # ... or after you, split by season and metier
-#' raised_overview_table(c(strict = raised_strict, relaxed = raised_relaxed),
+#' raised_overview_table(c(own = raised_own, everything = raised_all),
 #'                       by = c("seasonValue", "metier4"))
 #' }
 #' @export
@@ -382,14 +212,14 @@ raised_overview_table <- function(raised_catch_scenarios, scenarios_names = NULL
     out <- data.frame(scenario = rep(nm, nrow(r)),
                       catchCategory = as.character(r$catchCategory),
                       src = ifelse(raised, "Raised", "Imported"),
-                      .t = to_tonnes(r$total, u),
+                      .t = convert_units(r$total, u, "t"),
                       .no_donor = raised & is.nan(r$total),
                       stringsAsFactors = FALSE)
     for (v in by) out[[v]] <- as.character(r[[v]])
     out
   }))
   d$scenario <- factor(d$scenario, levels = names(sc$data))
-  for (v in by) d[[v]] <- level_factor(d[[v]], scenario_levels(sc$data, v))
+  for (v in by) d[[v]] <- scenario_factor(d[[v]], sc$data, v)
 
   cell <- c("scenario", by)
   agg <- d %>%
@@ -421,118 +251,3 @@ raised_overview_table <- function(raised_catch_scenarios, scenarios_names = NULL
   res
 }
 
-#' Raised catch composition: landings and discards, imported and raised
-#'
-#' A stacked bar of catch weight after raising, at any aggregation: bars are
-#' landings/discards (or just the one, via `catchCategory`). What raising added
-#' - `importedOrRaised`, imported from the data versus added by raising - is
-#' drawn as the shade, as the `fill` or as a `facet`, as you choose.
-#'
-#' `importedOrRaised` is a variable like any other. By default it is the shade
-#' (`alpha = "importedOrRaised"`): solid for what was imported, transparent for
-#' what raising added. Name it in `fill` to give the two a colour each (the bars
-#' are then no longer coloured landings / discards: say which they are with
-#' `catchCategory`, or with `facet = "catchCategory"`), in `facet` to give each
-#' its own panel, or in `x` for a bar each; it is then not drawn as a shade as
-#' well. `alpha = NULL` draws no shade, and unless it is named elsewhere the
-#' imported and the raised weights are added together.
-#'
-#' @param raised_catch Output of [catchRaising()]: `raised` with
-#'   `importedOrRaised` and `DrGroup` columns.
-#' @param x Column on the x axis: one bar (or bar segment) per level;
-#'   `"importedOrRaised"` included.
-#' @param facet Optional facet column; `"importedOrRaised"` included.
-#' @param fill Column mapped to the bar fill. `NULL` (default) colours the bars
-#'   landings / discards; `"importedOrRaised"` is allowed.
-#' @param alpha `"importedOrRaised"` (default) draws the shade: solid for
-#'   imported, transparent for raised. `NULL` draws none. Left out when
-#'   `importedOrRaised` is the `x`, the `fill` or the `facet`.
-#' @param catchCategory Optional filter to just `"Lan"` or `"Dis"` (matched
-#'   case-insensitively), so discards are readable on their own when landings
-#'   would otherwise dominate the scale. `NULL` (default) keeps both, stacked.
-#' @param ncol Facet columns, when `facet` is set.
-#' @inheritParams saving-plots
-#' @return A ggplot object.
-#' @seealso [plot_raised_DR()] for the discard rate of the same raised catch.
-#' @family raising plots
-#' @md
-#' @export
-plot_raised_catches <- function(raised_catch, x = NULL, facet = NULL,
-                                fill = NULL, alpha = "importedOrRaised",
-                                catchCategory = NULL, ncol = 2, save = NULL) {
-  save_on_exit(save, "plot_raised_catches")
-  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
-  S <- "importedOrRaised"
-  if (!is.null(alpha) && !identical(alpha, S))
-    stop("plot_raised_catches(): `alpha` is \"", S, "\" (solid = imported, ",
-         "transparent = raised) or NULL for no shade", call. = FALSE)
-  miss <- setdiff(c(S, "catchCategory", "total", if (has(x)) x,
-                    if (has(facet)) facet, if (has(fill)) fill),
-                  names(raised_catch))
-  if (length(miss))
-    stop("plot_raised_catches(): `raised_catch` has no column ",
-         paste0("'", miss, "'", collapse = ", "), call. = FALSE)
-  # imported / raised is drawn once: as the shade, unless it is already the
-  # x, the fill or the facet
-  shown    <- S %in% c(x, fill, facet)
-  alpha_on <- !is.null(alpha) && !shown
-  u <- if ("variableUnit" %in% names(raised_catch)) raised_catch$variableUnit else NULL
-  d <- raised_catch %>%
-    mutate(.t = to_tonnes(total, u),
-           src = factor(ifelse(importedOrRaised %in% "raised", "Raised", "Imported"),
-                        levels = c("Imported", "Raised")),
-           importedOrRaised = factor(ifelse(importedOrRaised %in% "raised",
-                                            "raised", "imported"),
-                                     levels = c("imported", "raised")),
-           .cat = ifelse(toupper(catchCategory) %in% c("LAN", "LANDINGS"),
-                         "Landings", "Discards"),
-           .x = if (has(x)) as.character(.data[[x]]) else "All")
-  if (has(catchCategory)) {
-    want <- if (toupper(catchCategory) %in% c("LAN", "LANDINGS")) "Landings" else "Discards"
-    d <- d[d$.cat == want, , drop = FALSE]
-  }
-  cc_label <- if (!has(catchCategory)) "Catch"
-             else if (toupper(catchCategory) %in% c("LAN", "LANDINGS")) "Landings"
-             else "Discards"
-  fill_col <- if (has(fill)) fill else ".cat"
-  keys <- unique(c(".x", fill_col, if (has(facet)) facet, if (alpha_on) "src"))
-  d <- d %>% group_by(across(all_of(keys))) %>%
-    summarise(t = sum(.t, na.rm = TRUE), .groups = "drop")
-  d <- reorder_mesh(d, c(fill, facet))
-  d <- discrete_cols(d, c(fill, facet))
-
-  ae <- aes(x = .x, y = t, fill = .data[[fill_col]])
-  if (alpha_on) ae <- modifyList(ae, aes(alpha = src))
-  p <- ggplot(d, ae) +
-    geom_col(position = position_stack(reverse = TRUE), width = 0.72,
-             colour = "grey25", linewidth = 0.25)
-  p <- p + if (!has(fill))
-    scale_fill_manual(values = c(Landings = "#59A14F", Discards = "#E15759"),
-                      name = NULL)
-  else if (identical(fill, S))
-    scale_fill_manual(values = c(imported = PAL_BASE[1], raised = PAL_BASE[2]),
-                      name = S)
-  else scale_fill_var(fill, d[[fill]], name = fill)
-  if (alpha_on)
-    p <- p + scale_alpha_manual(values = c(Imported = 1, Raised = 0.45), name = NULL,
-                                guide = guide_legend(override.aes = list(fill = "grey30")))
-  p +
-    scale_y_continuous(labels = scales::comma) +
-    (if (has(facet)) facet_wrap(vars(.data[[facet]]), ncol = ncol,
-                                scales = "free_y") else NULL) +
-    labs(title = sprintf("Raised %s per stratum", tolower(cc_label)),
-         caption = sub_wrap(
-           "grouping = no grouping, raw data per stratum.",
-           sprintf("bars = %s weight (t), summed per stratum.", tolower(cc_label)),
-           if (!has(fill) && !has(catchCategory))
-             "color = landings or discards.",
-           if (has(fill)) sprintf("color = %s.", fill),
-           if (alpha_on)
-             "shade = imported from the data, or added by raising.",
-           if (!alpha_on && !shown)
-             "imported and raised weights added together.",
-           width = 110),
-         x = if (has(x)) x else NULL, y = sprintf("%s (t)", cc_label)) +
-    app_theme() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))
-}

@@ -86,8 +86,7 @@ An error with \code{what = "discard"} (no fish are measured for a discard
 estimate).}
 
 \item{palette}{\code{"default"}, \code{"colorblind"} or \code{"gradual"}. Recolours the bar
-fill; on the heatmap and bubbles the status colours are fixed, and asking
-for anything but \code{"default"} warns.}
+fill, or the status colours of the heatmap and the bubbles.}
 
 \item{save}{Where to write the plot as well, or \code{NULL} (default) to only
 return it: a folder, a file name, or a list of options - see
@@ -131,7 +130,7 @@ needs to be given; a \code{what} that contradicts the table is an error.
 \subsection{The status scale (heatmap and bubbles)}{
 
 The colour of a cell is its sampling status against the thresholds:\tabular{ll}{
-   Colour \tab Status \cr
+   Colour (default palette) \tab Status \cr
    dark green \tab 100\% covered (and, when trips are active, more than \code{min_trip} trips) \cr
    green \tab covered at least \code{min_cov}, and passing every active threshold \cr
    yellow \tab one active threshold missed \cr
@@ -141,6 +140,8 @@ The colour of a cell is its sampling status against the thresholds:\tabular{ll}{
    blue \tab discards only, no landings (discard coverage) \cr
 }
 
+
+The other palettes keep the same scale, from best to worst sampled.
 
 A cell with no weight at all draws nothing. The legend always lists every
 reachable status, including those no cell falls in, so the same figure
@@ -186,8 +187,8 @@ not a caption about the plot itself.
 
 The bar chart shows sampled versus unsampled weight, which no threshold
 changes, so it takes none: passing \code{min_cov} or \code{min_trip} is an error.
-\code{palette} recolours the bars; the status colours are a fixed scale, so
-any \code{palette} other than \code{"default"} on the heatmap or bubbles warns.
+\code{palette} recolours the bars, and the status scale of the heatmap and the
+bubbles.
 }
 
 \subsection{Argument order}{

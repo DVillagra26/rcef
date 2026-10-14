@@ -46,7 +46,7 @@ return it: a folder, a file name, or a list of options - see
 A ggplot object, or \code{NULL} when there is nothing to draw.
 }
 \description{
-\code{\link[=plot_raised_catches]{plot_raised_catches()}} for two or more raised catches at once - two ways of
+\code{\link[=plot_catches]{plot_catches()}} for two or more raised catches at once - two ways of
 defining the groups, say. For each level of \code{x} (and each panel of \code{facet})
 one bar per scenario: its colour says which scenario, its shade whether the
 weight came with the data (imported, solid) or was added by the raising
@@ -68,33 +68,31 @@ as a table, category by category.
 }
 \examples{
 \dontrun{
-cef  <- subset(catch, year == 2023)
-dims <- c("metier4", "ICESDivision", "seasonValue")
-log  <- tempfile(fileext = ".txt")
-strict  <- define_raising_groups_auto(cef, hierarchy = dims,
-                                      thresholds = c(80, 60, 40))
-relaxed <- define_raising_groups_auto(cef, hierarchy = dims,
-                                      thresholds = c(50, 40, 30))
-raised_strict  <- run_native_raising(cef, dims, strict,
-                                     type = "discards", log_file = log)
-raised_relaxed <- run_native_raising(cef, dims, relaxed,
-                                     type = "discards", log_file = log)
+cef <- subset(catch, year == 2023)
+log <- tempfile(fileext = ".txt")
+
+# the groups, and the data each takes its discard ratio from: its own, or everything
+strataCond <- list(TBB  = rlang::quo(metier4 == "TBB"),
+                   REST = rlang::quo(metier4 != "TBB"))
+own <- strataCond
+all <- list(TBB = rlang::quo(TRUE), REST = rlang::quo(TRUE))
+raised_own <- catchRaising(cef, strataCond, own, logFile = log)
+raised_all <- catchRaising(cef, strataCond, all, logFile = log)
 
 # the scenarios are named after the objects ...
-plot_compare_raised(c(raised_strict, raised_relaxed), x = "metier4")
+plot_compare_raised(c(raised_own, raised_all), x = "metier4")
 
 # ... or after you; discards only, one panel per quarter
-plot_compare_raised(c(strict = raised_strict, relaxed = raised_relaxed),
+plot_compare_raised(c(own = raised_own, everything = raised_all),
                     x = "metier4", facet = "seasonValue", catchCategory = "Dis")
 }
 }
 \seealso{
 \code{\link[=raised_overview_table]{raised_overview_table()}} for the same comparison as a table;
-\code{\link[=plot_raised_catches]{plot_raised_catches()}} for one raised catch.
+\code{\link[=plot_catches]{plot_catches()}} for one raised catch.
 
 Other raising plots: 
-\code{\link{plot_raised_DR}()},
-\code{\link{plot_raised_catches}()},
+\code{\link{plot_catches}()},
 \code{\link{plot_river}()}
 }
 \concept{raising plots}

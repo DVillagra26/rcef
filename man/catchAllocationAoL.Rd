@@ -71,7 +71,7 @@ one is estimated from the sampled distributions of a group of matching strata
 and marked as estimated. The result holds, for each stratum, the numbers and
 the mean weight at every length or age class - what \code{\link[=catchAtAoLAggregation]{catchAtAoLAggregation()}}
 and \code{\link[=meanWoLatAoLAggregation]{meanWoLatAoLAggregation()}} add up into catch-at-length / catch-at-age
-tables, and what \code{\link[=plot_allocated_NaLoA]{plot_allocated_NaLoA()}} and \code{\link[=plot_allocated_MWaLoA]{plot_allocated_MWaLoA()}} draw.
+tables, and what \code{\link[=plot_NaLoA]{plot_NaLoA()}} and \code{\link[=plot_MWaLoA]{plot_MWaLoA()}} draw.
 }
 \details{
 \subsection{Groups}{
@@ -149,8 +149,8 @@ alloc <- catchAllocationAoL(catch, distributions,
 }
 \seealso{
 \code{\link[=catchAtAoLAggregation]{catchAtAoLAggregation()}} and \code{\link[=meanWoLatAoLAggregation]{meanWoLatAoLAggregation()}} to add the
-allocation up; \code{\link[=define_raising_groups_auto]{define_raising_groups_auto()}} for conditions made from the
-data; \code{\link[=catchRaising]{catchRaising()}} for the discards.
+allocation up; \code{\link[=check_group_conditions]{check_group_conditions()}} to check the groups;
+\code{\link[=catchRaising]{catchRaising()}} for the discards.
 }
 \author{
 Yves Reecht

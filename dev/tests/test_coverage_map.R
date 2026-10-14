@@ -32,14 +32,19 @@ is_gg <- function(expr) tryCatch({
 }, error = function(e) conditionMessage(e))
 
 ## ---- 1. centroid lookup ------------------------------------------
-cc <- suppressWarnings(ices_area_centroid(c("27.4.a", "4.b", "27.7.d", "99.9.z")))
-ok(all(is.finite(cc$lon[1:3])) && is.na(cc$lon[4]),
-   "ices_area_centroid() resolves 27. and bare codes, NA for unknown")
-ok(nrow(ICES_AREA_CENTROID) > 30 && all(c("area", "lon", "lat") %in%
-                                        names(ICES_AREA_CENTROID)),
-   "ICES_AREA_CENTROID is a lon/lat table")
-ok(grepl("99.9.z", tryCatch(ices_area_centroid("99.9.z"),
-                            warning = function(w) conditionMessage(w))),
+## one pie per area the map knows: the code with or without its "27.", and one it does
+## not know is named in a warning and left off
+pies <- function(p) {
+  l <- p$layers[[which(vapply(p$layers, function(l) all(c("pid", "slice") %in% names(l$data)), NA))[1]]]
+  length(unique(l$data$pid))
+}
+codes <- data.frame(catchCategory = c("Lan", "Dis"), total = c(100, 10), domainCatchDis = "d",
+                    stringsAsFactors = FALSE)
+codes <- do.call(rbind, lapply(c("27.4.a", "4.b", "27.7.d", "99.9.z"), function(a) transform(codes, areaValue = a)))
+mp <- suppressWarnings(plot_coverage_map(codes))
+ok(inherits(mp, "ggplot") && pies(mp) == 3,
+   "the map places 27. and bare codes (one pie each) and leaves an unknown one off")
+ok(grepl("99.9.z", tryCatch(plot_coverage_map(codes), warning = function(w) conditionMessage(w))),
    "an unknown area is warned about by name")
 
 ## ---- 2. from raw catch --------------------------------------------
@@ -71,7 +76,9 @@ body_ns <- gsub("[[:space:]]", "",
                 paste(deparse(body(plot_coverage_map)), collapse = ""))
 ok(grepl('requireNamespace("maps"', body_ns, fixed = TRUE),
    "the maps dependency is guarded")
-ok(grepl('c(sampled="#41AE76",unsampled="grey80")', body_ns, fixed = TRUE),
+fills <- suppressWarnings(plot_coverage_map(raw))$scales$get_scales("fill")$palette(1)
+ok(identical(names(fills), c("sampled", "unsampled")) && identical(fills[["unsampled"]], "grey80") &&
+     identical(fills[["sampled"]], "#41AE76"),
    "pie slices are the sampled / not-sampled shares")
 ok(grepl("boxed<-has(group_var)&&ngrp>1", body_ns, fixed = TRUE),
    "a group_var with >1 level triggers the boxed grid layout")

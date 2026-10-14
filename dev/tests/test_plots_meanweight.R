@@ -1,4 +1,4 @@
-## The mean-weight line plot, and mean weight in the allocation comparison.
+## The mean-weight line plot.
 FAIL <- 0L
 ok <- function(cond, what) {
   if (isTRUE(cond)) cat("ok    ", what, "\n")
@@ -16,32 +16,19 @@ p <- plot_MWaLoA(d, colour = "vesselFlagCountry", facet = "seasonValue")
 ok(inherits(p, "ggplot"), "the mean-weight line plot builds")
 ok(!inherits(try(ggplot_build(p), silent = TRUE), "try-error"), "and renders")
 
+## `shape` opens the averaged strata up: one series - one line - per colour level
+## AND per shape level, not one line per colour that zigzags through the shapes
+ps <- plot_MWaLoA(d, colour = "vesselFlagCountry", shape = "seasonValue")
+line_layer <- which(vapply(ps$layers, function(l) inherits(l$geom, "GeomLine"), logical(1)))
+ok(length(unique(ggplot_build(ps)$data[[line_layer]]$group)) == 2 * 4,
+   "shape: one line per colour level and per shape level")
+ps1 <- plot_MWaLoA(d, shape = "seasonValue")
+line_layer <- which(vapply(ps1$layers, function(l) inherits(l$geom, "GeomLine"), logical(1)))
+ok(length(unique(ggplot_build(ps1)$data[[line_layer]]$group)) == 4,
+   "shape alone: one line per shape level")
+
 ok(is.null(plot_MWaLoA(NULL)), "no data gives NULL, not an error")
 ok(is.null(plot_MWaLoA(d[0, ])), "no rows gives NULL")
-
-## --- mean weight in the comparison -----------------------------------
-cmp <- expand.grid(.cls = c(20, 22), allocation = c("a", "b"),
-                   catchCategory = c("Lan", "Dis"), stringsAsFactors = FALSE)
-cmp$numbers <- c(100, 200, 50, 400, 10, 20, 5, 40)
-cmp$tonnes  <- cmp$numbers * 250 / 1e6
-cmp$mean_weight <- cmp$tonnes * 1e6 / cmp$numbers
-
-for (v in c("numbers", "tonnes", "meanweight")) {
-  pp <- plot_allocation_comparison(cmp, v, "catchCategory", "Length")
-  ok(inherits(pp, "ggplot"), paste("comparison builds for", v))
-}
-
-## A mean weight is not extensive: summing it across the grouping would
-## give a number with no meaning, so it must be re-weighted by numbers.
-cmp2 <- data.frame(.cls = c(20, 20), allocation = "a",
-                   catchCategory = c("Lan", "Dis"),
-                   numbers = c(1000, 10), tonnes = NA_real_,
-                   mean_weight = c(200, 1000), stringsAsFactors = FALSE)
-pm <- plot_allocation_comparison(cmp2, "meanweight", NULL, "Length")
-v <- ggplot_build(pm)$data[[1]]$y[1]
-ok(abs(v - (200 * 1000 + 1000 * 10) / 1010) < 1e-6,
-   "mean weight is numbers-weighted across the grouping, not averaged flat")
-ok(v < 300, "so a 10-fish stratum does not drag the mean to 600")
 
 cat(sprintf("\nDONE  %d failure(s)\n", FAIL))
 if (FAIL) quit(status = 1L)

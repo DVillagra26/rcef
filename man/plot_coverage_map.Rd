@@ -12,6 +12,7 @@ plot_coverage_map(
   what = "discard",
   catchCategory = NULL,
   scale = 1,
+  palette = c("default", "colorblind", "gradual"),
   save = NULL
 )
 }
@@ -32,6 +33,9 @@ title comes from \code{what} and \code{catchCategory}.}
 
 \item{scale}{Multiplies every pie radius (and, when grouped, the size of
 the box's grid cell).}
+
+\item{palette}{\code{"default"}, \code{"colorblind"} or \code{"gradual"}: the colour of the
+sampled slice.}
 
 \item{save}{Where to write the plot as well, or \code{NULL} (default) to only
 return it: a folder, a file name, or a list of options - see
