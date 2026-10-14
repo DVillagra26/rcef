@@ -295,3 +295,68 @@ meanweight[, c("catchCategory", sub("^N_", "W_", shown))]
 Both take the groups you plot by in `grouping` - any column of the catch or of
 the distributions - and a plus group (`plusGroup = TRUE`, with `maxAoL`) for
 ages.
+
+# The stock coordination files
+
+The end of the chain: what the raising raised and the allocation allocated,
+added up into the two tables of the stock coordination format (SCF v3), Catch
+Combined (CC) and Distributions Combined (DC), which are uploaded together.
+Both are made from the two tables of the allocation result - its `$catch` and
+its `$distribution` - and every field the format has that the data does not
+fill is there, empty.
+
+`catchCombined()` adds the catch up by year, working group, stock and catch
+category (`grouping` adds the season, the area or the fleet, when the stock
+assessment splits the catch by them). Take the working group's own figures,
+`originType_catch = "WGEstimate"`, and a unit the format accepts:
+
+```{r scf-cc}
+cc <- catchCombined(catch_data = allocated$catch,
+                    grouping = "catchCategory",
+                    originType_catch = "WGEstimate",
+                    variableType_catch = "WeightLive",
+                    unit = "t", round = 3,
+                    version = 1, versionDescription = "brill 2025 example")
+cc[, c("recordType", "version", "year", "stock", "catchCategory",
+       "variableType", "variableUnit", "total")]
+```
+
+`distributionsCombined()` takes the arguments of the two aggregations above and
+gives the format's long table: for every length class a `Number` row (thousands
+of fish, `NE3`) and a `WeightLive` row (the mean weight, in g) of each catch
+category. It adds up exactly as `catchAtAoLAggregation()` and
+`meanWoLatAoLAggregation()` do - they are made of the same two functions - and
+leaves out the classes no fish fall in:
+
+```{r scf-dc}
+dc <- distributionsCombined(distribution_data = allocated$distribution,
+                            catch_data = allocated$catch,
+                            originType_catch = "WGEstimate",
+                            variableType_catch = "WeightLive",
+                            distributionType = "LengthTotal",
+                            unit = c("NE3", "g"), round = 3,
+                            version = 1, versionDescription = "brill 2025 example")
+dim(dc)
+head(dc[, c("catchCategory", "distributionType", "distributionClass",
+            "variableType", "variableUnit", "valueType", "value")], 4)
+```
+
+The format compares each category's catch with the sum of products of its
+distribution - the numbers times the mean weights, over the classes - and does
+not accept a total more than 20 % off. The same check before the files go
+(NE3 times g, in tonnes):
+
+```{r scf-sop}
+dc %>%
+  tidyr::pivot_wider(id_cols = c(catchCategory, distributionClass),
+                     names_from = variableType, values_from = value) %>%
+  group_by(catchCategory) %>%
+  summarise(SOP_t = sum(Number * 1000 * WeightLive, na.rm = TRUE) / 1e6) %>%
+  left_join(cc[c("catchCategory", "total")], by = "catchCategory") %>%
+  mutate(SOP_over_catch = round(SOP_t / total, 3))
+```
+
+The year is the calendar year here (`calendarYear = "Y"`); a stock whose model
+year starts on another date says so with `calendarYear = "N"` and
+`yearStartDate = "07-01"`, the same in both tables. `write.csv(cc, "CC.csv",
+row.names = FALSE, na = "")` writes a table with its empty fields left empty.

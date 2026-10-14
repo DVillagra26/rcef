@@ -83,3 +83,27 @@ fx_pivot_long <- function(d, kind = c("N", "W"), value_name = "value") {
   long <- long[!is.na(long[[value_name]]), setdiff(names(long), ".col")]
   as.data.frame(long)
 }
+
+## One year's raised catch and its allocation, lengths and ages, the way the TAF scripts get them: fx_raise() with one group per
+## metier, then fx_allocate(). The engine and its aggregations count a distribution once for every catch row that names its
+## domainBiology, so the catch handed to the allocation has ONE row per domain (a domain of its own for every catch row, per
+## country and catch category; the raised discards have none, and the allocation makes one up for each stratum): the CEF files built
+## from InterCatch are like that, the fixture as it is bundled is not. Returns raised (the raising's output), len and age (the two
+## allocations: distribution, catch, type).
+fx_allocation <- function(yr = 2023, log_file = tempfile(fileext = ".txt")) {
+  quiet <- function(expr) { out <- NULL; invisible(utils::capture.output(out <- suppressWarnings(suppressMessages(expr)))); out }
+  cy <- fx_catch(); cy <- cy[cy$year == yr, ]
+  dy <- as.data.frame(fx_dist()); dy <- dy[dy$year == yr, ]
+  raised <- as.data.frame(quiet(fx_raise(cy, fx_groups("own"), type = "discards", log_file = log_file)))
+  ckey <- paste(raised$vesselFlagCountry, raised$catchCategory, raised$domainBiology)
+  akey <- paste(raised$vesselFlagCountry, raised$seasonValue, raised$areaValue, raised$fisheriesManagementUnit,
+                raised$fleetValue, raised$catchCategory)
+  n_ck <- ave(seq_along(ckey), ckey, FUN = length)
+  n_ak <- ave(seq_along(akey), akey, FUN = length)
+  catch1 <- raised[ifelse(is.na(raised$domainBiology), n_ak == 1L, n_ck == 1L), ]
+  dist1  <- dy[paste(dy$vesselFlagCountry, dy$catchCategory, dy$domainBiology) %in%
+                 paste(catch1$vesselFlagCountry, catch1$catchCategory, catch1$domainBiology), ]
+  list(raised = raised,
+       len = quiet(fx_allocate(catch1, dist1, "LengthTotal", log_file = log_file)),
+       age = quiet(fx_allocate(catch1, dist1, "Age", log_file = log_file)))
+}

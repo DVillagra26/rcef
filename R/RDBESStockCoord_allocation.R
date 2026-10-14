@@ -20,6 +20,11 @@
 #      meanWoLatAoLAggregation(), written here (upstream documents none)
 #    - meanWoLatAoLAggregation(weighting = "CATON") reads the CATON column (the catch's
 #      total weight) instead of `total`, which is not there
+#    - catchAtAoLAggregation() and meanWoLatAoLAggregation() leave the joining, the
+#      pooling of the classes and the adding up to catchAtAoL() and meanWoLatAoL()
+#      (R/rcef_scf.R) and only spread the classes over the columns: the stock
+#      coordination format (distributionsCombined()) reports the same two tables,
+#      one row per class, so the three can never disagree
 #    - distributionType takes CEF's own value "LengthTotal" where upstream
 #      says "Length": the four argument defaults and the three match.arg()
 #      calls (seven places, each marked)
@@ -1014,8 +1019,9 @@ catchAllocationAoL <- function(catch_data,
 #'   and one column per class, named `N_<distributionType>_<class>`:
 #'   `N_LengthTotal_300`, `N_Age_3`, `N_Age_7+`.
 #' @seealso [meanWoLatAoLAggregation()] for the mean weights;
-#'   [catchAllocationAoL()] for the allocation; [plot_NaLoA()] to look
-#'   at it.
+#'   [distributionsCombined()] for the same numbers, one row per class, in the
+#'   format of the stock coordination; [catchAllocationAoL()] for the allocation;
+#'   [plot_NaLoA()] to look at it.
 #' @author Yves Reecht
 #' @md
 #' @examples
@@ -1054,68 +1060,23 @@ catchAtAoLAggregation <- function(distribution_data,
     ## Author: Yves Reecht, Date: 27 Oct 2025, 13:36
     ## browser()
 
-    ## Conversion (only if relevant unit):
-    if (! is.null(unit))
-    {
-        distribution_data <- distribution_data %>%
-            convert_field(valueField = "value",
-                          to = unit)
-    }
-    
-    tmp <- distribution_data %>%
-        inner_join(catch_data %>%
-                   filter(originType %in% originType_catch,
-                          variableType %in% variableType_catch) %>%
-                   select(vesselFlagCountry, year, workingGroup,
-                          stock, speciesCode, catchCategory,
-                          domainBiology,
-                          any_of(grouping)),
-                   by = join_by(vesselFlagCountry, year, workingGroup,
-                                stock, speciesCode, catchCategory, domainBiology),
-                   suffix = c(".c", "")) %>%
-        filter(variableType %in% c("Number"),
-               distributionType %in% {{distributionType}})
-
-    if (is.na(maxAoL))
-    {
-        maxAoL2 <- max(tmp$distributionClass, na.rm = TRUE)
-    }else{
-        maxAoL2 <- maxAoL
-    }
-
-    maxAoLdata <- ifelse(plusGroup || is.na(maxAoL),
-                         max(tmp$distributionClass, na.rm = TRUE),
-                         maxAoL)
-
-    res <- tmp %>%
-        select(all_of(c(grouping, "distributionClass", "variableUnit", "value"))) %>%
-        filter(between(distributionClass, minAoL, maxAoLdata)) %>% ## pull(distributionClass) %>% unique() %>% sort()
-        mutate(grp = if_else(distributionClass < maxAoL2,
-                             as.character(distributionClass),
-                             paste0(maxAoL2,
-                                    ifelse(plusGroup & ! is.na(maxAoL),
-                                           "+", ""))),
-               grp = factor(grp,
-                            levels = unique(grp)[order(as.numeric(sub("+",
-                                                                      "",
-                                                                      unique(grp),
-                                                                      fixed = TRUE)))])) %>%
-        dplyr::group_by(across(all_of(c(grouping, unit = "variableUnit", "grp")))) %>%
-        summarize(N = sum(value, na.rm = TRUE), .groups = "drop") %>%
-        arrange(grp) %>%
-        pivot_wider(names_from = "grp", names_prefix = paste0("N_", distributionType, "_"),
-                    values_from = "N")  %>%
-        mutate(across(starts_with(paste0("N_", distributionType, "_")),
-                          ~replace_na(.x , 0)))
-
-    if (!is.null(round) && is.numeric(round))
-    {
-        res <- res %>%
-            mutate(across(starts_with(paste0("N_", distributionType, "_")),
-                          ~round(.x , digits = round)))
-    }
-
-    return(res)
+    ## [pkg] The joining, the conversion, the pooling of the classes and the adding up are
+    ##   catchAtAoL()'s (R/rcef_scf.R): the table of one row per group and class that
+    ##   distributionsCombined() reports as well, so the two never disagree. It is spread
+    ##   over one column per class here.
+    catchAtAoL(distribution_data = distribution_data,
+               catch_data = catch_data,
+               grouping = grouping,
+               originType_catch = originType_catch,
+               variableType_catch = variableType_catch,
+               distributionType = distributionType,
+               unit = unit,
+               round = round,
+               minAoL = minAoL, maxAoL = maxAoL,
+               plusGroup = plusGroup) %>%
+        spread_AoL(grouping = grouping,
+                   prefix = paste0("N_", distributionType, "_"),
+                   fill = 0)
 }
 
 
@@ -1155,8 +1116,9 @@ catchAtAoLAggregation <- function(distribution_data,
 #'   weights) and one column per class, named `W_<distributionType>_<class>`:
 #'   `W_LengthTotal_300`, `W_Age_3`, `W_Age_7+`.
 #' @seealso [catchAtAoLAggregation()] for the numbers;
-#'   [catchAllocationAoL()] for the allocation; [plot_MWaLoA()] to look
-#'   at it.
+#'   [distributionsCombined()] for the same mean weights, one row per class, in
+#'   the format of the stock coordination; [catchAllocationAoL()] for the
+#'   allocation; [plot_MWaLoA()] to look at it.
 #' @author Yves Reecht
 #' @md
 #' @examples
@@ -1198,107 +1160,25 @@ meanWoLatAoLAggregation <- function(distribution_data,
     ## Author: Yves Reecht, Date: 27 Oct 2025, 14:57
     ## browser()
 
-    weighting <- match.arg(weighting, c("NumberAtAoL", "CATON"), several.ok = FALSE)
-
-    variableType_dist <- match.arg(variableType_dist,
-                                   c("WeightLive"), several.ok = FALSE)
-
-    varPfx <- sub("^(.).*$", "\\1", variableType_dist)
-
-    ## Conversion (only if relevant unit):
-    if (! is.null(unit))
-    {
-        distribution_data <- distribution_data %>%
-            convert_field(valueField = "value",
-                          to = unit)
-    }
-
-    catch_data_sel <- catch_data %>%
-        filter(originType %in% originType_catch,
-               variableType %in% variableType_catch) %>%
-        mutate(CATON = total) %>%
-        select(vesselFlagCountry, year, workingGroup,
-               stock, speciesCode, catchCategory,
-               domainBiology, CATON,
-               any_of(grouping))
-
-    tmp <- distribution_data %>%
-        inner_join(catch_data_sel,
-                   by = join_by(vesselFlagCountry, year, workingGroup,
-                                stock, speciesCode, catchCategory, domainBiology),
-                   suffix = c(".c", "")) %>%
-        filter(variableType %in% variableType_dist,
-               distributionType %in% {{distributionType}}) %>%
-        ## Add sampled and eatimated catch numbers:
-        left_join(distribution_data %>%
-                  filter(variableType %in% "Number",
-                         distributionType %in% {{distributionType}}) %>%
-                  select(vesselFlagCountry, year, workingGroup,
-                         stock, speciesCode, catchCategory, domainBiology,
-                         attributeType, attributeValue, distributionType, distributionUnit, distributionClass,
-                         NaAoL = value),
-                  by = join_by(vesselFlagCountry, year, workingGroup,
-                               stock, speciesCode, catchCategory, domainBiology,
-                               attributeType, attributeValue, distributionType, distributionUnit, distributionClass),
-                  suffix = c(".c", ""))
-
-    distribution_data %>% group_by(variableType) %>% slice_head(n = 1) %>% as.data.frame()
-    tmp %>% group_by(variableType) %>% slice_head(n = 1) %>% as.data.frame()
-
-    if (is.na(maxAoL))
-    {
-        maxAoL2 <- max(tmp$distributionClass, na.rm = TRUE)
-    }else{
-        maxAoL2 <- maxAoL
-    }
-
-    maxAoLdata <- ifelse(plusGroup || is.na(maxAoL),
-                         max(tmp$distributionClass, na.rm = TRUE),
-                         maxAoL)
-    
-    ## Field used for weighting, based on user choice:
-    ## [pkg] "CATON" weights by the total weight of the stratum's catch, which is held in the
-    ##   CATON column here: `total` is not among the columns selected below, so looking for it
-    ##   stopped with "object 'total' not found".
-    wgField <- case_when(weighting == "NumberAtAoL" ~ "NaAoL",
-                         weighting == "CATON" ~ "CATON",
-                         TRUE ~ NA)
-    if (is.na(wgField))
-        stop("mean weighting \"", weighting,
-             "\" not implemented for weights-at-age|length")
-    
-    res <- tmp %>%
-        select(all_of(c(grouping, "distributionClass", "variableUnit", "value", "CATON", "NaAoL"))) %>%
-        filter(between(distributionClass, minAoL, maxAoLdata)) %>% ## pull(distributionClass) %>% unique() %>% sort()
-        mutate(grp = if_else(distributionClass < maxAoL2,
-                             as.character(distributionClass),
-                             paste0(maxAoL2,
-                                    ifelse(plusGroup & ! is.na(maxAoL),
-                                           "+", ""))),
-               grp = factor(grp,
-                            levels = unique(grp)[order(as.numeric(sub("+",
-                                                                      "",
-                                                                      unique(grp),
-                                                                      fixed = TRUE)))])) %>%
-        ungroup() %>%
-        dplyr::group_by(across(all_of(c(grouping, unit = "variableUnit", "grp")))) %>%
-        filter(! is.na(!!sym(wgField))) %>% # Does not handle NAs in weights.
-        summarize(res = weighted.mean(x = value,
-                                      w = !!sym(wgField),
-                                      na.rm = TRUE),
-                  .groups = "drop") %>%
-        arrange(grp) %>%
-        pivot_wider(names_from = "grp", names_prefix = paste0(varPfx, "_", distributionType, "_"),
-                    values_from = "res")
-
-    if (!is.null(round) && is.numeric(round))
-    {
-        res <- res %>%
-            mutate(across(starts_with(paste0(varPfx, "_", distributionType, "_")),
-                          ~round(.x , digits = round)))
-    }
-    
-    return(res)
+    ## [pkg] As in catchAtAoLAggregation(): the joining, the conversion, the pooling of the
+    ##   classes and the averaging are meanWoLatAoL()'s (R/rcef_scf.R), which
+    ##   distributionsCombined() reports as well; it is spread over one column per class here.
+    ##   (`samplesOnly` is not used, as before.)
+    meanWoLatAoL(distribution_data = distribution_data,
+                 catch_data = catch_data,
+                 grouping = grouping,
+                 weighting = weighting,
+                 originType_catch = originType_catch,
+                 variableType_catch = variableType_catch,
+                 variableType_dist = variableType_dist,
+                 distributionType = distributionType,
+                 unit = unit,
+                 round = round,
+                 minAoL = minAoL, maxAoL = maxAoL,
+                 plusGroup = plusGroup) %>%
+        spread_AoL(grouping = grouping,
+                   prefix = paste0(sub("^(.).*$", "\\1", variableType_dist), "_",
+                                   distributionType, "_"))
 }
 
 

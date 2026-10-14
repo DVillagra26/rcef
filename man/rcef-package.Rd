@@ -27,6 +27,7 @@ RDBESStockCoord engines on them.
    compare two or more raised catches, as a table or a figure \tab \code{\link[=raised_overview_table]{raised_overview_table()}}, \code{\link[=plot_compare_raised]{plot_compare_raised()}} \cr
    give every stratum a length or age distribution \tab \code{\link[=catchAllocationAoL]{catchAllocationAoL()}} \cr
    add the allocation up into catch-at-length / -age and mean-weight tables \tab \code{\link[=catchAtAoLAggregation]{catchAtAoLAggregation()}}, \code{\link[=meanWoLatAoLAggregation]{meanWoLatAoLAggregation()}} \cr
+   write the raised catch and the allocated distributions in the format of the stock coordination (SCF v3): Catch Combined and Distributions Combined \tab \code{\link[=catchCombined]{catchCombined()}}, \code{\link[=distributionsCombined]{distributionsCombined()}} \cr
    change the colours of any plot \tab the \code{palette} argument they all take: \code{"default"}, \code{"colorblind"} or \code{"gradual"} \cr
    save any of the plots to a file \tab the \code{save} argument they all take, see \link{saving-plots} \cr
 }
@@ -62,7 +63,8 @@ run:
 \if{html}{\out{<div class="sourceCode">}}\preformatted{derive_fields() -> your strataCond / matchedDataCond -> check_group_conditions()
   -> catchRaising()          (discards)
   -> catchAllocationAoL()    (lengths and ages)
-  -> catchAtAoLAggregation() / meanWoLatAoLAggregation()
+  -> catchAtAoLAggregation() / meanWoLatAoLAggregation()   (one column per class)
+  -> catchCombined() / distributionsCombined()             (the SCF tables CC and DC)
 }\if{html}{\out{</div>}}
 
 The groups are two named lists of conditions: \code{strataCond}, the strata that

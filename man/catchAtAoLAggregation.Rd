@@ -101,8 +101,9 @@ catchAtAoLAggregation(alloc$distribution, alloc$catch,
 }
 \seealso{
 \code{\link[=meanWoLatAoLAggregation]{meanWoLatAoLAggregation()}} for the mean weights;
-\code{\link[=catchAllocationAoL]{catchAllocationAoL()}} for the allocation; \code{\link[=plot_NaLoA]{plot_NaLoA()}} to look
-at it.
+\code{\link[=distributionsCombined]{distributionsCombined()}} for the same numbers, one row per class, in the
+format of the stock coordination; \code{\link[=catchAllocationAoL]{catchAllocationAoL()}} for the allocation;
+\code{\link[=plot_NaLoA]{plot_NaLoA()}} to look at it.
 }
 \author{
 Yves Reecht

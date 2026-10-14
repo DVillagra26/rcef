@@ -145,6 +145,25 @@ plot_NaLoA(alloc$catch, alloc$distribution, catchCategory = "Lan", fill = "vesse
 plot_MWaLoA(alloc$catch, alloc$distribution, catchCategory = "Lan", colour = "sampledOrEstimated")
 ```
 
+The two end products are the tables of the stock coordination format (SCF v3):
+**Catch Combined** (CC) and **Distributions Combined** (DC), uploaded together.
+`catchCombined()` adds the catch up by year, stock and catch category - and, when
+the stock assessment asks for it, season, area or fleet - and
+`distributionsCombined()` the numbers and the mean weights at length or age, one
+row per class, with the arguments of the two aggregations above: it adds up exactly
+as they do, being made of the same two functions. Every field the format has that
+the data does not fill is there, empty; the header (`version`, `calendarYear`, with
+`yearStartDate` for a model year) is written on every row. Give both the allocation's
+own `$catch`, which is the one that knows the distributions it estimated:
+
+```r
+catchCombined(alloc$catch, originType_catch = "WGEstimate", variableType_catch = "WeightLive",
+              unit = "t", version = 1, versionDescription = "first run")
+distributionsCombined(alloc$distribution, alloc$catch, originType_catch = "WGEstimate",
+                      variableType_catch = "WeightLive", distributionType = "LengthTotal",
+                      unit = c("NE3", "g"), version = 1, versionDescription = "first run")
+```
+
 Raising uses the discard estimates whose `originType` matches the `originType`
 argument (`"WGEstimate"` by default, or `"Official"`), so that is the value the
 rows you want raised must carry.
@@ -155,7 +174,7 @@ rows you want raised must carry.
 R/                     THE PACKAGE
   aaa-package.R          package doc, imports, globals
   RDBESStockCoord_*.R    vendored ICES WG code — do not refactor
-  rcef_*.R               our analysis logic
+  rcef_*.R               our analysis logic (rcef_scf.R: the SCF tables)
   viz_*.R                our theme and plots (ggplot2 only)
 dev/                   tests and tooling (.Rbuildignore'd)
 ```

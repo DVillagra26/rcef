@@ -38,6 +38,7 @@
 #' | compare two or more raised catches, as a table or a figure | [raised_overview_table()], [plot_compare_raised()] |
 #' | give every stratum a length or age distribution | [catchAllocationAoL()] |
 #' | add the allocation up into catch-at-length / -age and mean-weight tables | [catchAtAoLAggregation()], [meanWoLatAoLAggregation()] |
+#' | write the raised catch and the allocated distributions in the format of the stock coordination (SCF v3): Catch Combined and Distributions Combined | [catchCombined()], [distributionsCombined()] |
 #' | change the colours of any plot | the `palette` argument they all take: `"default"`, `"colorblind"` or `"gradual"` |
 #' | save any of the plots to a file | the `save` argument they all take, see [saving-plots] |
 #'
@@ -72,7 +73,8 @@
 #' derive_fields() -> your strataCond / matchedDataCond -> check_group_conditions()
 #'   -> catchRaising()          (discards)
 #'   -> catchAllocationAoL()    (lengths and ages)
-#'   -> catchAtAoLAggregation() / meanWoLatAoLAggregation()
+#'   -> catchAtAoLAggregation() / meanWoLatAoLAggregation()   (one column per class)
+#'   -> catchCombined() / distributionsCombined()             (the SCF tables CC and DC)
 #' ```
 #'
 #' The groups are two named lists of conditions: `strataCond`, the strata that
