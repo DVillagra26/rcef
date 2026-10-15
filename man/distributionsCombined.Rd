@@ -27,8 +27,13 @@ distributionsCombined(
 \item{distribution_data}{The distributions: a CEF distributions table, or the
 \code{distribution} table of a \code{\link[=catchAllocationAoL]{catchAllocationAoL()}} result.}
 
-\item{catch_data}{The catch they belong to: a CEF catch table, or the \code{catch}
-table of the same allocation.}
+\item{catch_data}{The catch they belong to: a CEF catch table, the \code{catch}
+table of the same allocation, or the raised catch the allocation was run on.
+The distributions an allocation estimates for strata with no biological
+domain carry a domain it makes up from the stratum,
+\code{"[alloc]_<season>_<area>_<unit>_<fleet>_<category>"}, which its own \code{catch}
+has; the rows of the raised catch with no \code{domainBiology} are given the same
+one (a message says so), so the estimated distributions are found with it too.}
 
 \item{grouping}{The variables to add up by, on top of the year, the working
 group, the stock and the catch category (always reported by): the sex of
@@ -97,9 +102,14 @@ catch category and the country, and the \code{grouping} is read off the catch th
 are linked to. Take \strong{both tables from the same allocation}:
 \code{distributionsCombined(alloc$distribution, alloc$catch, ...)}. The
 distributions the allocation estimated for strata with no biological domain
-carry a domain it made up, which only its own \verb{$catch} has; the catch that
-went in cannot find them, and the numbers would silently be a fraction of what
-they are (a warning says so). Take one \code{originType_catch} and one
+carry a domain it made up from the stratum,
+\code{"[alloc]_<season>_<area>_<unit>_<fleet>_<category>"}, and so do those strata in
+its \verb{$catch}. The raised catch the allocation was run on has no such domain, so
+the rows of it with no \code{domainBiology} are given the one the allocation gives
+(a message says so) and the estimated distributions are found there too - as
+long as it is the raised catch the allocation was run on. A distribution with no
+catch row to go with is left out, and a warning says so. Take one
+\code{originType_catch} and one
 \code{variableType_catch} too, as in \code{\link[=catchAtAoLAggregation]{catchAtAoLAggregation()}}.
 
 The \code{grouping} is the one of \code{\link[=catchCombined]{catchCombined()}} (and of the same file: a

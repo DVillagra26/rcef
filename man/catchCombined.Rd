@@ -76,7 +76,9 @@ Take one \code{originType_catch}: the default takes the catch rows of both origi
 and a stratum that has rows of both is counted twice (a warning says so).
 \code{"WGEstimate"} is the working group's own catch - the raised discards among
 it. A catch of \code{NaN} (a stratum the raising had no rate for) adds up as
-nothing.
+nothing. The rows are added up whatever their \code{domainBiology}: the raised
+catch, and the \code{catch} of the allocation made from it (which has the domain the
+allocation made up for the strata it estimated), give the same CC.
 
 The distributions of the same stock go with it: use the same \code{grouping} in
 \code{\link[=distributionsCombined]{distributionsCombined()}}, since each distribution needs the catch it

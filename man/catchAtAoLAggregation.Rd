@@ -22,8 +22,13 @@ catchAtAoLAggregation(
 \item{distribution_data}{The distributions: a CEF distributions table, or the
 \code{distribution} table of a \code{\link[=catchAllocationAoL]{catchAllocationAoL()}} result.}
 
-\item{catch_data}{The catch they belong to: a CEF catch table, or the \code{catch}
-table of the same allocation.}
+\item{catch_data}{The catch they belong to: a CEF catch table, the \code{catch}
+table of the same allocation, or the raised catch the allocation was run on.
+The distributions an allocation estimates for strata with no biological
+domain carry a domain it makes up from the stratum,
+\code{"[alloc]_<season>_<area>_<unit>_<fleet>_<category>"}, which its own \code{catch}
+has; the rows of the raised catch with no \code{domainBiology} are given the same
+one (a message says so), so the estimated distributions are found with it too.}
 
 \item{grouping}{The variables to add up by: columns of the catch rows
 (\code{catchCategory}, \code{seasonValue}, \code{metier4}, ...) or of the distributions

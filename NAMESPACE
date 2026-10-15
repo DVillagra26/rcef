@@ -3,6 +3,7 @@
 S3method(grid::makeContent,hatch_grob)
 export(OUTLINE)
 export(OUTLINE_LW)
+export(alloc_domain)
 export(aol_classes)
 export(aol_finish)
 export(app_theme)

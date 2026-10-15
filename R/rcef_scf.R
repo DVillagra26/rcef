@@ -55,6 +55,8 @@ catchAtAoL <- function(distribution_data,
                        minAoL = 0, maxAoL = NA,
                        plusGroup = TRUE)
 {
+    catch_data <- alloc_domain(catch_data, distribution_data)
+
     ## Conversion (only if relevant unit):
     if (! is.null(unit))
     {
@@ -118,6 +120,8 @@ meanWoLatAoL <- function(distribution_data,
     variableType_dist <- match.arg(variableType_dist,
                                    c("WeightLive"), several.ok = FALSE)
 
+    catch_data <- alloc_domain(catch_data, distribution_data)
+
     ## Conversion (only if relevant unit):
     if (! is.null(unit))
     {
@@ -172,6 +176,52 @@ meanWoLatAoL <- function(distribution_data,
                                         na.rm = TRUE),
                   .groups = "drop") %>%
         aol_finish(grouping, distributionType, classes, round)
+}
+
+# The domainBiology an allocation gives what it estimated a distribution for. The strata
+# that have no distribution get one estimated by catchAllocationAoL(), and a domain made up
+# from the stratum - "[alloc]_<seasonValue>_<areaValue>_<fisheriesManagementUnit>_
+# <fleetValue>_<catchCategory>" - on the distribution and on the stratum of the `$catch` it
+# returns. The catch the allocation was run on, the raised catch, has no such domain: its
+# strata with no domainBiology are the ones the allocation estimated, and with it none of
+# those distributions would be found (a catch of the allocation result is not touched).
+# When the distributions have such domains and the catch has none, the catch rows with no
+# domainBiology are given the domain the allocation gives them - the same recipe - and it is
+# said. The three adding-up functions call it, so they read either catch the same way.
+#' @noRd
+#' @export
+alloc_domain <- function(catch_data, distribution_data)
+{
+    made_up <- function(x) startsWith(as.character(x), "[alloc]")
+    if (! any(made_up(distribution_data$domainBiology), na.rm = TRUE) ||
+        any(made_up(catch_data$domainBiology), na.rm = TRUE))
+        return(catch_data)
+
+    recipe <- c("seasonValue", "areaValue", "fisheriesManagementUnit", "fleetValue", "catchCategory")
+    if (! all(c("domainBiology", recipe) %in% names(catch_data)))
+    {
+        warning("the distributions have domains an allocation made up (\"[alloc]...\"), which a ",
+                "raised catch is given from its ", paste(recipe, collapse = ", "),
+                " - the catch lacks ", paste(setdiff(c("domainBiology", recipe), names(catch_data)),
+                                             collapse = ", "), ", so they cannot be found",
+                call. = FALSE)
+        return(catch_data)
+    }
+
+    none <- is.na(catch_data$domainBiology)
+    if (any(none))
+    {
+        catch_data$domainBiology <- as.character(catch_data$domainBiology)
+        catch_data$domainBiology[none] <-
+            paste("[alloc]", catch_data$seasonValue[none], catch_data$areaValue[none],
+                  catch_data$fisheriesManagementUnit[none], catch_data$fleetValue[none],
+                  catch_data$catchCategory[none], sep = "_")
+        message("The catch has no \"[alloc]\" domainBiology, which the distributions of an allocation ",
+                "have: the ", sum(none), " catch rows with no domainBiology were given the one the ",
+                "allocation gives (season, area, management unit, fleet and catch category). ",
+                "The catch of the allocation result (alloc$catch) has them already.")
+    }
+    catch_data
 }
 
 # Where the classes of a table of distributions stop, and where its plus group
@@ -428,7 +478,9 @@ scf_table <- function(d, record, version, versionDescription, calendarYear,
 #' and a stratum that has rows of both is counted twice (a warning says so).
 #' `"WGEstimate"` is the working group's own catch - the raised discards among
 #' it. A catch of `NaN` (a stratum the raising had no rate for) adds up as
-#' nothing.
+#' nothing. The rows are added up whatever their `domainBiology`: the raised
+#' catch, and the `catch` of the allocation made from it (which has the domain the
+#' allocation made up for the strata it estimated), give the same CC.
 #'
 #' The distributions of the same stock go with it: use the same `grouping` in
 #' [distributionsCombined()], since each distribution needs the catch it
@@ -552,9 +604,14 @@ catchCombined <- function(catch_data,
 #' are linked to. Take **both tables from the same allocation**:
 #' `distributionsCombined(alloc$distribution, alloc$catch, ...)`. The
 #' distributions the allocation estimated for strata with no biological domain
-#' carry a domain it made up, which only its own `$catch` has; the catch that
-#' went in cannot find them, and the numbers would silently be a fraction of what
-#' they are (a warning says so). Take one `originType_catch` and one
+#' carry a domain it made up from the stratum,
+#' `"[alloc]_<season>_<area>_<unit>_<fleet>_<category>"`, and so do those strata in
+#' its `$catch`. The raised catch the allocation was run on has no such domain, so
+#' the rows of it with no `domainBiology` are given the one the allocation gives
+#' (a message says so) and the estimated distributions are found there too - as
+#' long as it is the raised catch the allocation was run on. A distribution with no
+#' catch row to go with is left out, and a warning says so. Take one
+#' `originType_catch` and one
 #' `variableType_catch` too, as in [catchAtAoLAggregation()].
 #'
 #' The `grouping` is the one of [catchCombined()] (and of the same file: a
@@ -670,6 +727,10 @@ distributionsCombined <- function(distribution_data,
         if (type %in% names(x)) x[[type]] else default
     }
 
+    ## The catch an allocation was run on has no domain for the strata it estimated a distribution
+    ## for: given the one the allocation gives (nothing to do with the catch of its result):
+    catch_data <- alloc_domain(catch_data, distribution_data)
+
     ## Every distribution has a catch that goes with it: those that do not are said:
     keys <- c("vesselFlagCountry", "year", "workingGroup", "stock", "speciesCode",
               "catchCategory", "domainBiology")
@@ -681,9 +742,10 @@ distributionsCombined <- function(distribution_data,
     if (nrow(unlinked))
         warning(fn, "(): ", nrow(unlinked), " of the ", nrow(dist_keys),
                 " distribution domains have no catch row in `catch_data` and are left ",
-                "out - give it the catch of the allocation result (alloc$catch): the ",
-                "distributions it estimated for strata with no biological domain carry ",
-                "a domain only that catch has", call. = FALSE)
+                "out - give it the catch of the allocation result (alloc$catch), or the ",
+                "raised catch the allocation was run on: the distributions it estimated for ",
+                "strata with no biological domain carry a domain made up from the stratum ",
+                "(\"[alloc]_...\"), which those two have", call. = FALSE)
 
     one <- function(type)
     {

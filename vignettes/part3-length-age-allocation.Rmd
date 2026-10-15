@@ -303,7 +303,11 @@ added up into the two tables of the stock coordination format (SCF v3), Catch
 Combined (CC) and Distributions Combined (DC), which are uploaded together.
 Both are made from the two tables of the allocation result - its `$catch` and
 its `$distribution` - and every field the format has that the data does not
-fill is there, empty.
+fill is there, empty. The raised catch the allocation was run on does as well
+for the distributions: the ones the allocation estimated carry a `domainBiology`
+it made up from the stratum, `"[alloc]_<season>_<area>_<unit>_<fleet>_<category>"`,
+and the strata of the raised catch with no domain are given the same one - a
+message says so - so none is lost.
 
 `catchCombined()` adds the catch up by year, working group, stock and catch
 category (`grouping` adds the season, the area or the fleet, when the stock
