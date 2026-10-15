@@ -69,9 +69,9 @@ library(rcef)
 cef_dir <- file.path("..", "inst", "extdata", "data_CEF_format")
 
 # blank cells (no discard domain, no trip count ...) read as NA
-catch_data        <- read.csv(file.path(cef_dir, "bll", "bll_2025_catches_CEF_v17.1.csv"),
+catch_data        <- read.csv(file.path(cef_dir, "bll", "2025", "bll_2025_catches_CEF_v17.1.csv"),
                               na.strings = "")
-distribution_data <- read.csv(file.path(cef_dir, "bll", "bll_2025_distributions_CEF_v17.1.csv"),
+distribution_data <- read.csv(file.path(cef_dir, "bll", "2025",  "bll_2025_distributions_CEF_v17.1.csv"),
                               na.strings = "")
 
 age_catch <- read.csv(file.path(cef_dir, "pok", "pok_2022_catches_CEF_v17.1.csv"),
@@ -395,7 +395,7 @@ catch carries) - only the panels change:
 ```{r dr-facet, fig.width = 8, fig.height = 7, fig.alt = "Discard rate per stratum, by metier, coloured by country, one panel per area"}
 plot_DR(catch = catch_data,
        x = "metier4",
-       colour = "vesselFlagCountry",
+       colour = "mesh",
        facet = "areaValue",
        jitter = TRUE)
 ```
@@ -460,9 +460,9 @@ always means "similar discard rate" - the map is only where those clusters
 are then shown.
 
 ```{r clusters}
-dc <- build_discard_clusters(catch_data,
-                             dims = c("metier4", "mesh", "vesselFlagCountry", "seasonValue",
-                                      "areaValue"))
+dc <- build_discard_clusters(age_catch,
+                             dims = c("metier4", "mesh","target", "vesselFlagCountry", "seasonValue",
+                                      "areaValue"), k = 5)
 dc$importance
 ```
 
@@ -626,7 +626,7 @@ plot_NaLoA(data = age_catch, distributions = age_dist, distributionType = "Age",
 
 ```{r age-mw, fig.height = 5, fig.alt = "Mean weight at age of the landings, one line per country"}
 plot_MWaLoA(data = age_catch, distributions = age_dist, distributionType = "Age",
-           catchCategory = "Lan", colour = "vesselFlagCountry", facet = "seasonValue")
+           catchCategory = "Dis", colour = "vesselFlagCountry", facet = "seasonValue", show_samples = T)
 ```
 
 ### The plus group
@@ -652,11 +652,11 @@ plus group from 5, 10 and 15:
 
 ```{r age-mw-plus-sweep, fig.height = 4, fig.alt = "Mean weight at age of the landings without a plus group and with plus groups from 5, 10 and 15"}
 print(plot_MWaLoA(data = age_catch, distributions = age_dist, distributionType = "Age",
-                  catchCategory = "Lan"))
+                  catchCategory = "Lan", show_samples = T))
 for (start in c(5, 10, 15)) {
   print(plot_MWaLoA(data = age_catch, distributions = age_dist, distributionType = "Age",
                     catchCategory = "Lan",
-                    plus_group = start))
+                    plus_group = start, show_samples = T))
 }
 ```
 
