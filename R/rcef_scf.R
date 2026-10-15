@@ -36,6 +36,9 @@
 #' arguments are those of [catchAtAoLAggregation()].
 #'
 #' @inheritParams catchAtAoLAggregation
+#' @param check Warn about the catch with no distribution and the distributions
+#'   with no catch ([distributionsCombined()] asks it of the numbers only, not
+#'   twice).
 #' @return A tibble with the `grouping` columns, `distributionType`,
 #'   `distributionClass` (the class; the lowest class of the plus group for the
 #'   classes pooled into it), `plusClass` (that lowest class when a plus group
@@ -53,9 +56,16 @@ catchAtAoL <- function(distribution_data,
                        unit = NULL,
                        round = NULL,
                        minAoL = 0, maxAoL = NA,
-                       plusGroup = TRUE)
+                       plusGroup = TRUE,
+                       check = TRUE)
 {
-    catch_data <- alloc_domain(catch_data, distribution_data)
+    keys <- c("vesselFlagCountry", "year", "workingGroup", "stock", "speciesCode", "catchCategory")
+    catch_sel <- catch_data %>%
+        filter(originType %in% originType_catch,
+               variableType %in% variableType_catch)
+    catch_sel$.dom <- catch_domain(catch_sel)
+    if (check)
+        link_check(distribution_data, catch_sel, distributionType)
 
     ## Conversion (only if relevant unit):
     if (! is.null(unit))
@@ -66,15 +76,10 @@ catchAtAoL <- function(distribution_data,
     }
 
     tmp <- distribution_data %>%
-        inner_join(catch_data %>%
-                   filter(originType %in% originType_catch,
-                          variableType %in% variableType_catch) %>%
-                   select(vesselFlagCountry, year, workingGroup,
-                          stock, speciesCode, catchCategory,
-                          domainBiology,
-                          any_of(grouping)),
-                   by = join_by(vesselFlagCountry, year, workingGroup,
-                                stock, speciesCode, catchCategory, domainBiology),
+        inner_join(catch_sel %>%
+                   select(all_of(keys), .dom, any_of(grouping)) %>%
+                   distinct(),
+                   by = c(keys, domainBiology = ".dom"),
                    suffix = c(".c", "")) %>%
         filter(variableType %in% c("Number"),
                distributionType %in% !!distributionType)
@@ -113,14 +118,22 @@ meanWoLatAoL <- function(distribution_data,
                          unit = NULL,
                          round = NULL,
                          minAoL = 0, maxAoL = NA,
-                         plusGroup = TRUE)
+                         plusGroup = TRUE,
+                         check = TRUE)
 {
     weighting <- match.arg(weighting, c("NumberAtAoL", "CATON"), several.ok = FALSE)
 
     variableType_dist <- match.arg(variableType_dist,
                                    c("WeightLive"), several.ok = FALSE)
 
-    catch_data <- alloc_domain(catch_data, distribution_data)
+    keys <- c("vesselFlagCountry", "year", "workingGroup", "stock", "speciesCode", "catchCategory")
+    catch_sel <- catch_data %>%
+        filter(originType %in% originType_catch,
+               variableType %in% variableType_catch) %>%
+        mutate(CATON = if (weighting == "CATON") total else NA_real_)
+    catch_sel$.dom <- catch_domain(catch_sel)
+    if (check)
+        link_check(distribution_data, catch_sel, distributionType)
 
     ## Conversion (only if relevant unit):
     if (! is.null(unit))
@@ -130,19 +143,11 @@ meanWoLatAoL <- function(distribution_data,
                           to = unit)
     }
 
-    catch_data_sel <- catch_data %>%
-        filter(originType %in% originType_catch,
-               variableType %in% variableType_catch) %>%
-        mutate(CATON = total) %>%
-        select(vesselFlagCountry, year, workingGroup,
-               stock, speciesCode, catchCategory,
-               domainBiology, CATON,
-               any_of(grouping))
-
     tmp <- distribution_data %>%
-        inner_join(catch_data_sel,
-                   by = join_by(vesselFlagCountry, year, workingGroup,
-                                stock, speciesCode, catchCategory, domainBiology),
+        inner_join(catch_sel %>%
+                   select(all_of(keys), .dom, CATON, any_of(grouping)) %>%
+                   distinct(),
+                   by = c(keys, domainBiology = ".dom"),
                    suffix = c(".c", "")) %>%
         filter(variableType %in% variableType_dist,
                distributionType %in% !!distributionType) %>%
@@ -178,50 +183,60 @@ meanWoLatAoL <- function(distribution_data,
         aol_finish(grouping, distributionType, classes, round)
 }
 
-# The domainBiology an allocation gives what it estimated a distribution for. The strata
-# that have no distribution get one estimated by catchAllocationAoL(), and a domain made up
-# from the stratum - "[alloc]_<seasonValue>_<areaValue>_<fisheriesManagementUnit>_
-# <fleetValue>_<catchCategory>" - on the distribution and on the stratum of the `$catch` it
-# returns. The catch the allocation was run on, the raised catch, has no such domain: its
-# strata with no domainBiology are the ones the allocation estimated, and with it none of
-# those distributions would be found (a catch of the allocation result is not touched).
-# When the distributions have such domains and the catch has none, the catch rows with no
-# domainBiology are given the domain the allocation gives them - the same recipe - and it is
-# said. The three adding-up functions call it, so they read either catch the same way.
+# What a distribution and a catch row are linked by: the domainBiology. The strata an allocation
+# estimated a distribution for have none in the raised catch: the allocation made one up from the
+# stratum, for the distribution and for the `$catch` it returns - "[alloc]_<seasonValue>_<areaValue>_
+# <fisheriesManagementUnit>_<fleetValue>_<catchCategory>", with the catch category because an
+# allocation is made for each. The same recipe gives that domain to a catch row that has none, so a
+# stratum - raised or not, sampled or allocated - finds its distribution, whichever of the raised
+# catch and the catch of the allocation result is handed in.
 #' @noRd
 #' @export
-alloc_domain <- function(catch_data, distribution_data)
+catch_domain <- function(catch_data)
 {
-    made_up <- function(x) startsWith(as.character(x), "[alloc]")
-    if (! any(made_up(distribution_data$domainBiology), na.rm = TRUE) ||
-        any(made_up(catch_data$domainBiology), na.rm = TRUE))
-        return(catch_data)
+    own <- as.character(catch_data$domainBiology)
+    stratum <- c("seasonValue", "areaValue", "fisheriesManagementUnit", "fleetValue", "catchCategory")
+    if (! all(stratum %in% names(catch_data)))
+        return(own)
+    coalesce(own, paste("[alloc]", catch_data$seasonValue, catch_data$areaValue,
+                        catch_data$fisheriesManagementUnit, catch_data$fleetValue,
+                        catch_data$catchCategory, sep = "_"))
+}
 
-    recipe <- c("seasonValue", "areaValue", "fisheriesManagementUnit", "fleetValue", "catchCategory")
-    if (! all(c("domainBiology", recipe) %in% names(catch_data)))
-    {
-        warning("the distributions have domains an allocation made up (\"[alloc]...\"), which a ",
-                "raised catch is given from its ", paste(recipe, collapse = ", "),
-                " - the catch lacks ", paste(setdiff(c("domainBiology", recipe), names(catch_data)),
-                                             collapse = ", "), ", so they cannot be found",
+# What does not go together, said: a catch (not 0, not NaN) that has no distribution of the type
+# asked for, and a distribution with fish that has no catch (not 0, not NaN) to go with.
+# `catch_sel` is the catch of the origin and the variable asked for, with its domain in `.dom`.
+#' @noRd
+#' @export
+link_check <- function(distribution_data, catch_sel, type)
+{
+    keys <- c("vesselFlagCountry", "year", "workingGroup", "stock", "speciesCode", "catchCategory")
+    dist_all <- distribution_data %>%
+        filter(distributionType %in% !!type) %>%
+        distinct(across(all_of(c(keys, "domainBiology"))))
+    dist_fish <- distribution_data %>%
+        filter(distributionType %in% !!type, variableType %in% "Number", value > 0) %>%
+        distinct(across(all_of(c(keys, "domainBiology"))))
+    catch_w <- catch_sel %>%
+        filter(is.finite(total), total > 0) %>%
+        dplyr::group_by(across(all_of(c(keys, ".dom")))) %>%
+        summarize(total = max(total), .groups = "drop")
+    some <- function(d, dom)
+        paste(utils::head(paste(d$vesselFlagCountry, d[[dom]], sep = " | "), 3), collapse = "; ")
+
+    no_dist <- anti_join(catch_w, dist_all, by = c(keys, ".dom" = "domainBiology"))
+    if (nrow(no_dist))
+        warning(nrow(no_dist), " of the ", nrow(catch_w), " catch strata with a weight have no ",
+                paste(type, collapse = "/"), " distribution to go with: ",
+                signif(sum(no_dist$total), 4), " ", catch_sel$variableUnit[1],
+                " of the catch is not in the numbers (", some(no_dist, ".dom"), ")",
                 call. = FALSE)
-        return(catch_data)
-    }
 
-    none <- is.na(catch_data$domainBiology)
-    if (any(none))
-    {
-        catch_data$domainBiology <- as.character(catch_data$domainBiology)
-        catch_data$domainBiology[none] <-
-            paste("[alloc]", catch_data$seasonValue[none], catch_data$areaValue[none],
-                  catch_data$fisheriesManagementUnit[none], catch_data$fleetValue[none],
-                  catch_data$catchCategory[none], sep = "_")
-        message("The catch has no \"[alloc]\" domainBiology, which the distributions of an allocation ",
-                "have: the ", sum(none), " catch rows with no domainBiology were given the one the ",
-                "allocation gives (season, area, management unit, fleet and catch category). ",
-                "The catch of the allocation result (alloc$catch) has them already.")
-    }
-    catch_data
+    no_catch <- anti_join(dist_fish, catch_w, by = c(keys, "domainBiology" = ".dom"))
+    if (nrow(no_catch))
+        warning(nrow(no_catch), " of the ", nrow(dist_fish), " distributions with fish have no ",
+                "catch weight to go with and are left out (", some(no_catch, "domainBiology"), ")",
+                call. = FALSE)
 }
 
 # Where the classes of a table of distributions stop, and where its plus group
@@ -599,20 +614,20 @@ catchCombined <- function(catch_data,
 #' a `WeightLive` row (`valueType` `Mean`) for each class. A class no fish
 #' fall in is left out, since it has no mean weight.
 #'
-#' The distributions are linked to the catch through `domainBiology`, the
-#' catch category and the country, and the `grouping` is read off the catch they
-#' are linked to. Take **both tables from the same allocation**:
-#' `distributionsCombined(alloc$distribution, alloc$catch, ...)`. The
-#' distributions the allocation estimated for strata with no biological domain
-#' carry a domain it made up from the stratum,
-#' `"[alloc]_<season>_<area>_<unit>_<fleet>_<category>"`, and so do those strata in
-#' its `$catch`. The raised catch the allocation was run on has no such domain, so
-#' the rows of it with no `domainBiology` are given the one the allocation gives
-#' (a message says so) and the estimated distributions are found there too - as
-#' long as it is the raised catch the allocation was run on. A distribution with no
-#' catch row to go with is left out, and a warning says so. Take one
-#' `originType_catch` and one
-#' `variableType_catch` too, as in [catchAtAoLAggregation()].
+#' The distributions are linked to the catch through `domainBiology`, the catch
+#' category and the country, and the `grouping` is read off the catch they are
+#' linked to. A sampled distribution has the domain of its catch. The strata an
+#' allocation estimated a distribution for have none in the raised catch, and the
+#' allocation made one up for the distribution and for the `catch` it returns,
+#' `"[alloc]_<season>_<area>_<unit>_<fleet>_<category>"`; a catch row with no
+#' domain is given the same, so every stratum - raised or not, sampled or
+#' allocated - finds its distribution whether the raised catch the allocation was
+#' run on or the `catch` of its result is handed in
+#' (`distributionsCombined(alloc$distribution, alloc$catch, ...)`). It has to be
+#' that raised catch: another raising has other strata and weights. A catch weight
+#' with no distribution, or a distribution with fish and no catch weight, is
+#' warned about. Take one `originType_catch` and one `variableType_catch` too, as
+#' in [catchAtAoLAggregation()].
 #'
 #' The `grouping` is the one of [catchCombined()] (and of the same file: a
 #' distribution needs a catch of the same year, stock, category, season, area and
@@ -727,26 +742,6 @@ distributionsCombined <- function(distribution_data,
         if (type %in% names(x)) x[[type]] else default
     }
 
-    ## The catch an allocation was run on has no domain for the strata it estimated a distribution
-    ## for: given the one the allocation gives (nothing to do with the catch of its result):
-    catch_data <- alloc_domain(catch_data, distribution_data)
-
-    ## Every distribution has a catch that goes with it: those that do not are said:
-    keys <- c("vesselFlagCountry", "year", "workingGroup", "stock", "speciesCode",
-              "catchCategory", "domainBiology")
-    dist_keys <- distribution_data %>%
-        filter(distributionType %in% types) %>%
-        distinct(across(all_of(keys)))
-    unlinked <- dist_keys %>%
-        anti_join(distinct(catch_data, across(all_of(keys))), by = keys)
-    if (nrow(unlinked))
-        warning(fn, "(): ", nrow(unlinked), " of the ", nrow(dist_keys),
-                " distribution domains have no catch row in `catch_data` and are left ",
-                "out - give it the catch of the allocation result (alloc$catch), or the ",
-                "raised catch the allocation was run on: the distributions it estimated for ",
-                "strata with no biological domain carry a domain made up from the stratum ",
-                "(\"[alloc]_...\"), which those two have", call. = FALSE)
-
     one <- function(type)
     {
         min_c  <- per_type(minAoL, type, 0, "minAoL")
@@ -790,7 +785,8 @@ distributionsCombined <- function(distribution_data,
                             originType_catch = originType_catch,
                             variableType_catch = variableType_catch,
                             distributionType = type, unit = unit, round = round,
-                            minAoL = min_c, maxAoL = max_c, plusGroup = plus_c) %>%
+                            minAoL = min_c, maxAoL = max_c, plusGroup = plus_c,
+                            check = FALSE) %>%
             mutate(variableType = "WeightLive", valueType = "Mean")
 
         ## A class no fish fall in has no mean weight, and is not reported:

@@ -29,11 +29,14 @@ distributionsCombined(
 
 \item{catch_data}{The catch they belong to: a CEF catch table, the \code{catch}
 table of the same allocation, or the raised catch the allocation was run on.
-The distributions an allocation estimates for strata with no biological
-domain carry a domain it makes up from the stratum,
-\code{"[alloc]_<season>_<area>_<unit>_<fleet>_<category>"}, which its own \code{catch}
-has; the rows of the raised catch with no \code{domainBiology} are given the same
-one (a message says so), so the estimated distributions are found with it too.}
+A distribution and a catch row are linked by \code{domainBiology}. The strata an
+allocation estimated a distribution for have none in the raised catch: the
+allocation made one up for the distribution and for its own \code{catch},
+\code{"[alloc]_<season>_<area>_<unit>_<fleet>_<category>"}, and a catch row with no
+domain is given the same, so the raised catch finds the estimated
+distributions as the \code{catch} of the same allocation does. A catch weight with
+no distribution, or a distribution with fish and no catch weight, is warned
+about.}
 
 \item{grouping}{The variables to add up by, on top of the year, the working
 group, the stock and the catch category (always reported by): the sex of
@@ -97,20 +100,20 @@ SCF instead of one column per class: a \code{Number} row (\code{valueType} \code
 a \code{WeightLive} row (\code{valueType} \code{Mean}) for each class. A class no fish
 fall in is left out, since it has no mean weight.
 
-The distributions are linked to the catch through \code{domainBiology}, the
-catch category and the country, and the \code{grouping} is read off the catch they
-are linked to. Take \strong{both tables from the same allocation}:
-\code{distributionsCombined(alloc$distribution, alloc$catch, ...)}. The
-distributions the allocation estimated for strata with no biological domain
-carry a domain it made up from the stratum,
-\code{"[alloc]_<season>_<area>_<unit>_<fleet>_<category>"}, and so do those strata in
-its \verb{$catch}. The raised catch the allocation was run on has no such domain, so
-the rows of it with no \code{domainBiology} are given the one the allocation gives
-(a message says so) and the estimated distributions are found there too - as
-long as it is the raised catch the allocation was run on. A distribution with no
-catch row to go with is left out, and a warning says so. Take one
-\code{originType_catch} and one
-\code{variableType_catch} too, as in \code{\link[=catchAtAoLAggregation]{catchAtAoLAggregation()}}.
+The distributions are linked to the catch through \code{domainBiology}, the catch
+category and the country, and the \code{grouping} is read off the catch they are
+linked to. A sampled distribution has the domain of its catch. The strata an
+allocation estimated a distribution for have none in the raised catch, and the
+allocation made one up for the distribution and for the \code{catch} it returns,
+\code{"[alloc]_<season>_<area>_<unit>_<fleet>_<category>"}; a catch row with no
+domain is given the same, so every stratum - raised or not, sampled or
+allocated - finds its distribution whether the raised catch the allocation was
+run on or the \code{catch} of its result is handed in
+(\code{distributionsCombined(alloc$distribution, alloc$catch, ...)}). It has to be
+that raised catch: another raising has other strata and weights. A catch weight
+with no distribution, or a distribution with fish and no catch weight, is
+warned about. Take one \code{originType_catch} and one \code{variableType_catch} too, as
+in \code{\link[=catchAtAoLAggregation]{catchAtAoLAggregation()}}.
 
 The \code{grouping} is the one of \code{\link[=catchCombined]{catchCombined()}} (and of the same file: a
 distribution needs a catch of the same year, stock, category, season, area and

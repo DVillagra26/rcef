@@ -244,9 +244,13 @@ ok(has(err(combine(distributionType = "LengthTotal", grouping = c("catchCategory
 ## the link to the catch
 lost <- heard(distributionsCombined(distributions, catch[catch$domainBiology %in% c("D1", NA), ], originType_catch = "WGEstimate",
                                     variableType_catch = "WeightLive", distributionType = "LengthTotal"))
-ok(any(grepl("domains have no catch row", lost$warnings)) && any(grepl("alloc$catch", lost$warnings, fixed = TRUE)) &&
-     nrow(lost$value) < nrow(dl),
-   "DC: distributions with no catch row to go with are left out, and said - with where the catch of an allocation is")
+ok(any(grepl("2 of the 3 distributions with fish have no catch weight to go with", lost$warnings)) && nrow(lost$value) < nrow(dl),
+   "DC: a distribution with fish and no catch weight to go with is left out, and said")
+nodist <- heard(distributionsCombined(distributions[distributions$domainBiology != "D2", ], catch, originType_catch = "WGEstimate",
+                                      variableType_catch = "WeightLive", distributionType = "LengthTotal"))
+ok(any(grepl("1 of the 3 catch strata with a weight have no LengthTotal distribution", nodist$warnings)) &&
+     has(nodist$warnings, "3000 kg") && has(nodist$warnings, "BE | D2"),
+   "DC: a catch weight with no distribution to go with is said, with how much of it and which stratum")
 ok(has(err(distributionsCombined(distributions[setdiff(names(distributions), "distributionClass")], catch,
                                  originType_catch = "WGEstimate")), "no column 'distributionClass'"),
    "DC: a column the distributions lack is named")
@@ -289,29 +293,31 @@ ok(nrow(ages) > 0 && all(ages$distributionUnit == "y") && all(ages$ageGroupPlus 
 
 ## ---- the raised catch the allocation was run on, instead of the allocation's own catch -------------------------
 ## The strata the allocation estimated a distribution for have no domainBiology in the raised catch, and the allocation
-## gives them (and the distributions) one it makes up: "[alloc]_<season>_<area>_<unit>_<fleet>_<category>". The raised
-## catch is given the same, so the estimated distributions are found there too - and not for the catch of the result.
-lens_raised <- said(heard(distributionsCombined(al$distribution, fx$raised, originType_catch = "WGEstimate",
-                                                variableType_catch = "WeightLive", distributionType = "LengthTotal",
-                                                unit = c("NE3", "g"))))
-ok(!length(lens_raised$value$warnings) &&
+## gives them (and the distributions) one it makes up: "[alloc]_<season>_<area>_<unit>_<fleet>_<category>". A catch row with
+## no domain is given the same, so the raised catch finds the estimated distributions as the catch of the result does -
+## raised or imported, sampled or allocated.
+dc_of <- function(catch_x) said(heard(distributionsCombined(al$distribution, catch_x, originType_catch = "WGEstimate",
+                                                            variableType_catch = "WeightLive", distributionType = "LengthTotal",
+                                                            unit = c("NE3", "g"))))
+lens_raised <- dc_of(fx$catch1)
+ok(!length(lens_raised$messages) && isTRUE(all.equal(lens_raised$value$warnings, dc_of(al$catch)$value$warnings)) &&
      isTRUE(all.equal(as.data.frame(lens_raised$value$value), as.data.frame(lens))),
-   "DC: the raised catch the allocation was run on gives the DC of the allocation's own catch, with no warning")
-ok(length(lens_raised$messages) == 1 && has(lens_raised$messages, "[alloc]") &&
-     !length(said(distributionsCombined(al$distribution, al$catch, originType_catch = "WGEstimate",
-                                        variableType_catch = "WeightLive", distributionType = "LengthTotal"))$messages),
-   "DC: ... said once, and never for the catch of the allocation result")
-made <- suppressMessages(alloc_domain(fx$raised, al$distribution))
+   "DC: the raised catch the allocation was run on gives the DC of the allocation's own catch, and says what it says - no message")
+made <- catch_domain(fx$catch1)
 est <- unique(al$distribution$domainBiology[startsWith(al$distribution$domainBiology, "[alloc]")])
-has_dom <- !is.na(fx$raised$domainBiology)
-ok(length(est) > 5 && all(est %in% made$domainBiology) && identical(made$domainBiology[has_dom], fx$raised$domainBiology[has_dom]),
-   "alloc_domain(): every domain the allocation made up is made from the raised catch, and a domain the catch has is kept")
+has_dom <- !is.na(fx$catch1$domainBiology)
+ok(length(est) > 5 && all(est %in% made) && identical(made[has_dom], fx$catch1$domainBiology[has_dom]),
+   "catch_domain(): every domain the allocation made up is made from the raised catch, and a domain the catch has is kept")
+more <- dc_of(fx$raised)
+ok(any(grepl("catch strata with a weight have no LengthTotal distribution", more$value$warnings)) &&
+     isTRUE(all.equal(as.data.frame(more$value$value), as.data.frame(lens))),
+   "DC: a raised catch with strata the allocation was not run on says so, and adds up the same")
 wide_args <- list(grouping = "catchCategory", originType_catch = "WGEstimate", variableType_catch = "WeightLive",
                   distributionType = "LengthTotal")
 wn_a <- do.call(catchAtAoLAggregation, c(list(al$distribution, al$catch), wide_args, unit = "NE3"))
-wn_r <- suppressMessages(do.call(catchAtAoLAggregation, c(list(al$distribution, fx$raised), wide_args, unit = "NE3")))
+wn_r <- do.call(catchAtAoLAggregation, c(list(al$distribution, fx$catch1), wide_args, unit = "NE3"))
 ww_a <- do.call(meanWoLatAoLAggregation, c(list(al$distribution, al$catch), wide_args, unit = "g", plusGroup = FALSE))
-ww_r <- suppressMessages(do.call(meanWoLatAoLAggregation, c(list(al$distribution, fx$raised), wide_args, unit = "g", plusGroup = FALSE)))
+ww_r <- do.call(meanWoLatAoLAggregation, c(list(al$distribution, fx$catch1), wide_args, unit = "g", plusGroup = FALSE))
 ok(isTRUE(all.equal(wn_a, wn_r)) && isTRUE(all.equal(ww_a, ww_r)) && sum(wn_r[startsWith(names(wn_r), "N_")]) > 0,
    "catchAtAoLAggregation() and meanWoLatAoLAggregation(): the raised catch gives what the allocation's own catch does")
 ok(identical(catchCombined(fx$raised, originType_catch = "WGEstimate"),
@@ -326,11 +332,12 @@ catch_a <- rbind(catch, data.frame(vesselFlagCountry = "BE", year = 2023L, worki
                                    fleetValue = "OTB", stringsAsFactors = FALSE))
 catch_a$fisheriesManagementUnit <- NA_character_
 dist_a <- rbind(distributions, dist("[alloc]_3_27.4.b_NA_OTB_Lan", "LengthTotal", c(100L, 110L), c(2000, 500), c(10, 40)))
-by_hand <- function(catch_x) said(heard(distributionsCombined(dist_a, catch_x, originType_catch = "WGEstimate",
-                                                              variableType_catch = "WeightLive", distributionType = "LengthTotal")))
+by_hand <- function(catch_x, origin = "WGEstimate")
+  said(heard(distributionsCombined(dist_a, catch_x, originType_catch = origin,
+                                   variableType_catch = "WeightLive", distributionType = "LengthTotal")))
 a1 <- by_hand(catch_a)
 a1d <- a1$value$value
-ok(!length(a1$value$warnings) && length(a1$messages) == 1 &&
+ok(!length(a1$value$warnings) && !length(a1$messages) &&
      near(row_of(a1d, catchCategory = "Lan", distributionClass = 100L, variableType = "Number")$value, 6) &&
      near(row_of(a1d, catchCategory = "Lan", distributionClass = 110L, variableType = "Number")$value, 3.5) &&
      near(row_of(a1d, catchCategory = "Lan", distributionClass = 100L, variableType = "WeightLive")$value, (10 * 1000 + 30 * 3000 + 10 * 2000) / 6000) &&
@@ -341,18 +348,26 @@ a2 <- by_hand(catch_b)
 ok(!length(a2$messages) && isTRUE(all.equal(as.data.frame(a1d), as.data.frame(a2$value$value))),
    "DC by hand: ... the same as when the catch already has that domain, which is then left alone")
 a3 <- by_hand(catch_a[setdiff(names(catch_a), "fisheriesManagementUnit")])
-ok(has(a3$value$warnings, "fisheriesManagementUnit") && has(a3$value$warnings, "have no catch row"),
-   "DC by hand: a catch that lacks what the domain is made from is said, and the distributions left out")
-ok(!length(said(combine(distributionType = "LengthTotal"))$messages),
-   "DC: no message when the distributions have no domain made up by an allocation")
+ok(has(a3$value$warnings, "have no LengthTotal distribution") && has(a3$value$warnings, "have no catch weight"),
+   "DC by hand: a catch that lacks what the domain is made from cannot be given it: the weight with no distribution and the distribution with no weight are both said")
+## a stratum with a catch row of each origin counts its distribution once
+catch_c <- rbind(catch_b, data.frame(vesselFlagCountry = "BE", year = 2023L, workingGroup = "WGX", stock = "stk.27.1",
+                                     speciesCode = 100L, catchCategory = "Lan", domainBiology = NA_character_,
+                                     originType = "Official", variableType = "WeightLive", variableUnit = "kg", total = 999,
+                                     seasonType = "Quarter", seasonValue = 3L, areaType = "ICESArea", areaValue = "27.4.b",
+                                     fleetValue = "OTB", fisheriesManagementUnit = NA_character_, stringsAsFactors = FALSE))
+both <- by_hand(catch_c, origin = c("WGEstimate", "Official"))
+ok(isTRUE(all.equal(as.data.frame(both$value$value), as.data.frame(a2$value$value))) &&
+     length(both$value$warnings) == 1 && has(both$value$warnings, "777 kg"),
+   "DC by hand: a stratum with a catch row of each origin counts its distribution once, not once for each row - and the Official row with none is said")
 
 ## ---- the architecture: one adding up, three ways to read it ---------------------------------------------------
 ok(all(c("catchAtAoL", "spread_AoL") %in% all.names(body(catchAtAoLAggregation))) &&
      all(c("meanWoLatAoL", "spread_AoL") %in% all.names(body(meanWoLatAoLAggregation))) &&
      all(c("catchAtAoL", "meanWoLatAoL", "scf_table") %in% all.names(body(distributionsCombined))),
    "catchAtAoLAggregation(), meanWoLatAoLAggregation() and distributionsCombined() are made of the same two functions")
-ok(all(vapply(list(catchAtAoL, meanWoLatAoL, distributionsCombined), function(f) "alloc_domain" %in% all.names(body(f)), NA)),
-   "... and the two of them and the DC read the catch of an allocation and the raised catch the same way (alloc_domain())")
+ok(all(vapply(list(catchAtAoL, meanWoLatAoL), function(f) all(c("catch_domain", "link_check") %in% all.names(body(f))), NA)),
+   "... and the two of them link the catch of an allocation and the raised catch to the distributions the same way (catch_domain()), and say what does not go together")
 
 cat(sprintf("\nDONE  %d failure(s)\n", FAIL))
 if (FAIL) quit(status = 1L)

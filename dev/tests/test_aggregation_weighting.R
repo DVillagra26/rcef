@@ -16,11 +16,9 @@ ok <- function(cond, what) {
 quiet <- function(expr) { out <- NULL; invisible(utils::capture.output(out <- suppressMessages(expr))); out }
 near <- function(a, b) isTRUE(all.equal(as.numeric(a), as.numeric(b), tolerance = 1e-9))
 
-c23 <- subset(fx_catch(), year == 2023); d23 <- subset(fx_dist(), year == 2023)
-lf <- tempfile(fileext = ".txt")
-raised <- quiet(fx_raise(c23, fx_groups("own"), type = "discards", log_file = lf))
-alloc <- quiet(catchAllocationAoL(raised, d23, condition_alloc_st_list = list(ALL = rlang::quo(TRUE)),
-                                  distributionType = "LengthTotal", verbose = FALSE, logFile = lf))
+## the allocation of the fixture: one catch row for every domain, as the aggregations take it (a distribution is
+## counted once for each stratum it is linked to)
+alloc <- fx_allocation()$len
 
 agg <- function(w) quiet(meanWoLatAoLAggregation(alloc$distribution, alloc$catch, grouping = "catchCategory", weighting = w,
                                                  originType_catch = "WGEstimate", variableType_catch = "WeightLive",

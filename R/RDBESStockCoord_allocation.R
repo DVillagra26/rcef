@@ -996,11 +996,14 @@ catchAllocationAoL <- function(catch_data,
 #'   `distribution` table of a [catchAllocationAoL()] result.
 #' @param catch_data The catch they belong to: a CEF catch table, the `catch`
 #'   table of the same allocation, or the raised catch the allocation was run on.
-#'   The distributions an allocation estimates for strata with no biological
-#'   domain carry a domain it makes up from the stratum,
-#'   `"[alloc]_<season>_<area>_<unit>_<fleet>_<category>"`, which its own `catch`
-#'   has; the rows of the raised catch with no `domainBiology` are given the same
-#'   one (a message says so), so the estimated distributions are found with it too.
+#'   A distribution and a catch row are linked by `domainBiology`. The strata an
+#'   allocation estimated a distribution for have none in the raised catch: the
+#'   allocation made one up for the distribution and for its own `catch`,
+#'   `"[alloc]_<season>_<area>_<unit>_<fleet>_<category>"`, and a catch row with no
+#'   domain is given the same, so the raised catch finds the estimated
+#'   distributions as the `catch` of the same allocation does. A catch weight with
+#'   no distribution, or a distribution with fish and no catch weight, is warned
+#'   about.
 #' @param grouping The variables to add up by: columns of the catch rows
 #'   (`catchCategory`, `seasonValue`, `metier4`, ...) or of the distributions
 #'   (`attributeType`, `attributeValue`).
