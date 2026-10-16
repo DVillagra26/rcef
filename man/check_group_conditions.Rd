@@ -2,7 +2,7 @@
 % Please edit documentation in R/RDBESStockCoord_utils.R
 \name{check_group_conditions}
 \alias{check_group_conditions}
-\title{Function to check groups consistency.}
+\title{Function to check groups consistency}
 \usage{
 check_group_conditions(
   catch_data,
@@ -26,6 +26,9 @@ condition (as in filter(...), but with quotes) will be tentatively converted to 
 groups).}
 
 \item{domain}{The domain, used to match records with extra info.}
+
+\item{originType}{Origin of the records the groups are for: "unspecified" (default), "WGEstimate" or "Official".
+Not used for now: the groups are checked on every row of \code{catch_data}, whatever its origin.}
 
 \item{variableType}{Variable type (for info in the log-file only).}
 

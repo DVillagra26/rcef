@@ -35,18 +35,19 @@ discard-raising scripts use: a named list of quosures per method
 discard rate is estimated from), checked, then raised. Nothing wraps that
 call.
 
-The last two sections build the two output data sets this whole vignette
+The last two sections give the two output data sets this whole vignette
 exists for:
 
 * **CC** (Catch Combined) - one row per `catchCategory`, the stock-wide raised
-  total;
+  total, in the format of the stock coordination (SCF v3): `catchCombined()`
+  makes it;
 * **CAR / CAS** - every raised row, and the donor strata behind each group's
   rate,
 
-following the schema of a real ICES stock-annex CAR / CAS export. They are
-built inline, as plain data frames, on purpose - not wrapped in functions and
-not written to csv yet. Once the shape is right, both become functions that
-build and save these data sets; that is future work.
+the second following the schema of a real ICES stock-annex CAR / CAS export.
+CAR and CAS are built inline, as plain data frames, on purpose - not wrapped in
+functions and not written to csv yet. Once the shape is right, both become
+functions that build and save these data sets; that is future work.
 
 # Data
 
@@ -88,7 +89,7 @@ nrow(catch_data)
 
 Nothing else is derived: the groups' conditions are plain `metier4` /
 `catchCategory` / `fleetValue` tests against `catch_data` as loaded, and the
-output sections compute their own landings and discard sums directly off it.
+CAR and CAS sections compute their own landings and discard sums directly off it.
 
 # The groups
 
@@ -283,9 +284,9 @@ plot_DR(catch = raised_manual,
         x = "DrGroup", colour = "metier4", rate = "rate")
 ```
 
-Imported and raised side by side instead of as the shading: `importedOrRaised`
+Imported and raised side by side instead of as the mark: `importedOrRaised`
 is a variable like any other, so it can be a `facet` (or the `colour`, the
-`shape`, the `x`) - and is then not drawn as the shading as well.
+`shape`, the `x`) - and is then not drawn as the mark as well.
 
 ```{r dr-facet-status, fig.height = 5.5, fig.alt = "Discard rate of every stratum by metier, coloured by country, one panel for the imported strata and one for the raised"}
 plot_DR(catch = raised_manual, x = "metier4", colour = "vesselFlagCountry",
@@ -300,43 +301,36 @@ discards for the stock, in tonnes. One row per `catchCategory` actually
 present in `raised_manual` - usually `Lan` and `Dis`, but `BMS` too if the
 stock reports it; nothing below is hardcoded to just those two.
 
+`catchCombined()` adds the raised catch up and writes it in the format of the
+stock coordination (SCF v3): the year, the working group and the stock come
+straight off the data, every field of the format the data does not fill is
+there, empty, and `unit = "t"` is the tonnes the format wants. Take one
+origin - `originType_catch = "WGEstimate"` is the working group's own catch,
+the raised discards among it; a stratum the raising had no rate for (`NaN`)
+adds up as nothing. Its pair for the lengths and ages, `distributionsCombined()`,
+is in vignette 3.
+
 `car_version`, `car_version_desc` and `car_scheme_name` identify *this*
 allocation scheme's run - a different scheme (another set of groups) would
 carry a different version, so several runs'
 CC / CAR / CAS outputs can sit in the same downstream table without being
-confused for each other. All three are reused as they are in the next
-section - keep every use in sync if any of them changes.
+confused for each other. The first two are the `version` and
+`versionDescription` of the CC, and all three are reused as they are in the
+next section - keep every use in sync if any of them changes.
 
 ```{r cc}
 car_version      <- 1
 car_version_desc <- "Manual_Stock_Annex"
 car_scheme_name  <- "Stock_Annex"
 
-# year / workingGroup / stock come straight off the loaded data, not typed in
-# by hand - assumed constant across the whole run (one stock, one year); the
-# stopifnot catches it loudly if that is ever not true rather than silently
-# picking the first value.
-year_val         <- unique(catch_data$year)
-workingGroup_val <- unique(catch_data$workingGroup)
-stock_val        <- unique(catch_data$stock)
-stopifnot(length(year_val) == 1, length(workingGroup_val) == 1,
-          length(stock_val) == 1)
-
-cc_out <- raised_manual %>%
-  filter(originType == "WGEstimate", variableType == "WeightLive") %>%
-  group_by(catchCategory) %>%
-  summarise(total = round(sum(total, na.rm = TRUE) / 1000, 3), .groups = "drop") %>%
-  transmute(recordType = "CC", version = car_version,
-            versionDescription = car_version_desc,
-            calendarYear = "Y", year = year_val,
-            workingGroup = workingGroup_val, stock = stock_val,
-            catchCategory,
-            seasonType = NA_character_, seasonValue = NA_character_,
-            areaType = NA_character_, areaValue = NA_character_,
-            fleetValue = NA_character_,
-            variableType = "WeightLive", variableUnit = "t",
-            total, variance = NA_real_, numTrips = NA_integer_)
-cc_out
+cc_out <- catchCombined(catch_data = raised_manual,
+                        grouping = "catchCategory",
+                        originType_catch = "WGEstimate",
+                        variableType_catch = "WeightLive",
+                        unit = "t", round = 3,
+                        version = car_version, versionDescription = car_version_desc)
+cc_out[, c("recordType", "version", "year", "stock", "catchCategory",
+           "variableType", "variableUnit", "total")]
 ```
 
 # Output: CAR and CAS (detailed)

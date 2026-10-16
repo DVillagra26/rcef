@@ -22,7 +22,31 @@ funICoutCEF(
 
 \item{years}{year for whih IC data will be loaded}
 
-\item{output_format}{"to_environment" and/or "to_file"}
+\item{stock_relation}{The stock / area / species lookup that gives every record its stock code and
+working group, as made by funMakeRelation(). NULL (default): made here, by funMakeRelation(max(years)).}
+
+\item{output_format}{What to do with the result, any of "to_environment" (the tables catches,
+distributions and effort are assigned in the global environment), "to_file" (they are written as csv
+files in out_path), "to_upload" (they are written as the upload files, without a header) and "to_list"
+(they are returned, invisibly). The default is the whole vector, which does the first two; it lists
+"to_upload_file", which the code does not act on.}
+
+\item{out_path}{Folder the files are written to (default: the working directory).}
+
+\item{keep_temp_file}{Keep the folder tmp that is made inside dat_path, which holds the IC data as the
+exchange format files (hi.csv, si.csv and sd.csv) that funIntercatchCEF() reads? Default FALSE: it is removed.}
+
+\item{file_prefix}{Prefix of the names of the files written (default: none), as in
+pok_2022_catches_CEF_v17.1.csv.}
+
+\item{include_BMS_Caton}{Default TRUE. FALSE leaves out the BMS rows of the working group's estimate (Caton);
+the official BMS landings stay.}
+
+\item{patch_missing_DIS_PSU}{Default FALSE. TRUE gives a discard domain that has no sampling unit the PSU
+"FishingTrip" and 0 sampled trips (with a warning).}
+
+\item{metier6}{NULL (default) writes the metier6 as MIS_MIS_0_0_0. "Fleet" copies the fleet into it and
+writes the unit k of the numbers as NE3.}
 }
 \description{
 InterCatch output to CEF format

@@ -165,6 +165,21 @@ transparency then, now a cross, a dotted line or a hatched bar - is still
 
 ---
 
+# One link between the catch and the distributions of an allocation
+
+`alloc_domain()` (commit `88210a6`) gave a catch row with no `domainBiology` the
+domain the allocation makes up for the strata it estimates a distribution for
+(`"[alloc]_<season>_<area>_<unit>_<fleet>_<category>"`), but only when the
+distributions held such domains and no catch row did, and it said so in a
+message. It is gone. `catch_domain()` does it for every catch row, always:
+`domainBiology` where the row has one, the allocation's own recipe where it has
+none. `link_check()` warns - instead of the message - about a catch weight with
+no distribution and a distribution with fish and no catch weight. The two
+aggregations and `distributionsCombined()` call them, so the allocation's `$catch`
+and the raised catch it ran on give the same tables.
+
+---
+
 # Dropped from the old `R/` folder
 
 Verified unreferenced two ways before removal:

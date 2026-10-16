@@ -72,6 +72,15 @@ are raised together, and \code{matchedDataCond}, the data the discard ratio of
 each group is taken from. They are written against the columns of the catch
 (\code{metier4 == "TBB"}, say), and the same shape drives both RDBESStockCoord
 engines, \code{\link[=catchRaising]{catchRaising()}} and \code{\link[=catchAllocationAoL]{catchAllocationAoL()}}.
+
+The distributions of an allocation reach their catch through \code{domainBiology}
+and, for a stratum the allocation estimated one for, through the
+\code{"[alloc]_<season>_<area>_<unit>_<fleet>_<category>"} domain it made up. The
+two aggregations and \code{\link[=distributionsCombined]{distributionsCombined()}} read both, so the allocation's
+own \verb{$catch} and the raised catch it ran on give the same tables, and they
+warn about a catch weight with no distribution and a distribution with fish
+and no catch weight. The plots of the allocation, \code{\link[=plot_NaLoA]{plot_NaLoA()}} and
+\code{\link[=plot_MWaLoA]{plot_MWaLoA()}}, need its \verb{$catch}.
 }
 
 \subsection{How the code is laid out}{
@@ -84,8 +93,10 @@ group code. Algorithms, argument lists and return shapes are upstream's.
 Local edits are packaging, plus one - \code{distributionType} takes CEF's own
 \code{"LengthTotal"} where upstream says \code{"Length"} - and are marked
 \verb{## [pkg]}. The help pages of \code{\link[=catchRaising]{catchRaising()}}, \code{\link[=catchAllocationAoL]{catchAllocationAoL()}}
-and the two aggregation functions are written here. Do not refactor
-these files; fix upstream and re-vendor.
+and the two aggregation functions are written here, as are the arguments
+of \code{\link[=funICoutCEF]{funICoutCEF()}}, \code{\link[=funIntercatchCEF]{funIntercatchCEF()}} and \code{\link[=check_group_conditions]{check_group_conditions()}}
+that upstream leaves undocumented. Do not refactor these files; fix
+upstream and re-vendor.
 \item \code{R/rcef_*.R}: written here - field derivation and units, the coverage
 table, the distributions, the raised-catch summaries. Free to refactor.
 \item \code{R/viz_*.R}: written here - the theme, the colours (one function, three

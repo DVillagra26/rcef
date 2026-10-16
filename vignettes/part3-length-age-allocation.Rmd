@@ -25,13 +25,16 @@ fish. The **allocation** gives every stratum one: a stratum without samples
 takes the distribution of the samples of its group. This vignette follows the
 whole step on the brill data - look at where the samples are, write the groups,
 check them, allocate, look at what the allocation did, add it up into catch
-at length. It is a walkthrough, not a test: nothing here asserts pass or fail,
-and it is the script to run chunk by chunk in RStudio.
+at length, and write it in the format of the stock coordination. It is a
+walkthrough, not a test: nothing here asserts pass or fail, and it is the
+script to run chunk by chunk in RStudio.
 
 It is driven directly with the vendored RDBESStockCoord functions -
 `check_group_conditions()`, `catchAllocationAoL()`, `catchAtAoLAggregation()`
-and `meanWoLatAoLAggregation()` - the same pattern ICES's own scripts use. Ages
-are allocated exactly the same way with `distributionType = "Age"`.
+and `meanWoLatAoLAggregation()` - the same pattern ICES's own scripts use; the
+stock coordination files are made by `catchCombined()` and
+`distributionsCombined()`. Ages are allocated exactly the same way with
+`distributionType = "Age"`.
 
 # Data and the raised catch
 
@@ -303,13 +306,16 @@ added up into the two tables of the stock coordination format (SCF v3), Catch
 Combined (CC) and Distributions Combined (DC), which are uploaded together.
 Both are made from the two tables of the allocation result - its `$catch` and
 its `$distribution` - and every field the format has that the data does not
-fill is there, empty. The raised catch the allocation was run on does as well:
-the distributions are linked to the catch through `domainBiology`, and the strata
-the allocation estimated a distribution for - which have none in the raised
-catch - through the `"[alloc]_<season>_<area>_<unit>_<fleet>_<category>"` the
-allocation made up for them, which a catch row with no domain is given too. A
-catch weight with no distribution, or a distribution with fish and no catch
-weight, is warned about.
+fill is there, empty.
+
+Unlike the plots above, the sums do not need the allocation's own `$catch`: the
+raised catch the allocation was run on gives the same tables. A distribution is
+linked to its catch through `domainBiology`, and the strata the allocation
+estimated a distribution for - which have no domain in the raised catch - through
+the `"[alloc]_<season>_<area>_<unit>_<fleet>_<category>"` the allocation made up
+for them, which a catch row with none is given too. A catch weight with no
+distribution, or a distribution with fish and no catch weight, is warned about:
+how much of the catch is not in the numbers, and in which strata.
 
 `catchCombined()` adds the catch up by year, working group, stock and catch
 category (`grouping` adds the season, the area or the fleet, when the stock

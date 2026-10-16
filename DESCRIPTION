@@ -14,7 +14,8 @@ Description: Implements the ICES discard-raising and length/age catch
     the numbers and mean weight at length and age, and plots of the
     raised and allocated catch, with one colour palette for all of them.
     Wraps the RDBESStockCoord engines catchRaising() and
-    catchAllocationAoL().
+    catchAllocationAoL(), and writes what they give in the format of the
+    stock coordination (Catch Combined and Distributions Combined).
 License: file LICENSE
 URL: https://github.com/DVillagra26/rcef
 BugReports: https://github.com/DVillagra26/rcef/issues

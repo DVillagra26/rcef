@@ -21,9 +21,27 @@ funIntercatchCEF(
 
 \item{stock_relation}{stock/area/species lookup, as built by funMakeRelation()}
 
-\item{output_format}{where should the output go}
+\item{output_format}{where should the output go: any of "to_environment" (the tables catches,
+distributions and effort are assigned in the global environment), "to_file" (they are written as csv
+files in out_path), "to_upload" (they are written as the upload files, without a header) and "to_list"
+(they are returned). The default is the whole vector, which does the first two; it lists
+"to_upload_file", which the code does not act on.}
 
 \item{out_path}{if it should be in files, where}
+
+\item{file_prefix}{Prefix of the names of the files written (default: none), as in
+pok_2022_catches_CEF_v17.1.csv.}
+
+\item{file_suffix}{End of the names of the files written (default: _CEF_v17.1, the version of the format).}
+
+\item{include_BMS_Caton}{Default TRUE. FALSE leaves out the BMS rows of the working group's estimate (Caton);
+the official BMS landings stay.}
+
+\item{patch_missing_DIS_PSU}{Default FALSE. TRUE gives a discard domain that has no sampling unit the PSU
+"FishingTrip" and 0 sampled trips (with a warning).}
+
+\item{metier6}{NULL (default) writes the metier6 as MIS_MIS_0_0_0. "Fleet" copies the fleet into it and
+writes the unit k of the numbers as NE3.}
 }
 \description{
 InterCatch exchange format to CEF v17.1

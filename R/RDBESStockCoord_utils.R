@@ -38,7 +38,7 @@
 ##' Function to check groups consistency.
 ##'
 ##' 
-##' @title Function to check groups consistency.
+##' @title Function to check groups consistency
 ##' @name check_group_conditions
 ##' @param catch_data census (or assembled census+estimated+raised) data.
 ##' @param condition_list A (named) list of conditions, with one condition per group. Supported formats are logical
@@ -47,6 +47,8 @@
 ##' @param conditionType raising/allocation "strata" or "matched_data" (the latter is allowed to have overlap among
 ##'     groups).
 ##' @param domain The domain, used to match records with extra info.
+##' @param originType Origin of the records the groups are for: "unspecified" (default), "WGEstimate" or "Official".
+##'     Not used for now: the groups are checked on every row of \code{catch_data}, whatever its origin.
 ##' @param variableType Variable type (for info in the log-file only).
 ##' @param logFile Log-file path.
 ##' @param append Whether to append to the log file (FALSE: override it).

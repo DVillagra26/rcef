@@ -153,8 +153,12 @@ the stock assessment asks for it, season, area or fleet - and
 row per class, with the arguments of the two aggregations above: it adds up exactly
 as they do, being made of the same two functions. Every field the format has that
 the data does not fill is there, empty; the header (`version`, `calendarYear`, with
-`yearStartDate` for a model year) is written on every row. Give both the allocation's
-own `$catch`, which is the one that knows the distributions it estimated:
+`yearStartDate` for a model year) is written on every row. A distribution is linked
+to its catch through `domainBiology` and, for a stratum the allocation estimated
+one for, through the `[alloc]_<season>_<area>_<unit>_<fleet>_<category>` domain it
+made up for it, so the allocation's own `$catch` and the raised catch it ran on give
+the same tables. A catch weight with no distribution, and a distribution with fish
+and no catch weight, are warned about:
 
 ```r
 catchCombined(alloc$catch, originType_catch = "WGEstimate", variableType_catch = "WeightLive",

@@ -83,6 +83,15 @@
 #' (`metier4 == "TBB"`, say), and the same shape drives both RDBESStockCoord
 #' engines, [catchRaising()] and [catchAllocationAoL()].
 #'
+#' The distributions of an allocation reach their catch through `domainBiology`
+#' and, for a stratum the allocation estimated one for, through the
+#' `"[alloc]_<season>_<area>_<unit>_<fleet>_<category>"` domain it made up. The
+#' two aggregations and [distributionsCombined()] read both, so the allocation's
+#' own `$catch` and the raised catch it ran on give the same tables, and they
+#' warn about a catch weight with no distribution and a distribution with fish
+#' and no catch weight. The plots of the allocation, [plot_NaLoA()] and
+#' [plot_MWaLoA()], need its `$catch`.
+#'
 #' ## How the code is laid out
 #'
 #' The package holds three bodies of code, distinguished by file name so the
@@ -93,8 +102,10 @@
 #'   Local edits are packaging, plus one - `distributionType` takes CEF's own
 #'   `"LengthTotal"` where upstream says `"Length"` - and are marked
 #'   `## [pkg]`. The help pages of [catchRaising()], [catchAllocationAoL()]
-#'   and the two aggregation functions are written here. Do not refactor
-#'   these files; fix upstream and re-vendor.
+#'   and the two aggregation functions are written here, as are the arguments
+#'   of [funICoutCEF()], [funIntercatchCEF()] and [check_group_conditions()]
+#'   that upstream leaves undocumented. Do not refactor these files; fix
+#'   upstream and re-vendor.
 #' * `R/rcef_*.R`: written here - field derivation and units, the coverage
 #'   table, the distributions, the raised-catch summaries. Free to refactor.
 #' * `R/viz_*.R`: written here - the theme, the colours (one function, three

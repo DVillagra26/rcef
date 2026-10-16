@@ -9,7 +9,7 @@
 | `check_syntax.R` | `parse()` every `.R` file; must print `DONE ... 0 failure(s)` |
 | `check_exports.R` | every top-level object — functions **and constants** — must be exported; must print `NOT EXPORTED : 0` |
 | `check_all.sh` | the three checks above, then every suite in `tests/`, with real exit-code handling |
-| `tests/` | the suites, `test_*.R`, and `fixture.R`, the helpers they share: the synthetic CEF data (`fx_catch()`, `fx_dist()`), three ways of grouping the fixture written out as conditions (`fx_groups()`), and the engines called the way a TAF script calls them (`fx_raise()`, `fx_allocate()`, `fx_numbers()`, `fx_meanweight()`). `test_workflow_example.R` pushes the fixture through raising, allocation and aggregation with only rcef attached |
+| `tests/` | the suites, `test_*.R`, and `fixture.R`, the helpers they share: the synthetic CEF data (`fx_catch()`, `fx_dist()`), three ways of grouping the fixture written out as conditions (`fx_groups()`), and the engines called the way a TAF script calls them (`fx_raise()`, `fx_allocate()`, `fx_numbers()`, `fx_meanweight()`), or one year of both at once (`fx_allocation()`: the raised catch, the part of it the allocation was run on, and the allocations of lengths and ages made from it). `test_workflow_example.R` pushes the fixture through raising, allocation and aggregation with only rcef attached |
 | `testdata/` | `cef_fixture.rds` — the synthetic CEF data the tests share, read through `tests/fixture.R` (see its README) |
 
 The Shiny application, its checks and its tests are not here: see `DROPPED.md`.

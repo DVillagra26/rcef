@@ -46,6 +46,11 @@ takes CEF's own `"LengthTotal"` where upstream says `"Length"`, and
 `meanWoLatAoLAggregation(weighting = "CATON")` weights by the catch row's total weight
 (it looked for a `total` column the function had already dropped).
 
+The roxygen text of the vendored files has additions of ours (no marker: it is not
+code): the help pages of `catchRaising()`, `catchAllocationAoL()` and the two
+aggregations, and the arguments of `funICoutCEF()`, `funIntercatchCEF()` and
+`check_group_conditions()` that upstream leaves undocumented.
+
 **Not changed:** every function name, every argument name, every default,
 every return shape, every algorithm.
 

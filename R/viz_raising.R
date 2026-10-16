@@ -99,7 +99,7 @@ plot_river <- function(df, left_var, right_var = "raise_level",
 #' @description
 #' [plot_catches()] for two or more raised catches at once - two ways of
 #' defining the groups, say. For each level of `x` (and each panel of `facet`)
-#' one bar per scenario: its colour says which scenario, its shade whether the
+#' one bar per scenario: its colour says which scenario, its mark whether the
 #' weight came with the data (imported, solid) or was added by the raising
 #' (raised, transparent and hatched). The bars are catch weight, or only the landings or
 #' only the discards with `catchCategory`.

@@ -45,7 +45,9 @@ or allocates: it only has raw catch. A length plot on `catchCategory = "Dis"`
 would show the discards' *own*, un-raised length sample as if it were the
 whole picture - a coverage plot would look fully sampled when it is not, and
 a distribution plot would show a shape that has not been weighted up to what
-was actually discarded. So length and age views use `"Lan"` throughout.
+was actually discarded. So length and age views use `"Lan"`, but for one mean
+weight at age in the age section: the discards' own, with the fish measured
+behind every point - read it as that sample, and no more.
 
 **Nothing is filtered first.** Every plot uses everything in the loaded table.
 To plot a subset (a country, a year, an area), filter the catch or the
@@ -115,7 +117,7 @@ table(age_dist$distributionType)            # ages only
 Everything below reads `catch_data` / `distribution_data` (brill) except
 the *Age coverage* and *Age distribution* sections, which read `age_catch` /
 `age_dist` (saithe) instead - the brill file has no ages, and the saithe file
-no lengths.
+no lengths - and the *Discard-rate clusters*, which look in the saithe catch.
 
 # The tables
 
@@ -392,7 +394,7 @@ plot_DR(catch = catch_data,x = "metier4",colour = "vesselFlagCountry",jitter = T
 Faceted by area, the strata are unaffected (they were already the finest the
 catch carries) - only the panels change:
 
-```{r dr-facet, fig.width = 8, fig.height = 7, fig.alt = "Discard rate per stratum, by metier, coloured by country, one panel per area"}
+```{r dr-facet, fig.width = 8, fig.height = 7, fig.alt = "Discard rate per stratum, by metier, coloured by mesh, one panel per area"}
 plot_DR(catch = catch_data,
        x = "metier4",
        colour = "mesh",
@@ -450,14 +452,15 @@ plot_catches(catch = catch_data, x = "vesselFlagCountry", facet = "metier4",
 # Discard-rate clusters
 
 A different question from the discard rate itself: which strata *share* a
-rate, and which of `metier4`, `mesh`, `vesselFlagCountry`, `seasonValue`
-and `areaValue` actually predicts that? Most of those are categorical, so an ordinary PCA
+rate, and which of `metier4`, `mesh`, `target`, `vesselFlagCountry`,
+`seasonValue` and `areaValue` actually predicts that? Most of those are
+categorical, so an ordinary PCA
 does not apply - `build_discard_clusters()` uses MCA (Multiple Correspondence
 Analysis) instead, the categorical equivalent, to place every stratum on a
 map from how its categories co-occur. Clustering itself runs on the discard
 rate alone (`k` groups, k-means), not on the MCA coordinates, so a cluster
 always means "similar discard rate" - the map is only where those clusters
-are then shown.
+are then shown. Here it is the saithe catch, in five groups (`k = 5`).
 
 ```{r clusters}
 dc <- build_discard_clusters(age_catch,
@@ -471,14 +474,14 @@ variable space or is scattered through it - and the axes rarely capture more
 than a fifth of the total structure, so read it as a sketch, not the full
 picture:
 
-```{r clusters-map, fig.width = 8, fig.height = 6.5, fig.alt = "Every stratum on the MCA map of metier4, mesh, vesselFlagCountry, seasonValue and areaValue, coloured by its discard-rate cluster, with an ellipse per cluster"}
+```{r clusters-map, fig.width = 8, fig.height = 6.5, fig.alt = "Every stratum on the MCA map of metier4, mesh, target, vesselFlagCountry, seasonValue and areaValue, coloured by its discard-rate cluster, with an ellipse per cluster"}
 plot_discard_clusters(dc)
 ```
 
 Which variable actually drives the clustering - Cramer's V of each against
 the cluster, 0 unrelated, 1 fully determining it:
 
-```{r clusters-importance, fig.height = 4, fig.alt = "Cramer's V of metier4, mesh, vesselFlagCountry, seasonValue and areaValue against the discard-rate cluster, sorted strongest first"}
+```{r clusters-importance, fig.height = 4, fig.alt = "Cramer's V of metier4, mesh, target, vesselFlagCountry, seasonValue and areaValue against the discard-rate cluster, sorted strongest first"}
 plot_discard_cluster_variables(dc)
 ```
 
@@ -608,7 +611,8 @@ all(is.na(extreme$total[extreme$cat_key == "no_dist"]))
 
 Numbers, mean weight and the plus group at age - the same functions as the
 length distributions above, with `distributionType = "Age"`, on the saithe
-file (`age_catch` / `age_dist`). Landings throughout.
+file (`age_catch` / `age_dist`). Landings throughout, but for the first mean
+weight.
 
 ## Numbers and mean weight at age
 
@@ -624,7 +628,11 @@ plot_NaLoA(data = age_catch, distributions = age_dist, distributionType = "Age",
           facet = "seasonValue", stacked = TRUE)
 ```
 
-```{r age-mw, fig.height = 5, fig.alt = "Mean weight at age of the landings, one line per country"}
+The mean weight at age comes with the discards' own sample, for once: the fish
+measured at each age are drawn behind the lines (`show_samples`, see *The fish
+behind each point* below), so what each point rests on is on the figure.
+
+```{r age-mw, fig.height = 5, fig.alt = "Mean weight at age of the discards, one line per country, one panel per season, with bars of the fish measured behind the lines"}
 plot_MWaLoA(data = age_catch, distributions = age_dist, distributionType = "Age",
            catchCategory = "Dis", colour = "vesselFlagCountry", facet = "seasonValue", show_samples = T)
 ```
@@ -650,7 +658,7 @@ plot_MWaLoA(data = age_catch, distributions = age_dist, distributionType = "Age"
 The start is yours to move. One line for all countries, without and with the
 plus group from 5, 10 and 15:
 
-```{r age-mw-plus-sweep, fig.height = 4, fig.alt = "Mean weight at age of the landings without a plus group and with plus groups from 5, 10 and 15"}
+```{r age-mw-plus-sweep, fig.height = 4, fig.alt = "Mean weight at age of the landings without a plus group and with plus groups from 5, 10 and 15, with bars of the fish measured"}
 print(plot_MWaLoA(data = age_catch, distributions = age_dist, distributionType = "Age",
                   catchCategory = "Lan", show_samples = T))
 for (start in c(5, 10, 15)) {
@@ -681,7 +689,7 @@ plot_MWaLoA(data = age_catch, distributions = age_dist, distributionType = "Age"
 Together, for one line (no `colour`): the plus group turns the thin tail of
 old ages, each on a few fish, into one point with many.
 
-```{r age-mw-plus-n, fig.height = 5, fig.alt = "Mean weight at age of the landings with a plus group from 10 and bars of the fish measured"}
+```{r age-mw-plus-n, fig.height = 5, fig.alt = "Mean weight at age of the landings with a plus group from 7 and bars of the fish measured"}
 plot_MWaLoA(data = age_catch, distributions = age_dist, distributionType = "Age",
            catchCategory = "Lan", show_samples = TRUE,
            plus_group = 7)
