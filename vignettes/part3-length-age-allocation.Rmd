@@ -302,7 +302,7 @@ ages.
 # The stock coordination files
 
 The end of the chain: what the raising raised and the allocation allocated,
-added up into the two tables of the stock coordination format (SCF v3), Catch
+added up into the two tables of the stock coordination format (SCF v4), Catch
 Combined (CC) and Distributions Combined (DC), which are uploaded together.
 Both are made from the two tables of the allocation result - its `$catch` and
 its `$distribution` - and every field the format has that the data does not
@@ -320,7 +320,10 @@ how much of the catch is not in the numbers, and in which strata.
 `catchCombined()` adds the catch up by year, working group, stock and catch
 category (`grouping` adds the season, the area or the fleet, when the stock
 assessment splits the catch by them). Take the working group's own figures,
-`originType_catch = "WGEstimate"`, and a unit the format accepts:
+`originType_catch = "WGEstimate"`, and a unit the format accepts. The data
+cannot say which working group the files are for, so `workingGroupYear` - the
+year of the working group that processes them, 2026 for the brill of a WGNSSK
+2026 - is an argument, written on every row with the `version`:
 
 ```{r scf-cc}
 cc <- catchCombined(catch_data = allocated$catch,
@@ -328,9 +331,21 @@ cc <- catchCombined(catch_data = allocated$catch,
                     originType_catch = "WGEstimate",
                     variableType_catch = "WeightLive",
                     unit = "t", round = 3,
+                    workingGroupYear = 2026,
                     version = 1, versionDescription = "brill 2025 example")
-cc[, c("recordType", "version", "year", "stock", "catchCategory",
-       "variableType", "variableUnit", "total")]
+cc[, c("recordType", "workingGroupYear", "version", "year", "stock",
+       "catchCategory", "variableType", "variableUnit", "total")]
+```
+
+How much sampling stands behind a total is in the format too - `PSU` (the type
+of sampling unit), `numPSUs` and `numTrips` - and is taken from the columns of
+the catch with the same names, as the CEF has them: the counts of the rows
+added up are summed, empty where none of the rows has one, and the rows the
+raising only estimated, whose rate was borrowed from a group, leave their
+counts out:
+
+```{r scf-sampling}
+cc[, c("catchCategory", "PSU", "numPSUs", "numTrips")]
 ```
 
 `distributionsCombined()` takes the arguments of the two aggregations above and
@@ -347,11 +362,19 @@ dc <- distributionsCombined(distribution_data = allocated$distribution,
                             variableType_catch = "WeightLive",
                             distributionType = "LengthTotal",
                             unit = c("NE3", "g"), round = 3,
+                            workingGroupYear = 2026,
                             version = 1, versionDescription = "brill 2025 example")
 dim(dc)
 head(dc[, c("catchCategory", "distributionType", "distributionClass",
             "variableType", "variableUnit", "valueType", "value")], 4)
 ```
+
+The distributions carry their sampling too: `PSU`, `numPSUs`, `numTrips` and
+`numMeasurements`, summed over the distributions a class is made of, each
+counted once however many classes it has. The distributions the allocation
+estimated were borrowed and have none, so they add nothing; and
+`numMeasurements` is the count of the whole distribution, repeated on its
+classes, as the CEF has it - do not add it up over the classes.
 
 The format compares each category's catch with the sum of products of its
 distribution - the numbers times the mean weights, over the classes - and does
@@ -370,5 +393,5 @@ dc %>%
 
 The year is the calendar year here (`calendarYear = "Y"`); a stock whose model
 year starts on another date says so with `calendarYear = "N"` and
-`yearStartDate = "07-01"`, the same in both tables. `write.csv(cc, "CC.csv",
+`startDateYear = "07-01"`, the same in both tables. `write.csv(cc, "CC.csv",
 row.names = FALSE, na = "")` writes a table with its empty fields left empty.

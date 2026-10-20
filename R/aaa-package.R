@@ -38,7 +38,7 @@
 #' | compare two or more raised catches, as a table or a figure | [raised_overview_table()], [plot_compare_raised()] |
 #' | give every stratum a length or age distribution | [catchAllocationAoL()] |
 #' | add the allocation up into catch-at-length / -age and mean-weight tables | [catchAtAoLAggregation()], [meanWoLatAoLAggregation()] |
-#' | write the raised catch and the allocated distributions in the format of the stock coordination (SCF v3): Catch Combined and Distributions Combined | [catchCombined()], [distributionsCombined()] |
+#' | write the raised catch and the allocated distributions in the format of the stock coordination (SCF v4): Catch Combined and Distributions Combined | [catchCombined()], [distributionsCombined()] |
 #' | change the colours of any plot | the `palette` argument they all take: `"default"`, `"colorblind"` or `"gradual"` |
 #' | save any of the plots to a file | the `save` argument they all take, see [saving-plots] |
 #'
@@ -147,5 +147,7 @@ utils::globalVariables(c(
   "importedOrRaised", "originType", "variableType", "groupName",
   # build_coverage_strata() / coverage_cells() column names
   "total", "weightingTotal", "landings", "numTrips", "coverage",
-  "numMeasurements", "covered", ".covered", "rate"
+  "numMeasurements", "covered", ".covered", "rate",
+  # scf_sampling(): the sampling columns of the CEF, and what a row is a sample of
+  "PSU", "numPSUs", ".sample"
 ))

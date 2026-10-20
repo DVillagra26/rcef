@@ -145,15 +145,18 @@ plot_NaLoA(alloc$catch, alloc$distribution, catchCategory = "Lan", fill = "vesse
 plot_MWaLoA(alloc$catch, alloc$distribution, catchCategory = "Lan", colour = "sampledOrEstimated")
 ```
 
-The two end products are the tables of the stock coordination format (SCF v3):
+The two end products are the tables of the stock coordination format (SCF v4):
 **Catch Combined** (CC) and **Distributions Combined** (DC), uploaded together.
 `catchCombined()` adds the catch up by year, stock and catch category - and, when
 the stock assessment asks for it, season, area or fleet - and
 `distributionsCombined()` the numbers and the mean weights at length or age, one
 row per class, with the arguments of the two aggregations above: it adds up exactly
 as they do, being made of the same two functions. Every field the format has that
-the data does not fill is there, empty; the header (`version`, `calendarYear`, with
-`yearStartDate` for a model year) is written on every row. A distribution is linked
+the data does not fill is there, empty; the header (`workingGroupYear`, the year of
+the working group the files are for, `version`, `calendarYear`, with `startDateYear`
+for a model year) is written on every row, and the sampling behind the numbers
+(`PSU`, `numPSUs`, `numTrips`, `numMeasurements`) is taken from the columns of the
+catch and the distributions with those names. A distribution is linked
 to its catch through `domainBiology` and, for a stratum the allocation estimated
 one for, through the `[alloc]_<season>_<area>_<unit>_<fleet>_<category>` domain it
 made up for it, so the allocation's own `$catch` and the raised catch it ran on give
@@ -162,10 +165,11 @@ and no catch weight, are warned about:
 
 ```r
 catchCombined(alloc$catch, originType_catch = "WGEstimate", variableType_catch = "WeightLive",
-              unit = "t", version = 1, versionDescription = "first run")
+              unit = "t", workingGroupYear = 2026, version = 1, versionDescription = "first run")
 distributionsCombined(alloc$distribution, alloc$catch, originType_catch = "WGEstimate",
                       variableType_catch = "WeightLive", distributionType = "LengthTotal",
-                      unit = c("NE3", "g"), version = 1, versionDescription = "first run")
+                      unit = c("NE3", "g"), workingGroupYear = 2026, version = 1,
+                      versionDescription = "first run")
 ```
 
 Raising uses the discard estimates whose `originType` matches the `originType`

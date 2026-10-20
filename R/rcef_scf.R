@@ -4,7 +4,7 @@
 #  ORIGIN: this project (ILVO / RCEF Workbench). Freely refactorable.
 #
 #  The end of the chain: what catchRaising() and catchAllocationAoL() made is
-#  added up into the two tables of the stock coordination format (SCF v3), CC
+#  added up into the two tables of the stock coordination format (SCF v4), CC
 #  and DC.
 #
 #    catchCombined()          the CC: the catch added up by year, stock, catch
@@ -42,7 +42,9 @@
 #' @return A tibble with the `grouping` columns, `distributionType`,
 #'   `distributionClass` (the class; the lowest class of the plus group for the
 #'   classes pooled into it), `plusClass` (that lowest class when a plus group
-#'   was asked for, `NA` otherwise), `variableUnit` and `value` (the numbers).
+#'   was asked for, `NA` otherwise), `variableUnit`, `value` (the numbers) and
+#'   the sampling behind each row - `PSU`, `numPSUs`, `numTrips` and
+#'   `numMeasurements` (see `scf_sampling()`).
 #' @keywords internal
 #' @noRd
 #' @export
@@ -86,12 +88,15 @@ catchAtAoL <- function(distribution_data,
 
     classes <- aol_classes(tmp, minAoL, maxAoL, plusGroup)
 
-    tmp %>%
-        select(all_of(c(grouping, "distributionClass", "variableUnit", "value"))) %>%
+    tmp <- tmp %>%
         filter(between(distributionClass, minAoL, classes$last)) %>%
-        mutate(distributionClass = pmin(distributionClass, classes$from)) %>%
-        dplyr::group_by(across(all_of(c(grouping, "variableUnit", "distributionClass")))) %>%
+        mutate(distributionClass = pmin(distributionClass, classes$from))
+    cell <- c(grouping, "variableUnit", "distributionClass")
+
+    tmp %>%
+        dplyr::group_by(across(all_of(cell))) %>%
         summarize(value = sum(value, na.rm = TRUE), .groups = "drop") %>%
+        left_join(scf_sampling(tmp, cell, "DC"), by = cell) %>%
         aol_finish(grouping, distributionType, classes, round)
 }
 
@@ -169,17 +174,19 @@ meanWoLatAoL <- function(distribution_data,
     ## Field used for weighting, based on user choice:
     wgField <- switch(weighting, NumberAtAoL = "NaAoL", CATON = "CATON")
 
+    tmp <- tmp %>%
+        filter(between(distributionClass, minAoL, classes$last),
+               ! is.na(!!sym(wgField))) %>% # Does not handle NAs in weights.
+        mutate(distributionClass = pmin(distributionClass, classes$from))
+    cell <- c(grouping, "variableUnit", "distributionClass")
+
     tmp %>%
-        select(all_of(c(grouping, "distributionClass", "variableUnit", "value", "CATON", "NaAoL"))) %>%
-        filter(between(distributionClass, minAoL, classes$last)) %>%
-        mutate(distributionClass = pmin(distributionClass, classes$from)) %>%
-        ungroup() %>%
-        dplyr::group_by(across(all_of(c(grouping, "variableUnit", "distributionClass")))) %>%
-        filter(! is.na(!!sym(wgField))) %>% # Does not handle NAs in weights.
+        dplyr::group_by(across(all_of(cell))) %>%
         summarize(value = weighted.mean(x = value,
                                         w = !!sym(wgField),
                                         na.rm = TRUE),
                   .groups = "drop") %>%
+        left_join(scf_sampling(tmp, cell, "DC"), by = cell) %>%
         aol_finish(grouping, distributionType, classes, round)
 }
 
@@ -255,7 +262,8 @@ aol_classes <- function(tmp, minAoL, maxAoL, plusGroup)
 }
 
 # The end of the two adding-up functions: rounding, the type of distribution and
-# the plus group named, the columns in their order.
+# the plus group named, the columns in their order - the sampling behind each row
+# (scf_sampling()) after them.
 #' @noRd
 #' @export
 aol_finish <- function(res, grouping, distributionType, classes, round)
@@ -267,7 +275,8 @@ aol_finish <- function(res, grouping, distributionType, classes, round)
         mutate(distributionType = !!distributionType,
                plusClass = if (classes$plus) classes$from else NA_real_) %>%
         select(all_of(grouping), distributionType, distributionClass, plusClass,
-               variableUnit, value)
+               variableUnit, value,
+               any_of(c("PSU", "numPSUs", "numTrips", "numMeasurements")))
 }
 
 # The table of catchAtAoL() / meanWoLatAoL() spread over one column per class,
@@ -347,17 +356,73 @@ scf_input <- function(catch_data, grouping, record, originType_catch, default_or
     g
 }
 
-# The table as the SCF has it: every field there is, in the order of the format -
-# the ones the data has filled, each of its type, and the others `NA` - the header
-# of the file (version, calendar year) on every row, the codes checked against
-# the ones the format accepts (a code of another kind is a warning, not an error:
-# the table is still the table, and the vocabularies grow), and sorted.
+# The sampling behind the rows of a table, as the CEF has it: the type of the primary
+# sampling unit (`PSU`) and the counts of what was sampled - `numPSUs`, `numTrips` and,
+# for the distributions, `numMeasurements` - one row for each cell made of the columns
+# `by`. The counts of the rows of a cell add up, and are `NA` when none of the rows
+# reports one: nothing was counted, which is not 0. The `PSU` of a cell are those of
+# the rows that report a number of PSUs - the format wants a number with every type -
+# as a ";" separated list when there are several, since the samples of one estimate
+# can have different ones. A column the table lacks is `NA`. `record` is "CC", whose
+# rows are strata, each with a sample of its own, or "DC", whose rows are the classes
+# of distributions: the CEF repeats the counts of a distribution on each of its
+# classes (and on each sex) and a plus group puts several classes in one cell, so a
+# distribution - the country, the species and the domain - is counted once in a cell,
+# count by count: a count it repeats is one, a count that differs from class to class
+# adds up.
 #' @noRd
 #' @export
-scf_table <- function(d, record, version, versionDescription, calendarYear,
-                      yearStartDate, fn)
+scf_sampling <- function(d, by, record)
 {
-    ## The header of the file:
+    psu <- if ("PSU" %in% names(d)) as.character(d$PSU) else rep(NA_character_, nrow(d))
+    psu[psu %in% ""] <- NA_character_
+    d$PSU <- psu
+    for (f in c("numPSUs", "numTrips", "numMeasurements"))
+        d[[f]] <- if (f %in% names(d)) suppressWarnings(as.numeric(d[[f]]))
+                  else rep(NA_real_, nrow(d))
+    ## what a row is a sample of: itself in the CC, its distribution in the DC
+    id <- intersect(c("vesselFlagCountry", "speciesCode", "domainBiology"), names(d))
+    d$.sample <- if (identical(record, "DC") && length(id))
+                     do.call(paste, c(unname(as.list(d[id])), sep = "\r"))
+                 else seq_len(nrow(d))
+
+    types_of <- function(psu, n)
+    {
+        types <- as.character(unlist(strsplit(psu[! is.na(psu) & ! is.na(n)], ";",
+                                              fixed = TRUE)))
+        types <- sort(unique(types[nzchar(types)]))
+        if (length(types)) paste(types, collapse = ";") else NA_character_
+    }
+    count_of <- function(n, sample)
+        if (all(is.na(n))) NA_integer_
+        else as.integer(round(sum(n[! duplicated(data.frame(sample, n))], na.rm = TRUE)))
+
+    res <- d %>%
+        dplyr::group_by(across(all_of(by))) %>%
+        summarize(PSU = types_of(PSU, numPSUs),
+                  numPSUs = count_of(numPSUs, .sample),
+                  numTrips = count_of(numTrips, .sample),
+                  numMeasurements = count_of(numMeasurements, .sample),
+                  .groups = "drop")
+    if (identical(record, "DC")) res else res %>% select(-numMeasurements)
+}
+
+# The header of the file: what the SCF has once for the whole run and the data does
+# not have - the year of the working group, the version, the calendar year (or the
+# date a model year starts on). Checked first, before anything is added up, and
+# returned as the SCF has it, to be written on every row.
+#' @noRd
+#' @export
+scf_header <- function(workingGroupYear, version, versionDescription, calendarYear,
+                       startDateYear, fn)
+{
+    if (missing(workingGroupYear) ||
+        ! (is.numeric(workingGroupYear) && length(workingGroupYear) == 1 &&
+           is.finite(workingGroupYear) && workingGroupYear == round(workingGroupYear) &&
+           workingGroupYear >= 1000 && workingGroupYear <= 9999))
+        stop(fn, "(): `workingGroupYear` is the year of the working group the data are ",
+             "processed for (the 2026 of a WGNSSK 2026), as a four-digit year",
+             call. = FALSE)
     if (! (is.numeric(version) && length(version) == 1 && is.finite(version) &&
            version >= 0 && version == round(version)))
         stop(fn, "(): `version` is a whole number", call. = FALSE)
@@ -372,38 +437,60 @@ scf_table <- function(d, record, version, versionDescription, calendarYear,
     calendarYear <- toupper(calendarYear)
     if (identical(calendarYear, "N"))
     {
-        if (! (is.character(yearStartDate) && length(yearStartDate) == 1 &&
-               grepl("^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$", yearStartDate)))
-            stop(fn, "(): with calendarYear = \"N\" `yearStartDate` is the start ",
+        if (! (is.character(startDateYear) && length(startDateYear) == 1 &&
+               grepl("^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$", startDateYear)))
+            stop(fn, "(): with calendarYear = \"N\" `startDateYear` is the start ",
                  "of the model year, as \"MM-DD\" (\"07-01\")", call. = FALSE)
     }else{
-        if (! (length(yearStartDate) == 1 && is.na(yearStartDate)))
-            warning(fn, "(): `yearStartDate` is left blank with calendarYear = ",
+        if (! (length(startDateYear) == 1 && is.na(startDateYear)))
+            warning(fn, "(): `startDateYear` is left blank with calendarYear = ",
                     "\"Y\"; the one given is not used", call. = FALSE)
-        yearStartDate <- NA_character_
+        startDateYear <- NA_character_
     }
 
+    list(workingGroupYear = as.integer(workingGroupYear),
+         version = as.integer(version),
+         versionDescription = as.character(versionDescription),
+         calendarYear = calendarYear,
+         startDateYear = as.character(startDateYear))
+}
+
+# The table as the SCF has it: every field there is, in the order of the format -
+# the ones the data has filled, each of its type, and the others `NA` - the header
+# of the file (scf_header()) on every row, the codes checked against the ones the
+# format accepts (a code of another kind is a warning, not an error: the table is
+# still the table, and the vocabularies grow), and sorted.
+#' @noRd
+#' @export
+scf_table <- function(d, record, header, fn)
+{
     d <- d %>%
-        mutate(recordType = record,
-               version = as.integer(version),
-               versionDescription = as.character(versionDescription),
-               calendarYear = calendarYear,
-               yearStartDate = as.character(yearStartDate))
+        mutate(recordType = record, !!!header)
+
+    ## A working group does not process data that come after it:
+    late <- unique(d$year[! is.na(d$year) & d$year > header$workingGroupYear])
+    if (length(late))
+        warning(fn, "(): the data of ", paste(sort(late), collapse = ", "),
+                " come after the working group year ", header$workingGroupYear,
+                " - `workingGroupYear` is the year of the working group the data are ",
+                "processed for", call. = FALSE)
 
     ## Every field there is, in the order of the format, each of its type:
-    head <- c("recordType", "version", "versionDescription", "calendarYear",
-              "yearStartDate", "year", "workingGroup", "stock", "catchCategory",
-              "seasonType", "seasonValue", "areaType", "areaValue", "fleetValue")
+    head <- c("recordType", "workingGroupYear", "version", "versionDescription",
+              "calendarYear", "startDateYear", "year", "workingGroup", "stock",
+              "catchCategory", "seasonType", "seasonValue", "areaType", "areaValue",
+              "fleetValue")
     fields <- switch(record,
                      CC = c(head, "variableType", "variableUnit", "total", "variance",
-                            "numTrips"),
+                            "PSU", "numPSUs", "numTrips"),
                      DC = c(head, "distributionType", "distributionUnit",
                             "distributionClass", "ageGroupPlus", "attributeType",
                             "attributeValue", "variableType", "variableUnit",
-                            "valueType", "value", "variance", "numTrips",
-                            "numMeasurements"))
-    integer_fields <- c("version", "year", "seasonValue", "distributionClass",
-                        "ageGroupPlus", "numTrips", "numMeasurements")
+                            "valueType", "value", "variance", "PSU", "numPSUs",
+                            "numTrips", "numMeasurements"))
+    integer_fields <- c("workingGroupYear", "version", "year", "seasonValue",
+                        "distributionClass", "ageGroupPlus", "numPSUs", "numTrips",
+                        "numMeasurements")
     numeric_fields <- c("total", "value", "variance")
     for (f in setdiff(fields, names(d)))
         d[[f]] <- if (f %in% integer_fields) NA_integer_
@@ -425,10 +512,13 @@ scf_table <- function(d, record, version, versionDescription, calendarYear,
     }
 
     ## The codes the format accepts:
-    check <- function(field, accepted)
+    check <- function(field, accepted, sep = NULL)
     {
         bad <- unique(d[[field]])
-        bad <- setdiff(as.character(bad[! is.na(bad)]), accepted)
+        bad <- as.character(bad[! is.na(bad)])
+        if (! is.null(sep))
+            bad <- unique(unlist(strsplit(bad, sep, fixed = TRUE)))
+        bad <- setdiff(bad, accepted)
         if (length(bad))
             warning(fn, "(): ", field, " ", paste0("'", bad, "'", collapse = ", "),
                     " is not a code the SCF accepts (", paste(accepted, collapse = ", "),
@@ -437,6 +527,8 @@ scf_table <- function(d, record, version, versionDescription, calendarYear,
     check("catchCategory", c("BMS", "Dis", "DisBMS", "Lan", "Catch"))
     check("seasonType", c("Quarter", "Month", "Half-year"))
     check("areaType", c("ICESArea", "ICESAreaNonFAO"))
+    check("PSU", c("Location", "LandingEvent", "FishingTrip", "FishingOperation",
+                   "TemporalEvent", "FishingVessel", "OnshoreEvent"), sep = ";")
     weight_units <- if (identical(record, "CC")) c("t", "kg") else c("g", "kg")
     unit_ok <- ifelse(d$variableType %in% "WeightLive", d$variableUnit %in% weight_units,
                       ifelse(d$variableType %in% "Number",
@@ -473,7 +565,7 @@ scf_table <- function(d, record, version, versionDescription, calendarYear,
 #' Catch Combined (CC): the catch of a stock, added up, in the format of the stock coordination
 #'
 #' @description
-#' The catch of a stock, the way the stock coordination format (SCF v3) wants it:
+#' The catch of a stock, the way the stock coordination format (SCF v4) wants it:
 #' one row per year, working group, stock and catch category - and per
 #' variable and unit - with the catch added up. Give it the result of
 #' [catchRaising()]; every column the format has and the catch does not fill is
@@ -503,11 +595,27 @@ scf_table <- function(d, record, version, versionDescription, calendarYear,
 #'
 #' ## The header
 #'
-#' `version` and `versionDescription` name the run, so more than one can be kept
-#' (a benchmark, a sensitivity test). `calendarYear` is `"Y"` when `year` is the
-#' calendar year, which it is for most stocks, and `"N"` when it is a model year
-#' that starts on another date, `yearStartDate` (`"07-01"`), the same for every
-#' row of the stock.
+#' `workingGroupYear` is the year of the working group the data are processed
+#' for - the 2026 of a WGNSSK 2026 - and has no default, since it is not in the
+#' data. `version` and `versionDescription` name the run, so more than one can
+#' be kept (a benchmark, a sensitivity test). `calendarYear` is `"Y"` when `year`
+#' is the calendar year, which it is for most stocks, and `"N"` when it is a
+#' model year that starts on another date, `startDateYear` (`"07-01"`), the same
+#' for every row of the stock. They are written on every row; every other field
+#' comes from the catch.
+#'
+#' ## The sampling
+#'
+#' `PSU`, `numPSUs` and `numTrips` say how much sampling stands behind the
+#' total. They are taken from the columns of the catch with the same names, as
+#' the CEF has them: the counts of the rows added up are summed, and are `NA`
+#' when none of the rows reports one (nothing was counted, which is not 0), and
+#' `PSU`, the type of the sampling unit (`"FishingTrip"`), is that of the rows
+#' that report a number of them - a `;` separated list when there are several
+#' types. A row the raising only estimated (`importedOrRaised` is `"raised"`)
+#' has no sample of its own, its rate was borrowed from a group, so whatever
+#' count it carries is left out: the format asks for the strata that actually
+#' contributed to the estimate. `variance` is left empty.
 #'
 #' @param catch_data The catch to add up: the result of [catchRaising()], or a
 #'   CEF catch table.
@@ -523,17 +631,19 @@ scf_table <- function(d, record, version, versionDescription, calendarYear,
 #'   `"kg"` for weights, `"N"` or `"NE3"` for numbers. `NULL` (default) leaves
 #'   them as they are.
 #' @param round Digits to round the totals to; `NULL` (default) does not round.
+#' @param workingGroupYear The year of the working group the data are processed
+#'   for, as a four-digit year (`2026`). Required.
 #' @param version The version of the file, a whole number (default `1`).
 #' @param versionDescription What the version is, a string, or `NA` (default).
 #' @param calendarYear `"Y"` (default) or `"N"`.
-#' @param yearStartDate With `calendarYear = "N"`, the start of the model year
+#' @param startDateYear With `calendarYear = "N"`, the start of the model year
 #'   as `"MM-DD"`; left out otherwise.
-#' @return A tibble with the CC fields of the SCF: `recordType`, `version`,
-#'   `versionDescription`, `calendarYear`, `yearStartDate`, `year`,
-#'   `workingGroup`, `stock`, `catchCategory`, `seasonType`, `seasonValue`,
-#'   `areaType`, `areaValue`, `fleetValue`, `variableType`, `variableUnit`,
-#'   `total`, `variance` and `numTrips`. A code the SCF does not accept is
-#'   warned about.
+#' @return A tibble with the CC fields of the SCF: `recordType`,
+#'   `workingGroupYear`, `version`, `versionDescription`, `calendarYear`,
+#'   `startDateYear`, `year`, `workingGroup`, `stock`, `catchCategory`,
+#'   `seasonType`, `seasonValue`, `areaType`, `areaValue`, `fleetValue`,
+#'   `variableType`, `variableUnit`, `total`, `variance`, `PSU`, `numPSUs` and
+#'   `numTrips`. A code the SCF does not accept is warned about.
 #' @seealso [distributionsCombined()] for the distributions that go with it;
 #'   [catchRaising()] for the catch it is made of.
 #' @family stock coordination format
@@ -546,15 +656,18 @@ scf_table <- function(d, record, version, versionDescription, calendarYear,
 #' # the catch of the stock by catch category, in tonnes
 #' catchCombined(raised, originType_catch = "WGEstimate",
 #'               variableType_catch = "WeightLive", unit = "t",
+#'               workingGroupYear = 2026,
 #'               version = 1, versionDescription = "WGNSSK 2026, first run")
 #'
 #' # by quarter as well
 #' catchCombined(raised, grouping = c("catchCategory", "seasonValue"),
-#'               originType_catch = "WGEstimate", unit = "t")
+#'               originType_catch = "WGEstimate", unit = "t",
+#'               workingGroupYear = 2026)
 #'
 #' # a model year that starts on 1 July
 #' catchCombined(raised, originType_catch = "WGEstimate", unit = "t",
-#'               calendarYear = "N", yearStartDate = "07-01")
+#'               workingGroupYear = 2026,
+#'               calendarYear = "N", startDateYear = "07-01")
 #' }
 #' @export
 catchCombined <- function(catch_data,
@@ -563,12 +676,15 @@ catchCombined <- function(catch_data,
                           variableType_catch = c("WeightLive", "Number"),
                           unit = NULL,
                           round = NULL,
+                          workingGroupYear,
                           version = 1,
                           versionDescription = NA_character_,
                           calendarYear = "Y",
-                          yearStartDate = NA_character_)
+                          startDateYear = NA_character_)
 {
     fn <- "catchCombined"
+    header <- scf_header(workingGroupYear, version, versionDescription,
+                         calendarYear, startDateYear, fn)
     grouping <- scf_input(catch_data, grouping, "CC", originType_catch,
                           missing(originType_catch), fn)
 
@@ -586,21 +702,31 @@ catchCombined <- function(catch_data,
         res <- res %>%
             convert_field(valueField = "total", to = unit)
 
+    ## A row the raising only estimated has no sample of its own - its rate was
+    ## borrowed from a group - so the counts it carries (those of the landings it was
+    ## made from) are not the discards': they are left out.
+    if ("importedOrRaised" %in% names(res))
+        res <- res %>%
+            mutate(across(any_of(c("numPSUs", "numTrips")),
+                          ~ ifelse(importedOrRaised %in% "raised", NA, .x)))
+
+    cell <- c(grouping, "variableType", "variableUnit")
     res <- res %>%
-        dplyr::group_by(across(all_of(c(grouping, "variableType", "variableUnit")))) %>%
-        summarize(total = sum(total, na.rm = TRUE), .groups = "drop")
+        dplyr::group_by(across(all_of(cell))) %>%
+        summarize(total = sum(total, na.rm = TRUE), .groups = "drop") %>%
+        left_join(scf_sampling(res, cell, "CC"), by = cell)
 
     if (!is.null(round) && is.numeric(round))
         res <- res %>% mutate(total = round(total, digits = round))
 
-    scf_table(res, "CC", version, versionDescription, calendarYear, yearStartDate, fn)
+    scf_table(res, "CC", header, fn)
 }
 
 #' Distributions Combined (DC): the numbers and mean weights at length or age, in the format of the stock coordination
 #'
 #' @description
 #' The length or age distributions of a stock, the way the stock coordination
-#' format (SCF v3) wants them: the catch's numbers at length (or age) and the
+#' format (SCF v4) wants them: the catch's numbers at length (or age) and the
 #' mean weight at length (or age), one row per class, added up by year, working
 #' group, stock and catch category - and whatever else `grouping` adds. Give it
 #' the two tables of [catchAllocationAoL()]; every column the format has and the
@@ -633,7 +759,25 @@ catchCombined <- function(catch_data,
 #' distribution needs a catch of the same year, stock, category, season, area and
 #' fleet in the CC), with the sex of the distribution on top -
 #' `attributeType` and `attributeValue`, the default - which is `NA` when the
-#' distributions do not have one.
+#' distributions do not have one. The header - `workingGroupYear` and the rest -
+#' is the one of [catchCombined()] too, and so is the sampling's reading.
+#'
+#' ## The sampling
+#'
+#' `PSU`, `numPSUs`, `numTrips` and `numMeasurements` say how much sampling
+#' stands behind each class. They are taken from the columns of the
+#' distributions with the same names, as the CEF has them. A row of the table is
+#' made of the distributions of the catch it is added up from: each counts once,
+#' however many classes it has (the CEF repeats its counts on every class, and a
+#' plus group puts several of them in one row), and the counts of the
+#' distributions are summed. They are `NA` when none of the distributions reports
+#' one - the allocation leaves them empty for the distributions it estimated,
+#' which were borrowed: the format asks for the strata that actually contributed
+#' - and `PSU`, the type of the sampling unit, is that of the distributions that
+#' report a number of them, a `;` separated list when there are several types.
+#' `numMeasurements` is the count of the whole distribution, which is all the CEF
+#' has, though the format asks for the measurements at the class: do not sum it
+#' over the classes. `variance` is left empty.
 #'
 #' ## Classes
 #'
@@ -663,13 +807,14 @@ catchCombined <- function(catch_data,
 #' @param distributionType `"Age"` (default), `"LengthTotal"` or both.
 #' @param minAoL,maxAoL,plusGroup As in [catchAtAoLAggregation()]; named by
 #'   distribution type when there are several.
-#' @return A tibble with the DC fields of the SCF: `recordType`, `version`,
-#'   `versionDescription`, `calendarYear`, `yearStartDate`, `year`,
-#'   `workingGroup`, `stock`, `catchCategory`, `seasonType`, `seasonValue`,
-#'   `areaType`, `areaValue`, `fleetValue`, `distributionType`,
-#'   `distributionUnit`, `distributionClass`, `ageGroupPlus`, `attributeType`,
-#'   `attributeValue`, `variableType`, `variableUnit`, `valueType`, `value`,
-#'   `variance`, `numTrips` and `numMeasurements`.
+#' @return A tibble with the DC fields of the SCF: `recordType`,
+#'   `workingGroupYear`, `version`, `versionDescription`, `calendarYear`,
+#'   `startDateYear`, `year`, `workingGroup`, `stock`, `catchCategory`,
+#'   `seasonType`, `seasonValue`, `areaType`, `areaValue`, `fleetValue`,
+#'   `distributionType`, `distributionUnit`, `distributionClass`,
+#'   `ageGroupPlus`, `attributeType`, `attributeValue`, `variableType`,
+#'   `variableUnit`, `valueType`, `value`, `variance`, `PSU`, `numPSUs`,
+#'   `numTrips` and `numMeasurements`.
 #' @seealso [catchCombined()] for the catch that goes with it;
 #'   [catchAllocationAoL()] for the allocation it is made of;
 #'   [catchAtAoLAggregation()] and [meanWoLatAoLAggregation()] for the same
@@ -688,6 +833,7 @@ catchCombined <- function(catch_data,
 #'                       originType_catch = "WGEstimate",
 #'                       variableType_catch = "WeightLive",
 #'                       distributionType = "LengthTotal",
+#'                       workingGroupYear = 2026,
 #'                       version = 1, versionDescription = "WGNSSK 2026, first run")
 #'
 #' # ages, with every age from 10 up in a plus group, and the lengths as they are
@@ -695,7 +841,8 @@ catchCombined <- function(catch_data,
 #'                       originType_catch = "WGEstimate",
 #'                       variableType_catch = "WeightLive",
 #'                       distributionType = c("Age", "LengthTotal"),
-#'                       maxAoL = c(Age = 10), plusGroup = c(Age = TRUE, LengthTotal = FALSE))
+#'                       maxAoL = c(Age = 10), plusGroup = c(Age = TRUE, LengthTotal = FALSE),
+#'                       workingGroupYear = 2026)
 #' }
 #' @export
 distributionsCombined <- function(distribution_data,
@@ -710,12 +857,15 @@ distributionsCombined <- function(distribution_data,
                                   round = NULL,
                                   minAoL = 0, maxAoL = NA,
                                   plusGroup = TRUE,
+                                  workingGroupYear,
                                   version = 1,
                                   versionDescription = NA_character_,
                                   calendarYear = "Y",
-                                  yearStartDate = NA_character_)
+                                  startDateYear = NA_character_)
 {
     fn <- "distributionsCombined"
+    header <- scf_header(workingGroupYear, version, versionDescription,
+                         calendarYear, startDateYear, fn)
     weighting <- match.arg(weighting, c("NumberAtAoL", "CATON"), several.ok = FALSE)
     grouping <- scf_input(catch_data, grouping, "DC", originType_catch,
                           missing(originType_catch), fn)
@@ -802,5 +952,5 @@ distributionsCombined <- function(distribution_data,
         stop(fn, "(): no distributions are linked to the catch rows asked for",
              call. = FALSE)
 
-    scf_table(res, "DC", version, versionDescription, calendarYear, yearStartDate, fn)
+    scf_table(res, "DC", header, fn)
 }

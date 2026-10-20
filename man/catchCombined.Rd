@@ -11,10 +11,11 @@ catchCombined(
   variableType_catch = c("WeightLive", "Number"),
   unit = NULL,
   round = NULL,
+  workingGroupYear,
   version = 1,
   versionDescription = NA_character_,
   calendarYear = "Y",
-  yearStartDate = NA_character_
+  startDateYear = NA_character_
 )
 }
 \arguments{
@@ -38,25 +39,28 @@ them as they are.}
 
 \item{round}{Digits to round the totals to; \code{NULL} (default) does not round.}
 
+\item{workingGroupYear}{The year of the working group the data are processed
+for, as a four-digit year (\code{2026}). Required.}
+
 \item{version}{The version of the file, a whole number (default \code{1}).}
 
 \item{versionDescription}{What the version is, a string, or \code{NA} (default).}
 
 \item{calendarYear}{\code{"Y"} (default) or \code{"N"}.}
 
-\item{yearStartDate}{With \code{calendarYear = "N"}, the start of the model year
+\item{startDateYear}{With \code{calendarYear = "N"}, the start of the model year
 as \code{"MM-DD"}; left out otherwise.}
 }
 \value{
-A tibble with the CC fields of the SCF: \code{recordType}, \code{version},
-\code{versionDescription}, \code{calendarYear}, \code{yearStartDate}, \code{year},
-\code{workingGroup}, \code{stock}, \code{catchCategory}, \code{seasonType}, \code{seasonValue},
-\code{areaType}, \code{areaValue}, \code{fleetValue}, \code{variableType}, \code{variableUnit},
-\code{total}, \code{variance} and \code{numTrips}. A code the SCF does not accept is
-warned about.
+A tibble with the CC fields of the SCF: \code{recordType},
+\code{workingGroupYear}, \code{version}, \code{versionDescription}, \code{calendarYear},
+\code{startDateYear}, \code{year}, \code{workingGroup}, \code{stock}, \code{catchCategory},
+\code{seasonType}, \code{seasonValue}, \code{areaType}, \code{areaValue}, \code{fleetValue},
+\code{variableType}, \code{variableUnit}, \code{total}, \code{variance}, \code{PSU}, \code{numPSUs} and
+\code{numTrips}. A code the SCF does not accept is warned about.
 }
 \description{
-The catch of a stock, the way the stock coordination format (SCF v3) wants it:
+The catch of a stock, the way the stock coordination format (SCF v4) wants it:
 one row per year, working group, stock and catch category - and per
 variable and unit - with the catch added up. Give it the result of
 \code{\link[=catchRaising]{catchRaising()}}; every column the format has and the catch does not fill is
@@ -85,11 +89,28 @@ The distributions of the same stock go with it: use the same \code{grouping} in
 belongs to in the CC.
 \subsection{The header}{
 
-\code{version} and \code{versionDescription} name the run, so more than one can be kept
-(a benchmark, a sensitivity test). \code{calendarYear} is \code{"Y"} when \code{year} is the
-calendar year, which it is for most stocks, and \code{"N"} when it is a model year
-that starts on another date, \code{yearStartDate} (\code{"07-01"}), the same for every
-row of the stock.
+\code{workingGroupYear} is the year of the working group the data are processed
+for - the 2026 of a WGNSSK 2026 - and has no default, since it is not in the
+data. \code{version} and \code{versionDescription} name the run, so more than one can
+be kept (a benchmark, a sensitivity test). \code{calendarYear} is \code{"Y"} when \code{year}
+is the calendar year, which it is for most stocks, and \code{"N"} when it is a
+model year that starts on another date, \code{startDateYear} (\code{"07-01"}), the same
+for every row of the stock. They are written on every row; every other field
+comes from the catch.
+}
+
+\subsection{The sampling}{
+
+\code{PSU}, \code{numPSUs} and \code{numTrips} say how much sampling stands behind the
+total. They are taken from the columns of the catch with the same names, as
+the CEF has them: the counts of the rows added up are summed, and are \code{NA}
+when none of the rows reports one (nothing was counted, which is not 0), and
+\code{PSU}, the type of the sampling unit (\code{"FishingTrip"}), is that of the rows
+that report a number of them - a \verb{;} separated list when there are several
+types. A row the raising only estimated (\code{importedOrRaised} is \code{"raised"})
+has no sample of its own, its rate was borrowed from a group, so whatever
+count it carries is left out: the format asks for the strata that actually
+contributed to the estimate. \code{variance} is left empty.
 }
 }
 \examples{
@@ -100,15 +121,18 @@ raised <- catchRaising(catch, strataCond, matchedDataCond,
 # the catch of the stock by catch category, in tonnes
 catchCombined(raised, originType_catch = "WGEstimate",
               variableType_catch = "WeightLive", unit = "t",
+              workingGroupYear = 2026,
               version = 1, versionDescription = "WGNSSK 2026, first run")
 
 # by quarter as well
 catchCombined(raised, grouping = c("catchCategory", "seasonValue"),
-              originType_catch = "WGEstimate", unit = "t")
+              originType_catch = "WGEstimate", unit = "t",
+              workingGroupYear = 2026)
 
 # a model year that starts on 1 July
 catchCombined(raised, originType_catch = "WGEstimate", unit = "t",
-              calendarYear = "N", yearStartDate = "07-01")
+              workingGroupYear = 2026,
+              calendarYear = "N", startDateYear = "07-01")
 }
 }
 \seealso{

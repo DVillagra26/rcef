@@ -39,7 +39,7 @@ The last two sections give the two output data sets this whole vignette
 exists for:
 
 * **CC** (Catch Combined) - one row per `catchCategory`, the stock-wide raised
-  total, in the format of the stock coordination (SCF v3): `catchCombined()`
+  total, in the format of the stock coordination (SCF v4): `catchCombined()`
   makes it;
 * **CAR / CAS** - every raised row, and the donor strata behind each group's
   rate,
@@ -302,9 +302,13 @@ present in `raised_manual` - usually `Lan` and `Dis`, but `BMS` too if the
 stock reports it; nothing below is hardcoded to just those two.
 
 `catchCombined()` adds the raised catch up and writes it in the format of the
-stock coordination (SCF v3): the year, the working group and the stock come
-straight off the data, every field of the format the data does not fill is
-there, empty, and `unit = "t"` is the tonnes the format wants. Take one
+stock coordination (SCF v4): the year, the working group and the stock come
+straight off the data, as do the sampling counts (`PSU`, `numPSUs`, `numTrips`;
+the rows the raising only estimated leave theirs out), every field of the format
+the data does not fill is there, empty, and `unit = "t"` is the tonnes the
+format wants. The one thing the data cannot say is the working group that
+processes it, so `workingGroupYear` is an argument (2025 for the bll 2024 data of
+a WGNSSK 2025). Take one
 origin - `originType_catch = "WGEstimate"` is the working group's own catch,
 the raised discards among it; a stratum the raising had no rate for (`NaN`)
 adds up as nothing. Its pair for the lengths and ages, `distributionsCombined()`,
@@ -328,9 +332,10 @@ cc_out <- catchCombined(catch_data = raised_manual,
                         originType_catch = "WGEstimate",
                         variableType_catch = "WeightLive",
                         unit = "t", round = 3,
+                        workingGroupYear = 2025,
                         version = car_version, versionDescription = car_version_desc)
-cc_out[, c("recordType", "version", "year", "stock", "catchCategory",
-           "variableType", "variableUnit", "total")]
+cc_out[, c("recordType", "workingGroupYear", "version", "year", "stock",
+           "catchCategory", "variableType", "variableUnit", "total")]
 ```
 
 # Output: CAR and CAS (detailed)

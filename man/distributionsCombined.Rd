@@ -17,10 +17,11 @@ distributionsCombined(
   minAoL = 0,
   maxAoL = NA,
   plusGroup = TRUE,
+  workingGroupYear,
   version = 1,
   versionDescription = NA_character_,
   calendarYear = "Y",
-  yearStartDate = NA_character_
+  startDateYear = NA_character_
 )
 }
 \arguments{
@@ -66,27 +67,31 @@ catch rows to link. Pass one.}
 \item{minAoL, maxAoL, plusGroup}{As in \code{\link[=catchAtAoLAggregation]{catchAtAoLAggregation()}}; named by
 distribution type when there are several.}
 
+\item{workingGroupYear}{The year of the working group the data are processed
+for, as a four-digit year (\code{2026}). Required.}
+
 \item{version}{The version of the file, a whole number (default \code{1}).}
 
 \item{versionDescription}{What the version is, a string, or \code{NA} (default).}
 
 \item{calendarYear}{\code{"Y"} (default) or \code{"N"}.}
 
-\item{yearStartDate}{With \code{calendarYear = "N"}, the start of the model year
+\item{startDateYear}{With \code{calendarYear = "N"}, the start of the model year
 as \code{"MM-DD"}; left out otherwise.}
 }
 \value{
-A tibble with the DC fields of the SCF: \code{recordType}, \code{version},
-\code{versionDescription}, \code{calendarYear}, \code{yearStartDate}, \code{year},
-\code{workingGroup}, \code{stock}, \code{catchCategory}, \code{seasonType}, \code{seasonValue},
-\code{areaType}, \code{areaValue}, \code{fleetValue}, \code{distributionType},
-\code{distributionUnit}, \code{distributionClass}, \code{ageGroupPlus}, \code{attributeType},
-\code{attributeValue}, \code{variableType}, \code{variableUnit}, \code{valueType}, \code{value},
-\code{variance}, \code{numTrips} and \code{numMeasurements}.
+A tibble with the DC fields of the SCF: \code{recordType},
+\code{workingGroupYear}, \code{version}, \code{versionDescription}, \code{calendarYear},
+\code{startDateYear}, \code{year}, \code{workingGroup}, \code{stock}, \code{catchCategory},
+\code{seasonType}, \code{seasonValue}, \code{areaType}, \code{areaValue}, \code{fleetValue},
+\code{distributionType}, \code{distributionUnit}, \code{distributionClass},
+\code{ageGroupPlus}, \code{attributeType}, \code{attributeValue}, \code{variableType},
+\code{variableUnit}, \code{valueType}, \code{value}, \code{variance}, \code{PSU}, \code{numPSUs},
+\code{numTrips} and \code{numMeasurements}.
 }
 \description{
 The length or age distributions of a stock, the way the stock coordination
-format (SCF v3) wants them: the catch's numbers at length (or age) and the
+format (SCF v4) wants them: the catch's numbers at length (or age) and the
 mean weight at length (or age), one row per class, added up by year, working
 group, stock and catch category - and whatever else \code{grouping} adds. Give it
 the two tables of \code{\link[=catchAllocationAoL]{catchAllocationAoL()}}; every column the format has and the
@@ -119,7 +124,28 @@ The \code{grouping} is the one of \code{\link[=catchCombined]{catchCombined()}} 
 distribution needs a catch of the same year, stock, category, season, area and
 fleet in the CC), with the sex of the distribution on top -
 \code{attributeType} and \code{attributeValue}, the default - which is \code{NA} when the
-distributions do not have one.
+distributions do not have one. The header - \code{workingGroupYear} and the rest -
+is the one of \code{\link[=catchCombined]{catchCombined()}} too, and so is the sampling's reading.
+\subsection{The sampling}{
+
+\code{PSU}, \code{numPSUs}, \code{numTrips} and \code{numMeasurements} say how much sampling
+stands behind each class. They are taken from the columns of the
+distributions with the same names, as the CEF has them. A row of the table is
+made of the distributions of the catch it is added up from: each counts once,
+however many classes it has (the CEF repeats its counts on every class, and a
+plus group puts several of them in one row), and the counts of the
+distributions are summed. They are \code{NA} when none of the distributions reports
+one - the allocation leaves them empty for the distributions it estimated,
+which were borrowed: the format asks for the strata that actually contributed
+\itemize{
+\item and \code{PSU}, the type of the sampling unit, is that of the distributions that
+report a number of them, a \verb{;} separated list when there are several types.
+\code{numMeasurements} is the count of the whole distribution, which is all the CEF
+has, though the format asks for the measurements at the class: do not sum it
+over the classes. \code{variance} is left empty.
+}
+}
+
 \subsection{Classes}{
 
 Lengths are reported in mm, in the class the distributions give. \code{minAoL} drops
@@ -142,6 +168,7 @@ distributionsCombined(alloc$distribution, alloc$catch,
                       originType_catch = "WGEstimate",
                       variableType_catch = "WeightLive",
                       distributionType = "LengthTotal",
+                      workingGroupYear = 2026,
                       version = 1, versionDescription = "WGNSSK 2026, first run")
 
 # ages, with every age from 10 up in a plus group, and the lengths as they are
@@ -149,7 +176,8 @@ distributionsCombined(alloc$distribution, alloc$catch,
                       originType_catch = "WGEstimate",
                       variableType_catch = "WeightLive",
                       distributionType = c("Age", "LengthTotal"),
-                      maxAoL = c(Age = 10), plusGroup = c(Age = TRUE, LengthTotal = FALSE))
+                      maxAoL = c(Age = 10), plusGroup = c(Age = TRUE, LengthTotal = FALSE),
+                      workingGroupYear = 2026)
 }
 }
 \seealso{
