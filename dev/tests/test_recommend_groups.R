@@ -84,9 +84,27 @@ ok(near(lt$weight_t, c(4.8, 2, 4.5)) && near(lt$pct_weight, c(42.5, 17.7, 39.8))
 ok(near(lt$uncovered_t, c(1, 2, 4.4)) && near(lt$pct_uncovered, c(13.5, 27, 59.5)) &&
      near(lt$cum_pct_uncovered, c(13.5, 40.5, 100)),
    "levels: what has no estimate of its own (1, 2 and 4.4 t) and the share of it each level settles")
-ok(any(grepl("Groups for the raising of the discards: 6 strata in 4 groups", utils::capture.output(print(rec)), fixed = TRUE)) &&
-     any(grepl("areaValue > metier4", utils::capture.output(print(rec)), fixed = TRUE)),
+pr <- utils::capture.output(print(rec))
+ok(any(grepl("Groups for the raising of the discards: 6 strata in 4 groups", pr, fixed = TRUE)) &&
+     any(grepl("areaValue > metier4", pr, fixed = TRUE)),
    "print() says what the groups are for and the hierarchy")
+ok(any(grepl("Landings 11.3 t: 3.9 t (34.5%) have a discard estimate and are imported as reported; 7.4 t (65.5%) are raised",
+             pr, fixed = TRUE)),
+   "print() says first what needs no raising at all - the landings with a discard estimate, 3.9 t of 11.3 t - before the levels")
+ok(identical(which(grepl("^Landings", pr)) < which(grepl("level", pr))[1], TRUE),
+   "... and that comes before the table of levels")
+
+## the hierarchy is written from the variable that matters most with a > between them, or as a vector
+rs <- recommend_groups(hc, "areaValue > metier4", list(cov = 30))
+ok(identical(rs$hierarchy, hier) && identical(rs$strata, rec$strata) && identical(rs$levels, rec$levels) &&
+     identical(rs$groups, rec$groups) && identical(rs$strataCond, rec$strataCond),
+   "hierarchy = \"areaValue > metier4\" is the same as c(\"areaValue\", \"metier4\")")
+ok(identical(recommend_groups(hc, " areaValue>metier4 ", list(cov = 30))$hierarchy, hier) &&
+     identical(recommend_groups(hc, c("areaValue > metier4"), list(cov = 30))$hierarchy, hier) &&
+     identical(recommend_groups(hc, c("areaValue", "metier4"), list(cov = 30))$hierarchy, hier),
+   "the spaces around the > do not matter, and a vector says the same")
+ok(identical(recommend_groups(hc, "metier4 > areaValue", list(cov = 30))$hierarchy, rev(hier)),
+   "the order is the order written: the first is the one that matters most")
 
 ## ---- 2. the conditions -------------------------------------------------
 ## strataCond must share EVERY row of the catch out - the raising leaves out what is in no group and stops on an overlap
@@ -145,8 +163,15 @@ ok(identical(suppressWarnings(recommend_groups(hc, hier))$thresholds$cov, 50),
 ## ---- 4. what is refused ------------------------------------------------
 ok(grepl("no column 'nope'", err(recommend_groups(hc, c("areaValue", "nope")))),
    "a hierarchy variable that is not in the catch is named")
-ok(grepl("names the variables", err(recommend_groups(hc, character()))),
+ok(grepl("names the variables", err(recommend_groups(hc, character()))) &&
+     grepl("names the variables", err(recommend_groups(hc, ""))),
    "an empty hierarchy is refused")
+ok(grepl("names the variables", err(recommend_groups(hc, "areaValue > > metier4"))),
+   "an empty part between two > is refused")
+ok(grepl("'areaValue' more than once", err(recommend_groups(hc, "areaValue > metier4 > areaValue"))),
+   "a variable named twice is refused")
+ok(grepl("separate the variables with '>'", err(recommend_groups(hc, "areaValue, metier4"))),
+   "variables separated by a comma are pointed to the > notation")
 ok(grepl("catchCategory", err(recommend_groups(hc, c("areaValue", "catchCategory")))),
    "catchCategory is not a stratum variable")
 ok(grepl("cannot be empty", err(recommend_groups(hc, hier, list(cov = NA)))) &&

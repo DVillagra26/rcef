@@ -23,33 +23,77 @@
 #' @description
 #' Chooses the groups of [catchRaising()] (discards) or [catchAllocationAoL()]
 #' (lengths and ages) from the data, instead of writing them by hand. You name
-#' the variables the groups are made by, from the one that matters most to the
-#' one that matters least - the cluster plot of [build_discard_clusters()] ranks
-#' them - and how well a pool has to be sampled; every stratum is raised from the
-#' narrowest pool that is. What comes back holds the two lists of conditions
-#' those functions take, and tables that show how the strata fell into the
-#' levels - see [plot_groups()] and [plot_river()] to draw them.
+#' the variables the groups are made by, written from the one that matters most
+#' to the one that matters least with a `>` between them -
+#' `"areaValue > mesh > vesselFlagCountry > seasonValue"`; the cluster plot of
+#' [build_discard_clusters()] ranks them - and how well a pool has to be sampled.
+#' What has no estimate of its own is raised from the narrowest pool that is, and
+#' the variable that matters most is the last one to be pooled across. What comes
+#' back holds the two lists of conditions the two functions take, and tables that
+#' show how the strata fell into the levels - see [plot_groups()] and
+#' [plot_river()] to draw them.
 #'
 #' @details
-#' ## The levels
+#' ## The order, step by step
 #'
-#' A stratum is one combination of the `hierarchy` variables. With
-#' `c("areaValue", "mesh", "vesselFlagCountry", "seasonValue")` the pools a
-#' stratum can be raised from, from the narrowest to the widest, are
+#' Nothing is pooled until it has to be. Take
+#' `"areaValue > mesh > vesselFlagCountry > seasonValue"` on a catch whose strata
+#' are reported as area, season, country and fleet:
 #'
-#' | level | the pool | pooled across |
-#' |:--|:--|:--|
-#' | 4 | the stratum itself: its area, mesh, country and season | nothing |
-#' | 3 | the same area, mesh and country | seasons |
-#' | 2 | the same area and mesh | countries and seasons |
-#' | 1 | the same area | meshes, countries and seasons |
-#' | 0 | everything | all of them |
+#' 1. **The strata as they are reported.** A landing that has a discard estimate
+#'    (a discard row of its domain, as [catchRaising()] pairs them) needs no
+#'    raising, and the raising leaves it as it is. Only the landings without one
+#'    are raised; what `recommend_groups()` chooses is the data their discard ratio
+#'    is taken from. Printing the result says how much of the landings that is.
+#' 2. **The strata of the hierarchy** (level 4). The reported strata are summed
+#'    into strata made of the variables you named - here the area, the mesh, the
+#'    country and the season: what you did not name (the metier, say) is summed
+#'    over. Each of them is tested against the `thresholds` *before anything else is
+#'    pooled*: a stratum whose landings with an estimate reach them is raised from
+#'    itself.
+#' 3. **Across the last variable** (level 3). The strata that fall short are pooled
+#'    across the season - the same area, mesh and country in every season - and
+#'    tested again; the pool that reaches the thresholds raises them.
+#' 4. **Across the one before** (level 2): the same area and mesh, in every country
+#'    and season.
+#' 5. **And before that** (level 1): the same area, in every mesh, country and
+#'    season.
+#' 6. **Across the first variable** (level 0): everything. This is the last
+#'    resort and is always accepted - a warning says when the pool of everything
+#'    does not reach the thresholds - so that nothing is left without a group.
 #'
-#' A stratum takes the narrowest level whose pool reaches the `thresholds`, so
-#' the last variable of the hierarchy is pooled across first and the first one is
-#' kept the longest. Level 0 is the last resort and is always accepted (a warning
-#' says when it does not reach the thresholds), so that nothing is left without a
-#' group.
+#' ```
+#' reported strata: area + season + country + fleet     (landings with an estimate stay as they are)
+#'   |  summed over what is not named, e.g. the metier
+#'   v
+#' level 4   area + mesh + country + season             tested first
+#'   |  pooled across the season
+#'   v
+#' level 3   area + mesh + country
+#'   |  pooled across the country
+#'   v
+#' level 2   area + mesh
+#'   |  pooled across the mesh
+#'   v
+#' level 1   area
+#'   |  pooled across the area
+#'   v
+#' level 0   everything                                 the last resort
+#' ```
+#'
+#' A stratum takes the narrowest level whose pool reaches the `thresholds`: level
+#' *k* keeps the first *k* variables of the hierarchy. So the variable that matters
+#' most, the area, is kept the longest and the one that matters least, the season,
+#' is pooled across first. Write the hierarchy as a vector instead -
+#' `c("areaValue", "mesh", "vesselFlagCountry", "seasonValue")` - and it says the
+#' same.
+#'
+#' A variable that is not in the hierarchy is not kept apart at any level - from
+#' the first step on, the strata are summed over it. If the metier matters for the
+#' discards, name it: `"areaValue > mesh > metier4 > vesselFlagCountry"`. A
+#' variable and a coarser version of it can both be named, the coarser one first:
+#' `"ICESDivision > areaValue > mesh"` pools the strata of a division across their
+#' areas only when the pool of the area is not enough.
 #'
 #' ## The thresholds
 #'
@@ -69,7 +113,9 @@
 #'
 #' These are the numbers [plot_coverage_heat()] and the other coverage plots
 #' draw, and they are pooled the same way: weights and counts add up, and the
-#' coverage is worked out again from the summed weights.
+#' coverage is worked out again from the summed weights. A pool takes the rows of
+#' every stratum in it as its data - also those of the strata that were raised from
+#' their own, which are the best-sampled ones.
 #'
 #' ## Discards and lengths
 #'
@@ -96,8 +142,12 @@
 #'   columns (see [derive_fields()]): for discards the catch as it comes, for
 #'   lengths and ages the raised catch. One year and one stock.
 #' @param hierarchy The variables the groups are made by, from the one that
-#'   matters most to the one that matters least: the first is kept the longest,
-#'   the last is pooled across first. Columns of `catch_data`.
+#'   matters most to the one that matters least, with a `>` between them:
+#'   `"areaValue > mesh > vesselFlagCountry > seasonValue"` (read: the area
+#'   matters more than the mesh, the mesh more than the country ...). The first is
+#'   kept the longest, the last is pooled across first. A vector,
+#'   `c("areaValue", "mesh", ...)`, says the same. Columns of `catch_data`; what is
+#'   not named is summed over from the start.
 #' @param thresholds A list: `cov` (the coverage a pool has to reach, in
 #'   percent; default 50, cannot be empty), `trips` (the least number of trips)
 #'   and `fish` (the least number of fish measured; lengths and ages), the last
@@ -106,17 +156,30 @@
 #'   or the ages. `NULL` (default): the groups of the discards.
 #' @param distributionType `"LengthTotal"` (default) or `"Age"`: the distributions
 #'   the coverage is judged on. Only with `distribution_data`.
-#' @return A list of class `rcef_groups`, which prints as its table of levels:
+#' @return A list of class `rcef_groups`. Printing it says how much of the
+#'   landings already has a discard estimate (a length or age distribution) and is
+#'   kept as it is, and how many strata, groups and landings fall in each level.
+#'   It holds
 #'   * `strataCond` and `matchedDataCond`: named lists of quosures, one per group,
 #'     for the arguments of [catchRaising()] (`condition_raising_st_list`,
 #'     `condition_matched_data_list`) or [catchAllocationAoL()]
 #'     (`condition_alloc_st_list`, `condition_matched_data_list`);
-#'   * `strata`: one row per stratum (and catch part, for lengths and ages): its
-#'     weight and coverage, the level and group it falls in, and what the pool it
-#'     was given has to stand on;
-#'   * `groups`: one row per group, its pool and what it holds;
-#'   * `levels`: one row per level - how many strata and how much weight each
-#'     takes, and how much of what has to be raised it settles;
+#'   * `strata`: one row per stratum of the hierarchy (and catch part, for lengths
+#'     and ages): the hierarchy columns, `weight_t` (its landings, or its catch, in
+#'     tonnes), `covered_t` (the part of it that has an estimate or a distribution
+#'     of its own: what is not raised), `coverage` (in percent), `numTrips`
+#'     (and `numMeasurements`), the `level`, `level_label` and `group` it falls in,
+#'     and what the pool it was given stands on: `pool_coverage`, `pool_trips` (and
+#'     `pool_fish`) and `pool_strata`, how many strata it holds;
+#'   * `groups`: one row per group: `group`, `level`, `level_label`, its `pool` in
+#'     words, `n_strata` and `weight_t` of what it raises, and the `coverage`,
+#'     `numTrips` (and `numMeasurements`) of its pool;
+#'   * `levels`: one row per level (and catch part): `n_groups`, `n_strata`,
+#'     `weight_t` and `pct_weight` of what falls in it, `uncovered_t` - the part of
+#'     that with no estimate of its own, which is what the level's pools raise - and
+#'     `pct_uncovered` and `cum_pct_uncovered`: the share of everything that has to
+#'     be raised that the level settles, and the running total from the narrowest
+#'     level;
 #'   * `what`, `hierarchy` and `thresholds`, as they were used.
 #' @seealso [plot_groups()] and [plot_river()] to look at how the strata fell
 #'   into the levels; [build_coverage_strata()] for the numbers behind them;
@@ -125,8 +188,25 @@
 #' @family raising groups
 #' @md
 #' @examples
+#' # a small catch (kg): a landing has a discard estimate when it has a domain
+#' # (domainCatchDis) that a discard row carries too
+#' catch <- data.frame(
+#'   catchCategory  = c("Lan", "Lan", "Lan", "Lan", "Lan", "Lan", "Dis", "Dis"),
+#'   areaValue      = c("27.4", "27.4", "27.4", "27.7.d", "27.7.d", "27.7.d", "27.4", "27.7.d"),
+#'   mesh           = c("70-99", "70-99", "100-119", "70-99", "70-99", "100-119", "70-99", "70-99"),
+#'   total          = c(3000, 1000, 2000, 800, 200, 500, 200, 40),
+#'   domainCatchDis = c("d1", NA, NA, "d2", NA, NA, "d1", "d2"),
+#'   variableUnit   = "kg", stringsAsFactors = FALSE)
+#'
+#' # the area matters more than the mesh: the mesh is pooled across first
+#' rec <- recommend_groups(catch, "areaValue > mesh", list(cov = 50))
+#' rec                       # what needs no raising, and how the strata fell into the levels
+#' rec$strata                # 70-99 stands on its own; 100-119 is raised from its area
+#' rec$strataCond            # what catchRaising() takes
+#' rec$matchedDataCond
+#'
 #' \dontrun{
-#' hierarchy  <- c("areaValue", "mesh", "vesselFlagCountry", "seasonValue")
+#' hierarchy  <- "areaValue > mesh > vesselFlagCountry > seasonValue"
 #' thresholds <- list(cov = 50, trips = NA, fish = NA)
 #'
 #' # the groups of the discards, and the raising they go to
@@ -156,10 +236,16 @@ recommend_groups <- function(catch_data,
   catch_data <- as.data.frame(catch_data)
 
   ## ---- what was asked for
-  hierarchy <- unique(as.character(hierarchy))
+  ## "areaValue > mesh > vesselFlagCountry" or c("areaValue", "mesh", "vesselFlagCountry"): the
+  ## variable that matters most first, the one that is pooled across first last
+  hierarchy <- trimws(unlist(strsplit(as.character(hierarchy), ">", fixed = TRUE)))
   if (!length(hierarchy) || anyNA(hierarchy) || !all(nzchar(hierarchy)))
-    stop(fn, "(): `hierarchy` names the variables the groups are made by, from ",
-         "the one that matters most to the one that matters least", call. = FALSE)
+    stop(fn, "(): `hierarchy` names the variables the groups are made by, from the one that ",
+         "matters most to the one that matters least: \"areaValue > mesh > vesselFlagCountry\"",
+         call. = FALSE)
+  if (anyDuplicated(hierarchy))
+    stop(fn, "(): `hierarchy` names ", paste0("'", unique(hierarchy[duplicated(hierarchy)]), "'", collapse = ", "),
+         " more than once", call. = FALSE)
   if ("catchCategory" %in% hierarchy)
     stop(fn, "(): `catchCategory` is not a stratum variable: the landings and the ",
          "discards of a stratum go together (lengths and ages are grouped for each ",
@@ -167,6 +253,8 @@ recommend_groups <- function(catch_data,
   miss <- setdiff(hierarchy, names(catch_data))
   if (length(miss))
     stop(fn, "(): `catch_data` has no column ", paste0("'", miss, "'", collapse = ", "),
+         if (any(grepl("[,;[:space:]]", miss)))
+           " (separate the variables with '>': \"areaValue > mesh > vesselFlagCountry\")",
          derive_hint(miss), call. = FALSE)
   for (k in intersect(c("year", "stock"), names(catch_data)))
     if (dplyr::n_distinct(catch_data[[k]]) > 1)
@@ -398,9 +486,13 @@ recommend_groups <- function(catch_data,
             class = "rcef_groups")
 }
 
+#' @rdname recommend_groups
+#' @param x The result of `recommend_groups()`.
+#' @param ... Not used.
+#' @md
 #' @export
 print.rcef_groups <- function(x, ...) {
-  th <- x$thresholds
+  th <- x$thresholds; lv <- x$levels; discard <- identical(x$what, "discard")
   cat(sprintf("Groups for the %s: %d strata in %d groups\n",
               switch(x$what, discard = "raising of the discards",
                      length = "allocation of the lengths", "allocation of the ages"),
@@ -410,6 +502,22 @@ print.rcef_groups <- function(x, ...) {
   cat("thresholds: coverage >= ", th$cov, "%",
       if (!is.na(th$trips)) paste0(", trips >= ", th$trips),
       if (!is.na(th$fish)) paste0(", fish >= ", th$fish), "\n\n", sep = "")
-  print(x$levels, row.names = FALSE)
+  ## before any pooling: what has an estimate (or a distribution) already, and is kept as it is
+  ## - the rest is what the levels below take
+  t1 <- function(v) format(round(v, 1), big.mark = ",", nsmall = 1, trim = TRUE)
+  for (cc in if (is.null(lv$category)) "" else unique(lv$category)) {
+    d <- if (nzchar(cc)) lv[lv$category == cc, , drop = FALSE] else lv
+    all_t <- sum(d$weight_t); todo_t <- sum(d$uncovered_t)
+    if (!(all_t > 0)) next
+    cat(sprintf("%s %s t: %s t (%s%%) have %s and are %s; %s t (%s%%) are %s\n",
+                if (discard) "Landings" else switch(cc, Lan = "Landings", Dis = "Discards", cc),
+                t1(all_t), t1(all_t - todo_t), t1(100 * (all_t - todo_t) / all_t),
+                switch(x$what, discard = "a discard estimate", length = "a length distribution",
+                       "an age distribution"),
+                if (discard) "imported as reported" else "kept as sampled",
+                t1(todo_t), t1(100 * todo_t / all_t), if (discard) "raised" else "allocated"))
+  }
+  cat("\n")
+  print(lv, row.names = FALSE)
   invisible(x)
 }

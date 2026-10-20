@@ -2,6 +2,7 @@
 % Please edit documentation in R/rcef_groups.R
 \name{recommend_groups}
 \alias{recommend_groups}
+\alias{print.rcef_groups}
 \title{Groups for the raising and the allocation, from a hierarchy of variables}
 \usage{
 recommend_groups(
@@ -11,6 +12,8 @@ recommend_groups(
   distribution_data = NULL,
   distributionType = c("LengthTotal", "Age")
 )
+
+\method{print}{rcef_groups}(x, ...)
 }
 \arguments{
 \item{catch_data}{The catch, a CEF long-format table that has the \code{hierarchy}
@@ -18,8 +21,12 @@ columns (see \code{\link[=derive_fields]{derive_fields()}}): for discards the ca
 lengths and ages the raised catch. One year and one stock.}
 
 \item{hierarchy}{The variables the groups are made by, from the one that
-matters most to the one that matters least: the first is kept the longest,
-the last is pooled across first. Columns of \code{catch_data}.}
+matters most to the one that matters least, with a \code{>} between them:
+\code{"areaValue > mesh > vesselFlagCountry > seasonValue"} (read: the area
+matters more than the mesh, the mesh more than the country ...). The first is
+kept the longest, the last is pooled across first. A vector,
+\code{c("areaValue", "mesh", ...)}, says the same. Columns of \code{catch_data}; what is
+not named is summed over from the start.}
 
 \item{thresholds}{A list: \code{cov} (the coverage a pool has to reach, in
 percent; default 50, cannot be empty), \code{trips} (the least number of trips)
@@ -31,53 +38,114 @@ or the ages. \code{NULL} (default): the groups of the discards.}
 
 \item{distributionType}{\code{"LengthTotal"} (default) or \code{"Age"}: the distributions
 the coverage is judged on. Only with \code{distribution_data}.}
+
+\item{x}{The result of \code{recommend_groups()}.}
+
+\item{...}{Not used.}
 }
 \value{
-A list of class \code{rcef_groups}, which prints as its table of levels:
+A list of class \code{rcef_groups}. Printing it says how much of the
+landings already has a discard estimate (a length or age distribution) and is
+kept as it is, and how many strata, groups and landings fall in each level.
+It holds
 \itemize{
 \item \code{strataCond} and \code{matchedDataCond}: named lists of quosures, one per group,
 for the arguments of \code{\link[=catchRaising]{catchRaising()}} (\code{condition_raising_st_list},
 \code{condition_matched_data_list}) or \code{\link[=catchAllocationAoL]{catchAllocationAoL()}}
 (\code{condition_alloc_st_list}, \code{condition_matched_data_list});
-\item \code{strata}: one row per stratum (and catch part, for lengths and ages): its
-weight and coverage, the level and group it falls in, and what the pool it
-was given has to stand on;
-\item \code{groups}: one row per group, its pool and what it holds;
-\item \code{levels}: one row per level - how many strata and how much weight each
-takes, and how much of what has to be raised it settles;
+\item \code{strata}: one row per stratum of the hierarchy (and catch part, for lengths
+and ages): the hierarchy columns, \code{weight_t} (its landings, or its catch, in
+tonnes), \code{covered_t} (the part of it that has an estimate or a distribution
+of its own: what is not raised), \code{coverage} (in percent), \code{numTrips}
+(and \code{numMeasurements}), the \code{level}, \code{level_label} and \code{group} it falls in,
+and what the pool it was given stands on: \code{pool_coverage}, \code{pool_trips} (and
+\code{pool_fish}) and \code{pool_strata}, how many strata it holds;
+\item \code{groups}: one row per group: \code{group}, \code{level}, \code{level_label}, its \code{pool} in
+words, \code{n_strata} and \code{weight_t} of what it raises, and the \code{coverage},
+\code{numTrips} (and \code{numMeasurements}) of its pool;
+\item \code{levels}: one row per level (and catch part): \code{n_groups}, \code{n_strata},
+\code{weight_t} and \code{pct_weight} of what falls in it, \code{uncovered_t} - the part of
+that with no estimate of its own, which is what the level's pools raise - and
+\code{pct_uncovered} and \code{cum_pct_uncovered}: the share of everything that has to
+be raised that the level settles, and the running total from the narrowest
+level;
 \item \code{what}, \code{hierarchy} and \code{thresholds}, as they were used.
 }
 }
 \description{
 Chooses the groups of \code{\link[=catchRaising]{catchRaising()}} (discards) or \code{\link[=catchAllocationAoL]{catchAllocationAoL()}}
 (lengths and ages) from the data, instead of writing them by hand. You name
-the variables the groups are made by, from the one that matters most to the
-one that matters least - the cluster plot of \code{\link[=build_discard_clusters]{build_discard_clusters()}} ranks
-them - and how well a pool has to be sampled; every stratum is raised from the
-narrowest pool that is. What comes back holds the two lists of conditions
-those functions take, and tables that show how the strata fell into the
-levels - see \code{\link[=plot_groups]{plot_groups()}} and \code{\link[=plot_river]{plot_river()}} to draw them.
+the variables the groups are made by, written from the one that matters most
+to the one that matters least with a \code{>} between them -
+\code{"areaValue > mesh > vesselFlagCountry > seasonValue"}; the cluster plot of
+\code{\link[=build_discard_clusters]{build_discard_clusters()}} ranks them - and how well a pool has to be sampled.
+What has no estimate of its own is raised from the narrowest pool that is, and
+the variable that matters most is the last one to be pooled across. What comes
+back holds the two lists of conditions the two functions take, and tables that
+show how the strata fell into the levels - see \code{\link[=plot_groups]{plot_groups()}} and
+\code{\link[=plot_river]{plot_river()}} to draw them.
 }
 \details{
-\subsection{The levels}{
+\subsection{The order, step by step}{
 
-A stratum is one combination of the \code{hierarchy} variables. With
-\code{c("areaValue", "mesh", "vesselFlagCountry", "seasonValue")} the pools a
-stratum can be raised from, from the narrowest to the widest, are\tabular{lll}{
-   level \tab the pool \tab pooled across \cr
-   4 \tab the stratum itself: its area, mesh, country and season \tab nothing \cr
-   3 \tab the same area, mesh and country \tab seasons \cr
-   2 \tab the same area and mesh \tab countries and seasons \cr
-   1 \tab the same area \tab meshes, countries and seasons \cr
-   0 \tab everything \tab all of them \cr
+Nothing is pooled until it has to be. Take
+\code{"areaValue > mesh > vesselFlagCountry > seasonValue"} on a catch whose strata
+are reported as area, season, country and fleet:
+\enumerate{
+\item \strong{The strata as they are reported.} A landing that has a discard estimate
+(a discard row of its domain, as \code{\link[=catchRaising]{catchRaising()}} pairs them) needs no
+raising, and the raising leaves it as it is. Only the landings without one
+are raised; what \code{recommend_groups()} chooses is the data their discard ratio
+is taken from. Printing the result says how much of the landings that is.
+\item \strong{The strata of the hierarchy} (level 4). The reported strata are summed
+into strata made of the variables you named - here the area, the mesh, the
+country and the season: what you did not name (the metier, say) is summed
+over. Each of them is tested against the \code{thresholds} \emph{before anything else is
+pooled}: a stratum whose landings with an estimate reach them is raised from
+itself.
+\item \strong{Across the last variable} (level 3). The strata that fall short are pooled
+across the season - the same area, mesh and country in every season - and
+tested again; the pool that reaches the thresholds raises them.
+\item \strong{Across the one before} (level 2): the same area and mesh, in every country
+and season.
+\item \strong{And before that} (level 1): the same area, in every mesh, country and
+season.
+\item \strong{Across the first variable} (level 0): everything. This is the last
+resort and is always accepted - a warning says when the pool of everything
+does not reach the thresholds - so that nothing is left without a group.
 }
 
+\if{html}{\out{<div class="sourceCode">}}\preformatted{reported strata: area + season + country + fleet     (landings with an estimate stay as they are)
+  |  summed over what is not named, e.g. the metier
+  v
+level 4   area + mesh + country + season             tested first
+  |  pooled across the season
+  v
+level 3   area + mesh + country
+  |  pooled across the country
+  v
+level 2   area + mesh
+  |  pooled across the mesh
+  v
+level 1   area
+  |  pooled across the area
+  v
+level 0   everything                                 the last resort
+}\if{html}{\out{</div>}}
 
-A stratum takes the narrowest level whose pool reaches the \code{thresholds}, so
-the last variable of the hierarchy is pooled across first and the first one is
-kept the longest. Level 0 is the last resort and is always accepted (a warning
-says when it does not reach the thresholds), so that nothing is left without a
-group.
+A stratum takes the narrowest level whose pool reaches the \code{thresholds}: level
+\emph{k} keeps the first \emph{k} variables of the hierarchy. So the variable that matters
+most, the area, is kept the longest and the one that matters least, the season,
+is pooled across first. Write the hierarchy as a vector instead -
+\code{c("areaValue", "mesh", "vesselFlagCountry", "seasonValue")} - and it says the
+same.
+
+A variable that is not in the hierarchy is not kept apart at any level - from
+the first step on, the strata are summed over it. If the metier matters for the
+discards, name it: \code{"areaValue > mesh > metier4 > vesselFlagCountry"}. A
+variable and a coarser version of it can both be named, the coarser one first:
+\code{"ICESDivision > areaValue > mesh"} pools the strata of a division across their
+areas only when the pool of the area is not enough.
 }
 
 \subsection{The thresholds}{
@@ -99,7 +167,9 @@ added up over its strata): lengths and ages only. \code{NA} (default): not used.
 
 These are the numbers \code{\link[=plot_coverage_heat]{plot_coverage_heat()}} and the other coverage plots
 draw, and they are pooled the same way: weights and counts add up, and the
-coverage is worked out again from the summed weights.
+coverage is worked out again from the summed weights. A pool takes the rows of
+every stratum in it as its data - also those of the strata that were raised from
+their own, which are the best-sampled ones.
 }
 
 \subsection{Discards and lengths}{
@@ -126,8 +196,25 @@ narrower pool give their rows to the wider pools too.
 }
 }
 \examples{
+# a small catch (kg): a landing has a discard estimate when it has a domain
+# (domainCatchDis) that a discard row carries too
+catch <- data.frame(
+  catchCategory  = c("Lan", "Lan", "Lan", "Lan", "Lan", "Lan", "Dis", "Dis"),
+  areaValue      = c("27.4", "27.4", "27.4", "27.7.d", "27.7.d", "27.7.d", "27.4", "27.7.d"),
+  mesh           = c("70-99", "70-99", "100-119", "70-99", "70-99", "100-119", "70-99", "70-99"),
+  total          = c(3000, 1000, 2000, 800, 200, 500, 200, 40),
+  domainCatchDis = c("d1", NA, NA, "d2", NA, NA, "d1", "d2"),
+  variableUnit   = "kg", stringsAsFactors = FALSE)
+
+# the area matters more than the mesh: the mesh is pooled across first
+rec <- recommend_groups(catch, "areaValue > mesh", list(cov = 50))
+rec                       # what needs no raising, and how the strata fell into the levels
+rec$strata                # 70-99 stands on its own; 100-119 is raised from its area
+rec$strataCond            # what catchRaising() takes
+rec$matchedDataCond
+
 \dontrun{
-hierarchy  <- c("areaValue", "mesh", "vesselFlagCountry", "seasonValue")
+hierarchy  <- "areaValue > mesh > vesselFlagCountry > seasonValue"
 thresholds <- list(cov = 50, trips = NA, fish = NA)
 
 # the groups of the discards, and the raising they go to

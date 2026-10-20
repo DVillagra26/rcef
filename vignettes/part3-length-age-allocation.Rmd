@@ -400,17 +400,21 @@ row.names = FALSE, na = "")` writes a table with its empty fields left empty.
 # Letting the data choose the groups
 
 The groups above are written by hand. `recommend_groups()` chooses them from
-the data, as it does for the raising (vignette 2): you name the variables that
-matter, from the one that matters most to the one that matters least, and how
-well sampled a pool has to be, and every stratum is allocated from the narrowest
-pool that is. Give it the raised catch and the distributions: the coverage of a
-pool is the share of its weight that has a length distribution, and `fish` the
-least number of fish measured behind it. Landings and discards are grouped on
-their own - the length distribution of the landings is no use to the discards -
-so the groups, and their conditions, say which catch part they are for.
+the data, in the same order as for the raising (vignette 2): you name the
+variables that matter, from the one that matters most to the one that matters
+least with a `>` between them, and how well sampled a pool has to be. What
+already has a length distribution is kept as sampled; the reported strata are
+summed into strata of the variables you named and tested before anything else is
+pooled; the ones that fall short are pooled across the last variable first, and
+the variable that matters most is the last to go. Give it the raised catch and
+the distributions: the coverage of a pool is the share of its weight that has a
+length distribution, and `fish` the least number of fish measured behind it.
+Landings and discards are grouped on their own - the length distribution of the
+landings is no use to the discards - so the groups, and their conditions, say
+which catch part they are for.
 
 ```{r rec-length}
-hierarchy <- c("areaValue", "mesh", "vesselFlagCountry", "seasonValue")
+hierarchy <- "areaValue > mesh > vesselFlagCountry > seasonValue"
 
 rec_length <- recommend_groups(raised, hierarchy,
                                list(cov = 50, trips = NA, fish = 100),

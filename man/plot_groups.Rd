@@ -17,9 +17,10 @@ plot_groups(
 \item{rec}{The result of \code{\link[=recommend_groups]{recommend_groups()}}.}
 
 \item{x}{Column of the strata for the bars, e.g. \code{"areaValue"}; \code{NULL}
-(default) for one bar for each level.}
+(default) for one bar for each level. Any column of \code{rec$strata}: a variable
+of the hierarchy, \code{group}, or \code{catchCategory} for lengths and ages.}
 
-\item{facet}{Optional column for panels. Only with \code{x}.}
+\item{facet}{Optional column of \code{rec$strata} for panels. Only with \code{x}.}
 
 \item{share}{With \code{x}: bars of 100 \% instead of tonnes.}
 
@@ -52,11 +53,30 @@ panels.
 With \code{x}, one bar for each value of \code{x}, stacked by the level its strata take;
 \code{share = TRUE} makes every bar 100 \% so that the values can be compared whatever
 their weight. \code{\link[=plot_river]{plot_river()}} draws the same flows as ribbons.
+
+A level is a colour, the same in every figure of the groups: the top level (the
+number of variables in the hierarchy) is the stratum on its own, each level
+below it pools across one more variable of the hierarchy, from the last one up,
+and level 0 is everything. A tall bar at the top of the first figure means most
+of the stock stands on its own data; a tall hatched bar further down means a
+lot of it is raised from a wide pool.
 }
 \examples{
+# the small catch (kg) of ?recommend_groups
+catch <- data.frame(
+  catchCategory  = c("Lan", "Lan", "Lan", "Lan", "Lan", "Lan", "Dis", "Dis"),
+  areaValue      = c("27.4", "27.4", "27.4", "27.7.d", "27.7.d", "27.7.d", "27.4", "27.7.d"),
+  mesh           = c("70-99", "70-99", "100-119", "70-99", "70-99", "100-119", "70-99", "70-99"),
+  total          = c(3000, 1000, 2000, 800, 200, 500, 200, 40),
+  domainCatchDis = c("d1", NA, NA, "d2", NA, NA, "d1", "d2"),
+  variableUnit   = "kg", stringsAsFactors = FALSE)
+rec <- recommend_groups(catch, "areaValue > mesh", list(cov = 50))
+plot_groups(rec)                       # how much is raised at each level
+plot_groups(rec, x = "areaValue")      # ... and where
+
 \dontrun{
 rec <- recommend_groups(catch_data,
-                        c("areaValue", "mesh", "vesselFlagCountry", "seasonValue"))
+                        "areaValue > mesh > vesselFlagCountry > seasonValue")
 plot_groups(rec)                              # how much is raised at each level
 plot_groups(rec, x = "areaValue")             # ... and where
 plot_groups(rec, x = "vesselFlagCountry", share = TRUE)

@@ -95,17 +95,46 @@ table(raised$catchCategory, raised$importedOrRaised)   # what was imported, what
 ```
 
 Or let the data choose the groups. Name the variables that matter, from the one that
-matters most to the one that matters least, and how well sampled a pool has to be
-(`cov`: the share of its landings with a discard estimate, in percent; `trips` and
-`fish` - the least number of trips, and of fish measured - are optional): every
-stratum is raised from the narrowest pool that is, so the last variable is pooled
-across first. `recommend_groups()` returns the two lists, ready for `catchRaising()`,
-and `plot_groups()` and `plot_river()` show how the strata fell into the levels:
+matters most to the one that matters least with a `>` between them, and how well
+sampled a pool has to be (`cov`: the share of its landings with a discard estimate,
+in percent; `trips` and `fish` - the least number of trips, and of fish measured -
+are optional). Nothing is pooled until it has to be:
+
+1. a landing that has a discard estimate is never raised;
+2. the reported strata (area, season, country, fleet ...) are summed into strata of
+   the variables you named - what you did not name is summed over - and each is
+   tested against the thresholds *before anything else is pooled*: the ones that
+   reach them are raised from themselves;
+3. the ones that fall short are pooled across the last variable and tested again,
+   then across the one before, and so on, until everything is pooled: the variable
+   that matters most is the last one to be pooled across.
+
+```
+reported strata: area + season + country + fleet     (landings with an estimate stay as they are)
+  |  summed over what is not named, e.g. the metier
+  v
+level 4   area + mesh + country + season             tested first
+  |  pooled across the season
+  v
+level 3   area + mesh + country
+  |  pooled across the country
+  v
+level 2   area + mesh
+  |  pooled across the mesh
+  v
+level 1   area
+  |  pooled across the area
+  v
+level 0   everything                                 the last resort
+```
+
+`recommend_groups()` returns the two lists, ready for `catchRaising()`, and
+`plot_groups()` and `plot_river()` show how the strata fell into the levels:
 
 ```r
-hierarchy <- c("areaValue", "mesh", "vesselFlagCountry", "seasonValue")
+hierarchy <- "areaValue > mesh > vesselFlagCountry > seasonValue"
 rec <- recommend_groups(cef, hierarchy, list(cov = 50, trips = NA, fish = NA))
-rec                                       # the strata, groups and landings in each level
+rec                                       # what needs no raising, and the strata, groups and landings in each level
 plot_groups(rec)                          # the landings raised at each level
 plot_groups(rec, x = "areaValue")         # ... and where
 plot_river(rec, left_var = "areaValue")   # which area is raised at which level

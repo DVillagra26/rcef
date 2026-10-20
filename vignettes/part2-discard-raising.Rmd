@@ -593,16 +593,25 @@ Which gears belong together, and which strata are too thin to stand alone, is a
 judgement, and the groups above are that judgement written down.
 `recommend_groups()` makes the same choice from the data by a rule you set: name
 the variables that matter, from the one that matters most to the one that
-matters least (the cluster plot of `build_discard_clusters()`, vignette 1, ranks
-them), and how well sampled a pool has to be. A stratum is one combination of
-those variables, and it is raised from the narrowest pool that is: itself when
-at least `cov` percent of its landings have a discard estimate, otherwise the
-same area, mesh and country in every season, then the same area and mesh in every
-country, then the same area, and in the end everything. The last variable is
-pooled across first, the first one is kept the longest.
+matters least with a `>` between them (the cluster plot of
+`build_discard_clusters()`, vignette 1, ranks them), and how well sampled a pool
+has to be. Nothing is pooled until it has to be:
+
+1. A landing that has a discard estimate is never raised.
+2. The reported strata (area, season, country, fleet) are summed into strata of
+   the variables you named - what you did not name, the metier here, is summed
+   over - and each of them is tested against the thresholds *before anything else
+   is pooled*: the ones whose landings with an estimate reach `cov` percent are
+   raised from themselves.
+3. The ones that fall short are pooled across the last variable - the same area,
+   mesh and country in every season - and tested again; then across the country,
+   then across the mesh, and in the end across the area: everything.
+
+So the variable that matters most, the area, is the last one to be pooled across,
+and the one that matters least, the season, the first.
 
 ```{r rec}
-hierarchy  <- c("areaValue", "mesh", "vesselFlagCountry", "seasonValue")
+hierarchy  <- "areaValue > mesh > vesselFlagCountry > seasonValue"
 thresholds <- list(cov = 50, trips = NA, fish = NA)    # trips and fish: not used
 
 rec <- recommend_groups(catch_data, hierarchy, thresholds)
