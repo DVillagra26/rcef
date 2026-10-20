@@ -32,9 +32,10 @@
 #' | look at the catch weight and the discard rate per stratum, as reported or after the raising (imported against raised) | [plot_catches()], [plot_DR()] |
 #' | look at numbers and mean weight at length or age, as sampled or after the allocation (sampled against estimated) | [plot_NaLoA()], [plot_MWaLoA()] |
 #' | find strata with a similar discard rate | [build_discard_clusters()], [plot_discard_clusters()], [plot_discard_cluster_variables()] |
-#' | check the groups you wrote - the strata that are raised together, and the data each takes its discard ratio from - before raising or allocating | [check_group_conditions()] |
+#' | let the data choose the groups - the strata that are raised (or allocated) together, and the data each takes its discard ratio (or distribution) from - from the variables that matter most to least | [recommend_groups()] |
+#' | check the groups you wrote before raising or allocating | [check_group_conditions()] |
 #' | raise the discards | [catchRaising()] |
-#' | see which strata were raised from which group | [plot_river()] |
+#' | see which strata were raised from which group, and how the strata fell into the levels of the groups | [plot_river()], [plot_groups()] |
 #' | compare two or more raised catches, as a table or a figure | [raised_overview_table()], [plot_compare_raised()] |
 #' | give every stratum a length or age distribution | [catchAllocationAoL()] |
 #' | add the allocation up into catch-at-length / -age and mean-weight tables | [catchAtAoLAggregation()], [meanWoLatAoLAggregation()] |
@@ -71,6 +72,7 @@
 #'
 #' ```
 #' derive_fields() -> your strataCond / matchedDataCond -> check_group_conditions()
+#'                     (or recommend_groups(), which chooses them from the data)
 #'   -> catchRaising()          (discards)
 #'   -> catchAllocationAoL()    (lengths and ages)
 #'   -> catchAtAoLAggregation() / meanWoLatAoLAggregation()   (one column per class)
@@ -81,7 +83,12 @@
 #' are raised together, and `matchedDataCond`, the data the discard ratio of
 #' each group is taken from. They are written against the columns of the catch
 #' (`metier4 == "TBB"`, say), and the same shape drives both RDBESStockCoord
-#' engines, [catchRaising()] and [catchAllocationAoL()].
+#' engines, [catchRaising()] and [catchAllocationAoL()]. [recommend_groups()]
+#' returns the same two lists, chosen from the data: you name the variables that
+#' matter, from the one that matters most to the one that matters least, and how
+#' well sampled a pool has to be, and every stratum is raised (or allocated) from
+#' the narrowest pool that is. [plot_groups()] and [plot_river()] show how the
+#' strata fell into the levels.
 #'
 #' The distributions of an allocation reach their catch through `domainBiology`
 #' and, for a stratum the allocation estimated one for, through the
@@ -107,7 +114,8 @@
 #'   that upstream leaves undocumented. Do not refactor these files; fix
 #'   upstream and re-vendor.
 #' * `R/rcef_*.R`: written here - field derivation and units, the coverage
-#'   table, the distributions, the raised-catch summaries. Free to refactor.
+#'   table, the groups, the distributions, the raised-catch summaries. Free to
+#'   refactor.
 #' * `R/viz_*.R`: written here - the theme, the colours (one function, three
 #'   palettes) and the plots. Pure ggplot2;
 #'   separated so they can be dropped or split into their own package later

@@ -26,7 +26,8 @@ asserts pass or fail, and it is the script to run chunk by chunk in RStudio.
 
 This is vignette **2** of three: **1** explored the data, and **3** allocates the
 raised catch to lengths and ages. The first sections produce the real
-deliverable; the last compares it with an alternative way of raising.
+deliverable; the last two compare it with an alternative way of raising, and
+let the data choose the groups instead of writing them by hand.
 
 It is driven directly with the vendored RDBESStockCoord functions -
 `check_group_conditions()` and `catchRaising()` - the same pattern ICES's own
@@ -584,4 +585,74 @@ are exactly the strata it was raised from.
 ```{r donors-own-plot, fig.height = 5, fig.alt = "Discard rate of every stratum of the own-strata raised catch by raising group, circles where imported and crosses where raised, coloured by metier"}
 plot_DR(catch = raised_own,
         x = "DrGroup", colour = "metier4", rate = "rate")
+```
+
+# Letting the data choose the groups
+
+Which gears belong together, and which strata are too thin to stand alone, is a
+judgement, and the groups above are that judgement written down.
+`recommend_groups()` makes the same choice from the data by a rule you set: name
+the variables that matter, from the one that matters most to the one that
+matters least (the cluster plot of `build_discard_clusters()`, vignette 1, ranks
+them), and how well sampled a pool has to be. A stratum is one combination of
+those variables, and it is raised from the narrowest pool that is: itself when
+at least `cov` percent of its landings have a discard estimate, otherwise the
+same area, mesh and country in every season, then the same area and mesh in every
+country, then the same area, and in the end everything. The last variable is
+pooled across first, the first one is kept the longest.
+
+```{r rec}
+hierarchy  <- c("areaValue", "mesh", "vesselFlagCountry", "seasonValue")
+thresholds <- list(cov = 50, trips = NA, fish = NA)    # trips and fish: not used
+
+rec <- recommend_groups(catch_data, hierarchy, thresholds)
+rec
+```
+
+The table says how many groups, strata and landings (`weight_t`) fall in each
+level, and how much of what has to be raised - the landings with no discard
+estimate of their own, `uncovered_t` - rests on each of them. `plot_groups()`
+draws it: the landings raised at each level, the transparent part being the part
+with no estimate of its own, and with `x` where the coarse pools are needed.
+`plot_river()` follows the strata of one variable to the level they are raised
+at.
+
+```{r rec-levels, fig.height = 4, fig.alt = "Landings raised at each level of the groups, solid where the strata have a discard estimate of their own and hatched where they are raised from the pool"}
+plot_groups(rec)
+```
+
+```{r rec-area, fig.height = 4.5, fig.alt = "Landings of each area, stacked by the level of the groups its strata are raised at"}
+plot_groups(rec, x = "areaValue")
+```
+
+```{r rec-river, fig.height = 6, fig.alt = "Flow of the landings of each area to the level of the groups they are raised at"}
+plot_river(rec, left_var = "areaValue")
+```
+
+`rec$strataCond` and `rec$matchedDataCond` are the two lists `catchRaising()`
+takes, in the same shape as the hand-written ones: the strata a group raises, and
+the rows its discard ratio is taken from - which are not only its own strata,
+since strata that took a narrower pool give their rows to the wider pools too.
+Every row of the catch is in exactly one group, and no group is given a pool with
+nothing sampled in it, so no raised row comes out as `NaN`.
+
+```{r rec-raise, results = "hide", message = FALSE}
+raised_rec <- catchRaising(catch_data = catch_data,
+                           condition_raising_st_list = rec$strataCond,
+                           condition_matched_data_list = rec$matchedDataCond,
+                           type = "discards",
+                           originType = "WGEstimate",
+                           variableType = "WeightLive",
+                           logFile = file.path(tempdir(), "raising_log.txt"))
+```
+
+Against the hand-written groups, the stock-annex ones:
+
+```{r rec-compare}
+raised_overview_table(c(annex = raised_manual, hierarchy = raised_rec))
+```
+
+```{r rec-compare-plot, fig.height = 4.5, fig.alt = "Discards by metier, one bar per scheme, imported solid and raised hatched"}
+plot_compare_raised(c(annex = raised_manual, hierarchy = raised_rec),
+                    x = "metier4", catchCategory = "Dis")
 ```

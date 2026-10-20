@@ -25,7 +25,8 @@ fish. The **allocation** gives every stratum one: a stratum without samples
 takes the distribution of the samples of its group. This vignette follows the
 whole step on the brill data - look at where the samples are, write the groups,
 check them, allocate, look at what the allocation did, add it up into catch
-at length, and write it in the format of the stock coordination. It is a
+at length, and write it in the format of the stock coordination; the last
+section lets the data choose the groups instead. It is a
 walkthrough, not a test: nothing here asserts pass or fail, and it is the
 script to run chunk by chunk in RStudio.
 
@@ -395,3 +396,59 @@ The year is the calendar year here (`calendarYear = "Y"`); a stock whose model
 year starts on another date says so with `calendarYear = "N"` and
 `startDateYear = "07-01"`, the same in both tables. `write.csv(cc, "CC.csv",
 row.names = FALSE, na = "")` writes a table with its empty fields left empty.
+
+# Letting the data choose the groups
+
+The groups above are written by hand. `recommend_groups()` chooses them from
+the data, as it does for the raising (vignette 2): you name the variables that
+matter, from the one that matters most to the one that matters least, and how
+well sampled a pool has to be, and every stratum is allocated from the narrowest
+pool that is. Give it the raised catch and the distributions: the coverage of a
+pool is the share of its weight that has a length distribution, and `fish` the
+least number of fish measured behind it. Landings and discards are grouped on
+their own - the length distribution of the landings is no use to the discards -
+so the groups, and their conditions, say which catch part they are for.
+
+```{r rec-length}
+hierarchy <- c("areaValue", "mesh", "vesselFlagCountry", "seasonValue")
+
+rec_length <- recommend_groups(raised, hierarchy,
+                               list(cov = 50, trips = NA, fish = 100),
+                               distribution_data = distribution_data)
+rec_length
+```
+
+```{r rec-length-plot, fig.height = 6, fig.alt = "Catch weight of the landings and of the discards allocated at each level of the groups, solid where sampled and hatched where allocated from the pool"}
+plot_groups(rec_length)
+```
+
+`rec_length$strataCond` and `rec_length$matchedDataCond` are the two lists
+`catchAllocationAoL()` takes, in place of `allocStrataCond` and `bioMatchedCond`:
+
+```{r rec-length-allocate, results = "hide", message = FALSE}
+allocated_rec <- catchAllocationAoL(catch_data = raised,
+                                    distribution_data = distribution_data,
+                                    condition_alloc_st_list = rec_length$strataCond,
+                                    condition_matched_data_list = rec_length$matchedDataCond,
+                                    originType_catch = "WGEstimate",
+                                    variableType_catch = "WeightLive",
+                                    distributionType = "LengthTotal",
+                                    variableType_mean = "WeightLive",
+                                    weighting = "NumberAtAoL",
+                                    logFile = file.path(tempdir(), "allocation_log.txt"),
+                                    verbose = FALSE,
+                                    assembled_output = TRUE)
+```
+
+The numbers at length of the two allocations, in thousands of fish:
+
+```{r rec-length-compare}
+thousands <- function(a) {
+  n <- catchAtAoLAggregation(distribution_data = a$distribution, catch_data = a$catch,
+                             grouping = "catchCategory", originType_catch = "WGEstimate",
+                             variableType_catch = "WeightLive", distributionType = "LengthTotal",
+                             round = 0)
+  setNames(rowSums(n[, grep("^N_", names(n))]) / 1000, n$catchCategory)
+}
+round(rbind(hand_written = thousands(allocated), hierarchy = thousands(allocated_rec)))
+```

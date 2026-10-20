@@ -116,8 +116,9 @@ nothing is derived again.
 
 \code{what} chooses the question:
 \itemize{
-\item \code{"discard"} (default): does the stratum have a discard estimate? Its
-landings carry a \code{domainCatchDis}.
+\item \code{"discard"} (default): does the stratum have a discard estimate? A landing
+has one when a discard row with a weight carries its \code{domainCatchDis}
+(same country, origin and variable type), as \code{\link[=catchRaising]{catchRaising()}} pairs them.
 \item \code{"length"} / \code{"age"}: is a length / age distribution linked to the
 stratum's catch? Needs \code{distributions}. \code{catchCategory} chooses the catch
 part - \code{"Lan"}, \code{"Dis"}, \code{"BMS"}, or \code{"All"} (the default: landings and

@@ -423,8 +423,9 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #'
 #' `what` chooses the question:
 #'
-#' * `"discard"` (default): does the stratum have a discard estimate? Its
-#'   landings carry a `domainCatchDis`.
+#' * `"discard"` (default): does the stratum have a discard estimate? A landing
+#'   has one when a discard row with a weight carries its `domainCatchDis`
+#'   (same country, origin and variable type), as [catchRaising()] pairs them.
 #' * `"length"` / `"age"`: is a length / age distribution linked to the
 #'   stratum's catch? Needs `distributions`. `catchCategory` chooses the catch
 #'   part - `"Lan"`, `"Dis"`, `"BMS"`, or `"All"` (the default: landings and

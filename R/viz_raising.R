@@ -26,10 +26,15 @@ NULL
 #' from each pool, and which strata were swept into the fallback.
 #'
 #' @param df A stratum table: one row per stratum, with the columns named by
-#'   `left_var`, `right_var` and `value_var`.
+#'   `left_var`, `right_var` and `value_var`. Or the result of
+#'   [recommend_groups()]: its strata, which run from the value of `left_var` (any
+#'   column of them - a variable of the hierarchy, say) to the level they are
+#'   raised at, their weight the width.
 #' @param left_var Column on the left axis, usually the stratum label.
-#' @param right_var Column on the right axis, usually the donor group.
-#' @param value_var Column giving each ribbon its width.
+#' @param right_var Column on the right axis, usually the donor group (the level,
+#'   for the result of [recommend_groups()]).
+#' @param value_var Column giving each ribbon its width (the weight, for the result
+#'   of [recommend_groups()]).
 #' @param palette `"default"`, `"colorblind"` or `"gradual"`: the colours of the
 #'   groups.
 #' @param title Plot title.
@@ -47,6 +52,20 @@ plot_river <- function(df, left_var, right_var = "raise_level",
                        palette = c("default", "colorblind", "gradual"), save = NULL) {
   save_on_exit(save, "plot_river")
   palette <- match.arg(palette)
+  # the strata of recommend_groups(): each runs from its value of left_var to the level
+  # it is raised at, as wide as it is heavy
+  fill_var <- "raising group"; weight_label <- "Landings (t)"; to_label <- "Raised from"
+  if (inherits(df, "rcef_groups")) {
+    verb <- if (identical(df$what, "discard")) "raised" else "allocated"
+    if (missing(right_var)) right_var <- "level_label"
+    if (missing(value_var)) value_var <- "weight_t"
+    if (missing(stratum_axis)) stratum_axis <- left_var
+    if (missing(title)) title <- paste("Which", left_var, "is", verb, "at which level")
+    if (!identical(df$what, "discard")) weight_label <- "Catch weight (t)"
+    to_label <- paste(tools::toTitleCase(verb), "at")
+    df <- df$strata
+    fill_var <- "raising level"
+  }
   # left_label / right_label: optional character vectors (same length as
   # df) giving the text to show on each axis. When supplied they override
   # the raw left_var / right_var values - this is how a stratum is shown
@@ -83,15 +102,145 @@ plot_river <- function(df, left_var, right_var = "raise_level",
     # and failed otherwise with "Can't find stat called stratum".
     geom_text(stat = ggalluvial::StatStratum, aes(label = after_stat(stratum)),
               size = 2.7, lineheight = 0.82) +
-    scale_x_discrete(limits = c(stratum_axis, "Raised from"),
+    scale_x_discrete(limits = c(stratum_axis, to_label),
                      expand = c(0.16, 0.05)) +
-    scale_fill_manual(values = plot_colours(d$.fill, "raising group", palette),
+    scale_fill_manual(values = plot_colours(d$.fill, fill_var, palette),
                       name = "Raising group") +
     scale_y_continuous(labels = scales::comma) +
-    labs(title = title, y = "Landings (t)", x = NULL) +
+    labs(title = title, y = weight_label, x = NULL) +
     app_theme() +
     theme(legend.position = "none",
           axis.text.x = element_text(size = 9, colour = "grey35"))
+}
+
+#' How the strata fall into the levels of the groups
+#'
+#' @description
+#' Draws the result of [recommend_groups()]: how much of the stock is raised (or
+#' allocated) at each level of the hierarchy. With `x` it breaks that down by a
+#' column of the strata - a variable of the hierarchy, say - so that it shows
+#' where the coarse pools are needed: which areas, meshes or countries can stand
+#' on their own data and which have to borrow.
+#'
+#' @details
+#' Without `x`, one bar for each level, the narrowest on top: the weight of the
+#' strata that take that level. The solid part is weight that has a sample of its
+#' own, the transparent hatched part is the weight that has none, and is raised (or
+#' allocated) from the pool - so the hatched bars say how much of what has to be
+#' estimated rests on each level. The number at the end of a bar is how many strata
+#' fall in the level. For lengths and ages the landings and the discards are two
+#' panels.
+#'
+#' With `x`, one bar for each value of `x`, stacked by the level its strata take;
+#' `share = TRUE` makes every bar 100 % so that the values can be compared whatever
+#' their weight. [plot_river()] draws the same flows as ribbons.
+#'
+#' @param rec The result of [recommend_groups()].
+#' @param x Column of the strata for the bars, e.g. `"areaValue"`; `NULL`
+#'   (default) for one bar for each level.
+#' @param facet Optional column for panels. Only with `x`.
+#' @param share With `x`: bars of 100 % instead of tonnes.
+#' @param palette `"default"`, `"colorblind"` or `"gradual"`: the colours of the
+#'   levels.
+#' @inheritParams saving-plots
+#' @return A ggplot object.
+#' @seealso [recommend_groups()]; [plot_river()] for the flows from a variable to
+#'   the levels.
+#' @family raising groups
+#' @family raising plots
+#' @md
+#' @examples
+#' \dontrun{
+#' rec <- recommend_groups(catch_data,
+#'                         c("areaValue", "mesh", "vesselFlagCountry", "seasonValue"))
+#' plot_groups(rec)                              # how much is raised at each level
+#' plot_groups(rec, x = "areaValue")             # ... and where
+#' plot_groups(rec, x = "vesselFlagCountry", share = TRUE)
+#' }
+#' @export
+plot_groups <- function(rec, x = NULL, facet = NULL, share = FALSE,
+                        palette = c("default", "colorblind", "gradual"), save = NULL) {
+  save_on_exit(save, "plot_groups")
+  palette <- match.arg(palette)
+  if (!inherits(rec, "rcef_groups"))
+    stop("plot_groups(): `rec` is the result of recommend_groups()", call. = FALSE)
+  has <- function(v) !is.null(v) && length(v) == 1 && !is.na(v) && nzchar(v)
+  if (has(facet) && !has(x))
+    stop("plot_groups(): `facet` needs `x`", call. = FALSE)
+  s <- rec$strata; th <- rec$thresholds; n <- length(rec$hierarchy)
+  discard <- identical(rec$what, "discard")
+  miss <- setdiff(c(if (has(x)) x, if (has(facet)) facet), names(s))
+  if (length(miss))
+    stop("plot_groups(): the strata have no column ", paste0("'", miss, "'", collapse = ", "),
+         " (they have: ", paste(setdiff(names(s), c("weight_t", "covered_t", "level_label")),
+                                collapse = ", "), ")", call. = FALSE)
+  weight_word <- if (discard) "landings" else "catch"
+  label_of <- function(level, label) sprintf("L%d %s", level, label)
+  lv <- unique(rec$levels[c("level", "label")])
+  all_levels <- label_of(lv$level, lv$label)[order(-lv$level)]      # the narrowest first, as the table words them
+  cols <- plot_colours(all_levels, "raising level", palette)
+  caption <- sub_wrap(
+    sprintf("grouping = %s (the last is pooled across first).", paste(rec$hierarchy, collapse = " > ")),
+    sprintf("thresholds = coverage >= %s%%%s%s.", th$cov,
+            if (!is.na(th$trips)) sprintf(", trips >= %s", th$trips) else "",
+            if (!is.na(th$fish)) sprintf(", fish >= %s", th$fish) else ""),
+    "L<n> = the pool shares the first n variables of the grouping with the stratum (L0: everything).")
+
+  if (!has(x)) {
+    d <- rec$levels
+    if (is.null(d$category)) d$category <- ""
+    d$level_label <- factor(label_of(d$level, d$label), rev(all_levels))
+    sampled <- d$weight_t - d$uncovered_t
+    long <- rbind(data.frame(d[c("category", "level_label", "n_strata")], part = "Sampled", t = sampled),
+                  data.frame(d[c("category", "level_label", "n_strata")],
+                             part = if (discard) "Raised" else "Allocated", t = d$uncovered_t))
+    long$part <- factor(long$part, c("Sampled", if (discard) "Raised" else "Allocated"))
+    ends <- stats::aggregate(t ~ category + level_label + n_strata, data = long, FUN = sum)
+    ends$label <- sprintf("%d %s", ends$n_strata, ifelse(ends$n_strata == 1, "stratum", "strata"))
+    return(ggplot(long, aes(x = t, y = level_label, fill = level_label, alpha = part)) +
+      geom_col_hatch(orientation = "y", position = position_stack(reverse = TRUE),
+                     colour = OUTLINE, linewidth = OUTLINE_LW) +
+      geom_text(data = ends, aes(x = t, y = level_label, label = label), inherit.aes = FALSE,
+                hjust = -0.1, size = 3) +
+      scale_fill_manual(values = cols, guide = "none") +
+      scale_alpha_manual(values = stats::setNames(c(1, 0.45), levels(long$part)), name = NULL,
+                         guide = guide_legend(override.aes = list(fill = "grey30"))) +
+      scale_x_continuous(labels = scales::comma, expand = expansion(mult = c(0, 0.18))) +
+      scale_y_discrete(drop = FALSE) +
+      facet_layer(if (length(unique(long$category)) > 1) "category", ncol = 1, scales = "free_x") +
+      labs(title = sprintf("Where the %s %s %s from", weight_word, if (discard) "are" else "is",
+                           if (discard) "raised" else "allocated"),
+           x = sprintf("%s weight (t)", tools::toTitleCase(weight_word)), y = NULL,
+           caption = sub_wrap(
+             sprintf("bars = %s weight (t) of the strata that take the level; transparent = the part of it with no sample of its own, %s from the pool.",
+                     weight_word, if (discard) "raised" else "allocated"), caption)) +
+      app_theme() + theme(legend.position = "top"))
+  }
+
+  d <- s
+  d$.x <- as.character(d[[x]])
+  d$.level <- factor(d$level_label, all_levels)
+  if (has(facet)) d$.f <- as.character(d[[facet]])
+  d <- stats::aggregate(d$weight_t, d[c(".x", ".level", if (has(facet)) ".f")], sum)
+  names(d)[ncol(d)] <- "t"
+  ord <- names(sort(tapply(d$t, d$.x, sum), decreasing = TRUE))
+  d$.x <- factor(d$.x, ord)
+  ggplot(d, aes(x = .x, y = t, fill = .level)) +
+    geom_col(position = if (share) "fill" else "stack", colour = OUTLINE, linewidth = OUTLINE_LW,
+             width = 0.8) +
+    scale_fill_manual(values = cols, breaks = levels(droplevels(d$.level)), drop = TRUE, name = "Level") +
+    scale_y_continuous(labels = if (share) scales::percent else scales::comma,
+                       expand = expansion(mult = c(0, 0.05))) +
+    facet_layer(if (has(facet)) ".f", ncol = 3, scales = "free_x") +
+    labs(title = sprintf("Level of the groups, by %s", x), x = NULL,
+         y = if (share) sprintf("Share of the %s weight", weight_word)
+             else sprintf("%s weight (t)", tools::toTitleCase(weight_word)),
+         caption = sub_wrap(
+           sprintf("bars = %s weight (t) of the strata of each %s, coloured by the level they take.",
+                   weight_word, x), caption)) +
+    app_theme() + theme(legend.position = "right",
+                        axis.text.x = element_text(angle = if (length(ord) > 6) 45 else 0,
+                                                   hjust = if (length(ord) > 6) 1 else 0.5))
 }
 
 #' Raised catch of several scenarios, side by side

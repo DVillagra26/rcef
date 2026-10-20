@@ -93,6 +93,7 @@ plot_compare_raised(c(own = raised_own, everything = raised_all),
 
 Other raising plots: 
 \code{\link{plot_catches}()},
+\code{\link{plot_groups}()},
 \code{\link{plot_river}()}
 }
 \concept{raising plots}

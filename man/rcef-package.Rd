@@ -21,9 +21,10 @@ RDBESStockCoord engines on them.
    look at the catch weight and the discard rate per stratum, as reported or after the raising (imported against raised) \tab \code{\link[=plot_catches]{plot_catches()}}, \code{\link[=plot_DR]{plot_DR()}} \cr
    look at numbers and mean weight at length or age, as sampled or after the allocation (sampled against estimated) \tab \code{\link[=plot_NaLoA]{plot_NaLoA()}}, \code{\link[=plot_MWaLoA]{plot_MWaLoA()}} \cr
    find strata with a similar discard rate \tab \code{\link[=build_discard_clusters]{build_discard_clusters()}}, \code{\link[=plot_discard_clusters]{plot_discard_clusters()}}, \code{\link[=plot_discard_cluster_variables]{plot_discard_cluster_variables()}} \cr
-   check the groups you wrote - the strata that are raised together, and the data each takes its discard ratio from - before raising or allocating \tab \code{\link[=check_group_conditions]{check_group_conditions()}} \cr
+   let the data choose the groups - the strata that are raised (or allocated) together, and the data each takes its discard ratio (or distribution) from - from the variables that matter most to least \tab \code{\link[=recommend_groups]{recommend_groups()}} \cr
+   check the groups you wrote before raising or allocating \tab \code{\link[=check_group_conditions]{check_group_conditions()}} \cr
    raise the discards \tab \code{\link[=catchRaising]{catchRaising()}} \cr
-   see which strata were raised from which group \tab \code{\link[=plot_river]{plot_river()}} \cr
+   see which strata were raised from which group, and how the strata fell into the levels of the groups \tab \code{\link[=plot_river]{plot_river()}}, \code{\link[=plot_groups]{plot_groups()}} \cr
    compare two or more raised catches, as a table or a figure \tab \code{\link[=raised_overview_table]{raised_overview_table()}}, \code{\link[=plot_compare_raised]{plot_compare_raised()}} \cr
    give every stratum a length or age distribution \tab \code{\link[=catchAllocationAoL]{catchAllocationAoL()}} \cr
    add the allocation up into catch-at-length / -age and mean-weight tables \tab \code{\link[=catchAtAoLAggregation]{catchAtAoLAggregation()}}, \code{\link[=meanWoLatAoLAggregation]{meanWoLatAoLAggregation()}} \cr
@@ -61,6 +62,7 @@ be read as a table and looked at as a figure. Raising and allocation then
 run:
 
 \if{html}{\out{<div class="sourceCode">}}\preformatted{derive_fields() -> your strataCond / matchedDataCond -> check_group_conditions()
+                    (or recommend_groups(), which chooses them from the data)
   -> catchRaising()          (discards)
   -> catchAllocationAoL()    (lengths and ages)
   -> catchAtAoLAggregation() / meanWoLatAoLAggregation()   (one column per class)
@@ -71,7 +73,12 @@ The groups are two named lists of conditions: \code{strataCond}, the strata that
 are raised together, and \code{matchedDataCond}, the data the discard ratio of
 each group is taken from. They are written against the columns of the catch
 (\code{metier4 == "TBB"}, say), and the same shape drives both RDBESStockCoord
-engines, \code{\link[=catchRaising]{catchRaising()}} and \code{\link[=catchAllocationAoL]{catchAllocationAoL()}}.
+engines, \code{\link[=catchRaising]{catchRaising()}} and \code{\link[=catchAllocationAoL]{catchAllocationAoL()}}. \code{\link[=recommend_groups]{recommend_groups()}}
+returns the same two lists, chosen from the data: you name the variables that
+matter, from the one that matters most to the one that matters least, and how
+well sampled a pool has to be, and every stratum is raised (or allocated) from
+the narrowest pool that is. \code{\link[=plot_groups]{plot_groups()}} and \code{\link[=plot_river]{plot_river()}} show how the
+strata fell into the levels.
 
 The distributions of an allocation reach their catch through \code{domainBiology}
 and, for a stratum the allocation estimated one for, through the
@@ -98,7 +105,8 @@ of \code{\link[=funICoutCEF]{funICoutCEF()}}, \code{\link[=funIntercatchCEF]{fun
 that upstream leaves undocumented. Do not refactor these files; fix
 upstream and re-vendor.
 \item \code{R/rcef_*.R}: written here - field derivation and units, the coverage
-table, the distributions, the raised-catch summaries. Free to refactor.
+table, the groups, the distributions, the raised-catch summaries. Free to
+refactor.
 \item \code{R/viz_*.R}: written here - the theme, the colours (one function, three
 palettes) and the plots. Pure ggplot2;
 separated so they can be dropped or split into their own package later

@@ -51,6 +51,40 @@ ok(near(o$discardRate, 0.2 / 1.2) && near(b$discardRate, 0.1 / 4.1) &&
      is.na(s$discardRate),
    "discardRate = discards / (covered landings + discards); NA where there is no estimate")
 
+## ---- 1b. a landing has an estimate when a discard row pairs with it ----
+## The way catchRaising() decides it: a discard row with a weight, of the landing's domain, country, year, stock and
+## origin / variable type. 1000 kg landed in each stratum, with
+##   A: a WGEstimate discard row of its domain                               -> covered
+##   B: a domain whose only discard row is Official (0 kg beside the estimate) -> no estimate, the raising raises it
+##   C: a discard row of its domain with no weight (NA)                      -> no estimate
+##   D: discards, but of another domain                                      -> no estimate
+##   E: a discard row of its domain from another country                     -> no estimate
+pc <- data.frame(
+  catchCategory     = c(rep("Lan", 5), rep("Dis", 5)),
+  metier4           = rep(c("A", "B", "C", "D", "E"), 2),
+  vesselFlagCountry = c(rep("BE", 5), "BE", "BE", "BE", "BE", "NL"),
+  year = 2023L, stock = "syn", speciesCode = "1", workingGroup = "WG",
+  originType        = c(rep("WGEstimate", 6), "Official", rep("WGEstimate", 3)),
+  variableType      = "WeightLive", variableUnit = "kg",
+  total             = c(rep(1000, 5), 100, 0, NA, 50, 70),
+  domainCatchDis    = c("dA", "dB", "dC", "dD", "dE", "dA", "dB", "dC", "dX", "dE"),
+  stringsAsFactors = FALSE)
+tp <- build_coverage_strata(pc, c("metier4"))
+cv <- setNames(tp$coverage, tp$metier4)
+ok(near(cv[["A"]], 100) && all(cv[c("B", "C", "D", "E")] == 0),
+   "only the landings whose domain has a WGEstimate discard row with a weight, of their own country, are covered")
+ok(near(tp$weightingTotal[tp$metier4 == "A"], 1) && near(tp$rate[tp$metier4 == "A"], 0.1) &&
+     is.na(tp$rate[tp$metier4 == "B"]),
+   "B: the Official 0 kg row makes no rate (it was 0 at full coverage before)")
+ok(near(tp$landings[tp$metier4 == "B"], 1),
+   "and the landings of an uncovered stratum are still counted")
+## without the columns that pair (a table of your own), the domain alone does
+pd <- pc[, c("catchCategory", "metier4", "total", "domainCatchDis", "variableUnit")]
+td <- build_coverage_strata(pd, "metier4")
+ok(near(td$coverage[td$metier4 == "A"], 100) && near(td$coverage[td$metier4 == "B"], 100) &&
+     near(td$coverage[td$metier4 == "E"], 100) && near(td$coverage[td$metier4 == "D"], 0),
+   "a catch with no country / origin columns pairs on the domain alone")
+
 ## the columns follow CAR / CAS, and carry no judgement of the sampling
 want <- c("catchCategory", "variableUnit", "total", "weightingCategory",
           "weightingTotal", "rate", "discardRate", "landings", "coverage",

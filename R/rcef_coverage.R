@@ -48,7 +48,7 @@
 #' | `catchCategory`, `variableUnit` | `"Dis"` and `"t"`: what `total` is. |
 #' | `total` | Discards. `NA` when the stratum has no discard estimate at all (nobody looked), or when a raised estimate has no rate (`NaN`: its raising group had no donor to draw one from); `0` means it was looked at and none were found. |
 #' | `weightingCategory` | `"Lan"`. |
-#' | `weightingTotal` | The landings that carry a discard estimate (their `domainCatchDis` is filled): the weight `rate` is weighted by. In a raised catch (see `importedOrRaised` below) all of its landings do, imported or raised. |
+#' | `weightingTotal` | The landings that carry a discard estimate: the weight `rate` is weighted by. A landing does when a discard row with a weight has its `domainCatchDis`, in the same country, year, stock, origin and variable type - the way [catchRaising()] pairs them, so a domain whose only discard rows are another origin's (an Official 0 kg beside WGEstimate landings) is no estimate. In a raised catch (see `importedOrRaised` below) all of its landings do, imported or raised. |
 #' | `rate` | `total / weightingTotal` (D/L): discards per tonne of covered landings, as the CAS output reports it. A ratio, so it can exceed 1. `NA` when `total` is missing or `weightingTotal` is 0. |
 #' | `discardRate` | `total / (weightingTotal + total)` (D/(L+D)): the discards as a share of the covered landings plus the discards - Between 0 and 1. `NA` when `total` is missing or the denominator is 0. |
 #' | `landings` | All landings in the stratum, covered or not. |
@@ -246,16 +246,25 @@ build_coverage_strata <- function(catch, dims = NULL, distributions = NULL,
     }
     if (!nrow(d)) return(NULL)
     # Per stratum, in tonnes: all the landings, the landings that carry a
-    # discard estimate (their domainCatchDis is filled; in a raised catch every
-    # landing has one, imported or raised, whether or not its domain is filled),
-    # the discards, and the trips. A stratum with no discard row at all has no
-    # discard estimate - nobody looked - which is not the same as 0. Nor is a
-    # raised row that came out of the raising as NaN, a group with no donor to
-    # draw a rate from: that stratum has no estimate either, however much else
-    # it holds.
+    # discard estimate (in a raised catch every landing has one, imported or
+    # raised, whether or not its domain is filled), the discards, and the trips.
+    # A stratum with no discard row at all has no discard estimate - nobody
+    # looked - which is not the same as 0. Nor is a raised row that came out of
+    # the raising as NaN, a group with no donor to draw a rate from: that
+    # stratum has no estimate either, however much else it holds.
     d$.t   <- convert_units(d$total, if ("variableUnit" %in% names(d)) d$variableUnit, "t")
     d$.lan <- d$catchCategory == "Lan"
-    d$.est <- d$.lan & (has_status | (!is.na(d$domainCatchDis) & d$domainCatchDis != ""))
+    # A landing carries a discard estimate the way catchRaising() decides it: a
+    # discard row with a weight has the landing's domainCatchDis and is of the
+    # same country, year, stock, origin and variable type. A domain that only has
+    # discard rows of another origin (the Official 0 kg beside WGEstimate
+    # landings) is no estimate: the raising raises that landing.
+    has_dom  <- !is.na(d$domainCatchDis) & d$domainCatchDis != ""
+    link     <- intersect(c("vesselFlagCountry", "year", "workingGroup", "stock",
+                            "speciesCode", "originType", "variableType"), names(d))
+    link_key <- do.call(paste, c(unname(as.list(d[c(link, "domainCatchDis")])), sep = "\r"))
+    d$.est <- d$.lan & (has_status |
+                          (has_dom & link_key %in% link_key[!d$.lan & has_dom & !is.na(d$.t)]))
     has_trips  <- "numTrips" %in% names(d)
     st <- d %>%
       group_by(across(all_of(dims))) %>%

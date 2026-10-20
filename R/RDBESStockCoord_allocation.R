@@ -28,6 +28,11 @@
 #    - distributionType takes CEF's own value "LengthTotal" where upstream
 #      says "Length": the four argument defaults and the three match.arg()
 #      calls (seven places, each marked)
+#    - a group whose catch rows all have a sampled distribution has nothing to fill: in
+#      grp_AoL_alloc_N() and grp_AoL_alloc_WL() the estimation is skipped then (upstream
+#      stops: `1:n()` of no rows is `1:0`, two numbers, and bind_cols() cannot recycle no
+#      rows), and the group keeps its sampled distributions. A stratum that is sampled
+#      well enough is a group of its own in recommend_groups(). Belongs upstream.
 #
 #  Exported: catchAllocationAoL(), catchAtAoLAggregation(), meanWoLatAoLAggregation(),
 #            grp_AoL_alloc_N(), grp_AoL_alloc_WL(), grp_AoL_alloc_condition()
@@ -195,7 +200,8 @@ grp_AoL_alloc_N <- function(alloc_st_catch,
     ## catch_wo_est_N %>% slice_head(n = 2) %>% as.data.frame()
 
     ## Estimated catch numbers at age|length, collated with unsampled catch:
-    catch_bio_est_N <- catch_wo_est_N %>%
+    catch_bio_est_N <- if (nrow(catch_wo_est_N) == 0) NULL else # [pkg] nothing to fill: see the header
+        catch_wo_est_N %>%
         mutate(rowk = 1:n()) %>%
         group_by(rowk) %>%
         group_modify(function(cdata, key, aggr_N_samp)
@@ -221,7 +227,8 @@ grp_AoL_alloc_N <- function(alloc_st_catch,
                                                         "sampled"))) %>% # do not override if
                                                           # already provided.
         ## collated with estimated N-distributions
-        bind_rows(catch_bio_est_N %>%
+        bind_rows(if (!is.null(catch_bio_est_N)) # [pkg] nothing to fill: see the header
+                  catch_bio_est_N %>%
                   ## new domainBiology for estimated distributions (with a prefix):
                   mutate(domainBiology =
                              coalesce(domainBiology,
@@ -421,7 +428,8 @@ grp_AoL_alloc_WL <- function(alloc_st_catch,
     ## catch_wo_est_W %>% slice_head(n = 2) %>% as.data.frame()
 
     ## Estimated catch numbers at age|length, collated with unsampled catch:
-    catch_bio_est_W <- catch_wo_est_W %>%
+    catch_bio_est_W <- if (nrow(catch_wo_est_W) == 0) NULL else # [pkg] nothing to fill: see the header
+        catch_wo_est_W %>%
         mutate(rowk = 1:n()) %>%
         group_by(rowk) %>%
         group_modify(function(cdata, key, aggr_W_samp)
@@ -447,7 +455,8 @@ grp_AoL_alloc_WL <- function(alloc_st_catch,
                                                         "sampled"))) %>% # do not override if
                                         # already provided.
         ## collated with estimated W(or L)-distributions:
-        bind_rows(catch_bio_est_W %>%
+        bind_rows(if (!is.null(catch_bio_est_W)) # [pkg] nothing to fill: see the header
+                  catch_bio_est_W %>%
                   ## new domainBiology for estimated distributions (with a prefix):
                   mutate(domainBiology =
                              coalesce(domainBiology,

@@ -94,6 +94,25 @@ raised <- catchRaising(cef, strataCond, matchedDataCond, type = "discards")
 table(raised$catchCategory, raised$importedOrRaised)   # what was imported, what was raised
 ```
 
+Or let the data choose the groups. Name the variables that matter, from the one that
+matters most to the one that matters least, and how well sampled a pool has to be
+(`cov`: the share of its landings with a discard estimate, in percent; `trips` and
+`fish` - the least number of trips, and of fish measured - are optional): every
+stratum is raised from the narrowest pool that is, so the last variable is pooled
+across first. `recommend_groups()` returns the two lists, ready for `catchRaising()`,
+and `plot_groups()` and `plot_river()` show how the strata fell into the levels:
+
+```r
+hierarchy <- c("areaValue", "mesh", "vesselFlagCountry", "seasonValue")
+rec <- recommend_groups(cef, hierarchy, list(cov = 50, trips = NA, fish = NA))
+rec                                       # the strata, groups and landings in each level
+plot_groups(rec)                          # the landings raised at each level
+plot_groups(rec, x = "areaValue")         # ... and where
+plot_river(rec, left_var = "areaValue")   # which area is raised at which level
+
+raised <- catchRaising(cef, rec$strataCond, rec$matchedDataCond, type = "discards")
+```
+
 To look at what the raising did, use the plots you used before it: the catch
 weight and the discard rate of the raised catch take the same arguments as
 those of the raw catch. What was imported is drawn plain - a circle, a solid
@@ -133,6 +152,20 @@ alloc <- catchAllocationAoL(raised, subset(distributions, year == 2023),
 catchAtAoLAggregation(alloc$distribution, alloc$catch, grouping = "catchCategory",
                       originType_catch = "WGEstimate", variableType_catch = "WeightLive",
                       distributionType = "LengthTotal")
+```
+
+The groups of the allocation are chosen the same way, from the raised catch and the
+distributions - the coverage is the share of the weight that has a distribution, and
+the landings and the discards are grouped on their own:
+
+```r
+dist23 <- subset(distributions, year == 2023)
+rec_length <- recommend_groups(raised, hierarchy, list(cov = 50, trips = NA, fish = 100),
+                               distribution_data = dist23)
+plot_groups(rec_length)
+
+alloc <- catchAllocationAoL(raised, dist23, rec_length$strataCond, rec_length$matchedDataCond,
+                            distributionType = "LengthTotal")
 ```
 
 And the allocation is looked at with the length and age plots, given both tables of
@@ -182,7 +215,7 @@ rows you want raised must carry.
 R/                     THE PACKAGE
   aaa-package.R          package doc, imports, globals
   RDBESStockCoord_*.R    vendored ICES WG code — do not refactor
-  rcef_*.R               our analysis logic (rcef_scf.R: the SCF tables)
+  rcef_*.R               our analysis logic (rcef_groups.R: the groups; rcef_scf.R: the SCF tables)
   viz_*.R                our theme and plots (ggplot2 only)
 dev/                   tests and tooling (.Rbuildignore'd)
 ```
