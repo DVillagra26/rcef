@@ -45,6 +45,14 @@
 #' have edited, never undoes the edit; drop a column first to have it derived
 #' afresh.
 #'
+#' An empty field of a CEF csv arrives as `""` in a text column when the file is
+#' read with `read.csv()` or `read.taf()` (and as `NA` when it is read with
+#' readr). Empty text is missing in the CEF format, so it comes back as `NA` - on
+#' the catch and, with `what = "distribution"`, on the distributions - and the
+#' raising, the allocation and the link between catch and distributions all see
+#' the same missing id. Left as `""`, every catch row with no `domainBiology`
+#' would share the domain `""` and be taken for one distribution.
+#'
 #' An ICES area code is a nested path (`27.4.b.1`), so it is split into
 #' subarea, division and subdivision. A code already coarser than the level
 #' asked for REPEATS rather than becoming `NA`: `27.4` is its own division and
@@ -73,7 +81,7 @@
 #' share are kept and the ones they differ on are `NA`, with a message, rather
 #' than one of them being picked at random. A distribution row with no catch
 #' row behind it gets `NA` throughout, with a warning: the two files disagree.
-#' The rows of `distribution_data` come back exactly as they went in, same
+#' The rows of `distribution_data` come back as they went in (empty text apart), same
 #' number and same order; columns of the same name already on it (an earlier
 #' call, say) are replaced.
 #'
@@ -131,6 +139,17 @@ derive_fields <- function(catch_data, distribution_data = NULL,
     stop("Missing expected column(s): ", paste(miss, collapse = ", "))
   }
 
+  # An empty field of a csv read with read.csv() or read.taf() is "" in a text column, not NA,
+  # while the raising, the allocation and catch_domain() tell a missing id by NA: every catch row
+  # with no domainBiology would share the domain "" and be taken for one distribution. Empty
+  # text is missing in the CEF format, so it becomes NA, on both tables, here.
+  na_text <- function(x) {
+    x[] <- lapply(x, function(v) if (is.character(v)) replace(v, which(v == ""), NA_character_) else v)
+    x
+  }
+  catch_data <- na_text(catch_data)
+  if (identical(what, "distribution")) distribution_data <- na_text(distribution_data)
+
   # A column the catch already has is kept as it is - the caller's own regrouping, or a
   # column from an earlier call - and the codes are split only when some column still
   # needs them, so deriving a catch that is already derived costs nothing.
@@ -176,6 +195,7 @@ derive_fields <- function(catch_data, distribution_data = NULL,
   # is something rcef derived by splitting or mapping a native one.
   put("Stratum", paste(d$vesselFlagCountry, d$fleetValue, d$areaValue,
                        d$seasonValue, sep = " | "))
+  d <- na_text(d)   # a code split on an empty part ("TBB_DEF__0_0") gives "" for it: missing as well
   if (identical(what, "catch")) return(d)
 
   # ---- what = "distribution": the same fields, read off the catch ------------

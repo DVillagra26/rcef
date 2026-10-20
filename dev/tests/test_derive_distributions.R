@@ -32,6 +32,12 @@ heard <- function(expr) {
 }
 err <- function(expr) tryCatch({ expr; "" }, error = function(e) conditionMessage(e))
 lf <- tempfile(fileext = ".txt")
+# The fixture is a CEF file read with read.csv(): its blank cells are "". derive_fields() hands every
+# empty text back as NA, so "the distributions as they went in" is the fixture with its blanks as NA.
+blank_na <- function(x) {
+  x[] <- lapply(x, function(v) if (is.character(v)) replace(v, which(v == ""), NA_character_) else v)
+  x
+}
 
 ## ---- a catch and its distributions, small enough to read -----------------------
 mk_catch <- function(domain, cat, country, fleet, area, season, year = 2023L)
@@ -190,8 +196,8 @@ c23 <- subset(test_catch, year == 2023)
 d23 <- subset(test_dist, year == 2023)
 ha  <- heard(derive_fields(c23, d23, what = "distribution"))
 dd23 <- ha$value
-ok(nrow(dd23) == nrow(d23) && identical(dd23[names(d23)], d23) && length(ha$warnings) == 0L,
-   "fixture: all the rows back, nothing orphaned")
+ok(nrow(dd23) == nrow(d23) && identical(dd23[names(d23)], blank_na(d23)) && length(ha$warnings) == 0L,
+   "fixture: all the rows back, nothing orphaned (the blank cells as NA)")
 ok(!anyNA(dd23[c("fleetValue", "areaValue", "metier4", "metier4_mesh", "ICESDivision")]),
    "fixture: fleet, area and the fields from them are there for every row")
 # the example's distributions cover whole domains (all seasons): season is the one thing they cannot say
@@ -219,7 +225,7 @@ ok(isTRUE(all.equal(as.data.frame(q0$data), as.data.frame(q1$data))),
 raised <- quiet(fx_raise(c23, fx_groups("own"), type = "discards", log_file = lf))
 alloc <- function(dist, ty) quiet(fx_allocate(raised, dist, ty, log_file = lf))
 for (ty in c("LengthTotal", "Age")) {
-  a0 <- alloc(d23, ty)
+  a0 <- alloc(blank_na(d23), ty)          # plain: no derived field, the blank cells as NA like the derived ones
   a1 <- alloc(dd23, ty)
   ok(nrow(a1$distribution) > 0 && identical(a1$distribution[names(a0$distribution)], a0$distribution) &&
        identical(a1$catch, a0$catch),

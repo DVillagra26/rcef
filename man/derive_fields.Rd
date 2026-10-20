@@ -45,6 +45,14 @@ call - so calling it again, or deriving the distributions from a catch you
 have edited, never undoes the edit; drop a column first to have it derived
 afresh.
 
+An empty field of a CEF csv arrives as `""` in a text column when the file is
+read with `read.csv()` or `read.taf()` (and as `NA` when it is read with
+readr). Empty text is missing in the CEF format, so it comes back as `NA` - on
+the catch and, with `what = "distribution"`, on the distributions - and the
+raising, the allocation and the link between catch and distributions all see
+the same missing id. Left as `""`, every catch row with no `domainBiology`
+would share the domain `""` and be taken for one distribution.
+
 An ICES area code is a nested path (`27.4.b.1`), so it is split into
 subarea, division and subdivision. A code already coarser than the level
 asked for REPEATS rather than becoming `NA`: `27.4` is its own division and
@@ -73,7 +81,7 @@ distribution covers every catch row that names it). The fields those rows
 share are kept and the ones they differ on are `NA`, with a message, rather
 than one of them being picked at random. A distribution row with no catch
 row behind it gets `NA` throughout, with a warning: the two files disagree.
-The rows of `distribution_data` come back exactly as they went in, same
+The rows of `distribution_data` come back as they went in (empty text apart), same
 number and same order; columns of the same name already on it (an earlier
 call, say) are replaced.
 }
