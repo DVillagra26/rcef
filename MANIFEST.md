@@ -41,13 +41,16 @@ Provenance is encoded in the **file name prefix**, so it is visible in
 4. CRLF → LF.
 5. Provenance banner + `@family RDBESStockCoord` on each file.
 
-Three later edits to the vendored files, also marked `## [pkg]`: `distributionType`
+Four later edits to the vendored files, also marked `## [pkg]`: `distributionType`
 takes CEF's own `"LengthTotal"` where upstream says `"Length"`,
 `meanWoLatAoLAggregation(weighting = "CATON")` weights by the catch row's total weight
-(it looked for a `total` column the function had already dropped), and
+(it looked for a `total` column the function had already dropped),
 `grp_AoL_alloc_N()` / `grp_AoL_alloc_WL()` skip the estimation for a group whose catch rows
 all have a sampled distribution (upstream stops there: `1:n()` of no rows) - a stratum that is
-sampled well enough is a group of its own in `recommend_groups()`. All three belong upstream.
+sampled well enough is a group of its own in `recommend_groups()` - and `funICoutCEF()` labels the
+length classes of the InterCatch files "mm" (they are millimetres: class 130 is a fish of 13 cm),
+where upstream says "cm" and `funIntercatchCEF()` then multiplies them by 10 (a brill of 13 to 70 cm came
+out as 1300 to 7000). All four belong upstream.
 
 The roxygen text of the vendored files has additions of ours (no marker: it is not
 code): the help pages of `catchRaising()`, `catchAllocationAoL()` and the two
@@ -69,7 +72,7 @@ every return shape, every algorithm.
 | `rcef_summaries.R` | `R_development/summaries.R` | `raised_overview_table()` and the reading of `c(a, b)` raised catches |
 | `rcef_scf.R` | *(new)* | the stock coordination format (SCF v4): `catchCombined()` (CC) and `distributionsCombined()` (DC) - `scf_header()` checks the header (working group year, version, calendar year / start date of a model year) before anything is added up, `scf_sampling()` takes the sampling behind each row (`PSU`, `numPSUs`, `numTrips`, `numMeasurements`) from the data's columns, `scf_input()` / `scf_table()` check what goes in and put every field of the format in its order - and the adding up they are made of - `catchAtAoL()` and `meanWoLatAoL()`, which `catchAtAoLAggregation()` and `meanWoLatAoLAggregation()` (vendored; marked `## [pkg]`) spread over one column per class (`spread_AoL()`); `catch_domain()` gives a catch row with no `domainBiology` the `[alloc]_<season>_<area>_<unit>_<fleet>_<category>` the allocation gives its estimated strata, so the raised catch and the allocation's catch find the distributions alike, and `link_check()` warns about a catch weight with no distribution and a distribution with fish and no catch weight |
 | `viz_theme.R` | `R_development/0_Functions_theme.R` | `plot_colours()` (every colour of every plot: three palettes, a level keeps its colour, one status scale), `app_theme()` |
-| `viz_plots.R` | `R_development/0_Functions_plots.R` | the public plot functions (ggplot only), the catch and the distributions each looked at before a step and after it by the same function (`plot_catches()`, `plot_DR()`, `plot_NaLoA()`, `plot_MWaLoA()`); `coverage_grid()`, the one body behind the heatmap and the bubble grid, including the sampling status of a cell |
+| `viz_plots.R` | `R_development/0_Functions_plots.R` | the public plot functions (ggplot only), the catch and the distributions each looked at before a step and after it by the same function (`plot_catches()`, `plot_DR()`, `plot_NaLoA()`, `plot_MWaLoA()`); `plot_coverage_grid()`, the heatmap and the bubble grid (`type =`) in one body, including the sampling status of a cell |
 | `viz_helpers.R` | *(split from the plots)* | mesh size order, category columns, the imported / raised and sampled / estimated marks (a cross, a dotted line, a hatched bar), the facet layer, the grouping sentence of a caption, catch-part wording, the class axis of the distribution plots |
 | `viz_raising.R` | *(split from the plots)* | `plot_river()` (also for the result of `recommend_groups()`), `plot_groups()` (how the strata fell into the levels of the groups), `plot_compare_raised()` |
 | `viz_clusters.R` | *(new)* | `build_discard_clusters()` and its two plots |

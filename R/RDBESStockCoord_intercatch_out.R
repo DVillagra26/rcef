@@ -16,6 +16,12 @@
 #    - cross-package calls namespace-qualified
 #    - CRLF -> LF
 #    - roxygen @family / @source added for provenance
+#    - the length classes of the StockOverview / Numbers files are in mm (class 130 is
+#      a fish of 13 cm), and are now labelled "mm": upstream labels them "cm", and
+#      funIntercatchCEF() then multiplies by 10, so the CEF had the classes ten times
+#      too large (1300 to 7000 for a brill of 13 to 70 cm). Nothing is multiplied now;
+#      the unit of the mean lengths of the age distributions (cm) is left as it was.
+#      Belongs upstream.
 #
 #  Exported: funICoutCEF()
 #
@@ -125,7 +131,7 @@ funICoutCEF <- function(dat_path,
     sd$sex[sd$sex == "Female"] <- "F"
 
     sd$CANUMtype <- str_extract(sd$CANUMtype, "Age|Lngt")
-    sd$UnitAgeOrLength <- ifelse(sd$CANUMtype == "Age", "year", "cm")
+    sd$UnitAgeOrLength <- ifelse(sd$CANUMtype == "Age", "year", "mm") # [pkg] the classes are in mm: see the header
     sd$UnitMeanLength <- ifelse(sd$CANUMtype == "Age", "cm", NA)
 
     ## only include reported records
