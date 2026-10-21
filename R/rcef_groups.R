@@ -171,7 +171,9 @@
 #' strata a group raises - every row of them, so the groups share the catch out
 #' without overlap - and `matchedDataCond` the rows of the pool its discard ratio
 #' (or its distribution) is taken from, which are not only the strata it raises:
-#' strata that took a narrower pool give their rows to the wider pools too.
+#' strata that took a narrower pool give their rows to the wider pools too. Nothing
+#' is raised in `L1`, so it draws on everything (of its catch part): a landing of
+#' no weight and no estimate would otherwise have no donor, and come out as `NaN`.
 #'
 #' @param catch_data The catch, a CEF long-format table that has the `hierarchy`
 #'   columns (see [derive_fields()]): for discards the catch as it comes, for
@@ -519,9 +521,10 @@ recommend_groups <- function(catch_data,
   strataCond <- lapply(seq_len(nrow(g)), function(i)
     mk(if (g$kind[i] == "last") rest(i)
        else and_all(list(cat_call(g$category[i]), in_keys(unique(s$.key[s$.g == g$.g[i]]))))))
+  ## the group of the strata with nothing to raise draws on everything (of its catch part): nothing is raised there, but a landing that
+  ## has no estimate and weighs nothing still gets a ratio to be multiplied with, and none would be a NaN
   matchedDataCond <- lapply(seq_len(nrow(g)), function(i)
-    mk(if (g$kind[i] == "nothing") and_all(list(cat_call(g$category[i]),
-                                                in_keys(unique(s$.key[s$.g == g$.g[i]]))))
+    mk(if (g$kind[i] == "nothing") and_all(list(cat_call(g$category[i])))
        else and_all(c(list(cat_call(g$category[i])),
                       lapply(seq_len(g$k[i]), function(j)
                         rlang::call2("%in%", rlang::sym(hierarchy[j]), gval[[j]][i]))))))

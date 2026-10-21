@@ -261,6 +261,19 @@ ok(identical(sort(unique(raised$DrGroup[raised$areaValue == "A1" & raised$metier
      identical(sort(unique(raised$DrGroup[raised$areaValue == "A3" & raised$metier4 == "OTB"])), "L1"),
    "and A1 | TBB was raised in the group of its area, A3 | OTB sits in the group of what needs no raising")
 
+## a landing of no weight and no estimate, in a stratum of its own, is nothing to raise (L1) and still needs a ratio to be multiplied with:
+## the group of what needs no raising draws on everything, or its zero would come out as 0 x NaN
+ecz <- rbind(ec, transform(ec[1, ], areaValue = "A9", total = 0, domainCatchDis = NA_character_))
+rz <- recommend_groups(ecz, "areaValue", list(cov = 30))
+raised_z <- as.data.frame(quiet(catchRaising(ecz, rz$strataCond, rz$matchedDataCond, type = "discards",
+                                             originType = "WGEstimate", variableType = "WeightLive",
+                                             logFile = tempfile(fileext = ".txt"), verbose = FALSE)))
+ok(identical(rz$strata$level[rz$strata$areaValue == "A9"], 1L) && identical(unname(rz$strata$group[rz$strata$areaValue == "A9"]), "L1") &&
+     all(rep_len(rlang::eval_tidy(rz$matchedDataCond[["L1"]], data = ecz), nrow(ecz))),
+   "the group of what needs no raising draws on everything")
+ok(!any(is.nan(raised_z$total)) && sum(raised_z$importedOrRaised == "raised") == 6,
+   "a landing of no weight and no estimate gets a ratio all the same: no NaN (six landings raised, the zero one among them)")
+
 ## the same on the test fixture, a year at a time, at the finest hierarchy: every raised discard has a ratio
 cy <- cf[cf$year == 2023, ]
 fh <- c("areaValue", "mesh", "vesselFlagCountry", "seasonValue")

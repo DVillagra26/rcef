@@ -233,7 +233,9 @@ level 3, \code{L1} the strata with nothing to raise, \code{L6} the pool of All b
 strata a group raises - every row of them, so the groups share the catch out
 without overlap - and \code{matchedDataCond} the rows of the pool its discard ratio
 (or its distribution) is taken from, which are not only the strata it raises:
-strata that took a narrower pool give their rows to the wider pools too.
+strata that took a narrower pool give their rows to the wider pools too. Nothing
+is raised in \code{L1}, so it draws on everything (of its catch part): a landing of
+no weight and no estimate would otherwise have no donor, and come out as \code{NaN}.
 }
 }
 \examples{
