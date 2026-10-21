@@ -69,7 +69,7 @@ tc <- quiet(build_coverage_strata(cust, "fleetGroup", dd, what = "length"))
 ok(!is.null(tc) && setequal(unique(tc$fleetGroup), c("G1_PS", "G2_REST")),
    "build_coverage_strata(): a column of your own is a stratum column like any other")
 ok(drawable(quiet(plot_coverage_bar(cust, dd, y = "fleetGroup", what = "length", catchCategory = "Lan"))) &&
-     drawable(quiet(plot_coverage_heat(cust, dd, y = "fleetGroup", x = "vesselFlagCountry", what = "age"))) &&
+     drawable(quiet(plot_coverage_grid(cust, dd, y = "fleetGroup", x = "vesselFlagCountry", what = "age"))) &&
      drawable(quiet(plot_NaLoA(cust, dd, fill = "fleetGroup"))) &&
      drawable(quiet(plot_MWaLoA(cust, dd, colour = "fleetGroup"))) &&
      drawable(quiet(plot_catches(cust, x = "fleetGroup"))) &&
@@ -93,7 +93,7 @@ ok(!grepl("derive_fields", err(build_coverage_strata(cd0, "nonsense")), fixed = 
 ## ---- nothing derives behind your back --------------------------------------------
 no_derive <- function(f) !"derive_fields" %in% all.names(body(f))     # a call, not the word in a message
 ok(all(vapply(list(build_coverage_strata, biology_dist_prep, coverage_cells, plot_DR, plot_catches,
-                   plot_NaLoA, plot_MWaLoA, plot_coverage_heat, plot_coverage_bubble,
+                   plot_NaLoA, plot_MWaLoA, plot_coverage_grid,
                    plot_coverage_bar, plot_coverage_map), no_derive, NA)),
    "no coverage table or plot calls derive_fields()")
 

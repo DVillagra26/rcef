@@ -37,7 +37,7 @@ tab <- build_coverage_strata(catch, c("metier4", "vesselFlagCountry"))
 tab
 
 # the same numbers as figures (raw catch or the table both work)
-plot_coverage_heat(tab, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
+plot_coverage_grid(tab, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
 plot_DR(tab, x = "metier4", colour = "vesselFlagCountry")
 
 # the discard rate (discards as a share of the catch) instead of the ratio,
@@ -64,7 +64,7 @@ levels with an order, mesh sizes say) - and a level keeps its colour from
 plot to plot:
 
 ```r
-plot_coverage_heat(tab, y = "metier4", x = "vesselFlagCountry", palette = "colorblind")
+plot_coverage_grid(tab, y = "metier4", x = "vesselFlagCountry", palette = "colorblind")
 plot_NaLoA(catch, distributions, fill = "mesh", palette = "gradual")
 ```
 
@@ -95,48 +95,55 @@ table(raised$catchCategory, raised$importedOrRaised)   # what was imported, what
 ```
 
 Or let the data choose the groups. Name the variables that matter, from the one that
-matters most to the one that matters least with a `>` between them, and how well
-sampled a pool has to be (`cov`: the share of its landings with a discard estimate,
-in percent; `trips` and `fish` - the least number of trips, and of fish measured -
-are optional). Nothing is pooled until it has to be:
+matters most to the one that matters least, and how well sampled a pool has to be
+(`cov`: the share of its landings with a discard estimate, in percent; `trips` and
+`fish` - the least number of trips, and of fish measured - are optional). Nothing is
+pooled until it has to be, and the levels are numbered from the narrowest:
 
-1. a landing that has a discard estimate is never raised;
-2. the reported strata (area, season, country, fleet ...) are summed into strata of
+1. **L1, the strata as reported** (area, season, country, fleet ...): a landing that
+   has a discard estimate is never raised;
+2. **L2, the own stratum aggregated**: the reported strata are summed into strata of
    the variables you named - what you did not name is summed over - and each is
    tested against the thresholds *before anything else is pooled*: the ones that
-   reach them are raised from themselves;
-3. the ones that fall short are pooled across the last variable and tested again,
-   then across the one before, and so on, until everything is pooled: the variable
-   that matters most is the last one to be pooled across.
+   reach them are raised from themselves (when the variables you named are the
+   reported stratum already, there is nothing to sum and this level is skipped);
+3. **L3 and on**: the ones that fall short are pooled across the last variable and
+   tested again, then across the one before, and so on;
+4. **the last level, All by All**: everything pooled. The variable that matters most
+   is the last one to be pooled across.
 
 ```
 reported strata: area + season + country + fleet     (landings with an estimate stay as they are)
+  |  L1  own stratum (raw)
   |  summed over what is not named, e.g. the metier
   v
-level 4   area + mesh + country + season             tested first
+L2  area + mesh + country + season                   tested first
   |  pooled across the season
   v
-level 3   area + mesh + country
+L3  area + mesh + country
   |  pooled across the country
   v
-level 2   area + mesh
+L4  area + mesh
   |  pooled across the mesh
   v
-level 1   area
+L5  area
   |  pooled across the area
   v
-level 0   everything                                 the last resort
+L6  All by All                                       the last resort
 ```
 
 `recommend_groups()` returns the two lists, ready for `catchRaising()`, and
-`plot_groups()` and `plot_river()` show how the strata fell into the levels:
+`plot_recommended_groups()` and `plot_river()` show how the strata fell into the levels:
 
 ```r
-hierarchy <- "areaValue > mesh > vesselFlagCountry > seasonValue"
+hierarchy <- c("areaValue",          # matters most: the last one to be pooled across
+               "mesh",
+               "vesselFlagCountry",
+               "seasonValue")        # matters least: the first one to be pooled across
 rec <- recommend_groups(cef, hierarchy, list(cov = 50, trips = NA, fish = NA))
 rec                                       # what needs no raising, and the strata, groups and landings in each level
-plot_groups(rec)                          # the landings raised at each level
-plot_groups(rec, x = "areaValue")         # ... and where
+plot_recommended_groups(rec)              # the level the discards of the landings come from
+plot_recommended_groups(rec, x = "areaValue", share = TRUE)   # ... and where, as shares
 plot_river(rec, left_var = "areaValue")   # which area is raised at which level
 
 raised <- catchRaising(cef, rec$strataCond, rec$matchedDataCond, type = "discards")
@@ -185,13 +192,15 @@ catchAtAoLAggregation(alloc$distribution, alloc$catch, grouping = "catchCategory
 
 The groups of the allocation are chosen the same way, from the raised catch and the
 distributions - the coverage is the share of the weight that has a distribution, and
-the landings and the discards are grouped on their own:
+the landings and the discards are grouped on their own, and the catch part is the last
+variable to be pooled across (`drop_catchCategory = TRUE`, the default; `FALSE` never
+pools landings and discards):
 
 ```r
 dist23 <- subset(distributions, year == 2023)
 rec_length <- recommend_groups(raised, hierarchy, list(cov = 50, trips = NA, fish = 100),
                                distribution_data = dist23)
-plot_groups(rec_length)
+plot_recommended_groups(rec_length)
 
 alloc <- catchAllocationAoL(raised, dist23, rec_length$strataCond, rec_length$matchedDataCond,
                             distributionType = "LengthTotal")

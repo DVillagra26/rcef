@@ -12,9 +12,10 @@
 #  a ggplot object (or NULL when there is nothing to draw).
 #
 #  PUBLIC API (one function per view, one exploratory question each):
-#    plot_coverage_heat/_bubble/_bar/_map  how well a set of strata is
-#                                sampled - `what` switches discard / length /
-#                                age, `catchCategory` the landings / discards
+#    plot_coverage_grid/_bar/_map  how well a set of strata is sampled -
+#                                `type` of the grid is a heatmap or bubbles,
+#                                `what` switches discard / length / age,
+#                                `catchCategory` the landings / discards
 #                                part for length & age.
 #    plot_DR()                   per-stratum discard-rate points.
 #    plot_catches()              catch weight (stacked bars).
@@ -119,7 +120,7 @@ NULL
 #' @inheritParams saving-plots
 #' @return A ggplot object, or `NULL` (with a message) when nothing can be
 #'   mapped.
-#' @seealso [coverage-plots] for the heatmap, bubbles and bars;
+#' @seealso [coverage-plots] for the heatmap, the bubbles and the bars;
 #'   [build_coverage_strata()] for the table behind the pies.
 #' @family coverage plots
 #' @md
@@ -238,7 +239,7 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
     # catch part for length and age) above zero - the same strata that get a pie
     parts <- catch_category_parts(if (is.null(catchCategory)) "All" else catchCategory)
     wt <- if (identical(what, "discard")) {
-            if (is.na(coverage_table_what(src))) ifelse(src$catchCategory %in% "Lan", src$total, 0)
+            if (is.na(coverage_what(src))) ifelse(src$catchCategory %in% "Lan", src$total, 0)
             else src$landings
           } else ifelse(src$catchCategory %in% parts, src$total, 0)
     has_data <- !is.na(wt) & wt > 0
@@ -405,10 +406,11 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #' Coverage: which strata are sampled well enough
 #'
 #' @description
-#' Four views of how well a set of strata is sampled: a heatmap
-#' (`plot_coverage_heat()`), a weighted bubble grid (`plot_coverage_bubble()`)
-#' and a sampled-versus-unsampled weight bar chart (`plot_coverage_bar()`),
-#' all documented here, plus a map ([plot_coverage_map()]) on its own page.
+#' Three plots of how well a set of strata is sampled: a grid of cells drawn as
+#' a heatmap or as weighted bubbles (`plot_coverage_grid()`, `type = "heat"` or
+#' `"bubble"`) and a sampled-versus-unsampled weight bar chart
+#' (`plot_coverage_bar()`), both documented here, plus a map
+#' ([plot_coverage_map()]) on its own page.
 #'
 #' All take the CEF catch (and `distributions` for length and age) or the
 #' table [build_coverage_strata()] returns from it. Given the catch they build
@@ -514,13 +516,16 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #'   it selects among the parts the table has. Not valid for
 #'   `what = "discard"` (an error).
 #' @param y Row category: a column of the catch (or of the table). Required.
-#' @param x Column category, the second axis of the heatmap / bubble grid.
-#'   `NULL` collapses to a single column.
+#' @param x Column category, the second axis of the grid. `NULL` collapses to a
+#'   single column.
 #' @param fill Bar fill category (bars only). `NULL` uses `y`.
 #' @param facet Optional facet column.
-#' @param min_cov Minimum coverage, in percent (heatmap and bubbles).
+#' @param type `"heat"` (default) or `"bubble"` (grid only): the cells as tiles
+#'   that carry their weight as a number, or as bubbles sized by it. The same
+#'   cells, status, legend, thresholds box and labels either way.
+#' @param min_cov Minimum coverage, in percent (grid).
 #'   Always active: coverage is never dropped from the classification.
-#' @param min_trip Minimum sampling trips (heatmap and bubbles), or `NULL`
+#' @param min_trip Minimum sampling trips (grid), or `NULL`
 #'   (the default) to leave trips out of the classification altogether.
 #'   `0` is not the same as `NULL`: it still checks trips, and a stratum with
 #'   no reported trip count still fails that check.
@@ -541,71 +546,41 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #' \dontrun{
 #'
 #' # discard coverage: which metier x country strata carry a discard estimate?
-#' plot_coverage_heat(catch, y = "metier4", x = "vesselFlagCountry")
-#' plot_coverage_bubble(catch, y = "metier4", x = "vesselFlagCountry",
-#'                      min_cov = 50, min_trip = 2)
+#' plot_coverage_grid(catch, y = "metier4", x = "vesselFlagCountry")
+#' plot_coverage_grid(catch, y = "metier4", x = "vesselFlagCountry",
+#'                    type = "bubble", min_cov = 50, min_trip = 2)
 #' plot_coverage_bar(catch, y = "metier4", fill = "vesselFlagCountry")
 #'
 #' # length coverage of the landings, with a floor on the measurements
-#' plot_coverage_heat(catch, distributions, y = "metier4",
+#' plot_coverage_grid(catch, distributions, y = "metier4",
 #'                    x = "vesselFlagCountry", what = "length", catchCategory = "Lan",
 #'                    min_cov = 50, min_fish = 100)
 #'
 #' # the same figure from the table behind it
 #' cov <- build_coverage_strata(catch, c("metier4", "vesselFlagCountry"))
-#' plot_coverage_heat(cov, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
+#' plot_coverage_grid(cov, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
 #' }
 NULL
 
 
 #' @rdname coverage-plots
 #' @export
-plot_coverage_heat <- function(catch, distributions = NULL, y, x = NULL,
+plot_coverage_grid <- function(catch, distributions = NULL, y, x = NULL,
                                facet = NULL, what = "discard",
-                               catchCategory = NULL,
+                               catchCategory = NULL, type = c("heat", "bubble"),
                                min_cov = 50, min_trip = NULL, min_fish = NULL,
                                palette = c("default", "colorblind",
                                           "gradual"), save = NULL) {
-  save_on_exit(save, "plot_coverage_heat")
-  coverage_grid("heat", catch, distributions, y, x, facet, what, !missing(what),
-                catchCategory, min_cov, min_trip, min_fish, match.arg(palette))
-}
-
-
-#' @rdname coverage-plots
-#' @export
-plot_coverage_bubble <- function(catch, distributions = NULL, y, x = NULL,
-                                 facet = NULL, what = "discard",
-                                 catchCategory = NULL,
-                                 min_cov = 50, min_trip = NULL, min_fish = NULL,
-                                 palette = c("default", "colorblind",
-                                            "gradual"), save = NULL) {
-  save_on_exit(save, "plot_coverage_bubble")
-  coverage_grid("bubble", catch, distributions, y, x, facet, what, !missing(what),
-                catchCategory, min_cov, min_trip, min_fish, match.arg(palette))
-}
-
-
-#' The grid behind the heatmap and the bubble plot
-#'
-#' The two plots are one figure drawn with two marks: the same cells, the same
-#' status, the same legend, the same thresholds box and shortfall labels. Only
-#' the mark differs - a tile carrying the weight as a number, or a bubble sized
-#' by it - so the body is written once.
-#'
-#' @param kind `"heat"` or `"bubble"`.
-#' @param what_given Whether the caller typed `what` (a coverage table brings
-#'   its own).
-#' @inheritParams coverage-plots
-#' @return A ggplot object, or `NULL` when there is nothing to draw.
-#' @keywords internal
-#' @noRd
-#' @export
-coverage_grid <- function(kind, catch, distributions, y, x, facet, what,
-                          what_given, catchCategory, min_cov, min_trip,
-                          min_fish, palette) {
-  fn <- paste0("plot_coverage_", kind)
-  heat <- identical(kind, "heat")
+  fn <- "plot_coverage_grid"
+  save_on_exit(save, fn)
+  type <- match.arg(type)
+  palette <- match.arg(palette)
+  # The heatmap and the bubble grid are one figure drawn with two marks: the same
+  # cells, the same status, the same legend, the same thresholds box and shortfall
+  # labels. Only the mark differs - a tile carrying the weight as a number, or a
+  # bubble sized by it - so the body is written once.
+  what_given <- !missing(what)           # a coverage table brings its own
+  heat <- identical(type, "heat")
   y_var <- y
   if (is.null(y) || !nzchar(y)) stop(fn, "(): `y` is required", call. = FALSE)
   cv <- coverage_cells(catch, distributions, c(y, x, facet), what, what_given,
@@ -1180,7 +1155,7 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL, facet = NULL,
   keys <- unique(c(x, if (has(colour)) colour, if (has(shape)) shape,
                    if (has(facet)) facet))
 
-  tw <- coverage_table_what(catch)
+  tw <- coverage_what(catch)
   if (is.na(tw)) {
     # Raw or raised catch: build at the finest the catch carries, together with
     # whatever is plotted - not pooled to just the plotted columns, or a
@@ -1302,10 +1277,10 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL, facet = NULL,
   d$.lab <- if (is.null(ref_y) || !backdrop) "" else ifelse(d$.y > ref_y, lab_all, "")
 
   # What marks a raised stratum: a cross. It has no fill, so it takes the colour a
-  # circle is filled with (see cross_marks()). Not when `shape` is already a column:
+  # circle is filled with (see status_marks()). Not when `shape` is already a column:
   # then the marks are the transparency of the points.
   cross <- st$on && !has(shape_var)
-  if (cross) d <- cross_marks(d, if (has(colour_var)) colour_var, 1.2, 0.5)
+  if (cross) d <- st$cross(d, if (has(colour_var)) colour_var, 1.2, 0.5)
   pos <- if (jitter) position_jitter(width = 0.18, height = 0, seed = 1) else "identity"
   ae <- aes(x = .data[[x_var]], y = .y)
   if (has(colour_var)) ae <- modifyList(ae, aes(fill = .data[[colour_var]]))
@@ -2046,10 +2021,10 @@ plot_MWaLoA <- function(data, distributions = NULL,
   d$.line <- if (length(line_by)) interaction(d[line_by], drop = TRUE) else 1L
   # What marks an estimated mean weight: a dotted line, and crosses for its points
   # (which have no fill, so they take the colour a circle is filled with: see
-  # cross_marks()). Not when `shape` is already a column: then the points are
+  # status_marks()). Not when `shape` is already a column: then the points are
   # transparent instead.
   cross <- st$on && !has(shape)
-  if (cross) d <- cross_marks(d, if (has(colour)) colour, 1, 0.4)
+  if (cross) d <- st$cross(d, if (has(colour)) colour, 1, 0.4)
   with_dist <- !is.null(distributions)
   cc_word <- switch(catchCategory, Lan = "Landings", Dis = "Discards",
                     BMS = "BMS Catch", All = "Catch")

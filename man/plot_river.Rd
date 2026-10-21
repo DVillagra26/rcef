@@ -22,15 +22,15 @@ plot_river(
 `left_var`, `right_var` and `value_var`. Or the result of
 [recommend_groups()]: its strata, which run from the value of `left_var` (any
 column of them - a variable of the hierarchy, say) to the level they are
-raised at, their weight the width.}
+raised at, the weight they raise there the width.}
 
 \item{left_var}{Column on the left axis, usually the stratum label.}
 
 \item{right_var}{Column on the right axis, usually the donor group (the level,
 for the result of [recommend_groups()]).}
 
-\item{value_var}{Column giving each ribbon its width (the weight, for the result
-of [recommend_groups()]).}
+\item{value_var}{Column giving each ribbon its width (`raised_t`, the weight that is
+raised, for the result of [recommend_groups()]).}
 
 \item{title}{Plot title.}
 
@@ -58,6 +58,6 @@ from each pool, and which strata were swept into the fallback.
 Other raising plots: 
 \code{\link{plot_catches}()},
 \code{\link{plot_compare_raised}()},
-\code{\link{plot_groups}()}
+\code{\link{plot_recommended_groups}()}
 }
 \concept{raising plots}

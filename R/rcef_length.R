@@ -89,25 +89,29 @@ prep_distributions <- function(dist, type = "LengthTotal") {
   d
 }
 
+# One string per row for some columns, to test membership with. `keys` is the
+# columns (a character vector), or the table to be matched with - a data frame,
+# or NULL for none - and then it is the columns a catch and its distributions are
+# matched on, which the result also carries as attr(, "keys").
+#
 # A distribution belongs to the country that submitted it. A domainBiology
 # carries no country (the same "IC_1_27.4_TBB_DEF_70-99_0_0_all" names a
 # stratum in Germany and in the Netherlands), so catch and distributions
 # are matched on the domain, the catch category AND the country - as the
-# RDBESStockCoord engines do. This is the columns to match on: the country
-# only when both tables carry it.
-#' @noRd
-#' @export
-biology_match_keys <- function(catches, dist)
-  c("domainBiology", "catchCategory",
-    if ("vesselFlagCountry" %in% names(catches) &&
-        "vesselFlagCountry" %in% names(dist)) "vesselFlagCountry")
-
-# One string per row for those columns, to test membership with.
+# RDBESStockCoord engines do: the country only when both tables carry it.
 #' @noRd
 #' @export
 biology_key <- function(x, keys) {
-  if (!length(keys)) return(rep("", nrow(x)))
-  do.call(paste, c(lapply(keys, function(k) as.character(x[[k]])), sep = "\r"))
+  matched <- !is.character(keys)
+  if (matched)
+    keys <- c("domainBiology", "catchCategory",
+              if ("vesselFlagCountry" %in% intersect(names(x), names(keys)))
+                "vesselFlagCountry")
+  k <- if (length(keys))
+    do.call(paste, c(lapply(keys, function(k) as.character(x[[k]])), sep = "\r"))
+  else rep("", nrow(x))
+  if (matched) attr(k, "keys") <- keys
+  k
 }
 
 #' The numbers or the mean weight at each length / age class, for the plots
@@ -277,7 +281,7 @@ biology_dist_prep <- function(data, distributions, distributionType,
       # catch rows and de-duplicated rather than assumed unique. Without the
       # country in the match, a domain that two countries both use would hand
       # each country the other's distributions too.
-      by <- biology_match_keys(d, pd)
+      by <- attr(biology_key(d, pd), "keys")
       if ("vesselFlagCountry" %in% by) {
         d$vesselFlagCountry  <- as.character(d$vesselFlagCountry)
         pd$vesselFlagCountry <- as.character(pd$vesselFlagCountry)

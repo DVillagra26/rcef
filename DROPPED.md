@@ -109,14 +109,17 @@ one caller and no output of its own, joined into that caller):
 | `plot_colours()` | `PAL_BASE`, `PAL_CB`, `PAL_GRADUAL`, `var_palette()`, `scale_fill_var()`, `scale_colour_var()`, `group_palette()` |
 | `convert_units()` | `to_tonnes()`, `unit_factor()`, `WEIGHT_TO_TONNES`, `LEN_CLASS_TO_MM`, `NUMBER_TO_N`, `WEIGHT_TO_G` |
 | `build_coverage_strata()` | `biology_link()`, `stratum_measurements()`, `coverage_extra_cols()`, `DIMS_ALL_CANDIDATES`, `link_dist_to_strata()` as far as coverage needed it |
-| `coverage_grid()` (behind `plot_coverage_heat()` and `plot_coverage_bubble()`) | `classify_strata()`, `cat_lookup()`, `status_palette()`, `status_abbr()`, `combo_key()`, `thr_active()`, `coverage_status()`, `thr_lines()`, `thr_guide()`, `shortfall_label()`, `status_key_layer()` |
+| `plot_coverage_grid()` | `coverage_grid()`, `plot_coverage_heat()` and `plot_coverage_bubble()` (one function with `type = "heat"` or `"bubble"`), `classify_strata()`, `cat_lookup()`, `status_palette()`, `status_abbr()`, `combo_key()`, `thr_active()`, `coverage_status()`, `thr_lines()`, `thr_guide()`, `shortfall_label()`, `status_key_layer()` |
 | `coverage_cells()` | `cov_title()`, `cov_title_what()`, `share_phrase()`, `weight_words()`, `samp_word()`, `default_weight_label()` |
 | `biology_dist_prep()` | `link_dist_to_strata()`, `length_numbers()`, `length_meanweight()`, `pool_plus_group()` and `pool_length_bins()` (one pooling now), and the plus-group / bin-width checks that three functions each wrote out |
 | `derive_fields()` | `ices_area_levels()`, `distribution_fields()` |
 | `mesh_var_levels()` | `mesh_levels()`, `metier4_mesh_levels()` |
 | `category_cols()` | `reorder_mesh()`, `discrete_cols()` |
 | `facet_layer()` | `maybe_facet()`, `facet_two()` and four inline `facet_wrap()` calls |
-| `scenario_factor()` | `scenario_levels()`, `level_factor()` |
+| `scenario_list()` | `scenario_factor()` (its `factor` function now), `scenario_levels()`, `level_factor()` |
+| `coverage_what()` | `normalize_what()`, `coverage_table_what()` |
+| `biology_key()` | `biology_match_keys()` |
+| `status_marks()` | `cross_marks()` (its `cross` function now), `status_levels()` (the constant `STATUS_LEVELS`) |
 | `save_on_exit()` | `write_plot()` |
 | `plot_coverage_map()` | `ices_area_centroid()`, `ICES_AREA_CENTROID` |
 | `plot_DR()` | `finest_per_family()` |

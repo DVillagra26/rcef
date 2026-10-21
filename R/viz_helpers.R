@@ -92,7 +92,7 @@ mesh_var_levels <- function(var, x) {
 #' on the plot's own data, before any aesthetic is built from it; a no-op for a
 #' column that is already character or factor, or that `d` does not carry.
 #' The two status columns the raising and the allocation add
-#' ([status_levels()]) are factors in the order they read, `imported` before
+#' (`STATUS_LEVELS`) are factors in the order they read, `imported` before
 #' `raised` and `sampled` before `estimated`, so a legend, a panel order or a
 #' colour never depends on the alphabet.
 #'
@@ -107,7 +107,7 @@ category_cols <- function(d, vars) {
   vars <- vars[!is.na(vars) & nzchar(vars)]
   for (v in intersect(vars, names(d))) {
     lev <- mesh_var_levels(v, d[[v]])
-    sl  <- status_levels(v)
+    sl  <- STATUS_LEVELS[[v]]
     if (!is.null(sl)) {
       u <- unique(as.character(d[[v]])); u <- u[!is.na(u)]
       lev <- c(intersect(sl, u), setdiff(u, sl))
@@ -118,23 +118,18 @@ category_cols <- function(d, vars) {
   d
 }
 
-#' The values of a status column, in the order they read
+#' The values of the status columns, in the order they read
 #'
 #' The raising adds `importedOrRaised` to the catch and the allocation adds
 #' `sampledOrEstimated` to the distributions: what was in the data, and what
-#' the step added to it.
+#' the step added to it. `STATUS_LEVELS[[column]]` is `NULL` for any other
+#' column.
 #'
-#' @param var A column name.
-#' @return `c("imported", "raised")` for `importedOrRaised`,
-#'   `c("sampled", "estimated")` for `sampledOrEstimated`, `NULL` for any other
-#'   column.
 #' @keywords internal
 #' @noRd
 #' @export
-status_levels <- function(var) switch(var,
-  importedOrRaised   = c("imported", "raised"),
-  sampledOrEstimated = c("sampled", "estimated"),
-  NULL)
+STATUS_LEVELS <- list(importedOrRaised   = c("imported", "raised"),
+                      sampledOrEstimated = c("sampled", "estimated"))
 
 #' Whether, and how, a plot marks what the raising or the allocation added
 #'
@@ -166,14 +161,22 @@ status_levels <- function(var) switch(var,
 #'   is: `"imported + raised"`, `"only imported"`, `"only raised"`, `"sampled +
 #'   estimated"`, `"only sampled"` or `"only estimated"`), `status` (a function
 #'   turning the column's values into the factor the mark is mapped to:
-#'   `Imported` / `Raised`, `Sampled` / `Estimated`) and the scales to add when
+#'   `Imported` / `Raised`, `Sampled` / `Estimated`), the scales to add when
 #'   `on`: `scale` (transparency, 1 and 0.45 - the bars', and the points' when
-#'   `shape` is taken), `shape` (circle and cross) and `line` (solid and dotted).
+#'   `shape` is taken), `shape` (circle and cross) and `line` (solid and
+#'   dotted), and `cross`, for a plot that draws the status as circles and
+#'   crosses: a function giving each point of `d` (which has `.status` in it) an
+#'   `.edge`, the colour of the point - the dark outline for a circle and, for a
+#'   cross, which has no fill and takes its colour from the `colour` aesthetic,
+#'   the level of the `category` the circle would have been filled with (or one
+#'   fixed colour when there is none) - and a `.stroke`, which lets a cross be
+#'   drawn heavier (`cross_stroke`) than the outline of a circle
+#'   (`circle_stroke`).
 #' @keywords internal
 #' @noRd
 #' @export
 status_marks <- function(S, alpha, named, present, fn, override = list(fill = "grey30")) {
-  lv <- status_levels(S)
+  lv <- STATUS_LEVELS[[S]]
   if (!is.null(alpha) && !identical(alpha, S))
     stop(fn, "`alpha` is \"", S, "\" (to mark what was ", lv[2],
          ") or NULL for no mark", call. = FALSE)
@@ -190,33 +193,15 @@ status_marks <- function(S, alpha, named, present, fn, override = list(fill = "g
                                   guide = guide_legend(override.aes = override)),
        shape = scale_shape_manual(values = setNames(c(21, 4), lab), name = NULL),
        line  = scale_linetype_manual(values = setNames(c("solid", "dotted"), lab),
-                                     name = NULL))
-}
-
-#' The colour of the points of a plot that marks its raised values with crosses
-#'
-#' A circle is drawn with a fill and a dark outline, a cross has no fill and
-#' takes its colour from the `colour` aesthetic. So a plot that draws the
-#' status as circles and crosses gives each point a `.edge`: the dark outline
-#' for a circle and, for a cross, the level of the category the circle would
-#' have been filled with (or one fixed colour when there is none). And a
-#' `.stroke`, which lets a cross be drawn heavier than the outline of a circle.
-#'
-#' @param d The plot's data, with `.status` (`Imported` / `Raised`, or `Sampled` /
-#'   `Estimated`) in it.
-#' @param category The column the circles are filled by, or `NULL`.
-#' @param cross_stroke,circle_stroke The line weight of a cross and of a
-#'   circle's outline.
-#' @return `d` with `.edge` and `.stroke`.
-#' @keywords internal
-#' @noRd
-#' @export
-cross_marks <- function(d, category, cross_stroke, circle_stroke) {
-  marked <- d$.status %in% c("Raised", "Estimated")
-  d$.edge   <- ifelse(marked, if (is.null(category)) ".cross" else as.character(d[[category]]),
-                      ".outline")
-  d$.stroke <- ifelse(marked, cross_stroke, circle_stroke)
-  d
+                                     name = NULL),
+       cross = function(d, category, cross_stroke, circle_stroke) {
+         marked <- d$.status %in% c("Raised", "Estimated")
+         d$.edge   <- ifelse(marked, if (is.null(category)) ".cross"
+                                     else as.character(d[[category]]),
+                             ".outline")
+         d$.stroke <- ifelse(marked, cross_stroke, circle_stroke)
+         d
+       })
 }
 
 #' Stripes inside bars: how a hatched bar is drawn
@@ -384,7 +369,7 @@ strata_families <- function() list(
 strata_sentence <- function(vars, data = NULL) {
   vars <- unique(as.character(vars[!is.na(vars) & nzchar(vars)]))
   if (!length(vars)) return("")
-  have <- if (is.data.frame(data) && is.na(coverage_table_what(data))) names(data)
+  have <- if (is.data.frame(data) && is.na(coverage_what(data))) names(data)
   fam <- strata_families()
   canonical <- c(fleet = "fleetValue", area = "areaValue",
                  country = "vesselFlagCountry", season = "seasonValue")
@@ -429,32 +414,6 @@ sub_wrap <- function(..., width = 96) {
   paste(vapply(parts, function(s) paste(strwrap(s, width = width),
                                         collapse = "\n"), ""),
         collapse = "\n")
-}
-
-#' Canonicalise a `what` argument
-#'
-#' The coverage plots take `what = "discard"` / `"length"` / `"age"`.
-#' Callers reasonably type the plural or a near-synonym; this maps those
-#' to the canonical singular and gives a clear error for anything else,
-#' rather than letting an unrecognised value fall through to the biology
-#' pipeline and fail obscurely.
-#'
-#' @param what A string: discard(s), length(s)/len, or age(s).
-#' @return `"discard"`, `"length"` or `"age"`.
-#' @keywords internal
-#' @export
-#' @noRd
-normalize_what <- function(what) {
-  w <- tolower(trimws(as.character(what)))
-  out <- switch(w,
-    discard = , discards = "discard",
-    length = , lengths = , len = "length",
-    age = , ages = "age",
-    NA_character_)
-  if (is.na(out))
-    stop("`what` must be \"discard\", \"length\" or \"age\" (got \"", what,
-         "\")", call. = FALSE)
-  out
 }
 
 #' Expand a `catchCategory` argument to the catch parts it selects

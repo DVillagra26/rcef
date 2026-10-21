@@ -92,7 +92,7 @@ if (requireNamespace("maps", quietly = TRUE)) {
 }
 }
 \seealso{
-\link{coverage-plots} for the heatmap, bubbles and bars;
+\link{coverage-plots} for the heatmap, the bubbles and the bars;
 \code{\link[=build_coverage_strata]{build_coverage_strata()}} for the table behind the pies.
 
 Other coverage plots: 

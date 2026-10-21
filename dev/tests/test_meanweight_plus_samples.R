@@ -75,12 +75,16 @@ ok(near(build_coverage_strata(rbind(cA, cB), "catchCategory", dist2, what = "age
                               catchCategory = "Lan")$numMeasurements, 150),
    "measurements: two countries' distributions of one domain add (100 + 50), not max")
 nocty <- dist2[, setdiff(names(dist2), "vesselFlagCountry")]
-ok(identical(biology_match_keys(cA, nocty), c("domainBiology", "catchCategory")) &&
-     identical(biology_match_keys(cA, dist2),
-               c("domainBiology", "catchCategory", "vesselFlagCountry")),
-   "the country is matched on only when both tables carry it")
-ok(!is.null(numbers(cA, nocty)),
-   "... so a distributions table without a country still links, by domain alone")
+ok(identical(attr(biology_key(cA, nocty), "keys"), c("domainBiology", "catchCategory")) &&
+     identical(attr(biology_key(cA, dist2), "keys"),
+               c("domainBiology", "catchCategory", "vesselFlagCountry")) &&
+     identical(attr(biology_key(cA, NULL), "keys"), c("domainBiology", "catchCategory")) &&
+     identical(biology_key(cA, "domainBiology"), as.character(cA$domainBiology)) &&
+     identical(biology_key(cA, character(0)), "") &&
+     is.null(attr(biology_key(cA, "domainBiology"), "keys")),
+   "the country is matched on only when both tables carry it (biology_key())")
+ok(near(sum(numbers(cA, nocty)$number) * 1e3, 3100),
+   "... so a distributions table without a country still links, by domain alone (both countries' distributions)")
 
 ## the bundled example shares domain names across countries (Chile and China
 ## are both "chi"): each country's numbers must be its own distributions'

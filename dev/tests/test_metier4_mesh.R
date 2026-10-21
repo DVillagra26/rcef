@@ -168,12 +168,12 @@ ok(drawable(p1b) && in_order(levels(p1b$data$.fill)),
 p1f <- plot_coverage_bar(c23, y = "vesselFlagCountry", facet = "metier4_mesh")
 ok(drawable(p1f) && in_order(levels(p1f$data$.facet)),
    "plot_coverage_bar(): facet = metier4_mesh orders the panels")
-p2 <- plot_coverage_heat(c23, y = "metier4_mesh", x = "vesselFlagCountry")
+p2 <- plot_coverage_grid(c23, y = "metier4_mesh", x = "vesselFlagCountry")
 ok(drawable(p2) && in_order(levels(p2$data$metier4_mesh)),
-   "plot_coverage_heat(): y = metier4_mesh orders the rows")
-p3 <- plot_coverage_bubble(c23, y = "vesselFlagCountry", x = "metier4_mesh")
+   "plot_coverage_grid(): y = metier4_mesh orders the rows")
+p3 <- plot_coverage_grid(type = "bubble", c23, y = "vesselFlagCountry", x = "metier4_mesh")
 ok(drawable(p3) && in_order(levels(p3$data$metier4_mesh)),
-   "plot_coverage_bubble(): x = metier4_mesh orders the columns")
+   "plot_coverage_grid(): x = metier4_mesh orders the columns")
 p4 <- quiet(plot_coverage_map(c23, group = "metier4_mesh"))
 ok(drawable(p4), "plot_coverage_map(): draws with group = metier4_mesh")
 glab <- p4$layers[[which(vapply(p4$layers,

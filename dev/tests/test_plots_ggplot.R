@@ -29,14 +29,14 @@ test_dist <- fx_dist()
 cd <- test_catch; dd <- test_dist
 
 ## ---- 1. one engine: no `engine`, no `n_per_screen` ----------------------
-fns <- c("plot_coverage_heat", "plot_coverage_bubble", "plot_coverage_bar",
+fns <- c("plot_coverage_grid", "plot_coverage_bar",
          "plot_coverage_map", "plot_DR",
          "plot_NaLoA", "plot_MWaLoA")
 gone <- c("engine", "n_per_screen")
 ok(!any(vapply(fns, function(f) any(gone %in% names(formals(get(f)))),
                logical(1))),
-   "none of the seven plot functions takes `engine` or `n_per_screen`")
-ok(grepl("unused argument", err(plot_coverage_heat(cd, y = "metier4", engine = "base"))),
+   "none of the six plot functions takes `engine` or `n_per_screen`")
+ok(grepl("unused argument", err(plot_coverage_grid(cd, y = "metier4", engine = "base"))),
    "engine = 'base' is now simply an unused argument")
 gone_fns <- c("plot_numbers_at_length_age", "plot_meanweight_at_length_age")
 ok(!any(vapply(gone_fns, exists, logical(1), where = asNamespace("rcef"))),
@@ -44,11 +44,11 @@ ok(!any(vapply(gone_fns, exists, logical(1), where = asNamespace("rcef"))),
 
 ## ---- 2. discard coverage: raw catch and the table draw the same figure --
 tab <- build_coverage_strata(cd, c("metier4", "vesselFlagCountry"))
-h_raw <- plot_coverage_heat(cd,  y = "metier4", x = "vesselFlagCountry", min_cov = 50)
-h_tab <- plot_coverage_heat(tab, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
+h_raw <- plot_coverage_grid(cd,  y = "metier4", x = "vesselFlagCountry", min_cov = 50)
+h_tab <- plot_coverage_grid(tab, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
 ok(drawable(h_raw) && same(h_raw, h_tab), "heatmap: raw catch == table")
-b_raw <- plot_coverage_bubble(cd,  y = "metier4", x = "vesselFlagCountry", min_cov = 50, min_trip = 2)
-b_tab <- plot_coverage_bubble(tab, y = "metier4", x = "vesselFlagCountry", min_cov = 50, min_trip = 2)
+b_raw <- plot_coverage_grid(type = "bubble", cd,  y = "metier4", x = "vesselFlagCountry", min_cov = 50, min_trip = 2)
+b_tab <- plot_coverage_grid(type = "bubble", tab, y = "metier4", x = "vesselFlagCountry", min_cov = 50, min_trip = 2)
 ok(drawable(b_raw) && same(b_raw, b_tab), "bubbles: raw catch == table")
 r_raw <- plot_coverage_bar(cd,  y = "metier4", fill = "vesselFlagCountry")
 r_tab <- plot_coverage_bar(tab, y = "metier4", fill = "vesselFlagCountry")
@@ -59,13 +59,13 @@ ok(drawable(r_raw) && same(r_raw, r_tab), "bars: raw catch == table")
 ## (only numTrips differs - pooled strata SUM their trips, whereas the
 ## coarser table takes the largest count among its raw rows)
 fine <- build_coverage_strata(cd, c("metier4", "vesselFlagCountry", "seasonValue"))
-h_fine <- plot_coverage_heat(fine, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
+h_fine <- plot_coverage_grid(fine, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
 agree <- c("metier4", "vesselFlagCountry", "landings", "coverage", "cat_key")
 ok(isTRUE(all.equal(h_raw$data[agree], h_fine$data[agree],
                     check.attributes = FALSE)),
    "a table built finer (+ seasonValue) is pooled to metier4 x vesselFlagCountry: same weights, coverage and colours")
-ok(same(plot_coverage_heat(fine, y = "metier4", x = "vesselFlagCountry", facet = "seasonValue"),
-        plot_coverage_heat(cd,   y = "metier4", x = "vesselFlagCountry", facet = "seasonValue")),
+ok(same(plot_coverage_grid(fine, y = "metier4", x = "vesselFlagCountry", facet = "seasonValue"),
+        plot_coverage_grid(cd,   y = "metier4", x = "vesselFlagCountry", facet = "seasonValue")),
    "... and with the finer column facetted, still the same as from raw catch")
 
 ## the status is a plot-time colour, not a table column
@@ -74,9 +74,9 @@ ok(!any(c("cat_key", "Status") %in% names(tab)) &&
    "cat_key / Status live in the figure's data, not in the coverage table")
 
 ## thresholds are applied at plot time: same table, different colours
-t_lo <- ggplot_build(plot_coverage_heat(tab, y = "metier4", x = "vesselFlagCountry",
+t_lo <- ggplot_build(plot_coverage_grid(tab, y = "metier4", x = "vesselFlagCountry",
                                         min_cov = 10))$data[[1]]$fill
-t_hi <- ggplot_build(plot_coverage_heat(tab, y = "metier4", x = "vesselFlagCountry",
+t_hi <- ggplot_build(plot_coverage_grid(tab, y = "metier4", x = "vesselFlagCountry",
                                         min_cov = 95))$data[[1]]$fill
 ok(!identical(t_lo, t_hi), "the same table recolours when min_cov changes")
 
@@ -86,65 +86,65 @@ ok(grepl("unused argument", err(plot_coverage_bar(cd, y = "metier4", min_cov = 8
 ok(grepl("unused argument", err(plot_coverage_bar(cd, y = "metier4", min_trip = 5))),
    "nor min_trip")
 ok(grepl("catchCategory does not apply", err(
-     plot_coverage_heat(cd, y = "metier4", catchCategory = "Lan"))),
+     plot_coverage_grid(cd, y = "metier4", catchCategory = "Lan"))),
    "catchCategory on a discard plot is an error")
 ok(grepl("catchCategory does not apply", err(
-     plot_coverage_heat(tab, y = "metier4", catchCategory = "Lan"))),
+     plot_coverage_grid(tab, y = "metier4", catchCategory = "Lan"))),
    "... also when the input is a discard table")
 ok(grepl("must be", err(plot_coverage_bar(cd, y = "metier4", what = "nonsense"))),
    "an unknown `what` names the valid ones")
-ok(grepl("y", err(plot_coverage_heat(cd, x = "vesselFlagCountry"))), "no y is an error")
+ok(grepl("y", err(plot_coverage_grid(cd, x = "vesselFlagCountry"))), "no y is an error")
 ok(grepl("not in the coverage table: seasonValue", err(
-     plot_coverage_heat(tab, y = "metier4", x = "seasonValue"))),
+     plot_coverage_grid(tab, y = "metier4", x = "seasonValue"))),
    "a plotted column the table lacks is named, with what it does have")
-ok(identical(warn(plot_coverage_heat(cd, y = "metier4", palette = "colorblind")), "no warning") &&
-     !identical(ggplot_build(plot_coverage_heat(cd, y = "metier4", palette = "colorblind"))$data[[1]]$fill,
-                ggplot_build(plot_coverage_heat(cd, y = "metier4"))$data[[1]]$fill),
+ok(identical(warn(plot_coverage_grid(cd, y = "metier4", palette = "colorblind")), "no warning") &&
+     !identical(ggplot_build(plot_coverage_grid(cd, y = "metier4", palette = "colorblind"))$data[[1]]$fill,
+                ggplot_build(plot_coverage_grid(cd, y = "metier4"))$data[[1]]$fill),
    "a colourblind palette recolours the status heatmap, silently")
 ok(drawable(plot_coverage_bar(cd, y = "metier4", fill = "vesselFlagCountry",
                               palette = "colorblind")),
    "... and the bars")
-ok(drawable(plot_coverage_heat(cd, y = "metier4", what = "discards")),
+ok(drawable(plot_coverage_grid(cd, y = "metier4", what = "discards")),
    "what = 'discards' (plural) is accepted")
 ok(grepl("min_fish does not apply to what = \"discard\"", err(
-     plot_coverage_heat(cd, y = "metier4", min_fish = 100))) &&
+     plot_coverage_grid(cd, y = "metier4", min_fish = 100))) &&
      grepl("min_fish does not apply to what = \"discard\"", err(
-       plot_coverage_bubble(cd, y = "metier4", min_fish = 100))),
+       plot_coverage_grid(type = "bubble", cd, y = "metier4", min_fish = 100))),
    "min_fish on a discard heat/bubble is an error")
 ok(grepl("min_fish does not apply", err(
-     plot_coverage_heat(tab, y = "metier4", min_fish = 100))),
+     plot_coverage_grid(tab, y = "metier4", min_fish = 100))),
    "... also when the input is a discard table")
-ok(drawable(plot_coverage_heat(cd, y = "metier4")),
+ok(drawable(plot_coverage_grid(cd, y = "metier4")),
    "min_fish left at its default (NULL) is fine on a discard plot")
 
 ## ---- 4. length / age coverage ------------------------------------------
 lt <- build_coverage_strata(cd, c("metier4", "vesselFlagCountry"), dd, what = "length",
                             catchCategory = "Lan")
-lh_raw <- plot_coverage_heat(cd, dd, y = "metier4", x = "vesselFlagCountry", what = "length",
+lh_raw <- plot_coverage_grid(cd, dd, y = "metier4", x = "vesselFlagCountry", what = "length",
                              catchCategory = "Lan", min_cov = 50, min_fish = 100)
-lh_tab <- plot_coverage_heat(lt, y = "metier4", x = "vesselFlagCountry",
+lh_tab <- plot_coverage_grid(lt, y = "metier4", x = "vesselFlagCountry",
                              min_cov = 50, min_fish = 100)
 ok(drawable(lh_raw) && same(lh_raw, lh_tab),
    "length heatmap: raw catch + distributions == the length table (which brings its own what)")
 ok(grepl("length coverage table but what", err(
-     plot_coverage_heat(lt, y = "metier4", what = "age"))),
+     plot_coverage_grid(lt, y = "metier4", what = "age"))),
    "a `what` that contradicts the table is an error")
 ok(grepl("only used when building from raw", warn(
-     plot_coverage_heat(lt, dd, y = "metier4", min_cov = 50))),
+     plot_coverage_grid(lt, dd, y = "metier4", min_cov = 50))),
    "distributions handed in alongside a table are noted as ignored")
 la <- build_coverage_strata(cd, c("metier4", "vesselFlagCountry"), dd, what = "length")
-ok(identical(plot_coverage_heat(la, y = "metier4")$labels$title,
+ok(identical(plot_coverage_grid(la, y = "metier4")$labels$title,
              "Catch - Sampling of Length") &&
-     identical(plot_coverage_heat(la, y = "metier4",
+     identical(plot_coverage_grid(la, y = "metier4",
                                   catchCategory = "Lan")$labels$title,
                "Landings - Sampling of Length") &&
-     identical(plot_coverage_heat(la, y = "metier4",
+     identical(plot_coverage_grid(la, y = "metier4",
                                   catchCategory = "Dis")$labels$title,
                "Discards - Sampling of Length"),
    "a Lan+Dis table titles itself 'Catch'; choosing a part filters it and says which")
 ok(drawable(plot_coverage_bar(cd, dd, y = "metier4", fill = "vesselFlagCountry",
                               what = "length", catchCategory = "Lan")) &&
-     drawable(plot_coverage_bubble(cd, dd, y = "metier4", x = "vesselFlagCountry",
+     drawable(plot_coverage_grid(type = "bubble", cd, dd, y = "metier4", x = "vesselFlagCountry",
                                    what = "age", min_cov = 50)),
    "length bars and age bubbles build from raw catch + distributions")
 
@@ -330,7 +330,7 @@ ok(identical(ttl(b_raw), ttl(h_raw)) &&
    "bubbles: framed like the heatmap; bubble AREA is not re-explained (the size legend already shows it)")
 ok(grepl("trips >= 2:", box_text(b_raw), fixed = TRUE),
    "bubbles: an active trips threshold gets its own line in the box, with its formula")
-h_fac <- plot_coverage_heat(cd, y = "metier4", x = "vesselFlagCountry", facet = "seasonValue", min_cov = 50)
+h_fac <- plot_coverage_grid(cd, y = "metier4", x = "vesselFlagCountry", facet = "seasonValue", min_cov = 50)
 ok(says_cap(h_fac, "grouping = metier4 x vesselFlagCountry x seasonValue, grouped over finer fleet levels (fleetValue) and area (areaValue)."),
    "a facet column is part of the stratum, so it is no longer grouped over")
 ok(identical(cap(h_raw), cap(h_tab)),
@@ -406,8 +406,8 @@ ok(identical(strata_sentence(c("donor_group", "domainCatchDis", "metier4")),
              "grouping = no grouping, raw data as in CEF (CN) data.") &&
      identical(strata_sentence("Stratum"), "grouping = no grouping, raw data as in CEF (CN) data."),
    "a domain (or Stratum) column already names fleet, area, country and season: nothing is grouped over")
-ha <- plot_coverage_heat(cd, dd, y = "metier4", what = "age", catchCategory = "Dis")
-ok(identical(ttl(plot_coverage_heat(cd, dd, y = "metier4", what = "age", catchCategory = "Lan")),
+ha <- plot_coverage_grid(cd, dd, y = "metier4", what = "age", catchCategory = "Dis")
+ok(identical(ttl(plot_coverage_grid(cd, dd, y = "metier4", what = "age", catchCategory = "Lan")),
              "Landings - Sampling of Age") &&
      identical(ttl(ha), "Discards - Sampling of Age") &&
      grepl("^coverage >= 50%: share of discarded weight with age distributions\\.", box_text(ha)),
@@ -415,7 +415,7 @@ ok(identical(ttl(plot_coverage_heat(cd, dd, y = "metier4", what = "age", catchCa
 wrapped <- strsplit(sub_wrap(paste(rep("word", 60), collapse = " "), "short"), "\n")[[1]]
 ok(all(nchar(wrapped) <= 96) && identical(wrapped[length(wrapped)], "short"),
    "sub_wrap() wraps each paragraph on its own")
-ok(identical(box_text(suppressWarnings(plot_coverage_heat(cd, dd, y = "metier4", what = "length",
+ok(identical(box_text(suppressWarnings(plot_coverage_grid(cd, dd, y = "metier4", what = "length",
                                                           catchCategory = "Lan", min_cov = 50,
                                                           min_trip = 2, min_fish = 1000))),
              paste("coverage >= 50%: share of landed weight with length distributions.",

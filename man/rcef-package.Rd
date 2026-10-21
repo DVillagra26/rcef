@@ -24,7 +24,7 @@ RDBESStockCoord engines on them.
    let the data choose the groups - the strata that are raised (or allocated) together, and the data each takes its discard ratio (or distribution) from - from the variables that matter most to least \tab \code{\link[=recommend_groups]{recommend_groups()}} \cr
    check the groups you wrote before raising or allocating \tab \code{\link[=check_group_conditions]{check_group_conditions()}} \cr
    raise the discards \tab \code{\link[=catchRaising]{catchRaising()}} \cr
-   see which strata were raised from which group, and how the strata fell into the levels of the groups \tab \code{\link[=plot_river]{plot_river()}}, \code{\link[=plot_groups]{plot_groups()}} \cr
+   see which strata were raised from which group, and how the strata fell into the levels of the groups \tab \code{\link[=plot_river]{plot_river()}}, \code{\link[=plot_recommended_groups]{plot_recommended_groups()}} \cr
    compare two or more raised catches, as a table or a figure \tab \code{\link[=raised_overview_table]{raised_overview_table()}}, \code{\link[=plot_compare_raised]{plot_compare_raised()}} \cr
    give every stratum a length or age distribution \tab \code{\link[=catchAllocationAoL]{catchAllocationAoL()}} \cr
    add the allocation up into catch-at-length / -age and mean-weight tables \tab \code{\link[=catchAtAoLAggregation]{catchAtAoLAggregation()}}, \code{\link[=meanWoLatAoLAggregation]{meanWoLatAoLAggregation()}} \cr
@@ -49,7 +49,7 @@ CAR and CAS tables, and comparing two ways of raising) and
 Exploring the data first is its own short chain:
 
 \if{html}{\out{<div class="sourceCode">}}\preformatted{derive_fields() -> build_coverage_strata()
-  -> plot_coverage_heat() / _bubble() / _bar() / _map() | plot_DR() | plot_catches()
+  -> plot_coverage_grid() / _bar() / _map() | plot_DR() | plot_catches()
 }\if{html}{\out{</div>}}
 
 \code{\link[=derive_fields]{derive_fields()}} runs once, on the raw catch (and on its distributions):
@@ -77,8 +77,9 @@ engines, \code{\link[=catchRaising]{catchRaising()}} and \code{\link[=catchAlloc
 returns the same two lists, chosen from the data: you name the variables that
 matter, from the one that matters most to the one that matters least, and how
 well sampled a pool has to be, and every stratum is raised (or allocated) from
-the narrowest pool that is. \code{\link[=plot_groups]{plot_groups()}} and \code{\link[=plot_river]{plot_river()}} show how the
-strata fell into the levels.
+the narrowest pool that is - the stratum itself first, All by All last.
+\code{\link[=plot_recommended_groups]{plot_recommended_groups()}} and \code{\link[=plot_river]{plot_river()}} show how the strata fell into the
+levels.
 
 The distributions of an allocation reach their catch through \code{domainBiology}
 and, for a stratum the allocation estimated one for, through the

@@ -206,15 +206,19 @@ ok(near(l_all$numMeasurements[l_all$catchCategory == "Dis"], tot_meas),
    "a Dis row's numMeasurements is the Dis part's own")
 
 ## ---- 5. a table is recognised by its own columns ----------------------
-ok(identical(coverage_table_what(t1), "discard") &&
-     identical(coverage_table_what(l_lan), "length") &&
-     identical(coverage_table_what(a_lan), "age"),
-   "coverage_table_what() tells the three kinds apart")
-ok(is.na(coverage_table_what(cd)) && is.na(coverage_table_what(ac)),
+ok(identical(coverage_what(t1), "discard") &&
+     identical(coverage_what(l_lan), "length") &&
+     identical(coverage_what(a_lan), "age"),
+   "coverage_what() tells the three kinds of table apart")
+ok(is.na(coverage_what(cd)) && is.na(coverage_what(ac)),
    "raw catch is not mistaken for a coverage table")
 withcov <- ac; withcov$coverage <- 50
-ok("coverage" %in% names(withcov) && is.na(coverage_table_what(withcov)),
+ok("coverage" %in% names(withcov) && is.na(coverage_what(withcov)),
    "even raw catch that carries a row-level coverage column")
+ok(identical(coverage_what(" Discards "), "discard") && identical(coverage_what("LEN"), "length") &&
+     identical(coverage_what("ages"), "age") &&
+     grepl("must be", tryCatch(coverage_what("weight"), error = conditionMessage)),
+   "coverage_what() spells a typed `what` the one way, and refuses what it does not know")
 
 cat(sprintf("\nDONE  %d failure(s)\n", FAIL))
 if (FAIL) quit(status = 1L)

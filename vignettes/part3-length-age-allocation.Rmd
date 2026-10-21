@@ -104,7 +104,7 @@ plot_coverage_bar(catch = raised, distributions = distribution_data, y = "metier
 ```
 
 ```{r cov-heat, fig.height = 5, fig.alt = "Length-sampling coverage of the discards by metier and mesh, with the thresholds in the box under the panel"}
-plot_coverage_heat(catch = raised, distributions = distribution_data, y = "metier4",
+plot_coverage_grid(catch = raised, distributions = distribution_data, y = "metier4",
                    x = "mesh", what = "length", catchCategory = "Dis",
                    min_cov = 50, min_fish = 100)
 ```
@@ -402,19 +402,27 @@ row.names = FALSE, na = "")` writes a table with its empty fields left empty.
 The groups above are written by hand. `recommend_groups()` chooses them from
 the data, in the same order as for the raising (vignette 2): you name the
 variables that matter, from the one that matters most to the one that matters
-least with a `>` between them, and how well sampled a pool has to be. What
-already has a length distribution is kept as sampled; the reported strata are
-summed into strata of the variables you named and tested before anything else is
-pooled; the ones that fall short are pooled across the last variable first, and
-the variable that matters most is the last to go. Give it the raised catch and
+least, and how well sampled a pool has to be. What
+already has a length distribution is kept as sampled (L1, the strata as reported);
+the reported strata are summed into strata of the variables you named and tested
+before anything else is pooled (L2); the ones that fall short are pooled across
+the last variable first, and the variable that matters most is the last to go,
+until everything is pooled (All by All). Give it the raised catch and
 the distributions: the coverage of a pool is the share of its weight that has a
 length distribution, and `fish` the least number of fish measured behind it.
-Landings and discards are grouped on their own - the length distribution of the
-landings is no use to the discards - so the groups, and their conditions, say
-which catch part they are for.
+Landings and discards are grouped on their own, so the groups, and their
+conditions, say which catch part they are for. The catch part is the last variable
+to be pooled across (`drop_catchCategory = TRUE`, the default): the pool of the
+whole catch part is tested first, and only what still falls short is allocated
+from landings and discards together. `drop_catchCategory = FALSE` keeps the catch
+part always - the length distribution of the landings is no use to the discards -
+and accepts the pool of the catch part whether or not it reaches the thresholds.
 
 ```{r rec-length}
-hierarchy <- "areaValue > mesh > vesselFlagCountry > seasonValue"
+hierarchy <- c("areaValue",          # matters most: the last one to be pooled across
+               "mesh",
+               "vesselFlagCountry",
+               "seasonValue")        # matters least: the first one to be pooled across
 
 rec_length <- recommend_groups(raised, hierarchy,
                                list(cov = 50, trips = NA, fish = 100),
@@ -423,7 +431,7 @@ rec_length
 ```
 
 ```{r rec-length-plot, fig.height = 6, fig.alt = "Catch weight of the landings and of the discards allocated at each level of the groups, solid where sampled and hatched where allocated from the pool"}
-plot_groups(rec_length)
+plot_recommended_groups(rec_length)
 ```
 
 `rec_length$strataCond` and `rec_length$matchedDataCond` are the two lists

@@ -52,7 +52,7 @@ key_colours <- function(p) {
 ## orange for both. Which one(s) failed is a distinct status (warn_cov /
 ## warn_trip / warn_cov_trip), the same colour within a count. Red is not
 ## reachable from a threshold miss: it is reserved for "no discard estimate".
-h <- plot_coverage_heat(disc_tbl(c(100, 70, 30, 70, 30), c(3, 2, 3, 1, 1)),
+h <- plot_coverage_grid(disc_tbl(c(100, 70, 30, 70, 30), c(3, 2, 3, 1, 1)),
                         y = "id", min_cov = 50, min_trip = 2)
 ok(identical(status(h), c("full", "safe", "warn_cov", "warn_trip", "warn_cov_trip")),
    "every discard combination lands in the specified status")
@@ -65,31 +65,31 @@ ok(identical(names(key_colours(h)),
    "the legend lists every reachable status, best to worst, with no 'none' among them")
 
 ## red only when the stratum carries NO discard estimate (total is NA)
-nd <- plot_coverage_heat(disc_tbl(0, 0, total = NA), y = "id", min_cov = 50, min_trip = 2)
+nd <- plot_coverage_grid(disc_tbl(0, 0, total = NA), y = "id", min_cov = 50, min_trip = 2)
 ok(identical(status(nd), "no_dist"),
    "a stratum with no discard estimate at all is red (no_dist), not a warning")
 ## the same numbers WITH an estimate (nobody found any discards) are just a double miss
-wd <- plot_coverage_heat(disc_tbl(0, 0, total = 0), y = "id", min_cov = 50, min_trip = 2)
+wd <- plot_coverage_grid(disc_tbl(0, 0, total = 0), y = "id", min_cov = 50, min_trip = 2)
 ok(identical(status(wd), "warn_cov_trip"),
    "with an estimate present, missing both thresholds is warn_cov_trip (orange), not red")
 
 ## boundary: exactly 2 trips is NOT "more than 2" (full needs > min_trip)
-b <- plot_coverage_heat(disc_tbl(100, 2), y = "id", min_cov = 50, min_trip = 2)
+b <- plot_coverage_grid(disc_tbl(100, 2), y = "id", min_cov = 50, min_trip = 2)
 ok(identical(status(b), "safe"),
    "100% coverage with exactly 2 trips is safe, not full (needs > 2)")
 
 ## coverage only: trips left out of the verdict, and out of the legend
-co <- plot_coverage_heat(disc_tbl(c(100, 70, 30), c(1, 1, 1)), y = "id", min_cov = 50)
+co <- plot_coverage_grid(disc_tbl(c(100, 70, 30), c(1, 1, 1)), y = "id", min_cov = 50)
 ok(identical(status(co), c("full", "safe", "warn_cov")) &&
      identical(names(key_colours(co)), c("full", "safe", "warn_cov", "no_dist", "disc_only")),
    "min_trip left at NULL: trips judge nothing and the legend has no trips statuses")
 
 ## nothing landed and nothing discarded: nothing to judge, so nothing is drawn
 z <- disc_tbl(c(100, 80), c(3, 3), total = c(10, 0), landings = c(100, 0))
-ok(identical(status(plot_coverage_heat(z, y = "id", min_cov = 50, min_trip = 2)), "full"),
+ok(identical(status(plot_coverage_grid(z, y = "id", min_cov = 50, min_trip = 2)), "full"),
    "a cell with no landings and no discards draws no tile at all")
 ## discards but no landings: its own blue status, not a threshold miss
-do <- plot_coverage_bubble(disc_tbl(c(100, 0), c(3, 3), total = c(10, 5), landings = c(100, 0)),
+do <- plot_coverage_grid(type = "bubble", disc_tbl(c(100, 0), c(3, 3), total = c(10, 5), landings = c(100, 0)),
                            y = "id", min_cov = 50, min_trip = 2)
 ok(identical(status(do), c("full", "disc_only")),
    "discards without landings is disc_only, on the bubble grid too")
@@ -101,7 +101,7 @@ ok(identical(status(do), c("full", "disc_only")),
 l <- bio_tbl(coverage        = c(100, 70, 30, 70, 70, 70, 30, 30),
              numTrips        = c(3,   3,  3,  3,  1,  1,  3,  1),
              numMeasurements = c(150, 150, 150, 50, 150, 50, 50, 150))
-hl <- plot_coverage_heat(l, y = "id", min_cov = 50, min_trip = 2, min_fish = 100)
+hl <- plot_coverage_grid(l, y = "id", min_cov = 50, min_trip = 2, min_fish = 100)
 ok(identical(status(hl), c("full", "safe", "warn_cov", "warn_meas", "warn_trip",
                            "warn_trip_meas", "warn_cov_meas", "warn_cov_trip")),
    "each length / age corner lands in its specific missed-target status")
@@ -118,42 +118,42 @@ ok(all(vapply(by_count, function(v) length(unique(v)) == 1, logical(1))) &&
    "every combination with the same missed-count shares one colour; the counts differ; none reuses full / safe / no_dist")
 
 ## all three missed -> dark orange, NOT red
-r <- plot_coverage_heat(bio_tbl(30, 1, 50), y = "id", min_cov = 50, min_trip = 2, min_fish = 100)
+r <- plot_coverage_grid(bio_tbl(30, 1, 50), y = "id", min_cov = 50, min_trip = 2, min_fish = 100)
 ok(identical(status(r), "warn_cov_trip_meas") && ggplot_build(r)$data[[1]]$fill != kc[["no_dist"]],
    "coverage, trips and measurements all missed is warn_cov_trip_meas, and not the red")
 
 ## red only when NO distribution is linked at all
-nl <- suppressWarnings(plot_coverage_heat(bio_tbl(0, 0, 0), y = "id", min_cov = 50, min_trip = 2, min_fish = 100))
+nl <- suppressWarnings(plot_coverage_grid(bio_tbl(0, 0, 0), y = "id", min_cov = 50, min_trip = 2, min_fish = 100))
 ok(identical(status(nl), "no_dist"),
    "a length stratum with no linked distribution is red (no_dist)")
 
 ## a stratum with nothing in it has nothing to sample - not a failure, not red,
 ## and not drawn; real weight is unaffected
 zl <- bio_tbl(c(NA, NA, 80), c(NA, NA, 3), c(0, 0, 150), total = c(0, NA, 100))
-hz <- plot_coverage_heat(zl, y = "id", min_cov = 50, min_trip = 2, min_fish = 100)
+hz <- plot_coverage_grid(zl, y = "id", min_cov = 50, min_trip = 2, min_fish = 100)
 ok(nrow(hz$data) == 1 && identical(status(hz), "safe") && !any(c("s01", "s02") %in% hz$data$id),
    "zero weight and NA weight draw nothing; real weight is classified as usual")
 ## the same applies to age
-ok(is.null(suppressWarnings(plot_coverage_heat(bio_tbl(NA, NA, 0, total = 0, type = "Age"),
+ok(is.null(suppressWarnings(plot_coverage_grid(bio_tbl(NA, NA, 0, total = 0, type = "Age"),
                                                y = "id", min_cov = 50, min_trip = 2, min_fish = 100))),
    "age with no weight anywhere: nothing to draw")
-ok(identical(names(key_colours(plot_coverage_heat(bio_tbl(80, 3, 150, type = "Age"), y = "id",
+ok(identical(names(key_colours(plot_coverage_grid(bio_tbl(80, 3, 150, type = "Age"), y = "id",
                                                  min_cov = 50, min_fish = 100))),
              c("full", "safe", "warn_cov", "warn_meas", "warn_cov_meas", "no_dist")),
    "age: the same scheme, with no trips question when min_trip is NULL")
 
 ## ---- 3. unknown trips are treated as failing, not passing -------------------
-u <- suppressWarnings(plot_coverage_heat(disc_tbl(70, NA), y = "id", min_cov = 50, min_trip = 2))
+u <- suppressWarnings(plot_coverage_grid(disc_tbl(70, NA), y = "id", min_cov = 50, min_trip = 2))
 ok(identical(status(u), "warn_trip") &&
      grepl("every stratum's numTrips is unknown", warn(
-       plot_coverage_heat(disc_tbl(70, NA), y = "id", min_cov = 50, min_trip = 2))),
+       plot_coverage_grid(disc_tbl(70, NA), y = "id", min_cov = 50, min_trip = 2))),
    "no reported trip count fails the trips test (unknown is not adequate), and says why when no stratum has one")
-ok(identical(status(plot_coverage_heat(disc_tbl(c(70, 70), c(NA, 3)), y = "id",
+ok(identical(status(plot_coverage_grid(disc_tbl(c(70, 70), c(NA, 3)), y = "id",
                                        min_cov = 50, min_trip = 0)),
              c("warn_trip", "safe")),
    "an unknown trip count fails even at min_trip = 0; a known one passes")
 ok(grepl("numMeasurements is 0", warn(
-     plot_coverage_heat(bio_tbl(80, 3, 0), y = "id", min_cov = 50, min_fish = 100))),
+     plot_coverage_grid(bio_tbl(80, 3, 0), y = "id", min_cov = 50, min_fish = 100))),
    "a measurement floor no stratum can meet (every count is 0) is flagged")
 
 ## ---- 4. numTrips is a sufficiency control on the coverage plots -----------
@@ -163,8 +163,8 @@ ok(grepl("numMeasurements is 0", warn(
 ## recolour.
 strata <- disc_tbl(c(80, 70, 60), c(1, 1, 1), total = c(8, 7, 6), landings = 100)
 strata$metier4 <- c("OTB", "SDN", "SSC")
-p_lo <- plot_coverage_heat(strata, y = "metier4", min_cov = 50, min_trip = 1)
-p_hi <- plot_coverage_heat(strata, y = "metier4", min_cov = 50, min_trip = 5)
+p_lo <- plot_coverage_grid(strata, y = "metier4", min_cov = 50, min_trip = 1)
+p_hi <- plot_coverage_grid(strata, y = "metier4", min_cov = 50, min_trip = 5)
 ok(!is.null(p_lo) && !is.null(p_hi), "the heatmap renders at both trips floors")
 b_lo <- ggplot_build(p_lo)$data[[1]]$fill
 b_hi <- ggplot_build(p_hi)$data[[1]]$fill

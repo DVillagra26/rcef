@@ -2,12 +2,11 @@
 % Please edit documentation in R/viz_plots.R
 \name{coverage-plots}
 \alias{coverage-plots}
-\alias{plot_coverage_heat}
-\alias{plot_coverage_bubble}
+\alias{plot_coverage_grid}
 \alias{plot_coverage_bar}
 \title{Coverage: which strata are sampled well enough}
 \usage{
-plot_coverage_heat(
+plot_coverage_grid(
   catch,
   distributions = NULL,
   y,
@@ -15,21 +14,7 @@ plot_coverage_heat(
   facet = NULL,
   what = "discard",
   catchCategory = NULL,
-  min_cov = 50,
-  min_trip = NULL,
-  min_fish = NULL,
-  palette = c("default", "colorblind", "gradual"),
-  save = NULL
-)
-
-plot_coverage_bubble(
-  catch,
-  distributions = NULL,
-  y,
-  x = NULL,
-  facet = NULL,
-  what = "discard",
-  catchCategory = NULL,
+  type = c("heat", "bubble"),
   min_cov = 50,
   min_trip = NULL,
   min_fish = NULL,
@@ -58,8 +43,8 @@ output, or columns of your own), or a table from \code{\link[=build_coverage_str
 
 \item{y}{Row category: a column of the catch (or of the table). Required.}
 
-\item{x}{Column category, the second axis of the heatmap / bubble grid.
-\code{NULL} collapses to a single column.}
+\item{x}{Column category, the second axis of the grid. \code{NULL} collapses to a
+single column.}
 
 \item{facet}{Optional facet column.}
 
@@ -72,10 +57,14 @@ linked to and the weight word in the plot title. With a coverage table
 it selects among the parts the table has. Not valid for
 \code{what = "discard"} (an error).}
 
-\item{min_cov}{Minimum coverage, in percent (heatmap and bubbles).
+\item{type}{\code{"heat"} (default) or \code{"bubble"} (grid only): the cells as tiles
+that carry their weight as a number, or as bubbles sized by it. The same
+cells, status, legend, thresholds box and labels either way.}
+
+\item{min_cov}{Minimum coverage, in percent (grid).
 Always active: coverage is never dropped from the classification.}
 
-\item{min_trip}{Minimum sampling trips (heatmap and bubbles), or \code{NULL}
+\item{min_trip}{Minimum sampling trips (grid), or \code{NULL}
 (the default) to leave trips out of the classification altogether.
 \code{0} is not the same as \code{NULL}: it still checks trips, and a stratum with
 no reported trip count still fails that check.}
@@ -98,10 +87,11 @@ return it: a folder, a file name, or a list of options - see
 A ggplot object, or \code{NULL} when there is nothing to draw.
 }
 \description{
-Four views of how well a set of strata is sampled: a heatmap
-(\code{plot_coverage_heat()}), a weighted bubble grid (\code{plot_coverage_bubble()})
-and a sampled-versus-unsampled weight bar chart (\code{plot_coverage_bar()}),
-all documented here, plus a map (\code{\link[=plot_coverage_map]{plot_coverage_map()}}) on its own page.
+Three plots of how well a set of strata is sampled: a grid of cells drawn as
+a heatmap or as weighted bubbles (\code{plot_coverage_grid()}, \code{type = "heat"} or
+\code{"bubble"}) and a sampled-versus-unsampled weight bar chart
+(\code{plot_coverage_bar()}), both documented here, plus a map
+(\code{\link[=plot_coverage_map]{plot_coverage_map()}}) on its own page.
 
 All take the CEF catch (and \code{distributions} for length and age) or the
 table \code{\link[=build_coverage_strata]{build_coverage_strata()}} returns from it. Given the catch they build
@@ -205,19 +195,19 @@ columns are the strata (\code{y}, \code{x} or \code{fill}, \code{facet}), then t
 \dontrun{
 
 # discard coverage: which metier x country strata carry a discard estimate?
-plot_coverage_heat(catch, y = "metier4", x = "vesselFlagCountry")
-plot_coverage_bubble(catch, y = "metier4", x = "vesselFlagCountry",
-                     min_cov = 50, min_trip = 2)
+plot_coverage_grid(catch, y = "metier4", x = "vesselFlagCountry")
+plot_coverage_grid(catch, y = "metier4", x = "vesselFlagCountry",
+                   type = "bubble", min_cov = 50, min_trip = 2)
 plot_coverage_bar(catch, y = "metier4", fill = "vesselFlagCountry")
 
 # length coverage of the landings, with a floor on the measurements
-plot_coverage_heat(catch, distributions, y = "metier4",
+plot_coverage_grid(catch, distributions, y = "metier4",
                    x = "vesselFlagCountry", what = "length", catchCategory = "Lan",
                    min_cov = 50, min_fish = 100)
 
 # the same figure from the table behind it
 cov <- build_coverage_strata(catch, c("metier4", "vesselFlagCountry"))
-plot_coverage_heat(cov, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
+plot_coverage_grid(cov, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
 }
 }
 \seealso{

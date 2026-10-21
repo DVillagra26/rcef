@@ -49,11 +49,11 @@ ok(drawable(p_x) && is.factor(p_x$data$seasonValue),
    "plot_DR(): x = seasonValue, drawn as categories (a factor, not a continuous axis)")
 ok(drawable(plot_DR(c23, x = "metier4", facet = "seasonValue")),
    "plot_DR(): facet = seasonValue")
-h_y <- plot_coverage_heat(c23, y = "seasonValue", x = "metier4")
+h_y <- plot_coverage_grid(c23, y = "seasonValue", x = "metier4")
 ok(drawable(h_y) && is.factor(h_y$data$seasonValue),
-   "plot_coverage_heat(): y = seasonValue is a discrete axis")
-ok(drawable(plot_coverage_bubble(c23, y = "seasonValue", x = "metier4")),
-   "plot_coverage_bubble(): y = seasonValue")
+   "plot_coverage_grid(): y = seasonValue is a discrete axis")
+ok(drawable(plot_coverage_grid(type = "bubble", c23, y = "seasonValue", x = "metier4")),
+   "plot_coverage_grid(): y = seasonValue")
 ok(drawable(plot_coverage_bar(c23, y = "metier4", fill = "seasonValue")),
    "plot_coverage_bar(): fill = seasonValue")
 ok(drawable(quiet(plot_coverage_map(c23, group = "seasonValue"))),

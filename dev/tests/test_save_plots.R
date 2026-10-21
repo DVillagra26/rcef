@@ -140,7 +140,7 @@ ok(n_files(d10) == 0L, "nothing is written when the options are refused")
 d11 <- fresh("notdrawn")
 ok(is.null(suppressMessages(plot_DR(c23[0, ], x = "metier4", save = d11))) && n_files(d11) == 0L,
    "nothing to draw: NULL back, no file")
-ok(is.null(suppressMessages(plot_coverage_heat(c23[0, ], y = "metier4", x = "vesselFlagCountry", save = d11))) &&
+ok(is.null(suppressMessages(plot_coverage_grid(c23[0, ], y = "metier4", x = "vesselFlagCountry", save = d11))) &&
      n_files(d11) == 0L, "... for the coverage plots too")
 ok(nzchar(err(plot_DR(c23, x = "nope", save = d11))) && n_files(d11) == 0L,
    "an error on the way: the error comes through and no file is written")
@@ -153,8 +153,7 @@ alloc <- quiet(catchAllocationAoL(raised, d23, condition_alloc_st_list = list(AL
 dc  <- quiet(build_discard_clusters(c23, dims = c("metier4", "ICESDivision", "seasonValue"), k = 3, seed = 7))
 
 plots <- list(
-  plot_coverage_heat      = function(s) plot_coverage_heat(c23, y = "metier4", x = "vesselFlagCountry", save = s),
-  plot_coverage_bubble    = function(s) plot_coverage_bubble(c23, y = "metier4", x = "vesselFlagCountry", save = s),
+  plot_coverage_grid      = function(s) plot_coverage_grid(c23, y = "metier4", x = "vesselFlagCountry", save = s),
   plot_coverage_bar       = function(s) plot_coverage_bar(c23, y = "metier4", fill = "vesselFlagCountry", save = s),
   plot_DR                 = function(s) plot_DR(c23, x = "metier4", save = s),
   plot_NaLoA              = function(s) plot_NaLoA(c23, d23, fill = "vesselFlagCountry", save = s),
@@ -178,6 +177,8 @@ for (nm in names(plots)) {
 
 ## the same functions on a raised catch and on an allocation write a file just the same
 variants <- list(
+  plot_coverage_grid_bubble = function(s) plot_coverage_grid(c23, y = "metier4", x = "vesselFlagCountry",
+                                                             type = "bubble", save = s),
   plot_DR_raised        = function(s) plot_DR(raised, x = "metier4", save = s),
   plot_NaLoA_allocated  = function(s) plot_NaLoA(alloc$catch, alloc$distribution, catchCategory = "Lan",
                                                  fill = "vesselFlagCountry", save = s),

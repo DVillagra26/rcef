@@ -97,7 +97,7 @@ the raising; \code{\link[=raised_overview_table]{raised_overview_table()}} for t
 
 Other raising plots: 
 \code{\link{plot_compare_raised}()},
-\code{\link{plot_groups}()},
+\code{\link{plot_recommended_groups}()},
 \code{\link{plot_river}()}
 }
 \concept{raising plots}

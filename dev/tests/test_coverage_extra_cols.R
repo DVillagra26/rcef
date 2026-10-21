@@ -84,8 +84,8 @@ tab_no_season <- build_coverage_strata(c23, "metier4")
 ok("seasonValue" %in% names(tab_no_season) && all(is.na(tab_no_season$seasonValue)),
   "fixture: seasonValue rides along on this table, but is NA throughout")
 ok(grepl("not in the coverage table: seasonValue", err(
-     plot_coverage_heat(tab_no_season, y = "metier4", x = "seasonValue"))),
-  "plot_coverage_heat(): an all-NA extra column is still named as unavailable")
+     plot_coverage_grid(tab_no_season, y = "metier4", x = "seasonValue"))),
+  "plot_coverage_grid(): an all-NA extra column is still named as unavailable")
 
 ## ---- plot_DR() does not let Stratum (or an NA extra) into a label -------
 ## Stratum is fleetValue/vesselFlagCountry/areaValue/seasonValue already

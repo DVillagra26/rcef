@@ -63,17 +63,17 @@ ok(drawable(p1f), "plot_coverage_bar(): draws with facet = mesh")
 ok(identical(levels(p1f$data$.facet), natural),
   "plot_coverage_bar(): facet = mesh orders the panels by size")
 
-## ---- plot_coverage_heat(): y = \"mesh\" ------------------------------------
-p2 <- plot_coverage_heat(c23, y = "mesh", x = "metier4")
-ok(drawable(p2), "plot_coverage_heat(): draws with y = mesh")
+## ---- plot_coverage_grid(): y = \"mesh\" ------------------------------------
+p2 <- plot_coverage_grid(c23, y = "mesh", x = "metier4")
+ok(drawable(p2), "plot_coverage_grid(): draws with y = mesh")
 ok(identical(levels(p2$data$mesh), natural),
-  "plot_coverage_heat(): y = mesh orders the rows by size")
+  "plot_coverage_grid(): y = mesh orders the rows by size")
 
-## ---- plot_coverage_bubble(): x = \"mesh\" -----------------------------------
-p3 <- plot_coverage_bubble(c23, y = "metier4", x = "mesh")
-ok(drawable(p3), "plot_coverage_bubble(): draws with x = mesh")
+## ---- plot_coverage_grid(): x = \"mesh\" -----------------------------------
+p3 <- plot_coverage_grid(type = "bubble", c23, y = "metier4", x = "mesh")
+ok(drawable(p3), "plot_coverage_grid(): draws with x = mesh")
 ok(identical(levels(p3$data$mesh), natural),
-  "plot_coverage_bubble(): x = mesh orders the columns by size")
+  "plot_coverage_grid(): x = mesh orders the columns by size")
 
 ## ---- plot_coverage_map(): group = \"mesh\" ----------------------------------
 p4 <- quiet(plot_coverage_map(c23, group = "mesh"))

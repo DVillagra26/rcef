@@ -51,8 +51,8 @@ how well the stratum is sampled - a table you can read, sort and filter,
 at whatever aggregation you choose. Give it the catch and the columns
 that define a stratum; for length and age, also the distributions.
 
-This is the table behind \code{\link[=plot_coverage_heat]{plot_coverage_heat()}}, \code{\link[=plot_coverage_bubble]{plot_coverage_bubble()}},
-\code{\link[=plot_coverage_bar]{plot_coverage_bar()}}, \code{\link[=plot_coverage_map]{plot_coverage_map()}} and \code{\link[=plot_DR]{plot_DR()}}.
+This is the table behind \code{\link[=plot_coverage_grid]{plot_coverage_grid()}}, \code{\link[=plot_coverage_bar]{plot_coverage_bar()}},
+\code{\link[=plot_coverage_map]{plot_coverage_map()}} and \code{\link[=plot_DR]{plot_DR()}}.
 They build it themselves from raw catch and take it directly when you
 pass it, so every number in a figure can be found in this table, and a
 table can always be looked at as a figure.
@@ -172,7 +172,7 @@ len <- build_coverage_strata(catch, c("metier4", "vesselFlagCountry"),
 head(len[order(-len$total), ])
 
 # the plots draw the same table, from the raw catch or from the table
-plot_coverage_heat(cov, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
+plot_coverage_grid(cov, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
 plot_DR(cov, x = "metier4", colour = "vesselFlagCountry")
 }
 }

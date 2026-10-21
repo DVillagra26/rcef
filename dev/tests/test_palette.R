@@ -61,8 +61,8 @@ alloc   <- quiet(fx_allocate(raised, d23, "LengthTotal", log_file = lf))
 dc      <- quiet(build_discard_clusters(c23, dims = c("metier4", "ICESDivision", "seasonValue"),
                                         k = 3, seed = 7))
 plots <- list(
-  plot_coverage_heat     = function(pal) plot_coverage_heat(cd, y = "metier4", x = "vesselFlagCountry", min_trip = 2, palette = pal),
-  plot_coverage_bubble   = function(pal) plot_coverage_bubble(cd, y = "metier4", x = "vesselFlagCountry", min_trip = 2, palette = pal),
+  plot_coverage_grid     = function(pal) plot_coverage_grid(cd, y = "metier4", x = "vesselFlagCountry", min_trip = 2, palette = pal),
+  plot_coverage_grid_bubble = function(pal) plot_coverage_grid(type = "bubble", cd, y = "metier4", x = "vesselFlagCountry", min_trip = 2, palette = pal),
   plot_coverage_bar      = function(pal) plot_coverage_bar(cd, y = "metier4", fill = "vesselFlagCountry", palette = pal),
   plot_DR                = function(pal) plot_DR(cd, x = "metier4", colour = "vesselFlagCountry", palette = pal),
   plot_NaLoA             = function(pal) plot_NaLoA(cd, dd, fill = "vesselFlagCountry", palette = pal),
@@ -83,7 +83,7 @@ if (requireNamespace("maps", quietly = TRUE))
   plots$plot_coverage_map <- function(pal) suppressWarnings(plot_coverage_map(cd, palette = pal))
 
 ## ---- 1. the same argument on every plot -----------------------------------------
-exported <- c("plot_coverage_map", "plot_coverage_heat", "plot_coverage_bubble", "plot_coverage_bar",
+exported <- c("plot_coverage_map", "plot_coverage_grid", "plot_coverage_bar",
               "plot_DR", "plot_NaLoA", "plot_MWaLoA", "plot_catches",
               "plot_compare_raised", "plot_river",
               "plot_discard_clusters", "plot_discard_cluster_variables")
@@ -109,7 +109,7 @@ for (nm in names(plots)) {
   sets <- lapply(c("default", "colorblind", "gradual"), function(pal) drawn(plots[[nm]](pal)))
   names(sets) <- c("default", "colorblind", "gradual")
   # the status plots use the status scale, the map only its sampled slice
-  allowed <- if (grepl("^plot_coverage_(heat|bubble)", nm)) STATUS
+  allowed <- if (grepl("^plot_coverage_grid", nm)) STATUS
              else if (nm == "plot_coverage_map") lapply(STATUS, function(s) s[2])
              else PAL
   inside <- vapply(names(sets), function(pal)
@@ -182,18 +182,18 @@ ok(length(pd) == 40 && !anyDuplicated(pd) && identical(unname(pd[1:28]), PAL$def
 
 ## ---- 6. the status scale ----------------------------------------------------------
 fills <- function(p) ggplot_build(p)$data[[length(p$layers)]]$fill     # the legend's own marks
-key_of <- function(pal) fills(plots$plot_coverage_heat(pal))
+key_of <- function(pal) fills(plots$plot_coverage_grid(pal))
 ok(identical(unname(key_of("default")[1:2]), STATUS$default[1:2]) &&
      identical(unname(key_of("colorblind")[1:2]), STATUS$colorblind[1:2]) &&
      identical(unname(key_of("gradual")[1:2]), STATUS$gradual[1:2]),
    "the status legend starts with the palette's full and safe colours")
-h_cb <- plots$plot_coverage_heat("colorblind")
+h_cb <- plots$plot_coverage_grid("colorblind")
 ok(!any(drawn(h_cb) %in% toupper(STATUS$default)),
    "a colourblind heatmap draws none of the default status colours")
-ok(identical(plot_coverage_heat(cd, y = "metier4", palette = "colorblind")$data$cat_key,
-             plot_coverage_heat(cd, y = "metier4")$data$cat_key),
+ok(identical(plot_coverage_grid(cd, y = "metier4", palette = "colorblind")$data$cat_key,
+             plot_coverage_grid(cd, y = "metier4")$data$cat_key),
    "the palette recolours the status; it never changes which status a cell has")
-ok(identical(tryCatch({ plot_coverage_heat(cd, y = "metier4", palette = "colorblind"); "silent" },
+ok(identical(tryCatch({ plot_coverage_grid(cd, y = "metier4", palette = "colorblind"); "silent" },
                       warning = function(w) "warned"), "silent"),
    "a palette on the status plots is honoured silently (it used to warn that it did nothing)")
 

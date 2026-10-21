@@ -593,45 +593,54 @@ Which gears belong together, and which strata are too thin to stand alone, is a
 judgement, and the groups above are that judgement written down.
 `recommend_groups()` makes the same choice from the data by a rule you set: name
 the variables that matter, from the one that matters most to the one that
-matters least with a `>` between them (the cluster plot of
-`build_discard_clusters()`, vignette 1, ranks them), and how well sampled a pool
-has to be. Nothing is pooled until it has to be:
+matters least (the cluster plot of `build_discard_clusters()`, vignette 1, ranks
+them), and how well sampled a pool has to be. Nothing is pooled until it has to
+be, and the levels are numbered from the narrowest:
 
-1. A landing that has a discard estimate is never raised.
-2. The reported strata (area, season, country, fleet) are summed into strata of
-   the variables you named - what you did not name, the metier here, is summed
+1. **L1, the strata as they are reported** (area, season, country, fleet): a landing
+   that has a discard estimate is never raised.
+2. **L2, the own stratum aggregated.** The reported strata are summed into strata
+   of the variables you named - what you did not name, the metier here, is summed
    over - and each of them is tested against the thresholds *before anything else
    is pooled*: the ones whose landings with an estimate reach `cov` percent are
-   raised from themselves.
-3. The ones that fall short are pooled across the last variable - the same area,
-   mesh and country in every season - and tested again; then across the country,
-   then across the mesh, and in the end across the area: everything.
+   raised from themselves. (If the variables you named are the reported stratum
+   already there is nothing to sum, this level is skipped and the own stratum is
+   L1.)
+3. **L3 and on.** The ones that fall short are pooled across the last variable -
+   the same area, mesh and country in every season - and tested again; then across
+   the country, then across the mesh, and in the end across the area: **All by
+   All**, the last level, which takes whatever is left.
 
 So the variable that matters most, the area, is the last one to be pooled across,
 and the one that matters least, the season, the first.
 
 ```{r rec}
-hierarchy  <- "areaValue > mesh > vesselFlagCountry > seasonValue"
+hierarchy  <- c("areaValue",          # matters most: the last one to be pooled across
+                "mesh",
+                "vesselFlagCountry",
+                "seasonValue")        # matters least: the first one to be pooled across
 thresholds <- list(cov = 50, trips = NA, fish = NA)    # trips and fish: not used
 
 rec <- recommend_groups(catch_data, hierarchy, thresholds)
 rec
 ```
 
-The table says how many groups, strata and landings (`weight_t`) fall in each
-level, and how much of what has to be raised - the landings with no discard
-estimate of their own, `uncovered_t` - rests on each of them. `plot_groups()`
-draws it: the landings raised at each level, the transparent part being the part
-with no estimate of its own, and with `x` where the coarse pools are needed.
-`plot_river()` follows the strata of one variable to the level they are raised
-at.
+The table says how many groups and strata fall in each level, how much of the
+landings (`weight_t`) rests on it, and how much of what has to be raised - the
+landings with no discard estimate of their own, `raised_t` - each level settles.
+`plot_recommended_groups()` draws it: the landings, by the level their discards
+come from. The solid part of L1 is the landings that have a discard estimate and
+are imported as reported; the hatched parts are raised from the level in the
+colour. With `x` it shows where the coarse pools are needed, and `share = TRUE`
+draws shares instead of tonnes. `plot_river()` follows the strata of one variable
+to the level they are raised at.
 
 ```{r rec-levels, fig.height = 4, fig.alt = "Landings raised at each level of the groups, solid where the strata have a discard estimate of their own and hatched where they are raised from the pool"}
-plot_groups(rec)
+plot_recommended_groups(rec)
 ```
 
 ```{r rec-area, fig.height = 4.5, fig.alt = "Landings of each area, stacked by the level of the groups its strata are raised at"}
-plot_groups(rec, x = "areaValue")
+plot_recommended_groups(rec, x = "areaValue")
 ```
 
 ```{r rec-river, fig.height = 6, fig.alt = "Flow of the landings of each area to the level of the groups they are raised at"}

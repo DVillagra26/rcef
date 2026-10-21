@@ -12,8 +12,8 @@
 #' at whatever aggregation you choose. Give it the catch and the columns
 #' that define a stratum; for length and age, also the distributions.
 #'
-#' This is the table behind [plot_coverage_heat()], [plot_coverage_bubble()],
-#' [plot_coverage_bar()], [plot_coverage_map()] and [plot_DR()].
+#' This is the table behind [plot_coverage_grid()], [plot_coverage_bar()],
+#' [plot_coverage_map()] and [plot_DR()].
 #' They build it themselves from raw catch and take it directly when you
 #' pass it, so every number in a figure can be found in this table, and a
 #' table can always be looked at as a figure.
@@ -154,14 +154,14 @@
 #' head(len[order(-len$total), ])
 #'
 #' # the plots draw the same table, from the raw catch or from the table
-#' plot_coverage_heat(cov, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
+#' plot_coverage_grid(cov, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
 #' plot_DR(cov, x = "metier4", colour = "vesselFlagCountry")
 #' }
 #' @export
 build_coverage_strata <- function(catch, dims = NULL, distributions = NULL,
                                   what = "discard", catchCategory = NULL) {
   fn   <- "build_coverage_strata"
-  what <- normalize_what(what)
+  what <- coverage_what(what)
   catch <- as.data.frame(catch)
   if (is.null(dims)) {
     # Nothing pooled unless asked for: the finest a stratum naturally gets,
@@ -337,9 +337,9 @@ build_coverage_strata <- function(catch, dims = NULL, distributions = NULL,
   # sampling.
   d  <- catch
   pd <- prep_distributions(distributions, dist_type)
-  by <- biology_match_keys(d, pd)
+  d$.k <- biology_key(d, pd)
+  by <- attr(d$.k, "keys")
   d$.t <- convert_units(d$total, if ("variableUnit" %in% names(d)) d$variableUnit, "t")
-  d$.k <- biology_key(d, by)
   d$.has_key <- if ("domainBiology" %in% names(d))
     !is.na(d$domainBiology) & nzchar(as.character(d$domainBiology)) else FALSE
   d$.measured <- d$.has_key & d$.k %in% (if (is.null(pd)) character(0)
@@ -410,25 +410,41 @@ build_coverage_strata <- function(catch, dims = NULL, distributions = NULL,
 #  What the coverage plots do with the table (internal, one place)
 # ---------------------------------------------------------------------
 
-#' Is this a coverage table?
+#' What a `what` argument, or a coverage table, is about
 #'
-#' A [build_coverage_strata()] table is recognised by its own columns, so
-#' raw catch (even one that carries a row-level `coverage`) is never mistaken
-#' for one.
+#' One answer to two questions: `"discard"`, `"length"` or `"age"`. Given the
+#' `what` a caller typed it settles the spelling - callers reasonably type the
+#' plural or a near-synonym (`"discards"`, `"Length"`, `"len"`) - and anything
+#' else is a clear error, rather than a value that falls through to the biology
+#' pipeline and fails obscurely. Given a data frame it says which kind of
+#' [build_coverage_strata()] table it is, recognised by its own columns, so raw
+#' catch (even one that carries a row-level `coverage`) is never mistaken for
+#' one.
 #'
-#' @param x Anything.
-#' @return `"discard"`, `"length"`, `"age"` or `NA` (not a coverage table).
+#' @param x A string - discard(s), length(s) / len, age(s) - or a data frame.
+#' @return `"discard"`, `"length"` or `"age"`; `NA` for a data frame that is not
+#'   a coverage table.
 #' @keywords internal
 #' @noRd
 #' @export
-coverage_table_what <- function(x) {
-  if (!is.data.frame(x)) return(NA_character_)
-  nm <- names(x)
-  if (all(c("weightingTotal", "rate", "landings", "coverage") %in% nm))
-    return("discard")
-  if (all(c("distributionType", "total", "coverage") %in% nm))
-    return(if (any(x$distributionType %in% "Age")) "age" else "length")
-  NA_character_
+coverage_what <- function(x) {
+  if (is.data.frame(x)) {
+    nm <- names(x)
+    if (all(c("weightingTotal", "rate", "landings", "coverage") %in% nm))
+      return("discard")
+    if (all(c("distributionType", "total", "coverage") %in% nm))
+      return(if (any(x$distributionType %in% "Age")) "age" else "length")
+    return(NA_character_)
+  }
+  out <- switch(tolower(trimws(as.character(x))),
+    discard = , discards = "discard",
+    length = , lengths = , len = "length",
+    age = , ages = "age",
+    NA_character_)
+  if (is.na(out))
+    stop("`what` must be \"discard\", \"length\" or \"age\" (got \"", x,
+         "\")", call. = FALSE)
+  out
 }
 
 #' Pool a coverage table to the cells a coverage plot draws
@@ -460,9 +476,9 @@ coverage_table_what <- function(x) {
 coverage_cells <- function(catch, distributions, keys, what, what_given,
                            catchCategory, fn) {
   keys <- unique(keys[!is.na(keys) & nzchar(keys)])
-  tw <- coverage_table_what(catch)
+  tw <- coverage_what(catch)
   if (!is.na(tw)) {
-    if (what_given && !identical(normalize_what(what), tw))
+    if (what_given && !identical(coverage_what(what), tw))
       stop(fn, "(): `catch` is a ", tw, " coverage table but what = \"",
            what, "\"", call. = FALSE)
     what <- tw
@@ -483,7 +499,7 @@ coverage_cells <- function(catch, distributions, keys, what, what_given,
              call. = FALSE)
     }
   } else {
-    what <- normalize_what(what)
+    what <- coverage_what(what)
     tbl <- build_coverage_strata(catch, keys, distributions, what,
                                  catchCategory)
   }

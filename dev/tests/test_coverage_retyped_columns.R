@@ -61,9 +61,9 @@ Cn <- retype(cd); Dn <- retype(dd)
 ok(drawable(plot_coverage_bar(Cn, Dn, y = "metier4", fill = "ICESSubArea", what = "length", catchCategory = "Lan")),
    "plot_coverage_bar(what = \"length\", fill = \"ICESSubArea\"): the call that failed")
 ok(drawable(plot_coverage_bar(Cn, Dn, y = "metier4", fill = "ICESSubArea", what = "age")), "... and at age")
-ok(drawable(plot_coverage_heat(Cn, Dn, y = "metier4", x = "ICESSubArea", what = "length")), "plot_coverage_heat(x = \"ICESSubArea\")")
-ok(drawable(plot_coverage_bubble(Cn, Dn, y = "metier4", x = "vesselFlagCountry", facet = "ICESSubArea", what = "length")),
-   "plot_coverage_bubble(facet = \"ICESSubArea\")")
+ok(drawable(plot_coverage_grid(Cn, Dn, y = "metier4", x = "ICESSubArea", what = "length")), "plot_coverage_grid(x = \"ICESSubArea\")")
+ok(drawable(plot_coverage_grid(type = "bubble", Cn, Dn, y = "metier4", x = "vesselFlagCountry", facet = "ICESSubArea", what = "length")),
+   "plot_coverage_grid(facet = \"ICESSubArea\")")
 ok(drawable(plot_coverage_bar(Cn, y = "metier4", fill = "ICESSubArea")), "the discard coverage too")
 ok(drawable(plot_NaLoA(Cn, Dn, fill = "ICESSubArea")) && drawable(plot_MWaLoA(Cn, Dn, colour = "ICESSubArea")),
    "plot_NaLoA() and plot_MWaLoA() with the retyped column as fill / colour")

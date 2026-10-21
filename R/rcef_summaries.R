@@ -27,8 +27,17 @@
 #'   any other.
 #' @param fn The calling function, for error messages.
 #' @param min The fewest raised catches the caller accepts.
-#' @return A list: `data`, a named list of raised catches, and `single`,
-#'   `TRUE` when the argument was one bare data frame.
+#' @return A list: `data`, a named list of raised catches; `single`, `TRUE`
+#'   when the argument was one bare data frame; and `factor`, a function
+#'   `factor(x, var = NULL)` that turns the values `x` of one category column
+#'   of the raised catches into a factor in a sensible order. The levels are the
+#'   union of what the column `var` holds in any of the raised catches, as
+#'   strings: by size for `mesh` and `metier4_mesh` ([mesh_var_levels()]),
+#'   numerically for a numeric column (`seasonValue`: 2 before 10), in
+#'   factor-level order for a factor, alphabetically for anything else. Values
+#'   missing from them are dropped from the levels; a missing value becomes its
+#'   own last level, `"NA"`, rather than silently falling out of a plot or a
+#'   table. `var = NULL` is no column: one level, `"All"`.
 #' @keywords internal
 #' @noRd
 #' @export
@@ -83,45 +92,26 @@ scenario_list <- function(expr, value, env, scenarios_names = NULL,
     stop(fn, ": compares two or more raised catches, got ", length(vals),
          call. = FALSE)
   names(vals) <- nms
-  list(data = vals, single = single)
-}
-
-#' One category column of a raised catch, as a factor in a sensible order
-#'
-#' The levels are the union of what the column holds in any of the raised
-#' catches, as strings: by size for `mesh` and `metier4_mesh`
-#' ([mesh_var_levels()]), numerically for a numeric column (`seasonValue`: 2
-#' before 10), in factor-level order for a factor, alphabetically for anything
-#' else. Values missing from them are dropped from the levels; a missing value
-#' becomes its own last level, `"NA"`, rather than silently falling out of a plot
-#' or a table.
-#'
-#' @param x The values to turn into a factor.
-#' @param data A named list of raised catches.
-#' @param var The column the levels are taken from; `NULL` for no column (one
-#'   level, `"All"`).
-#' @return A factor.
-#' @keywords internal
-#' @noRd
-#' @export
-scenario_factor <- function(x, data, var = NULL) {
-  levels <- "All"
-  if (!is.null(var)) {
-    vals <- lapply(data, function(r) r[[var]])
-    levels <- mesh_var_levels(var, unlist(lapply(vals, as.character)))
-    if (is.null(levels))
-      levels <- if (all(vapply(vals, is.numeric, NA)))
-                  as.character(sort(unique(unlist(vals))))
-                else if (all(vapply(vals, is.factor, NA)))
-                  unique(unlist(lapply(vals, levels)))
-                else sort(unique(as.character(unlist(vals))))
-  }
-  x <- as.character(x)
-  if (anyNA(x)) {
-    x[is.na(x)] <- "NA"
-    levels <- c(levels, "NA")
-  }
-  factor(x, levels = unique(levels[levels %in% x]))
+  list(data = vals, single = single,
+       factor = function(x, var = NULL) {
+         levels <- "All"
+         if (!is.null(var)) {
+           cols <- lapply(vals, function(r) r[[var]])
+           levels <- mesh_var_levels(var, unlist(lapply(cols, as.character)))
+           if (is.null(levels))
+             levels <- if (all(vapply(cols, is.numeric, NA)))
+                         as.character(sort(unique(unlist(cols))))
+                       else if (all(vapply(cols, is.factor, NA)))
+                         unique(unlist(lapply(cols, levels)))
+                       else sort(unique(as.character(unlist(cols))))
+         }
+         x <- as.character(x)
+         if (anyNA(x)) {
+           x[is.na(x)] <- "NA"
+           levels <- c(levels, "NA")
+         }
+         factor(x, levels = unique(levels[levels %in% x]))
+       })
 }
 
 #' Imported against raised catch, by catch category: one raised catch or several
@@ -219,7 +209,7 @@ raised_overview_table <- function(raised_catch_scenarios, scenarios_names = NULL
     out
   }))
   d$scenario <- factor(d$scenario, levels = names(sc$data))
-  for (v in by) d[[v]] <- scenario_factor(d[[v]], sc$data, v)
+  for (v in by) d[[v]] <- sc$factor(d[[v]], v)
 
   cell <- c("scenario", by)
   agg <- d %>%

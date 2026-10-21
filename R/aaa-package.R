@@ -35,7 +35,7 @@
 #' | let the data choose the groups - the strata that are raised (or allocated) together, and the data each takes its discard ratio (or distribution) from - from the variables that matter most to least | [recommend_groups()] |
 #' | check the groups you wrote before raising or allocating | [check_group_conditions()] |
 #' | raise the discards | [catchRaising()] |
-#' | see which strata were raised from which group, and how the strata fell into the levels of the groups | [plot_river()], [plot_groups()] |
+#' | see which strata were raised from which group, and how the strata fell into the levels of the groups | [plot_river()], [plot_recommended_groups()] |
 #' | compare two or more raised catches, as a table or a figure | [raised_overview_table()], [plot_compare_raised()] |
 #' | give every stratum a length or age distribution | [catchAllocationAoL()] |
 #' | add the allocation up into catch-at-length / -age and mean-weight tables | [catchAtAoLAggregation()], [meanWoLatAoLAggregation()] |
@@ -58,7 +58,7 @@
 #'
 #' ```
 #' derive_fields() -> build_coverage_strata()
-#'   -> plot_coverage_heat() / _bubble() / _bar() / _map() | plot_DR() | plot_catches()
+#'   -> plot_coverage_grid() / _bar() / _map() | plot_DR() | plot_catches()
 #' ```
 #'
 #' [derive_fields()] runs once, on the raw catch (and on its distributions):
@@ -87,8 +87,9 @@
 #' returns the same two lists, chosen from the data: you name the variables that
 #' matter, from the one that matters most to the one that matters least, and how
 #' well sampled a pool has to be, and every stratum is raised (or allocated) from
-#' the narrowest pool that is. [plot_groups()] and [plot_river()] show how the
-#' strata fell into the levels.
+#' the narrowest pool that is - the stratum itself first, All by All last.
+#' [plot_recommended_groups()] and [plot_river()] show how the strata fell into the
+#' levels.
 #'
 #' The distributions of an allocation reach their catch through `domainBiology`
 #' and, for a stratum the allocation estimated one for, through the
