@@ -244,6 +244,25 @@ distributionsCombined(alloc$distribution, alloc$catch, originType_catch = "WGEst
                       versionDescription = "first run")
 ```
 
+The allocation setup of the same format says how the discards were raised, stratum
+by stratum, in two more tables made by `catchAllocation()` from what
+`catchRaising()` was given and made - the raised catch and the conditions of the
+groups, with the header of the CC: the **Catch Allocation Results** (CAR), every
+stratum of the raised catch with the group it was raised for
+(`catchAllocationGroupNameTarget`, on the raised discards) or fed
+(`catchAllocationGroupNameSource`, on the donors), and `imported` `"Y"` or `"N"`; and
+the **Catch Allocation Settings** (CAS), the donor strata behind each group's discard
+ratio - `rate`, the discards over the landings of the donor, and `weightingTotal`, the
+landings that weight it. The countries are written as their ISO 3166 code:
+
+```r
+alloc_tables <- catchAllocation(raised, strataCond, matchedDataCond,
+                                workingGroupYear = 2026, version = 1,
+                                versionDescription = "first run")
+alloc_tables$CAR
+alloc_tables$CAS
+```
+
 Raising uses the discard estimates whose `originType` matches the `originType`
 argument (`"WGEstimate"` by default, or `"Official"`), so that is the value the
 rows you want raised must carry.

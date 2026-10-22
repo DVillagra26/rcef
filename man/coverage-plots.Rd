@@ -174,7 +174,7 @@ columns has other strata
 behind it. The rest of the caption spells out how the numbers on the
 figure are worked out - the value in a tile, what a bubble's size or a
 bar means - leaving out anything a legend already shows. On the heatmap
-and bubble grid the active thresholds move into their own boxed guide,
+and bubble grid the thresholds in use move into their own boxed guide,
 bottom right, under the in-panel status legend - a detail section of it,
 not a caption about the plot itself.
 }

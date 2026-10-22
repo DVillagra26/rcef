@@ -36,19 +36,17 @@ discard-raising scripts use: a named list of quosures per method
 discard rate is estimated from), checked, then raised. Nothing wraps that
 call.
 
-The last two sections give the two output data sets this whole vignette
-exists for:
+The output sections give the data sets this whole vignette exists for:
 
 * **CC** (Catch Combined) - one row per `catchCategory`, the stock-wide raised
   total, in the format of the stock coordination (SCF v4): `catchCombined()`
   makes it;
-* **CAR / CAS** - every raised row, and the donor strata behind each group's
-  rate,
-
-the second following the schema of a real ICES stock-annex CAR / CAS export.
-CAR and CAS are built inline, as plain data frames, on purpose - not wrapped in
-functions and not written to csv yet. Once the shape is right, both become
-functions that build and save these data sets; that is future work.
+* **CAR / CAS** (Catch Allocation Results and Settings) - every stratum of the
+  raised catch with the group it was raised for or fed, and the donor strata
+  behind each group's discard ratio, in the allocation setup of the same format:
+  `catchAllocation()` makes both from the raised catch and the conditions of the
+  groups. They are plain data frames in this vignette; writing them to csv is
+  one `write.csv()` away.
 
 # Data
 
@@ -339,180 +337,152 @@ cc_out[, c("recordType", "workingGroupYear", "version", "year", "stock",
            "catchCategory", "variableType", "variableUnit", "total")]
 ```
 
-# Output: CAR and CAS (detailed)
+# Output: CAR and CAS (Catch Allocation Results and Settings)
 
-Two tables sharing one allocation-scheme identity (`recordType`, `version`,
-`versionDescription` and `catchAllocationSchemeName` line up between them, the
-same values the CC section already set) - kept as two separate data frames
-for now, per-row CAR and per-donor-stratum CAS. Combining them into one csv
-with CAS appended under CAR, and writing either to disk, is future work.
+The allocation setup of the stock coordination format writes down *how* the
+discards were raised, stratum by stratum, in two tables that go with the CC:
 
-## CAR: every row `catchRaising()` produced
+* the **CAR** (Catch Allocation Results) has every stratum of the raised
+  catch - the landings, the discards that were reported and the discards the
+  raising made - and says which group each was raised for or fed;
+* the **CAS** (Catch Allocation Settings) has the donor strata behind each
+  group's discard ratio: the ratio of each donor and the weight it counts for.
 
-Each row is tagged with the **group** that raised it. `catchAllocationGroupName`
-is filled *only* where a row was actually raised - `imported` is Y / N,
-matching the source RDBESStockCoord convention rather than rcef's own
-"imported" / "raised" wording, and it is that column, not the group name, that
-marks a row as sampled. The group itself is rebuilt here by re-testing every
-row against `strataCond_manual` - the same partition `check_group_conditions()`
-already confirmed above is exhaustive and non-overlapping, so exactly one
-group matches every row, imported or raised alike (the engine's own `DrGroup`
-column agrees, and is filled the same way on both - it is `.car_group` below,
-not `DrGroup`, that is blanked back out on imported rows, only because the CAR
-schema itself only names a group where raising actually happened).
+`catchAllocation()` makes both from what `catchRaising()` was given and made:
+the raised catch and the conditions of the groups. The header is the CC's -
+`workingGroupYear`, `version` and `versionDescription` are given the same values
+as in the section above - and `catchAllocationSchemeName` names the scheme
+(it is the `versionDescription` when it is not given). The weights stay in the
+kg of the raising (`unit = "t"` has them in tonnes).
 
-```{r car}
-raised_manual <- raised_manual %>%
-  mutate(.car_group = case_when(
-    !!strataCond_manual$G1 ~ "G1",
-    !!strataCond_manual$G2 ~ "G2",
-    !!strataCond_manual$G3 ~ "G3",
-    !!strataCond_manual$G4 ~ "G4",
-    !!strataCond_manual$G5 ~ "G5",
-    # !!strataCond_manual$G6 ~ "G6",
-    TRUE ~ NA_character_))
+```{r car-cas}
+alloc_out <- catchAllocation(catch_data = raised_manual,
+                             condition_raising_st_list = strataCond_manual,
+                             condition_matched_data_list = matchedDataCond_manual,
+                             originType = "WGEstimate", variableType = "WeightLive",
+                             catchAllocationSchemeName = car_scheme_name,
+                             workingGroupYear = 2025,
+                             version = car_version, versionDescription = car_version_desc)
+car_out <- alloc_out$CAR
+cas_out <- alloc_out$CAS
 
-# the engine's own DrGroup agrees with the re-test on every raised row
-with(subset(raised_manual, importedOrRaised == "raised"),
-     all(DrGroup == .car_group))
-
-car_out <- raised_manual %>%
-  mutate(recordType = "CAR",
-         version = car_version,
-         versionDescription = car_version_desc,
-         catchAllocationSchemeName = car_scheme_name,
-         catchAllocationGroupName = if_else(importedOrRaised == "raised",
-                                            .car_group, NA_character_),
-         imported = if_else(importedOrRaised == "imported", "Y", "N")) %>%
-  select(-.car_group, -importedOrRaised) %>%
-  select(recordType, version, versionDescription, catchAllocationSchemeName,
-         catchAllocationGroupName, imported, everything())
-
-cat(sprintf("CAR: %d rows x %d columns (%d imported, %d raised across %d groups)\n",
-            nrow(car_out), ncol(car_out),
-            sum(car_out$imported == "Y"), sum(car_out$imported == "N"),
-            n_distinct(car_out$catchAllocationGroupName, na.rm = TRUE)))
+cat(sprintf("CAR: %d rows x %d columns (%d imported, %d raised across %d groups)\nCAS: %d donor rows x %d columns across %d groups\n",
+            nrow(car_out), ncol(car_out), sum(car_out$imported == "Y"), sum(car_out$imported == "N"),
+            n_distinct(car_out$catchAllocationGroupNameTarget, na.rm = TRUE),
+            nrow(cas_out), ncol(cas_out), n_distinct(cas_out$catchAllocationGroupName)))
 ```
 
-`car_out` carries the scheme identity columns first, then every column of the
-raised table. The raised rows first, key columns only:
+A raised discard whose group had no donor to take a ratio from has no total
+(`NaN`: here the IBC group, G5, whose own discard records are all of another
+`originType`). It is not a result, so it is left out - `catchAllocation()` warns how many and
+which (this vignette does not print warnings) - and the group is neither a
+target nor a source.
 
-```{r car-head}
+## CAR: every stratum, imported or raised
+
+`imported` is `"N"` for the discards the raising made (the `importedOrRaised`
+column of the raised catch) and `"Y"` for all the others. Two columns say how a
+stratum took part in the raising, and each is filled for one kind of row only:
+
+* `catchAllocationGroupNameTarget`: the group the stratum was **raised for** -
+  on the raised discards. The group is the one of `strataCond_manual` the
+  stratum falls in (the engine's own `DrGroup` agrees; the function warns when
+  it does not).
+* `catchAllocationGroupNameSource`: the group(s) the stratum **feeds** - on the
+  donor strata, their landings as well as their discards. Which strata are
+  donors of a group comes from its `matchedDataCond`: the strata it selects
+  that have a discard estimate and landings. A stratum that feeds several
+  groups has all of them, separated by `"; "` (G4, the rest of the gears, draws
+  on every gear, so most strata also feed G4).
+
+The scheme name is written on the raised discards only, the sampling
+(`PSU`, `numPSUs`, `numTrips`) on the strata that have a sample of their own,
+and the country is the ISO code the format wants (the converted InterCatch files
+spell it out). The raised discards first:
+
+```{r car-raised}
 car_out %>%
-  arrange(desc(imported == "N"), catchAllocationGroupName) %>%
-  select(catchAllocationGroupName, imported, vesselFlagCountry, seasonValue,
+  filter(imported == "N") %>%
+  select(catchAllocationGroupNameTarget, vesselFlagCountry, seasonValue,
          areaValue, fleetValue, catchCategory, total) %>%
-  head(10)
+  head(8)
+```
+
+and the donors of the groups, with the groups they feed:
+
+```{r car-donors}
+car_out %>%
+  filter(!is.na(catchAllocationGroupNameSource)) %>%
+  count(catchCategory, catchAllocationGroupNameSource)
 ```
 
 ## Which strata are raised from which group
 
-`raised_manual$.car_group`, built above, already tags every row with its
-group - nothing new to derive. `plot_river()` draws it as an alluvial: metier
-on the left, raising group on the right, ribbon width the landings weight -
-the same "how much of the stock comes from which pool" question the CAR/CAS
-tables answer in numbers, here in one picture. Landings only (`catchCategory`
-is not itself a raising outcome, and counting discards too would double the
-weight of a raised stratum against an imported one).
+`raised_manual$DrGroup` tags every row with its group - nothing new to derive.
+`plot_river()` draws it as an alluvial: metier on the left, raising group on the
+right, ribbon width the landings weight - the same "how much of the stock comes
+from which pool" question the CAR and CAS tables answer in numbers, here in one
+picture. Landings only (`catchCategory` is not itself a raising outcome, and
+counting discards too would double the weight of a raised stratum against an
+imported one).
 
 ```{r river, fig.height = 5.5, fig.alt = "Alluvial plot of landings weight flowing from each metier to its raising group"}
 raised_manual %>%
   filter(catchCategory == "Lan") %>%
   mutate(.landings_t = total / 1000) %>%
-  plot_river(left_var = "metier4", right_var = ".car_group", value_var = ".landings_t")
+  plot_river(left_var = "metier4", right_var = "DrGroup", value_var = ".landings_t")
 ```
 
 ## CAS: the donor strata behind each group's rate
 
-Only the imported `Dis` rows that satisfy at least one group's
-`matchedDataCond` - the ones `catchRaising()` actually pulled a rate from.
-Unlike CAR, this is **not** a partition: G4's `matchedDataCond` draws on every
-gear (see the manual grouping above), so a stratum that is G1's own donor is
-*also* one of G4's many donors - it appears once *per group it feeds*, not once
-per row.
-
-`weightingTotal` and `rate` are per this stratum, matched on `domainCatchDis` -
-the column CEF itself uses to link a `Dis` estimate to its domain:
-`weightingTotal` is that domain's own landed weight (kg, same unit as `total` -
-unlike the CC table, CAR and CAS stay in the CEF's native kg throughout), and
-`rate` is this row's discards over that landed weight (discards / landings,
-*not* the raising side's `discard_rate` = discards / (landings + discards) -
-matching the source RDBESStockCoord convention's unbounded `dis_ratio`, and
-the same `rate` `build_coverage_strata()` and `plot_DR()` use,
-confirmed against the reference CAR-CAS_detailed.csv: its `rate` column is
-exactly `total / weightingTotal`, occasionally above 1).
-
-```{r cas}
-landings_by_domain <- catch_data %>%
-  filter(catchCategory == "Lan", originType == "WGEstimate",
-         variableType == "WeightLive", !is.na(domainCatchDis)) %>%
-  group_by(domainCatchDis) %>%
-  summarise(.landings = sum(total, na.rm = TRUE), .groups = "drop")
-
-cas_out <- bind_rows(lapply(names(matchedDataCond_manual), function(g)
-  catch_data %>%
-    filter(!!matchedDataCond_manual[[g]], catchCategory == "Dis",
-           !is.na(domainCatchDis), originType == "WGEstimate",
-           variableType == "WeightLive") %>%
-    mutate(catchAllocationGroupName = g))) %>%
-  left_join(landings_by_domain, by = "domainCatchDis") %>%
-  mutate(recordType = "CAS",
-         version = car_version,
-         versionDescription = car_version_desc,
-         catchAllocationSchemeName = car_scheme_name,
-         imported = "Y",
-         weightingCategory = "Lan",
-         weightingParameter = "WeightLive",
-         averagingMethod = "weighted",
-         weightingTotal = round(.landings, 3),
-         rate = round(total / .landings, 4)) %>%
-  select(-.landings) %>%
-  select(recordType, version, versionDescription, catchAllocationSchemeName,
-         catchAllocationGroupName, imported, everything())
-
-cat(sprintf("CAS: %d donor rows x %d columns across %d groups (%d distinct strata - some strata donate to more than one group)\n",
-            nrow(cas_out), ncol(cas_out), n_distinct(cas_out$catchAllocationGroupName),
-            n_distinct(cas_out$domainCatchDis)))
-```
-
-The first donor rows, key columns only:
+One row for each donor discard stratum of each group. Unlike the CAR this is
+**not** a partition: a stratum that is G1's own donor is *also* one of G4's many
+donors - it appears once *per group it feeds*. `rate` is the discards of the
+donor over its landings (discards / landings, an unbounded ratio that can exceed
+1 - not the discards over landings plus discards), and `weightingTotal` is the
+landings that weight it. The averaging, the weighting category and the weighting
+parameter are those of `catchRaising()`: the ratio of a group is the mean of its
+donors' ratios, weighted by their landings (`Weighted`, `Lan`, `WeightLive`).
 
 ```{r cas-head}
 cas_out %>%
-  arrange(catchAllocationGroupName) %>%
-  select(catchAllocationGroupName, vesselFlagCountry, areaValue, fleetValue,
-         domainCatchDis, total, weightingTotal, rate) %>%
-  head(10)
+  select(catchAllocationGroupName, vesselFlagCountry, seasonValue, areaValue,
+         fleetValue, rate, averagingMethod, weightingCategory, weightingParameter,
+         weightingTotal) %>%
+  head(8)
 ```
 
 ## Do CAR and CAS describe the same groups?
 
-Every group CAR raised something for should have at least one CAS donor row,
-and vice versa - the two tables describing the same groups, not two different
-countings. A group *can* legitimately fail this (this data's G5 / IBC does):
-`catchRaising()` and every donor filter above are restricted to
-`originType == "WGEstimate"`, so a group whose own discard records all carry
-some *other* `originType` (IBC's here are all `"Official"`) has no
-`WGEstimate` donor at all - CAS then has no row for it, and its CAR rows
-raised on nothing get `total = NaN`, not a real weight. That is a genuine gap
-in the **scheme** (this group cannot really be raised as defined), not a bug
-in these tables - so it is printed by name below, never just a silent `FALSE`.
+The two tables describe the same groups, not two different countings, and they
+add up to the other tables. The CAR adds up to the CC; every group the CAR
+raised something for has donors in the CAS, and vice versa; and the donors of a
+group give the discard ratio its raised discards were made with
+(`sum(rate * weightingTotal) / sum(weightingTotal)` is the raised discards over
+the landings they were made from).
 
 ```{r linked}
-car_groups <- na.omit(unique(car_out$catchAllocationGroupName))
+car_dis <- sum(car_out$total[car_out$catchCategory == "Dis"]) / 1000
+cc_dis  <- cc_out$total[cc_out$catchCategory == "Dis"]
+cat(sprintf("the CAR adds up to the CC (discards, t): %.3f against %.3f\n", car_dis, cc_dis))
+
+car_groups <- na.omit(unique(car_out$catchAllocationGroupNameTarget))
 cas_groups <- unique(cas_out$catchAllocationGroupName)
-ok_linked <- setequal(car_groups, cas_groups)
-cat(sprintf("every CAR group also appears in CAS, and vice versa: %s\n", ok_linked))
-if (!ok_linked) {
-  raised_no_donor  <- setdiff(car_groups, cas_groups)
-  donor_not_raised <- setdiff(cas_groups, car_groups)
-  if (length(raised_no_donor))
-    cat(sprintf("  raised in CAR but no CAS donor (raised total is NaN - check originType): %s\n",
-                paste(raised_no_donor, collapse = ", ")))
-  if (length(donor_not_raised))
-    cat(sprintf("  donor in CAS but nothing raised under it in CAR: %s\n",
-                paste(donor_not_raised, collapse = ", ")))
-}
+cat(sprintf("every group raised in the CAR has donors in the CAS, and vice versa: %s\n",
+            setequal(car_groups, cas_groups)))
+
+# the discards raised in each group, and the ratio its donors give
+car_out %>%
+  filter(imported == "N") %>%
+  group_by(group = catchAllocationGroupNameTarget) %>%
+  summarise(raised_kg = sum(total), .groups = "drop") %>%
+  left_join(cas_out %>%
+              group_by(group = catchAllocationGroupName) %>%
+              summarise(donors = n(),
+                        donor_landings_kg = sum(weightingTotal),
+                        ratio = sum(rate * weightingTotal) / sum(weightingTotal),
+                        .groups = "drop"),
+            by = "group")
 ```
 
 `cc_out`, `car_out` and `cas_out` are plain data frames in this session;

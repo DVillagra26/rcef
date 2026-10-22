@@ -1,16 +1,21 @@
 # =====================================================================
-#  rcef_scf.R   (the Stock Coordination Format: Catch Combined and Distributions Combined)
+#  rcef_scf.R   (the Stock Coordination Format: Catch Combined, Distributions Combined
+#                and the Catch Allocation Results and Settings)
 #
 #  ORIGIN: this project (ILVO / RCEF Workbench). Freely refactorable.
 #
 #  The end of the chain: what catchRaising() and catchAllocationAoL() made is
-#  added up into the two tables of the stock coordination format (SCF v4), CC
-#  and DC.
+#  added up into the tables of the stock coordination format (SCF v4), CC and
+#  DC, and written down stratum by stratum in the allocation setup, CAR and CAS.
 #
 #    catchCombined()          the CC: the catch added up by year, stock, catch
 #                             category and whatever else the SCF reports by;
 #    distributionsCombined()  the DC: the numbers and the mean weight at length
-#                             or age of the same, in the same long format.
+#                             or age of the same, in the same long format;
+#    catchAllocation()        the CAR and the CAS: every stratum of the raised
+#                             catch, imported or raised, with the group it was
+#                             raised for or fed, and the donors behind each
+#                             group's discard ratio.
 #
 #  The adding up of the distributions is catchAtAoL() and meanWoLatAoL(). They
 #  do what catchAtAoLAggregation() and meanWoLatAoLAggregation() did in one
@@ -459,13 +464,35 @@ scf_header <- function(workingGroupYear, version, versionDescription, calendarYe
 # the ones the data has filled, each of its type, and the others `NA` - the header
 # of the file (scf_header()) on every row, the codes checked against the ones the
 # format accepts (a code of another kind is a warning, not an error: the table is
-# still the table, and the vocabularies grow), and sorted.
+# still the table, and the vocabularies grow), and sorted. `record` is "CC", "DC"
+# or, for the allocation setup, "CAR" and "CAS".
 #' @noRd
 #' @export
 scf_table <- function(d, record, header, fn)
 {
     d <- d %>%
         mutate(recordType = record, !!!header)
+    alloc <- record %in% c("CAR", "CAS")
+
+    ## The converted InterCatch files name the country (Belgium, UK(Scotland)); the
+    ## SCF wants its ISO 3166 code (BE, GB-SCT): the names that have a code get it, the
+    ## others are warned about below.
+    if (alloc && "vesselFlagCountry" %in% names(d))
+    {
+        iso <- c(Belgium = "BE", Bulgaria = "BG", Canada = "CA", Croatia = "HR",
+                 Denmark = "DK", Estonia = "EE", "Faroe Islands" = "FO", Finland = "FI",
+                 France = "FR", Germany = "DE", Greece = "GR", Greenland = "GL",
+                 Iceland = "IS", Ireland = "IE", Italy = "IT", Latvia = "LV",
+                 Lithuania = "LT", Netherlands = "NL", Norway = "NO", Poland = "PL",
+                 Portugal = "PT", Romania = "RO", Russia = "RU", Spain = "ES",
+                 Sweden = "SE", "Isle of Man" = "IM", Jersey = "JE", Guernsey = "GG",
+                 "UK (England)" = "GB-ENG", "UK(England)" = "GB-ENG",
+                 "UK (Scotland)" = "GB-SCT", "UK(Scotland)" = "GB-SCT",
+                 "UK (Wales)" = "GB-WLS", "UK(Wales)" = "GB-WLS",
+                 "UK (Northern Ireland)" = "GB-NIR", "UK(Northern Ireland)" = "GB-NIR")
+        named <- d$vesselFlagCountry %in% names(iso)
+        d$vesselFlagCountry[named] <- unname(iso[d$vesselFlagCountry[named]])
+    }
 
     ## A working group does not process data that come after it:
     late <- unique(d$year[! is.na(d$year) & d$year > header$workingGroupYear])
@@ -480,6 +507,10 @@ scf_table <- function(d, record, header, fn)
               "calendarYear", "startDateYear", "year", "workingGroup", "stock",
               "catchCategory", "seasonType", "seasonValue", "areaType", "areaValue",
               "fleetValue")
+    stratum <- c("vesselFlagCountry", "calendarYear", "startDateYear", "year",
+                 "workingGroup", "stock", "speciesCode", "catchCategory", "seasonType",
+                 "seasonValue", "areaType", "areaValue", "fisheriesManagementUnit",
+                 "fleetType", "fleetValue")
     fields <- switch(record,
                      CC = c(head, "variableType", "variableUnit", "total", "variance",
                             "PSU", "numPSUs", "numTrips"),
@@ -487,11 +518,22 @@ scf_table <- function(d, record, header, fn)
                             "distributionClass", "ageGroupPlus", "attributeType",
                             "attributeValue", "variableType", "variableUnit",
                             "valueType", "value", "variance", "PSU", "numPSUs",
-                            "numTrips", "numMeasurements"))
+                            "numTrips", "numMeasurements"),
+                     CAR = c("recordType", "workingGroupYear", "version",
+                             "versionDescription", "catchAllocationSchemeName",
+                             "catchAllocationGroupNameTarget",
+                             "catchAllocationGroupNameSource", "imported", stratum,
+                             "variableType", "variableUnit", "total", "variance",
+                             "PSU", "numPSUs", "numTrips", "comment"),
+                     CAS = c("recordType", "workingGroupYear", "version",
+                             "versionDescription", "catchAllocationSchemeName",
+                             "catchAllocationGroupName", stratum, "rate",
+                             "averagingMethod", "weightingCategory",
+                             "weightingParameter", "weightingTotal", "comment"))
     integer_fields <- c("workingGroupYear", "version", "year", "seasonValue",
-                        "distributionClass", "ageGroupPlus", "numPSUs", "numTrips",
-                        "numMeasurements")
-    numeric_fields <- c("total", "value", "variance")
+                        "speciesCode", "distributionClass", "ageGroupPlus", "numPSUs",
+                        "numTrips", "numMeasurements")
+    numeric_fields <- c("total", "value", "variance", "rate", "weightingTotal")
     for (f in setdiff(fields, names(d)))
         d[[f]] <- if (f %in% integer_fields) NA_integer_
                   else if (f %in% numeric_fields) NA_real_
@@ -524,21 +566,41 @@ scf_table <- function(d, record, header, fn)
                     " is not a code the SCF accepts (", paste(accepted, collapse = ", "),
                     ")", call. = FALSE)
     }
-    check("catchCategory", c("BMS", "Dis", "DisBMS", "Lan", "Catch"))
-    check("seasonType", c("Quarter", "Month", "Half-year"))
-    check("areaType", c("ICESArea", "ICESAreaNonFAO"))
+    check("catchCategory", switch(record, CAR = c("BMS", "Dis", "DisBMS", "Lan"),
+                                  CAS = c("BMS", "Dis", "DisBMS"),
+                                  c("BMS", "Dis", "DisBMS", "Lan", "Catch")))
+    check("seasonType", if (alloc) c("Year", "Quarter", "Month")
+                        else c("Quarter", "Month", "Half-year"))
+    check("areaType", if (alloc) "ICESArea" else c("ICESArea", "ICESAreaNonFAO"))
     check("PSU", c("Location", "LandingEvent", "FishingTrip", "FishingOperation",
                    "TemporalEvent", "FishingVessel", "OnshoreEvent"), sep = ";")
-    weight_units <- if (identical(record, "CC")) c("t", "kg") else c("g", "kg")
-    unit_ok <- ifelse(d$variableType %in% "WeightLive", d$variableUnit %in% weight_units,
-                      ifelse(d$variableType %in% "Number",
-                             d$variableUnit %in% c("N", "NE3"), TRUE))
-    if (any(! unit_ok))
-        warning(fn, "(): variableUnit ",
-                paste0("'", unique(d$variableUnit[! unit_ok]), "'", collapse = ", "),
-                " does not go with its variableType (WeightLive: ",
-                paste(weight_units, collapse = ", "), "; Number: N, NE3) - give `unit`",
-                call. = FALSE)
+    if (alloc)
+    {
+        check("imported", c("Y", "N"))
+        check("fleetType", c("Fleet", "Metier6", "Metier5", "Metier4"))
+        check("averagingMethod", c("Weighted", "Equal"))
+        check("weightingCategory", c("BMS", "Dis", "Lan", "DisBMS"))
+        check("weightingParameter", c("WeightLive", "Number"))
+        notiso <- unique(d$vesselFlagCountry[! is.na(d$vesselFlagCountry) &
+                                             ! grepl("^[A-Z]{2}(-[A-Z]{3})?$", d$vesselFlagCountry)])
+        if (length(notiso))
+            warning(fn, "(): vesselFlagCountry ", paste0("'", notiso, "'", collapse = ", "),
+                    " is not an ISO 3166 code the SCF accepts (BE, DK, GB-SCT ...)",
+                    call. = FALSE)
+    }
+    weight_units <- if (record %in% c("CC", "CAR")) c("t", "kg") else c("g", "kg")
+    if ("variableUnit" %in% fields)
+    {
+        unit_ok <- ifelse(d$variableType %in% "WeightLive", d$variableUnit %in% weight_units,
+                          ifelse(d$variableType %in% "Number",
+                                 d$variableUnit %in% c("N", "NE3"), TRUE))
+        if (any(! unit_ok))
+            warning(fn, "(): variableUnit ",
+                    paste0("'", unique(d$variableUnit[! unit_ok]), "'", collapse = ", "),
+                    " does not go with its variableType (WeightLive: ",
+                    paste(weight_units, collapse = ", "), "; Number: N, NE3) - give `unit`",
+                    call. = FALSE)
+    }
     if (identical(record, "DC"))
     {
         check("distributionType",
@@ -551,15 +613,24 @@ scf_table <- function(d, record, header, fn)
     }
 
     ## Sorted by the stratum, then - for the distributions - by type, sex and variable,
-    ## the classes in their order within each:
-    order_by <- c("year", "workingGroup", "stock", "catchCategory", "seasonType",
-                  "seasonValue", "areaType", "areaValue", "fleetValue",
-                  if (identical(record, "DC"))
-                      c("distributionType", "attributeType", "attributeValue",
-                        "variableType", "distributionClass")
-                  else "variableType")
+    ## the classes in their order within each. The allocation setup is sorted by the
+    ## country and the stratum, the landings and the discards of a stratum one after the
+    ## other (the settings by the group first, in the order the groups were given):
+    place <- c("seasonType", "seasonValue", "areaType", "areaValue", "fleetValue")
+    order_by <- switch(record,
+                       CAR = c("vesselFlagCountry", "year", "workingGroup", "stock", place,
+                               "catchCategory", "variableType"),
+                       CAS = c(".group", "vesselFlagCountry", "year", "workingGroup", "stock", place),
+                       c("year", "workingGroup", "stock", "catchCategory", place,
+                         if (identical(record, "DC"))
+                             c("distributionType", "attributeType", "attributeValue",
+                               "variableType", "distributionClass")
+                         else "variableType"))
+    if (identical(record, "CAS"))
+        d$.group <- match(d$catchAllocationGroupName, unique(d$catchAllocationGroupName))
     d %>%
-        arrange(across(all_of(order_by)))
+        arrange(across(all_of(order_by))) %>%
+        select(any_of(fields))
 }
 
 #' Catch Combined (CC): the catch of a stock, added up, in the format of the stock coordination
@@ -953,4 +1024,344 @@ distributionsCombined <- function(distribution_data,
              call. = FALSE)
 
     scf_table(res, "DC", header, fn)
+}
+
+#' Catch Allocation (CAR and CAS): how the discards were raised, in the format of the stock coordination
+#'
+#' @description
+#' The raised catch written down stratum by stratum, the way the allocation setup of the
+#' stock coordination format wants it: the **Catch Allocation Results (CAR)**, one row for
+#' every stratum of the catch - imported or raised - with the group it was raised for or
+#' fed, and the **Catch Allocation Settings (CAS)**, one row for every donor stratum of
+#' every group, with the discard ratio it gave and the weight it counted for. Give it what
+#' [catchRaising()] was given and made: the raised catch and the conditions of the groups.
+#'
+#' @details
+#' ## The CAR
+#'
+#' Every stratum of the raised catch is a row: the landings, the discards that were
+#' reported and the discards the raising made, whichever of the origin and the variable
+#' the raising was run for. `imported` says which: `"N"` for the discards the raising
+#' made (`importedOrRaised == "raised"`), `"Y"` for all the others. The two names of the
+#' group say how the strata took part in the raising:
+#'
+#' * `catchAllocationGroupNameTarget`: the group the stratum was **raised for**, on the
+#'   discards the raising made (`imported = "N"`) and on those only. It is the group of
+#'   `condition_raising_st_list` the stratum falls in.
+#' * `catchAllocationGroupNameSource`: the group(s) the stratum **feeds**, on the donor
+#'   strata (`imported = "Y"`) and on those only - the landings and the discards of the
+#'   strata whose discard ratio went into a group's. A stratum that feeds several groups
+#'   has them all, separated by `"; "`. A group's donors are the strata of its
+#'   `condition_matched_data_list` condition that have a discard estimate (and landings),
+#'   and the other rows of the same domain, as [catchRaising()] picks them.
+#' * `catchAllocationSchemeName` is written on the raised discards only.
+#'
+#' A group that raised nothing (it had no landings without an estimate, or no donor to
+#' take a ratio from) is neither a target nor a source: it is not in the tables. A raised
+#' discard with no total - the ratio of a group with no donor is `NaN` - is not a result
+#' and is left out, with a warning.
+#'
+#' The other fields are the catch's: `total` is added up for the strata that are one row
+#' of the CAR (the format has no `metier6`, so a stratum the CEF splits further is added
+#' up), and so are the counts of the sampling - `PSU`, `numPSUs` and `numTrips`, `NA` for
+#' the raised discards, which have no sample of their own - as in [catchCombined()], whose
+#' totals the CAR adds up to. The format asks for them on every imported discard (and BMS)
+#' stratum, and a stratum without them is counted in a warning. `variance` is left empty.
+#' `vesselFlagCountry` is the ISO 3166
+#' code the format wants: a country the converted InterCatch files name (`"Belgium"`,
+#' `"UK(Scotland)"`) is written as its code (`BE`, `GB-SCT`), and one with no code is
+#' warned about and kept.
+#'
+#' ## The CAS
+#'
+#' One row for each donor discard stratum of each group: `rate`, the discards over the
+#' landings of the donor (the discard ratio, which can exceed 1), and `weightingTotal`,
+#' the landings that weight it. This is how [catchRaising()] combines them: the ratio of a
+#' group is the mean of the donors' ratios weighted by their landings -
+#' `averagingMethod` `"Weighted"`, `weightingCategory` `"Lan"` and `weightingParameter`
+#' the variable of the raising (`"WeightLive"`) - and so `sum(rate * weightingTotal) /
+#' sum(weightingTotal)` of a group is the ratio the raised discards of the group were made
+#' with. That is checked: a group whose donors do not give the ratio its raised discards
+#' have is warned about - the conditions are not those of the raising, or the donors are
+#' not all in the catch given. The CAS strata are rows of the CAR (`imported = "Y"`,
+#' `Dis`, with the group in its source), by the country, year, season, area and fleet.
+#'
+#' ## The header
+#'
+#' `workingGroupYear`, `version`, `versionDescription`, `calendarYear` and
+#' `startDateYear` are those of [catchCombined()] - give them the same values - and are
+#' written on every row. `catchAllocationSchemeName` is the name of the scheme the discards
+#' were allocated by; it is the `versionDescription` when not given.
+#'
+#' @param catch_data The raised catch: the result of [catchRaising()], with its
+#'   `importedOrRaised`, `DrGroup` and the catch's own columns.
+#' @param condition_raising_st_list,condition_matched_data_list The conditions the catch was
+#'   raised with: the strata each group raises and the data each takes its discard ratio
+#'   from, as in [catchRaising()] (the same names and order; quosures or text, not logical
+#'   vectors, which refer to the rows of the catch before the raising). The matched data
+#'   default to the strata. A scheme of [recommend_groups()] has both in `strataCond` and
+#'   `matchedDataCond`. A condition that uses an object of the session (a list of strata,
+#'   say) rather than columns of the catch is evaluated where it was made: unquote the
+#'   object into it - `rlang::quo(Stratum %in% !!high)` - to keep the condition for another
+#'   session (`saveRDS()`).
+#' @param originType,variableType The origin and the variable of the rows the catch was
+#'   raised for, as in [catchRaising()]: `"WGEstimate"` and `"WeightLive"` by default.
+#'   The rows of other origins and variables are not part of the tables.
+#' @param catchAllocationSchemeName The name of the scheme the discards were allocated by,
+#'   a string; default the `versionDescription`.
+#' @param unit The unit to convert the weights to before the tables are made: `"t"` or
+#'   `"kg"` (for weights; the raising works in kg). `NULL` (default) leaves them as they
+#'   are.
+#' @param round Digits to round `total` and `weightingTotal` to; `NULL` (default) does not
+#'   round. The rates are not rounded.
+#' @param workingGroupYear,version,versionDescription,calendarYear,startDateYear The header
+#'   of [catchCombined()]; `workingGroupYear` has no default.
+#' @return A list of two tibbles, with the fields of the SCF in their order:
+#'   `CAR` (`recordType`, `workingGroupYear`, `version`, `versionDescription`,
+#'   `catchAllocationSchemeName`, `catchAllocationGroupNameTarget`,
+#'   `catchAllocationGroupNameSource`, `imported`, `vesselFlagCountry`, `calendarYear`,
+#'   `startDateYear`, `year`, `workingGroup`, `stock`, `speciesCode`, `catchCategory`,
+#'   `seasonType`, `seasonValue`, `areaType`, `areaValue`, `fisheriesManagementUnit`,
+#'   `fleetType`, `fleetValue`, `variableType`, `variableUnit`, `total`, `variance`,
+#'   `PSU`, `numPSUs`, `numTrips`, `comment`) and `CAS` (`recordType`,
+#'   `workingGroupYear`, `version`, `versionDescription`, `catchAllocationSchemeName`,
+#'   `catchAllocationGroupName`, `vesselFlagCountry`, `calendarYear`, `startDateYear`,
+#'   `year`, `workingGroup`, `stock`, `speciesCode`, `catchCategory`, `seasonType`,
+#'   `seasonValue`, `areaType`, `areaValue`, `fisheriesManagementUnit`, `fleetType`,
+#'   `fleetValue`, `rate`, `averagingMethod`, `weightingCategory`, `weightingParameter`,
+#'   `weightingTotal`, `comment`). A code the SCF does not accept is warned about.
+#' @seealso [catchRaising()] for the raising, [recommend_groups()] for groups to give it,
+#'   [catchCombined()] for the catch added up.
+#' @family stock coordination format
+#' @md
+#' @examples
+#' \dontrun{
+#' strataCond <- list(TBB = rlang::quo(metier4 == "TBB"), REST = rlang::quo(metier4 != "TBB"))
+#' raised <- catchRaising(catch, strataCond, logFile = tempfile(fileext = ".txt"))
+#'
+#' alloc <- catchAllocation(raised, strataCond,
+#'                          workingGroupYear = 2026, version = 1,
+#'                          versionDescription = "WGNSSK 2026, first run")
+#' alloc$CAR
+#' alloc$CAS
+#'
+#' # the discards of every group can be read back from its donors
+#' with(alloc$CAS[alloc$CAS$catchAllocationGroupName == "TBB", ],
+#'      sum(rate * weightingTotal) / sum(weightingTotal))
+#' }
+#' @export
+catchAllocation <- function(catch_data,
+                            condition_raising_st_list,
+                            condition_matched_data_list = condition_raising_st_list,
+                            originType = c("WGEstimate", "Official"),
+                            variableType = c("WeightLive", "Number"),
+                            catchAllocationSchemeName = NULL,
+                            unit = NULL,
+                            round = NULL,
+                            workingGroupYear,
+                            version = 1,
+                            versionDescription = NA_character_,
+                            calendarYear = "Y",
+                            startDateYear = NA_character_)
+{
+    fn <- "catchAllocation"
+    header <- scf_header(workingGroupYear, version, versionDescription,
+                         calendarYear, startDateYear, fn)
+    originType <- match.arg(originType, c("WGEstimate", "Official"), several.ok = FALSE)
+    variableType <- match.arg(variableType, c("WeightLive", "Number"), several.ok = FALSE)
+    scheme <- if (is.null(catchAllocationSchemeName)) header$versionDescription
+              else catchAllocationSchemeName
+    if (! (is.character(scheme) && length(scheme) == 1 && ! is.na(scheme) && nzchar(scheme)))
+        stop(fn, "(): `catchAllocationSchemeName` is the name of the scheme the discards ",
+             "were allocated by, which the SCF asks for: give it, or a `versionDescription` ",
+             "to take it from", call. = FALSE)
+
+    ## ---- the catch: the rows the raising was run for
+    d <- as.data.frame(catch_data, stringsAsFactors = FALSE)
+    stratum <- c("vesselFlagCountry", "year", "workingGroup", "stock", "speciesCode",
+                 "catchCategory", "seasonType", "seasonValue", "areaType", "areaValue",
+                 "fisheriesManagementUnit", "fleetType", "fleetValue")
+    miss <- setdiff(c(setdiff(stratum, "fisheriesManagementUnit"), "originType",
+                      "variableType", "variableUnit", "total", "domainCatchDis",
+                      "importedOrRaised"), names(d))
+    if (length(miss))
+        stop(fn, "(): `catch_data` has no column ", paste0("'", miss, "'", collapse = ", "),
+             " - it is the result of catchRaising()", call. = FALSE)
+    for (f in setdiff(c("fisheriesManagementUnit", "PSU", "numPSUs", "numTrips", "comment"),
+                      names(d)))
+        d[[f]] <- NA
+    w <- d[d$originType %in% originType & d$variableType %in% variableType, , drop = FALSE]
+    if (nrow(w) == 0)
+        stop(fn, "(): no catch rows with originType '", originType, "' and variableType '",
+             variableType, "'", call. = FALSE)
+    if (! is.null(unit))
+        w <- convert_field(w, valueField = "total", to = unit)
+    rownames(w) <- NULL
+    n <- nrow(w)
+
+    ## ---- the groups: the conditions of the raising, a group's name for both
+    as_quo <- function(x, what)
+    {
+        if (is.character(x)) x <- eval(rlang::parse_expr(paste0("rlang::quo(", x, ")")))
+        if (! rlang::is_quosure(x))
+            stop(fn, "(): `", what, "` are conditions as catchRaising() takes them, ",
+                 "quosures (rlang::quo(metier4 == \"TBB\")) or text; a logical vector refers ",
+                 "to the rows of the catch before the raising", call. = FALSE)
+        x
+    }
+    if (length(condition_raising_st_list) != length(condition_matched_data_list))
+        stop(fn, "(): `condition_raising_st_list` and `condition_matched_data_list` are the ",
+             "conditions of the same groups: they have to be as long", call. = FALSE)
+    strata  <- lapply(condition_raising_st_list, as_quo, what = "condition_raising_st_list")
+    matched <- lapply(condition_matched_data_list, as_quo, what = "condition_matched_data_list")
+    if (is.null(names(strata))) names(strata) <- paste0("G", seq_along(strata))
+    names(matched) <- names(strata)
+    rows_of <- function(q)
+    {
+        r <- rep_len(rlang::eval_tidy(q, data = w), n)
+        r[is.na(r)] <- FALSE
+        r
+    }
+
+    ## the group each stratum is raised for: the group whose strata it falls in
+    in_strata <- vapply(strata, rows_of, logical(n))
+    in_strata <- matrix(in_strata, nrow = n)
+    twice <- rowSums(in_strata) > 1 & w$catchCategory %in% c("Lan", "Dis")
+    if (any(twice))
+        stop(fn, "(): ", sum(twice), " rows fall in the strata of more than ",
+             "one group - the strata of `condition_raising_st_list` do not overlap, as ",
+             "catchRaising() asks", call. = FALSE)
+    group_of <- ifelse(rowSums(in_strata) == 1, names(strata)[max.col(in_strata * 1, "first")],
+                       NA_character_)
+    raised <- w$importedOrRaised %in% "raised"
+    if (any(raised & is.na(group_of)))
+        stop(fn, "(): ", sum(raised & is.na(group_of)), " raised rows fall in none of the ",
+             "strata of `condition_raising_st_list`: those are not the groups the catch was ",
+             "raised with", call. = FALSE)
+    if ("DrGroup" %in% names(w))
+    {
+        other <- ! is.na(w$DrGroup) & (is.na(group_of) | w$DrGroup != group_of)
+        if (any(other))
+            warning(fn, "(): ", sum(other), " rows were raised in another group than ",
+                    "`condition_raising_st_list` puts them in (the DrGroup of the raising): ",
+                    "the conditions are not those of the raising", call. = FALSE)
+    }
+
+    ## a raised discard with no total (NaN: its group had no donor) is not a result
+    keep <- is.finite(w$total)
+    if (any(! keep))
+        warning(fn, "(): ", sum(! keep), " rows have no total and are not reported (",
+                paste0(names(table(paste(w$catchCategory, w$importedOrRaised, group_of)[! keep])),
+                       collapse = "; "),
+                "): a group with no donor has no discard ratio to raise by", call. = FALSE)
+
+    ## ---- the donors of each group that raised something: the strata of its matched
+    ## data with a discard estimate, as catchRaising() has them - the rows the condition
+    ## selects, and the others of their domains - and the landings of each domain
+    imp <- ! raised
+    key <- c("vesselFlagCountry", "year", "workingGroup", "stock", "speciesCode",
+             "domainCatchDis", "originType", "variableType")
+    dom <- ifelse(is.na(w$domainCatchDis), NA_character_,
+                  do.call(paste, c(unname(as.list(w[key])), sep = "\r")))
+    ## the landings a raised discard was made from: those of the stratum it shares with them
+    skey <- do.call(paste, c(unname(as.list(w[setdiff(stratum, "catchCategory")])), sep = "\r"))
+    lan_of <- tapply(w$total[imp & w$catchCategory %in% "Lan" & keep],
+                     skey[imp & w$catchCategory %in% "Lan" & keep], sum)
+    groups <- names(strata)[names(strata) %in% unique(group_of[raised & keep])]
+    source_of <- vector("list", n)
+    donors <- list()
+    for (g in groups)
+    {
+        m <- imp & rows_of(matched[[g]])
+        m <- (m | (imp & dom %in% unique(dom[m & ! is.na(dom)]))) & ! is.na(dom)
+        lan_g <- tapply(w$total[m & w$catchCategory %in% "Lan" & keep],
+                        dom[m & w$catchCategory %in% "Lan" & keep], sum)
+        dis_g <- which(m & w$catchCategory %in% "Dis" & keep &
+                       dom %in% names(lan_g)[lan_g > 0])
+        if (! length(dis_g)) next
+        feeds <- which(m & w$catchCategory %in% "Lan" & keep & dom %in% dom[dis_g])
+        for (r in c(dis_g, feeds)) source_of[[r]] <- c(source_of[[r]], g)
+        donors[[g]] <- data.frame(group = g, row = dis_g, dis = w$total[dis_g],
+                                  lan = as.numeric(lan_g[dom[dis_g]]), stringsAsFactors = FALSE)
+    }
+    donors <- if (length(donors)) dplyr::bind_rows(donors)
+              else data.frame(group = character(), row = integer(), dis = numeric(),
+                              lan = numeric(), stringsAsFactors = FALSE)
+
+    ## the ratio the donors give is the one the raised discards were made with
+    for (g in groups)
+    {
+        r <- which(raised & keep & group_of %in% g & w$catchCategory %in% "Dis")
+        base <- as.numeric(lan_of[skey[r]])
+        dg <- donors[donors$group == g, , drop = FALSE]
+        if (! length(r) || anyNA(base) || ! nrow(dg)) next
+        used <- sum(w$total[r]) / sum(base)
+        given <- sum(dg$dis) / sum(dg$lan)
+        if (is.finite(used) && is.finite(given) && abs(used - given) > 1e-6 * max(1, abs(given)))
+            warning(fn, "(): the donors of group '", g, "' give a discard ratio of ",
+                    signif(given, 6), ", the raised discards of the group were made with ",
+                    signif(used, 6), " - the conditions are not those of the raising, or ",
+                    "the catch does not hold all its donors", call. = FALSE)
+    }
+
+    ## ---- the CAR: every stratum, imported or raised, with the groups
+    labels <- vapply(source_of, function(g)
+        if (is.null(g)) NA_character_
+        else paste(unique(g)[order(match(unique(g), names(strata)))], collapse = "; "), "")
+    car <- w[keep, , drop = FALSE]
+    car$imported <- ifelse(raised[keep], "N", "Y")
+    car$catchAllocationGroupNameTarget <- ifelse(raised[keep], group_of[keep], NA_character_)
+    car$catchAllocationGroupNameSource <- ifelse(raised[keep], NA_character_, labels[keep])
+    car$catchAllocationSchemeName <- ifelse(raised[keep], scheme, NA_character_)
+    ## a raised discard has no sample of its own: its ratio was borrowed
+    for (f in c("numPSUs", "numTrips")) car[[f]][raised[keep]] <- NA
+    cell <- c(stratum, "variableType", "variableUnit", "imported", "catchAllocationSchemeName",
+              "catchAllocationGroupNameTarget", "catchAllocationGroupNameSource")
+    car <- car %>%
+        group_by(across(all_of(cell))) %>%
+        summarise(total = sum(total),
+                  comment = {said <- unique(as.character(comment[! is.na(comment) & nzchar(as.character(comment))]))
+                             if (length(said)) paste(said, collapse = "; ") else NA_character_},
+                  .groups = "drop") %>%
+        left_join(scf_sampling(car, cell, "CC"), by = cell)
+    if (anyDuplicated(car[stratum]))
+        warning(fn, "(): ", sum(duplicated(car[stratum])),
+                " strata are in the CAR more than once, with another group or another ",
+                "origin in each of their rows", call. = FALSE)
+    ## the format asks for the sampling of every discard (and BMS) stratum that was imported
+    asked <- car$imported == "Y" & ! car$catchCategory %in% "Lan"
+    lacking <- asked & (is.na(car$PSU) | is.na(car$numPSUs) | is.na(car$numTrips))
+    if (any(lacking))
+        warning(fn, "(): ", sum(lacking), " of the ", sum(asked), " imported discard (and BMS) ",
+                "strata have no PSU, numPSUs or numTrips, which the format asks for",
+                call. = FALSE)
+
+    ## ---- the CAS: the donor discard strata of each group
+    param <- variableType
+    cas <- cbind(donors, w[donors$row, stratum, drop = FALSE]) %>%
+        group_by(across(all_of(c("group", stratum)))) %>%
+        summarise(dis = sum(dis), weightingTotal = sum(lan), .groups = "drop") %>%
+        mutate(catchAllocationGroupName = group,
+               catchAllocationSchemeName = scheme,
+               rate = dis / weightingTotal,
+               averagingMethod = "Weighted",
+               weightingCategory = "Lan",
+               weightingParameter = param) %>%
+        select(-group, -dis)
+
+    if (! is.null(round) && is.numeric(round))
+    {
+        car <- car %>% mutate(total = round(total, digits = round))
+        cas <- cas %>% mutate(weightingTotal = round(weightingTotal, digits = round))
+    }
+    tables <- list(CAR = scf_table(car, "CAR", header, fn),
+                   CAS = scf_table(cas, "CAS", header, fn))
+
+    long <- unique(c(tables$CAR$catchAllocationGroupNameTarget,
+                     tables$CAS$catchAllocationGroupName))
+    long <- long[! is.na(long) & nchar(long) > 25]
+    if (length(long))
+        warning(fn, "(): the group names ", paste0("'", long, "'", collapse = ", "),
+                " are longer than the 25 characters the SCF takes", call. = FALSE)
+    tables
 }

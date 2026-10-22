@@ -187,6 +187,7 @@ distributionsCombined(alloc$distribution, alloc$catch,
 numbers and mean weights with one column per class.
 
 Other stock coordination format: 
+\code{\link{catchAllocation}()},
 \code{\link{catchCombined}()}
 }
 \concept{stock coordination format}
