@@ -135,11 +135,13 @@
 #' * `fish`, the number of fish measured behind the pool (`numMeasurements`,
 #'   added up over its strata): lengths and ages only. `NA` (default): not used.
 #'
-#' These are the numbers [plot_coverage_grid()] and the other coverage plots
-#' draw, and they are pooled the same way: weights and counts add up, and the
-#' coverage is worked out again from the summed weights. A pool takes the rows of
-#' every stratum in it as its data - also those of the strata that were raised from
-#' their own, which are the best-sampled ones.
+#' These are the numbers [plot_coverage_grid()] draws, and that function takes
+#' the same `thresholds` list - so the figure of where the sampling falls short and
+#' the groups made from it are judged by the same values. They are pooled the same
+#' way too: weights and counts add up, and the coverage is worked out again from
+#' the summed weights. A pool takes the rows of every stratum in it as its data -
+#' also those of the strata that were raised from their own, which are the
+#' best-sampled ones.
 #'
 #' ## Discards, lengths and ages
 #'
@@ -187,7 +189,8 @@
 #' @param thresholds A list: `cov` (the coverage a pool has to reach, in
 #'   percent; default 50, cannot be empty), `trips` (the least number of trips)
 #'   and `fish` (the least number of fish measured; lengths and ages), the last
-#'   two `NA` (default) when not used.
+#'   two `NA` (default) when not used. Leave out what you do not set; `NULL` is
+#'   the same as `NA`. [plot_coverage_grid()] takes the same list.
 #' @param distribution_data The CEF distributions, for the groups of the lengths
 #'   or the ages. `NULL` (default): the groups of the discards.
 #' @param distributionType `"LengthTotal"` (default) or `"Age"`: the distributions
@@ -315,31 +318,7 @@ recommend_groups <- function(catch_data,
            paste(sort(unique(catch_data[[k]])), collapse = ", "), "): the groups are ",
            "made within one year and one stock, give them one at a time", call. = FALSE)
 
-  th <- list(cov = 50, trips = NA_real_, fish = NA_real_)
-  if (!is.list(thresholds) || (length(thresholds) && is.null(names(thresholds))))
-    stop(fn, "(): `thresholds` is a named list, e.g. list(cov = 50, trips = NA, fish = 100)",
-         call. = FALSE)
-  unknown <- setdiff(names(thresholds), names(th))
-  if (length(unknown))
-    stop(fn, "(): `thresholds` has no ", paste0("'", unknown, "'", collapse = ", "),
-         ": it takes cov, trips and fish", call. = FALSE)
-  for (k in names(thresholds)) th[[k]] <- thresholds[[k]]
-  if (!(is.numeric(th$cov) && length(th$cov) == 1 && is.finite(th$cov) &&
-        th$cov >= 0 && th$cov <= 100))
-    stop(fn, "(): `thresholds$cov` is the coverage a pool has to reach, in percent (0 to ",
-         "100); it cannot be empty (the default is 50)", call. = FALSE)
-  for (k in c("trips", "fish")) {
-    v <- th[[k]]
-    if (length(v) != 1 || !(is.na(v) || (is.numeric(v) && v >= 0)))
-      stop(fn, "(): `thresholds$", k, "` is a number, or NA when it is not used",
-           call. = FALSE)
-    th[[k]] <- as.numeric(v)
-  }
-  if (identical(what, "discard") && !is.na(th$fish)) {
-    warning(fn, "(): `thresholds$fish` counts measured fish, which discards have none ",
-            "of: it is not used", call. = FALSE)
-    th$fish <- NA_real_
-  }
+  th <- coverage_thresholds(thresholds, fn, what)
 
   ## ---- the coverage of every pool: the table of the plots, built once at the
   ## strata of the dimensions and pooled to every level above it

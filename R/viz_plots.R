@@ -443,11 +443,11 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #'
 #' | Colour (default palette) | Status |
 #' |:-------|:-------|
-#' | dark green | 100% covered (and, when trips are active, more than `min_trip` trips) |
-#' | green | covered at least `min_cov`, and passing every active threshold |
-#' | yellow | one active threshold missed |
-#' | orange | two active thresholds missed |
-#' | dark orange | three missed: only for length / age, with both `min_trip` and `min_fish` active |
+#' | dark green | 100% covered (and, when trips are used, more than `thresholds$trips` trips) |
+#' | green | covered at least `thresholds$cov`, and passing every threshold in use |
+#' | yellow | one threshold in use missed |
+#' | orange | two thresholds in use missed |
+#' | dark orange | three missed: only for length / age, with both `trips` and `fish` in use |
 #' | red | no discard estimate / no linked distribution at all - never a threshold miss |
 #' | blue | discards only, no landings (discard coverage) |
 #'
@@ -457,18 +457,23 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #' reachable status, including those no cell falls in, so the same figure
 #' drawn on two subsets has the same key.
 #'
-#' Coverage (`min_cov`) is always on. `min_trip` (discard, length, age) and
-#' `min_fish` (length, age) both default to `NULL` and are each optional:
-#' `NULL` drops that question from the classification and the legend, a
-#' number turns it on. The label says which threshold(s) a cell missed, so
-#' `"< 50% covered"` and `">= 50% covered, < 2 trips"` are both yellow but
-#' read differently.
+#' The thresholds are one list, `thresholds = list(cov = 50, trips = NA, fish = NA)`
+#' - the list [recommend_groups()] takes, so the figure and the groups made from it
+#' are judged by the same values. Coverage (`cov`, in percent) is always in use.
+#' `trips` (discard, length, age) and `fish` (length, age) default to `NA` and are
+#' each optional: `NA` (or `NULL`) drops that question from the classification and
+#' the legend, a number turns it on; leave out of the list what you do not set.
+#' The label says which threshold(s) a cell missed, so `"< 50% covered"` and
+#' `">= 50% covered, < 2 trips"` are both yellow but read differently.
 #'
-#' `min_trip = 0` is not the same as `NULL`: it is an active (if lenient)
-#' threshold, and a stratum with no reported trip count fails an active trips
-#' test however low it is set - unknown is not treated as adequate. A fully
-#' covered stratum with no trip count reads "safe" at `min_trip = NULL` but
-#' stays a warning at `min_trip = 0`.
+#' `trips = 0` is not the same as `NA`: it is a threshold in use (if a lenient
+#' one), and a stratum with no reported trip count fails a trips test however low
+#' it is set - unknown is not treated as adequate. A fully covered stratum with no
+#' trip count reads "safe" at `trips = NA` but stays a warning at `trips = 0`.
+#'
+#' `fish` counts the fish measured for a length or age distribution, which a
+#' discard estimate has none of: with `what = "discard"` it is not used (a
+#' warning), so one list can be given to the discards and to the lengths alike.
 #'
 #' ## What the title and caption say
 #'
@@ -487,22 +492,22 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #' behind it. The rest of the caption spells out how the numbers on the
 #' figure are worked out - the value in a tile, what a bubble's size or a
 #' bar means - leaving out anything a legend already shows. On the heatmap
-#' and bubble grid the active thresholds move into their own boxed guide,
+#' and bubble grid the thresholds in use move into their own boxed guide,
 #' bottom right, under the in-panel status legend - a detail section of it,
 #' not a caption about the plot itself.
 #'
 #' ## Bars and palettes
 #'
 #' The bar chart shows sampled versus unsampled weight, which no threshold
-#' changes, so it takes none: passing `min_cov` or `min_trip` is an error.
+#' changes, so it takes none: passing `thresholds` is an error.
 #' `palette` recolours the bars, and the status scale of the heatmap and the
 #' bubbles.
 #'
 #' ## Argument order
 #'
 #' What data (`catch`, `distributions`, `what`, `catchCategory`), then which
-#' columns are the strata (`y`, `x` or `fill`, `facet`), then the thresholds
-#' (`min_cov`, `min_trip`, `min_fish`), then `palette`.
+#' columns are the strata (`y`, `x` or `fill`, `facet`), then the `thresholds`,
+#' then `palette`.
 #'
 #' @param catch CEF catch data carrying the columns you plot by ([derive_fields()]
 #'   output, or columns of your own), or a table from [build_coverage_strata()].
@@ -523,16 +528,16 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #' @param type `"heat"` (default) or `"bubble"` (grid only): the cells as tiles
 #'   that carry their weight as a number, or as bubbles sized by it. The same
 #'   cells, status, legend, thresholds box and labels either way.
-#' @param min_cov Minimum coverage, in percent (grid).
-#'   Always active: coverage is never dropped from the classification.
-#' @param min_trip Minimum sampling trips (grid), or `NULL`
-#'   (the default) to leave trips out of the classification altogether.
-#'   `0` is not the same as `NULL`: it still checks trips, and a stratum with
-#'   no reported trip count still fails that check.
-#' @param min_fish Minimum measurements for `what = "length"` / `"age"`, or
-#'   `NULL` (the default) to leave measurements out of the classification.
-#'   An error with `what = "discard"` (no fish are measured for a discard
-#'   estimate).
+#' @param thresholds A list (grid): `cov`, the minimum coverage in percent
+#'   (default 50; always in use, coverage is never dropped from the
+#'   classification); `trips`, the minimum number of sampling trips; `fish`, the
+#'   minimum number of measurements for `what = "length"` / `"age"`. `trips` and
+#'   `fish` default to `NA` (or `NULL`): that question is left out of the
+#'   classification altogether. `trips = 0` is not the same as `NA`: it still
+#'   checks trips, and a stratum with no reported trip count still fails that
+#'   check. `fish` is not used with `what = "discard"` (a warning: no fish are
+#'   measured for a discard estimate). Leave out of the list what you do not set;
+#'   [recommend_groups()] takes the same list.
 #' @param palette `"default"`, `"colorblind"` or `"gradual"`. Recolours the bar
 #'   fill, or the status colours of the heatmap and the bubbles.
 #' @inheritParams saving-plots
@@ -548,17 +553,18 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #' # discard coverage: which metier x country strata carry a discard estimate?
 #' plot_coverage_grid(catch, y = "metier4", x = "vesselFlagCountry")
 #' plot_coverage_grid(catch, y = "metier4", x = "vesselFlagCountry",
-#'                    type = "bubble", min_cov = 50, min_trip = 2)
+#'                    type = "bubble", thresholds = list(cov = 50, trips = 2))
 #' plot_coverage_bar(catch, y = "metier4", fill = "vesselFlagCountry")
 #'
 #' # length coverage of the landings, with a floor on the measurements
 #' plot_coverage_grid(catch, distributions, y = "metier4",
 #'                    x = "vesselFlagCountry", what = "length", catchCategory = "Lan",
-#'                    min_cov = 50, min_fish = 100)
+#'                    thresholds = list(cov = 50, fish = 100))
 #'
 #' # the same figure from the table behind it
 #' cov <- build_coverage_strata(catch, c("metier4", "vesselFlagCountry"))
-#' plot_coverage_grid(cov, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
+#' plot_coverage_grid(cov, y = "metier4", x = "vesselFlagCountry",
+#'                    thresholds = list(cov = 50))
 #' }
 NULL
 
@@ -568,13 +574,14 @@ NULL
 plot_coverage_grid <- function(catch, distributions = NULL, y, x = NULL,
                                facet = NULL, what = "discard",
                                catchCategory = NULL, type = c("heat", "bubble"),
-                               min_cov = 50, min_trip = NULL, min_fish = NULL,
+                               thresholds = list(cov = 50, trips = NA, fish = NA),
                                palette = c("default", "colorblind",
                                           "gradual"), save = NULL) {
   fn <- "plot_coverage_grid"
   save_on_exit(save, fn)
   type <- match.arg(type)
   palette <- match.arg(palette)
+  coverage_thresholds(thresholds, fn)       # a wrong list stops here, before the table is built
   # The heatmap and the bubble grid are one figure drawn with two marks: the same
   # cells, the same status, the same legend, the same thresholds box and shortfall
   # labels. Only the mark differs - a tile carrying the weight as a number, or a
@@ -588,20 +595,17 @@ plot_coverage_grid <- function(catch, distributions = NULL, y, x = NULL,
   if (is.null(cv)) return(NULL)
   what <- cv$what
   is_bio <- !identical(what, "discard")
-  on <- function(v) !is.null(v) && !(length(v) == 1 && is.na(v))
-  if (!is_bio && on(min_fish))
-    stop(fn, "(): min_fish does not apply to what = \"discard\" (no fish ",
-         "are measured for a discard estimate - min_fish is for length / ",
-         "age)", call. = FALSE)
-  trip_on <- on(min_trip)
-  meas_on <- is_bio && on(min_fish)
+  th <- coverage_thresholds(thresholds, fn, what)    # fish is not used for the discards
+  min_cov <- th$cov; min_trip <- th$trips; min_fish <- th$fish
+  trip_on <- !is.na(min_trip)
+  meas_on <- is_bio && !is.na(min_fish)
 
   # ---- the sampling status a cell can have, best to worst ---------------------------
   # The colour of a cell is its status against the thresholds, worked out here, at
   # plot time: the status is a colour on a figure, not a column of the coverage
   # table (the table reports numbers; the thresholds are a plotting choice).
-  # Coverage is always part of the verdict. min_trip (discards, length / age) and
-  # min_fish (length / age) are each independently optional - NULL drops that
+  # Coverage is always part of the verdict. thresholds$trips (discards, length / age)
+  # and thresholds$fish (length / age) are each independently optional - NA drops that
   # question entirely rather than giving it an always-passing threshold. A cell is:
   #   full       100% covered, with more than min_trip trips and at least min_fish
   #              measurements, for the thresholds that are active
@@ -659,15 +663,15 @@ plot_coverage_grid <- function(catch, distributions = NULL, y, x = NULL,
     has_est   <- !is.na(d$total)
   }
   if (trip_on && nrow(d) && all(is.na(d$numTrips)))
-    warning(fn, "(): min_trip is active but every stratum's numTrips is ",
+    warning(fn, "(): `thresholds$trips` is used but every stratum's numTrips is ",
             "unknown (NA) - none of them can pass the trips test, at any ",
-            "min_trip value including 0. Pass min_trip = NULL to drop trips ",
+            "`trips` value including 0. Set `trips = NA` to drop trips ",
             "from the classification, or check that the data actually ",
             "carries a trip count.", call. = FALSE)
   if (meas_on && isTRUE(min_fish > 0) && nrow(d) && all(d$n_measurements == 0))
-    warning(fn, "(): min_fish is active but every stratum's numMeasurements ",
+    warning(fn, "(): `thresholds$fish` is used but every stratum's numMeasurements ",
             "is 0 - none of them can pass the measurements test, at any ",
-            "min_fish value above 0. Pass min_fish = NULL to drop ",
+            "`fish` value above 0. Set `fish = NA` to drop ",
             "measurements from the classification, or check that the data ",
             "actually carries measurement counts.", call. = FALSE)
   cov_ok  <- !is.na(d$coverage) & d$coverage >= min_cov

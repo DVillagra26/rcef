@@ -61,9 +61,9 @@ table can always be looked at as a figure.
 \subsection{What the table leaves out}{
 
 It reports numbers and does not judge them: there is no status, category
-or decision column. The thresholds (\code{min_cov}, \code{min_trip}, \code{min_fish})
-are a plotting choice; the coverage plots apply them to these numbers as
-they draw.
+or decision column. The thresholds (\code{thresholds = list(cov = 50, trips = NA, fish = NA)}) are the choice of the functions that judge these numbers:
+\code{\link[=plot_coverage_grid]{plot_coverage_grid()}} applies them as it draws and \code{\link[=recommend_groups]{recommend_groups()}} to
+choose the groups. This function takes none.
 }
 
 \subsection{Column names and units}{
@@ -172,7 +172,8 @@ len <- build_coverage_strata(catch, c("metier4", "vesselFlagCountry"),
 head(len[order(-len$total), ])
 
 # the plots draw the same table, from the raw catch or from the table
-plot_coverage_grid(cov, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
+plot_coverage_grid(cov, y = "metier4", x = "vesselFlagCountry",
+                   thresholds = list(cov = 50))
 plot_DR(cov, x = "metier4", colour = "vesselFlagCountry")
 }
 }

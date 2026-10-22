@@ -22,9 +22,10 @@
 #' ## What the table leaves out
 #'
 #' It reports numbers and does not judge them: there is no status, category
-#' or decision column. The thresholds (`min_cov`, `min_trip`, `min_fish`)
-#' are a plotting choice; the coverage plots apply them to these numbers as
-#' they draw.
+#' or decision column. The thresholds (`thresholds = list(cov = 50, trips = NA,
+#' fish = NA)`) are the choice of the functions that judge these numbers:
+#' [plot_coverage_grid()] applies them as it draws and [recommend_groups()] to
+#' choose the groups. This function takes none.
 #'
 #' ## Column names and units
 #'
@@ -154,7 +155,8 @@
 #' head(len[order(-len$total), ])
 #'
 #' # the plots draw the same table, from the raw catch or from the table
-#' plot_coverage_grid(cov, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
+#' plot_coverage_grid(cov, y = "metier4", x = "vesselFlagCountry",
+#'                    thresholds = list(cov = 50))
 #' plot_DR(cov, x = "metier4", colour = "vesselFlagCountry")
 #' }
 #' @export
@@ -409,6 +411,54 @@ build_coverage_strata <- function(catch, dims = NULL, distributions = NULL,
 # ---------------------------------------------------------------------
 #  What the coverage plots do with the table (internal, one place)
 # ---------------------------------------------------------------------
+
+#' The `thresholds` argument of the functions that judge sampling
+#'
+#' [recommend_groups()] and [plot_coverage_grid()] take their thresholds the same
+#' way: `thresholds = list(cov = 50, trips = NA, fish = NA)`. This reads such a list
+#' once, for both: leave out what you do not set (the default stays), `NA` or `NULL`
+#' for `trips` and `fish` is "not used", and anything else is an error that names
+#' the calling function. Given `what` it also drops `fish` for the discards (no fish
+#' are measured for a discard estimate) with a warning, so one list can be given to
+#' the discards and to the lengths alike.
+#'
+#' @param thresholds The list the caller was given.
+#' @param fn The calling function's name, for messages.
+#' @param what `NULL` (the list is only read), or `"discard"`, `"length"` or `"age"`.
+#' @return `list(cov, trips, fish)`: numbers, `NA_real_` where not used.
+#' @keywords internal
+#' @noRd
+#' @export
+coverage_thresholds <- function(thresholds, fn, what = NULL) {
+  th <- list(cov = 50, trips = NA_real_, fish = NA_real_)
+  if (!is.list(thresholds) || (length(thresholds) && (is.null(names(thresholds)) ||
+                                                      !all(nzchar(names(thresholds))))))
+    stop(fn, "(): `thresholds` is a named list, e.g. list(cov = 50, trips = NA, fish = 100)",
+         call. = FALSE)
+  unknown <- setdiff(names(thresholds), names(th))
+  if (length(unknown))
+    stop(fn, "(): `thresholds` has no ", paste0("'", unknown, "'", collapse = ", "),
+         ": it takes cov, trips and fish", call. = FALSE)
+  for (k in names(thresholds))             # NULL is "not used" (cov: no value, an error below)
+    th[[k]] <- if (is.null(thresholds[[k]])) NA_real_ else thresholds[[k]]
+  if (!(is.numeric(th$cov) && length(th$cov) == 1 && is.finite(th$cov) &&
+        th$cov >= 0 && th$cov <= 100))
+    stop(fn, "(): `thresholds$cov` is the coverage a pool has to reach, in percent (0 to ",
+         "100); it cannot be empty (the default is 50)", call. = FALSE)
+  for (k in c("trips", "fish")) {
+    v <- th[[k]]
+    if (length(v) != 1 || !(is.na(v) || (is.numeric(v) && v >= 0)))
+      stop(fn, "(): `thresholds$", k, "` is a number, or NA when it is not used",
+           call. = FALSE)
+    th[[k]] <- as.numeric(v)
+  }
+  if (identical(what, "discard") && !is.na(th$fish)) {
+    warning(fn, "(): `thresholds$fish` counts measured fish, which discards have none ",
+            "of: it is not used", call. = FALSE)
+    th$fish <- NA_real_
+  }
+  th
+}
 
 #' What a `what` argument, or a coverage table, is about
 #'

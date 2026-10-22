@@ -15,9 +15,7 @@ plot_coverage_grid(
   what = "discard",
   catchCategory = NULL,
   type = c("heat", "bubble"),
-  min_cov = 50,
-  min_trip = NULL,
-  min_fish = NULL,
+  thresholds = list(cov = 50, trips = NA, fish = NA),
   palette = c("default", "colorblind", "gradual"),
   save = NULL
 )
@@ -61,18 +59,16 @@ it selects among the parts the table has. Not valid for
 that carry their weight as a number, or as bubbles sized by it. The same
 cells, status, legend, thresholds box and labels either way.}
 
-\item{min_cov}{Minimum coverage, in percent (grid).
-Always active: coverage is never dropped from the classification.}
-
-\item{min_trip}{Minimum sampling trips (grid), or \code{NULL}
-(the default) to leave trips out of the classification altogether.
-\code{0} is not the same as \code{NULL}: it still checks trips, and a stratum with
-no reported trip count still fails that check.}
-
-\item{min_fish}{Minimum measurements for \code{what = "length"} / \code{"age"}, or
-\code{NULL} (the default) to leave measurements out of the classification.
-An error with \code{what = "discard"} (no fish are measured for a discard
-estimate).}
+\item{thresholds}{A list (grid): \code{cov}, the minimum coverage in percent
+(default 50; always in use, coverage is never dropped from the
+classification); \code{trips}, the minimum number of sampling trips; \code{fish}, the
+minimum number of measurements for \code{what = "length"} / \code{"age"}. \code{trips} and
+\code{fish} default to \code{NA} (or \code{NULL}): that question is left out of the
+classification altogether. \code{trips = 0} is not the same as \code{NA}: it still
+checks trips, and a stratum with no reported trip count still fails that
+check. \code{fish} is not used with \code{what = "discard"} (a warning: no fish are
+measured for a discard estimate). Leave out of the list what you do not set;
+\code{\link[=recommend_groups]{recommend_groups()}} takes the same list.}
 
 \item{palette}{\code{"default"}, \code{"colorblind"} or \code{"gradual"}. Recolours the bar
 fill, or the status colours of the heatmap and the bubbles.}
@@ -124,11 +120,11 @@ needs to be given; a \code{what} that contradicts the table is an error.
 
 The colour of a cell is its sampling status against the thresholds:\tabular{ll}{
    Colour (default palette) \tab Status \cr
-   dark green \tab 100\% covered (and, when trips are active, more than \code{min_trip} trips) \cr
-   green \tab covered at least \code{min_cov}, and passing every active threshold \cr
-   yellow \tab one active threshold missed \cr
-   orange \tab two active thresholds missed \cr
-   dark orange \tab three missed: only for length / age, with both \code{min_trip} and \code{min_fish} active \cr
+   dark green \tab 100\% covered (and, when trips are used, more than \code{thresholds$trips} trips) \cr
+   green \tab covered at least \code{thresholds$cov}, and passing every threshold in use \cr
+   yellow \tab one threshold in use missed \cr
+   orange \tab two thresholds in use missed \cr
+   dark orange \tab three missed: only for length / age, with both \code{trips} and \code{fish} in use \cr
    red \tab no discard estimate / no linked distribution at all - never a threshold miss \cr
    blue \tab discards only, no landings (discard coverage) \cr
 }
@@ -140,18 +136,25 @@ A cell with no weight at all draws nothing. The legend always lists every
 reachable status, including those no cell falls in, so the same figure
 drawn on two subsets has the same key.
 
-Coverage (\code{min_cov}) is always on. \code{min_trip} (discard, length, age) and
-\code{min_fish} (length, age) both default to \code{NULL} and are each optional:
-\code{NULL} drops that question from the classification and the legend, a
-number turns it on. The label says which threshold(s) a cell missed, so
-\code{"< 50\% covered"} and \code{">= 50\% covered, < 2 trips"} are both yellow but
-read differently.
+The thresholds are one list, \code{thresholds = list(cov = 50, trips = NA, fish = NA)}
+\itemize{
+\item the list \code{\link[=recommend_groups]{recommend_groups()}} takes, so the figure and the groups made from it
+are judged by the same values. Coverage (\code{cov}, in percent) is always in use.
+\code{trips} (discard, length, age) and \code{fish} (length, age) default to \code{NA} and are
+each optional: \code{NA} (or \code{NULL}) drops that question from the classification and
+the legend, a number turns it on; leave out of the list what you do not set.
+The label says which threshold(s) a cell missed, so \code{"< 50\% covered"} and
+\code{">= 50\% covered, < 2 trips"} are both yellow but read differently.
+}
 
-\code{min_trip = 0} is not the same as \code{NULL}: it is an active (if lenient)
-threshold, and a stratum with no reported trip count fails an active trips
-test however low it is set - unknown is not treated as adequate. A fully
-covered stratum with no trip count reads "safe" at \code{min_trip = NULL} but
-stays a warning at \code{min_trip = 0}.
+\code{trips = 0} is not the same as \code{NA}: it is a threshold in use (if a lenient
+one), and a stratum with no reported trip count fails a trips test however low
+it is set - unknown is not treated as adequate. A fully covered stratum with no
+trip count reads "safe" at \code{trips = NA} but stays a warning at \code{trips = 0}.
+
+\code{fish} counts the fish measured for a length or age distribution, which a
+discard estimate has none of: with \code{what = "discard"} it is not used (a
+warning), so one list can be given to the discards and to the lengths alike.
 }
 
 \subsection{What the title and caption say}{
@@ -179,7 +182,7 @@ not a caption about the plot itself.
 \subsection{Bars and palettes}{
 
 The bar chart shows sampled versus unsampled weight, which no threshold
-changes, so it takes none: passing \code{min_cov} or \code{min_trip} is an error.
+changes, so it takes none: passing \code{thresholds} is an error.
 \code{palette} recolours the bars, and the status scale of the heatmap and the
 bubbles.
 }
@@ -187,8 +190,8 @@ bubbles.
 \subsection{Argument order}{
 
 What data (\code{catch}, \code{distributions}, \code{what}, \code{catchCategory}), then which
-columns are the strata (\code{y}, \code{x} or \code{fill}, \code{facet}), then the thresholds
-(\code{min_cov}, \code{min_trip}, \code{min_fish}), then \code{palette}.
+columns are the strata (\code{y}, \code{x} or \code{fill}, \code{facet}), then the \code{thresholds},
+then \code{palette}.
 }
 }
 \examples{
@@ -197,17 +200,18 @@ columns are the strata (\code{y}, \code{x} or \code{fill}, \code{facet}), then t
 # discard coverage: which metier x country strata carry a discard estimate?
 plot_coverage_grid(catch, y = "metier4", x = "vesselFlagCountry")
 plot_coverage_grid(catch, y = "metier4", x = "vesselFlagCountry",
-                   type = "bubble", min_cov = 50, min_trip = 2)
+                   type = "bubble", thresholds = list(cov = 50, trips = 2))
 plot_coverage_bar(catch, y = "metier4", fill = "vesselFlagCountry")
 
 # length coverage of the landings, with a floor on the measurements
 plot_coverage_grid(catch, distributions, y = "metier4",
                    x = "vesselFlagCountry", what = "length", catchCategory = "Lan",
-                   min_cov = 50, min_fish = 100)
+                   thresholds = list(cov = 50, fish = 100))
 
 # the same figure from the table behind it
 cov <- build_coverage_strata(catch, c("metier4", "vesselFlagCountry"))
-plot_coverage_grid(cov, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
+plot_coverage_grid(cov, y = "metier4", x = "vesselFlagCountry",
+                   thresholds = list(cov = 50))
 }
 }
 \seealso{

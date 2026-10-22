@@ -176,11 +176,12 @@ averaged.
 `type = "bubble"`), `plot_coverage_bar()` and `plot_coverage_map()`. Each takes raw
 catch (or the table above) and, given raw catch, builds the table itself. `y`
 is required. The grid puts the second category on `x`; bars put it on
-`fill`. `min_cov` and `min_trip` colour the grid's status - a bar
-chart ignores them (passing them is an error); `min_fish` is length/age
-only, an error on a discard plot (no fish are measured for a discard
-estimate). The status is worked out here from the thresholds, not stored in
-the table. The status legend always lists
+`fill`. `thresholds` - one list, `list(cov = 50, trips = NA, fish = NA)`, the
+same one `recommend_groups()` takes - colours the grid's status: a bar
+chart ignores it (passing it is an error); `fish` is length/age
+only, not used on a discard plot (a warning: no fish are measured for a
+discard estimate). The status is worked out here from the thresholds, not
+stored in the table. The status legend always lists
 every *reachable* category - a stratum with no landed or caught weight at all
 draws no cell (nothing to judge), so "no landings" is not one of them.
 
@@ -191,7 +192,7 @@ over everything else ("grouping = metier4 x vesselFlagCountry, grouped over
 of the caption gives the formula behind the mark (a tile's value, a bubble's
 size, the bar staircase) - never something a legend already shows (a
 bubble's size scale, for instance, is never repeated in words). On the
-heatmap and bubble grid the active thresholds move out of the caption
+heatmap and bubble grid the thresholds in use move out of the caption
 entirely, into their own bordered box bottom right, under the in-panel
 status legend - a detail section of it, each threshold a formula, plus the
 labelling rule.
@@ -205,21 +206,21 @@ plot_coverage_bar(catch = catch_data, y = "metier4", facet = "metier4")
 ## Heatmap: status per metier, country and season
 
 ```{r disc-heat-1, fig.width = 8, fig.height = 7, fig.alt = "Coverage heatmap, metier by country, one panel per season"}
-plot_coverage_grid(catch = catch_data, y = "metier4", min_cov = 50, min_trip = 2)
+plot_coverage_grid(catch = catch_data, y = "metier4", thresholds = list(cov = 50, trips = 2))
 ```
 
 The same with a trip threshold switched on:
 
 ```{r disc-heat-2, fig.width = 8, fig.height = 7, fig.alt = "The same heatmap with a minimum of two trips"}
 plot_coverage_grid(catch = catch_data, y = "metier4", x = "vesselFlagCountry",
-                   facet = "seasonValue", min_cov = 50, min_trip = 2)
+                   facet = "seasonValue", thresholds = list(cov = 50, trips = 2))
 ```
 
 ## Bubbles: the weighted status grid
 
 ```{r disc-bubble, fig.height = 5, fig.alt = "Coverage bubble grid, bubble area proportional to landed weight"}
 plot_coverage_grid(catch = catch_data, y = "metier4", type = "bubble",
-                   min_cov = 50, min_trip = 2)
+                   thresholds = list(cov = 50, trips = 2))
 ```
 
 Same grid as the heatmap, but a tiny un-sampled stratum now reads as a tiny
@@ -284,7 +285,7 @@ one is drawn without a `facet`; every facet repeats them.
 plot_coverage_grid(catch = catch_data, y = "fleetValue", x = "vesselFlagCountry",
                    what = "length", catchCategory = "Lan",
                    distributions = distribution_data,
-                   min_cov = 70, min_fish = 100, min_trip = NULL)
+                   thresholds = list(cov = 70, trips = NA, fish = 100))
 ```
 
 ## Bubbles
@@ -293,7 +294,7 @@ plot_coverage_grid(catch = catch_data, y = "fleetValue", x = "vesselFlagCountry"
 plot_coverage_grid(catch = catch_data, y = "metier4", x = "vesselFlagCountry",
                    type = "bubble", what = "length", catchCategory = "Lan",
                    distributions = distribution_data,
-                   min_cov = 50, min_fish = 100, min_trip = NULL)
+                   thresholds = list(cov = 50, trips = NA, fish = 100))
 ```
 
 ## Map
@@ -339,7 +340,7 @@ plot_coverage_bar(catch = age_catch, y = "metier4",
 ```{r age-heat, fig.width = 8.5, fig.height = 6, fig.alt = "Age-sampling coverage of the landings, metier by country"}
 plot_coverage_grid(catch = age_catch, y = "metier4", x = "vesselFlagCountry",
                    what = "age", catchCategory = "Lan", distributions = age_dist,
-                   min_cov = 50, min_fish = 100, min_trip = NULL)
+                   thresholds = list(cov = 50, trips = NA, fish = 100))
 ```
 
 ## Bubbles
@@ -348,7 +349,7 @@ plot_coverage_grid(catch = age_catch, y = "metier4", x = "vesselFlagCountry",
 plot_coverage_grid(catch = age_catch, y = "metier4", x = "vesselFlagCountry",
                    type = "bubble", what = "age", catchCategory = "Lan",
                    distributions = age_dist,
-                   min_cov = 50, min_fish = 100, min_trip = NULL)
+                   thresholds = list(cov = 50, trips = NA, fish = 100))
 ```
 
 ## Map
@@ -555,15 +556,19 @@ head(mw_len[order(mw_len$n_fish), c(".class", "vesselFlagCountry", "mean_weight"
 
 # Thresholds
 
-`min_cov` is always part of the classification. `min_trip` (discard, length,
-age) and `min_fish` (length, age only) are each independently **optional**:
-`NULL` drops that question from the classification and the legend entirely,
-a number turns it on. On the plot functions both default to `NULL`, so a
-call with no `min_trip` at all is coverage-only already.
+The thresholds are one list, `thresholds = list(cov = 50, trips = NA, fish = NA)`,
+the same list `recommend_groups()` takes, so the figure and the groups made
+from it are judged by the same values. `cov` is always part of the
+classification. `trips` (discard, length, age) and `fish` (length, age only)
+are each independently **optional**: `NA` drops that question from the
+classification and the legend entirely, a number turns it on. Both default to
+`NA`, so a call that does not set `trips` is coverage-only already, and what
+the list leaves out keeps its default: `list(trips = 2)` is
+`list(cov = 50, trips = 2, fish = NA)`.
 
-`min_trip = 0` is *not* the same as `NULL`: it is still an active (if lenient)
-threshold, and a stratum with no reported trip count fails an active trips
-test no matter how low it is set - unknown is never treated as adequate.
+`trips = 0` is *not* the same as `NA`: it is still a threshold in use (if a
+lenient one), and a stratum with no reported trip count fails a trips test
+no matter how low it is set - unknown is never treated as adequate.
 
 The status of every cell is the `cat_key` column of the data the plot is drawn
 from - the `data` of the returned plot - so it can be read as a table too, and
@@ -572,11 +577,11 @@ the legend lists every status that is reachable for the thresholds you set:
 ```{r thr-lookup}
 cells <- function(...) plot_coverage_grid(catch = catch_data, y = "metier4",
                                           x = "vesselFlagCountry", ...)$data
-table(cells(min_trip = NULL)$cat_key)   # coverage only
-table(cells(min_trip = 2)$cat_key)      # + trips
+table(cells(thresholds = list(trips = NA))$cat_key)   # coverage only
+table(cells(thresholds = list(trips = 2))$cat_key)      # + trips
 ```
 
-The colour is a straight count of how many *active* targets a stratum missed
+The colour is a straight count of how many targets *in use* a stratum missed
 - yellow for one, orange for two, dark orange for three (only reachable with
 trips **and** measurements both on) - but each specific combination is still
 its own category and its own label. **Red** stays reserved for "no discard
@@ -585,26 +590,28 @@ never a threshold miss, and never a stratum with no weight at all (that draws
 no cell to begin with).
 
 ```{r thr-heat-cov, fig.height = 4.5, fig.alt = "Coverage heatmap, coverage alone"}
-plot_coverage_grid(catch = catch_data, y = "metier4", x = "vesselFlagCountry", min_trip = NULL)
+plot_coverage_grid(catch = catch_data, y = "metier4", x = "vesselFlagCountry", thresholds = list(trips = NA))
 ```
 
 ```{r thr-heat-trip, fig.height = 4.5, fig.alt = "Coverage heatmap with trips added"}
-plot_coverage_grid(catch = catch_data, y = "metier4", x = "vesselFlagCountry")
+plot_coverage_grid(catch = catch_data, y = "metier4", x = "vesselFlagCountry",
+                   thresholds = list(cov = 50, trips = 2))
 ```
 
 ```{r thr-heat-len, fig.height = 4.5, fig.alt = "Length coverage heatmap, coverage and measurements"}
 plot_coverage_grid(catch = catch_data, y = "metier4", x = "vesselFlagCountry",
                    what = "length", catchCategory = "Lan",
                    distributions = distribution_data,
-                   min_trip = NULL, min_fish = 25)
+                   thresholds = list(trips = NA, fish = 25))
 ```
 
-Setting the thresholds absurdly high must **not** turn every stratum red: it
-crowds them into the worst-active warning shade instead. Red only ever comes
-from "no estimate / no distribution", never from a threshold comparison:
+Setting the thresholds absurdly high (the coverage is a percentage, so 100 is
+the most it can ask) must **not** turn every stratum red: it crowds them into
+the worst warning shade in use instead. Red only ever comes from "no estimate /
+no distribution", never from a threshold comparison:
 
 ```{r thr-extreme}
-extreme <- cells(min_cov = 1500, min_trip = 1000)
+extreme <- cells(thresholds = list(cov = 100, trips = 1000))
 table(extreme$cat_key)
 # red ("no_dist") only where there really is no discard estimate
 all(is.na(extreme$total[extreme$cat_key == "no_dist"]))
@@ -712,7 +719,7 @@ best sampled to worst.
 
 ```{r palette-heat, fig.height = 4.5, fig.alt = "Coverage heatmap in the colourblind palette"}
 plot_coverage_grid(catch = catch_data, y = "metier4", x = "vesselFlagCountry",
-                   min_trip = 2, palette = "colorblind")
+                   thresholds = list(trips = 2), palette = "colorblind")
 ```
 
 Mesh sizes are drawn in size order (`"16-31"` before `"100-119"`), so the gradual

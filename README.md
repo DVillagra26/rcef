@@ -37,7 +37,8 @@ tab <- build_coverage_strata(catch, c("metier4", "vesselFlagCountry"))
 tab
 
 # the same numbers as figures (raw catch or the table both work)
-plot_coverage_grid(tab, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
+plot_coverage_grid(tab, y = "metier4", x = "vesselFlagCountry",
+                   thresholds = list(cov = 50, trips = NA, fish = NA))   # recommend_groups() takes the same list
 plot_DR(tab, x = "metier4", colour = "vesselFlagCountry")
 
 # the discard rate (discards as a share of the catch) instead of the ratio,

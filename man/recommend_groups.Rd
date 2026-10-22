@@ -31,7 +31,8 @@ named is summed over from the start.}
 \item{thresholds}{A list: \code{cov} (the coverage a pool has to reach, in
 percent; default 50, cannot be empty), \code{trips} (the least number of trips)
 and \code{fish} (the least number of fish measured; lengths and ages), the last
-two \code{NA} (default) when not used.}
+two \code{NA} (default) when not used. Leave out what you do not set; \code{NULL} is
+the same as \code{NA}. \code{\link[=plot_coverage_grid]{plot_coverage_grid()}} takes the same list.}
 
 \item{distribution_data}{The CEF distributions, for the groups of the lengths
 or the ages. \code{NULL} (default): the groups of the discards.}
@@ -195,11 +196,13 @@ strata). \code{NA} (default): not used.
 added up over its strata): lengths and ages only. \code{NA} (default): not used.
 }
 
-These are the numbers \code{\link[=plot_coverage_grid]{plot_coverage_grid()}} and the other coverage plots
-draw, and they are pooled the same way: weights and counts add up, and the
-coverage is worked out again from the summed weights. A pool takes the rows of
-every stratum in it as its data - also those of the strata that were raised from
-their own, which are the best-sampled ones.
+These are the numbers \code{\link[=plot_coverage_grid]{plot_coverage_grid()}} draws, and that function takes
+the same \code{thresholds} list - so the figure of where the sampling falls short and
+the groups made from it are judged by the same values. They are pooled the same
+way too: weights and counts add up, and the coverage is worked out again from
+the summed weights. A pool takes the rows of every stratum in it as its data -
+also those of the strata that were raised from their own, which are the
+best-sampled ones.
 }
 
 \subsection{Discards, lengths and ages}{

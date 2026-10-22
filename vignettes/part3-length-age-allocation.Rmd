@@ -106,7 +106,7 @@ plot_coverage_bar(catch = raised, distributions = distribution_data, y = "metier
 ```{r cov-heat, fig.height = 5, fig.alt = "Length-sampling coverage of the discards by metier and mesh, with the thresholds in the box under the panel"}
 plot_coverage_grid(catch = raised, distributions = distribution_data, y = "metier4",
                    x = "mesh", what = "length", catchCategory = "Dis",
-                   min_cov = 50, min_fish = 100)
+                   thresholds = list(cov = 50, fish = 100))
 ```
 
 The numbers at length that were sampled, with `plot_NaLoA()` - the plot the

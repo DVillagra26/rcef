@@ -61,8 +61,8 @@ alloc   <- quiet(fx_allocate(raised, d23, "LengthTotal", log_file = lf))
 dc      <- quiet(build_discard_clusters(c23, dims = c("metier4", "ICESDivision", "seasonValue"),
                                         k = 3, seed = 7))
 plots <- list(
-  plot_coverage_grid     = function(pal) plot_coverage_grid(cd, y = "metier4", x = "vesselFlagCountry", min_trip = 2, palette = pal),
-  plot_coverage_grid_bubble = function(pal) plot_coverage_grid(type = "bubble", cd, y = "metier4", x = "vesselFlagCountry", min_trip = 2, palette = pal),
+  plot_coverage_grid     = function(pal) plot_coverage_grid(cd, y = "metier4", x = "vesselFlagCountry", thresholds = list(trips = 2), palette = pal),
+  plot_coverage_grid_bubble = function(pal) plot_coverage_grid(type = "bubble", cd, y = "metier4", x = "vesselFlagCountry", thresholds = list(trips = 2), palette = pal),
   plot_coverage_bar      = function(pal) plot_coverage_bar(cd, y = "metier4", fill = "vesselFlagCountry", palette = pal),
   plot_DR                = function(pal) plot_DR(cd, x = "metier4", colour = "vesselFlagCountry", palette = pal),
   plot_NaLoA             = function(pal) plot_NaLoA(cd, dd, fill = "vesselFlagCountry", palette = pal),

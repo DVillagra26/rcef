@@ -44,11 +44,11 @@ ok(!any(vapply(gone_fns, exists, logical(1), where = asNamespace("rcef"))),
 
 ## ---- 2. discard coverage: raw catch and the table draw the same figure --
 tab <- build_coverage_strata(cd, c("metier4", "vesselFlagCountry"))
-h_raw <- plot_coverage_grid(cd,  y = "metier4", x = "vesselFlagCountry", min_cov = 50)
-h_tab <- plot_coverage_grid(tab, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
+h_raw <- plot_coverage_grid(cd,  y = "metier4", x = "vesselFlagCountry", thresholds = list(cov = 50))
+h_tab <- plot_coverage_grid(tab, y = "metier4", x = "vesselFlagCountry", thresholds = list(cov = 50))
 ok(drawable(h_raw) && same(h_raw, h_tab), "heatmap: raw catch == table")
-b_raw <- plot_coverage_grid(type = "bubble", cd,  y = "metier4", x = "vesselFlagCountry", min_cov = 50, min_trip = 2)
-b_tab <- plot_coverage_grid(type = "bubble", tab, y = "metier4", x = "vesselFlagCountry", min_cov = 50, min_trip = 2)
+b_raw <- plot_coverage_grid(type = "bubble", cd,  y = "metier4", x = "vesselFlagCountry", thresholds = list(cov = 50, trips = 2))
+b_tab <- plot_coverage_grid(type = "bubble", tab, y = "metier4", x = "vesselFlagCountry", thresholds = list(cov = 50, trips = 2))
 ok(drawable(b_raw) && same(b_raw, b_tab), "bubbles: raw catch == table")
 r_raw <- plot_coverage_bar(cd,  y = "metier4", fill = "vesselFlagCountry")
 r_tab <- plot_coverage_bar(tab, y = "metier4", fill = "vesselFlagCountry")
@@ -59,7 +59,7 @@ ok(drawable(r_raw) && same(r_raw, r_tab), "bars: raw catch == table")
 ## (only numTrips differs - pooled strata SUM their trips, whereas the
 ## coarser table takes the largest count among its raw rows)
 fine <- build_coverage_strata(cd, c("metier4", "vesselFlagCountry", "seasonValue"))
-h_fine <- plot_coverage_grid(fine, y = "metier4", x = "vesselFlagCountry", min_cov = 50)
+h_fine <- plot_coverage_grid(fine, y = "metier4", x = "vesselFlagCountry", thresholds = list(cov = 50))
 agree <- c("metier4", "vesselFlagCountry", "landings", "coverage", "cat_key")
 ok(isTRUE(all.equal(h_raw$data[agree], h_fine$data[agree],
                     check.attributes = FALSE)),
@@ -75,16 +75,14 @@ ok(!any(c("cat_key", "Status") %in% names(tab)) &&
 
 ## thresholds are applied at plot time: same table, different colours
 t_lo <- ggplot_build(plot_coverage_grid(tab, y = "metier4", x = "vesselFlagCountry",
-                                        min_cov = 10))$data[[1]]$fill
+                                        thresholds = list(cov = 10)))$data[[1]]$fill
 t_hi <- ggplot_build(plot_coverage_grid(tab, y = "metier4", x = "vesselFlagCountry",
-                                        min_cov = 95))$data[[1]]$fill
-ok(!identical(t_lo, t_hi), "the same table recolours when min_cov changes")
+                                        thresholds = list(cov = 95)))$data[[1]]$fill
+ok(!identical(t_lo, t_hi), "the same table recolours when thresholds$cov changes")
 
 ## ---- 3. arguments that do not fit --------------------------------------
-ok(grepl("unused argument", err(plot_coverage_bar(cd, y = "metier4", min_cov = 80))),
-   "a bar chart takes no min_cov")
-ok(grepl("unused argument", err(plot_coverage_bar(cd, y = "metier4", min_trip = 5))),
-   "nor min_trip")
+ok(grepl("unused argument", err(plot_coverage_bar(cd, y = "metier4", thresholds = list(cov = 80)))),
+   "a bar chart takes no thresholds")
 ok(grepl("catchCategory does not apply", err(
      plot_coverage_grid(cd, y = "metier4", catchCategory = "Lan"))),
    "catchCategory on a discard plot is an error")
@@ -106,31 +104,79 @@ ok(drawable(plot_coverage_bar(cd, y = "metier4", fill = "vesselFlagCountry",
    "... and the bars")
 ok(drawable(plot_coverage_grid(cd, y = "metier4", what = "discards")),
    "what = 'discards' (plural) is accepted")
-ok(grepl("min_fish does not apply to what = \"discard\"", err(
-     plot_coverage_grid(cd, y = "metier4", min_fish = 100))) &&
-     grepl("min_fish does not apply to what = \"discard\"", err(
-       plot_coverage_grid(type = "bubble", cd, y = "metier4", min_fish = 100))),
-   "min_fish on a discard heat/bubble is an error")
-ok(grepl("min_fish does not apply", err(
-     plot_coverage_grid(tab, y = "metier4", min_fish = 100))),
+## thresholds$fish counts measured fish, which a discard estimate has none of: it is
+## not used for the discards (a warning), so one list can go to the discards and to
+## the lengths alike - and the figure is the one drawn without it
+fish_w <- "counts measured fish, which discards have none of"
+ok(grepl(fish_w, warn(plot_coverage_grid(cd, y = "metier4", thresholds = list(fish = 100)))) &&
+     grepl(fish_w, warn(plot_coverage_grid(type = "bubble", cd, y = "metier4",
+                                           thresholds = list(fish = 100)))),
+   "thresholds$fish on a discard heat/bubble is not used, with a warning")
+ok(grepl(fish_w, warn(plot_coverage_grid(tab, y = "metier4", thresholds = list(fish = 100)))),
    "... also when the input is a discard table")
-ok(drawable(plot_coverage_grid(cd, y = "metier4")),
-   "min_fish left at its default (NULL) is fine on a discard plot")
+ok(same(suppressWarnings(plot_coverage_grid(cd, y = "metier4", thresholds = list(cov = 50, fish = 100))),
+        plot_coverage_grid(cd, y = "metier4", thresholds = list(cov = 50))),
+   "... and the figure is the one drawn without it")
+ok(drawable(plot_coverage_grid(cd, y = "metier4")) &&
+     identical(warn(plot_coverage_grid(cd, y = "metier4")), "no warning"),
+   "thresholds left at their default (fish = NA) is fine on a discard plot")
+
+## ---- 3b. one thresholds list, read the same way by every function ----------
+## list(cov = 50, trips = NA, fish = NA) is the default of plot_coverage_grid() and of
+## recommend_groups(); what the list leaves out keeps its default, NULL is NA, and a
+## wrong list stops with the name of the function that was called
+d_th <- eval(formals(plot_coverage_grid)$thresholds)
+ok(identical(d_th, eval(formals(recommend_groups)$thresholds)) &&
+     identical(names(d_th), c("cov", "trips", "fish")) && d_th$cov == 50,
+   "plot_coverage_grid() and recommend_groups() have the same default thresholds")
+ok(!any(c("min_cov", "min_trip", "min_fish") %in% names(formals(plot_coverage_grid))),
+   "the separate min_cov / min_trip / min_fish arguments are gone")
+ok(same(plot_coverage_grid(cd, y = "metier4", thresholds = list(cov = 50, trips = NA, fish = NA)),
+        plot_coverage_grid(cd, y = "metier4")) &&
+     same(plot_coverage_grid(cd, y = "metier4", thresholds = list(trips = 2)),
+          plot_coverage_grid(cd, y = "metier4", thresholds = list(cov = 50, trips = 2))) &&
+     same(plot_coverage_grid(cd, y = "metier4", thresholds = list(cov = 50, trips = NULL)),
+          plot_coverage_grid(cd, y = "metier4")),
+   "the default is the full list; a list that leaves cov out keeps 50; trips = NULL is trips = NA")
+ok(!same(plot_coverage_grid(cd, y = "metier4", thresholds = list(cov = 95)),
+         plot_coverage_grid(cd, y = "metier4")),
+   "a threshold that is set changes the figure")
+th_cases <- list(
+  list(list(cov = 50, tripz = 2), "`thresholds` has no 'tripz'"),
+  list(c(cov = 50), "`thresholds` is a named list"),
+  list(list(50, 2), "`thresholds` is a named list"),
+  list(list(cov = 150), "`thresholds\\$cov` is the coverage"),
+  list(list(cov = NULL), "`thresholds\\$cov` is the coverage"),
+  list(list(cov = 50, trips = "many"), "`thresholds\\$trips` is a number"),
+  list(list(cov = 50, trips = -1), "`thresholds\\$trips` is a number"))
+cd_year <- cd[cd$year == max(cd$year), ]          # recommend_groups() works on one year
+for (tc in th_cases) {
+  m1 <- err(plot_coverage_grid(cd, y = "metier4", thresholds = tc[[1]]))
+  m2 <- err(recommend_groups(cd_year, "metier4", tc[[1]]))
+  ok(grepl(tc[[2]], m1) && grepl("^plot_coverage_grid\\(\\)", m1) &&
+       grepl(tc[[2]], m2) && grepl("^recommend_groups\\(\\)", m2),
+     paste("a wrong thresholds list is refused by both, naming the function:", tc[[2]]))
+}
+ok(grepl("thresholds\\$cov", err(coverage_thresholds(list(cov = NA), "f"))) &&
+     identical(coverage_thresholds(list(), "f"), list(cov = 50, trips = NA_real_, fish = NA_real_)) &&
+     identical(coverage_thresholds(list(fish = 100), "f", "length")$fish, 100) &&
+     is.na(suppressWarnings(coverage_thresholds(list(fish = 100), "f", "discard")$fish)),
+   "coverage_thresholds(): the defaults, and fish dropped for the discards only")
 
 ## ---- 4. length / age coverage ------------------------------------------
 lt <- build_coverage_strata(cd, c("metier4", "vesselFlagCountry"), dd, what = "length",
                             catchCategory = "Lan")
 lh_raw <- plot_coverage_grid(cd, dd, y = "metier4", x = "vesselFlagCountry", what = "length",
-                             catchCategory = "Lan", min_cov = 50, min_fish = 100)
+                             catchCategory = "Lan", thresholds = list(cov = 50, fish = 100))
 lh_tab <- plot_coverage_grid(lt, y = "metier4", x = "vesselFlagCountry",
-                             min_cov = 50, min_fish = 100)
+                             thresholds = list(cov = 50, fish = 100))
 ok(drawable(lh_raw) && same(lh_raw, lh_tab),
    "length heatmap: raw catch + distributions == the length table (which brings its own what)")
 ok(grepl("length coverage table but what", err(
      plot_coverage_grid(lt, y = "metier4", what = "age"))),
    "a `what` that contradicts the table is an error")
 ok(grepl("only used when building from raw", warn(
-     plot_coverage_grid(lt, dd, y = "metier4", min_cov = 50))),
+     plot_coverage_grid(lt, dd, y = "metier4", thresholds = list(cov = 50)))),
    "distributions handed in alongside a table are noted as ignored")
 la <- build_coverage_strata(cd, c("metier4", "vesselFlagCountry"), dd, what = "length")
 ok(identical(plot_coverage_grid(la, y = "metier4")$labels$title,
@@ -145,7 +191,7 @@ ok(identical(plot_coverage_grid(la, y = "metier4")$labels$title,
 ok(drawable(plot_coverage_bar(cd, dd, y = "metier4", fill = "vesselFlagCountry",
                               what = "length", catchCategory = "Lan")) &&
      drawable(plot_coverage_grid(type = "bubble", cd, dd, y = "metier4", x = "vesselFlagCountry",
-                                   what = "age", min_cov = 50)),
+                                   what = "age", thresholds = list(cov = 50))),
    "length bars and age bubbles build from raw catch + distributions")
 
 ## ---- 5. the map ---------------------------------------------------------
@@ -155,7 +201,7 @@ if (requireNamespace("maps", quietly = TRUE)) {
   mt <- build_coverage_strata(cd, c("areaValue", "seasonValue"))
   ok(inherits(suppressWarnings(plot_coverage_map(mt, group = "seasonValue")), "ggplot"),
      "and draws from a coverage table")
-  ok(!any(c("min_cov", "min_trip", "min_fish") %in% names(formals(plot_coverage_map))),
+  ok(!any(c("thresholds", "min_cov", "min_trip", "min_fish") %in% names(formals(plot_coverage_map))),
      "the map takes no thresholds (it never used them)")
 }
 
@@ -330,7 +376,7 @@ ok(identical(ttl(b_raw), ttl(h_raw)) &&
    "bubbles: framed like the heatmap; bubble AREA is not re-explained (the size legend already shows it)")
 ok(grepl("trips >= 2:", box_text(b_raw), fixed = TRUE),
    "bubbles: an active trips threshold gets its own line in the box, with its formula")
-h_fac <- plot_coverage_grid(cd, y = "metier4", x = "vesselFlagCountry", facet = "seasonValue", min_cov = 50)
+h_fac <- plot_coverage_grid(cd, y = "metier4", x = "vesselFlagCountry", facet = "seasonValue", thresholds = list(cov = 50))
 ok(says_cap(h_fac, "grouping = metier4 x vesselFlagCountry x seasonValue, grouped over finer fleet levels (fleetValue) and area (areaValue)."),
    "a facet column is part of the stratum, so it is no longer grouped over")
 ok(identical(cap(h_raw), cap(h_tab)),
@@ -416,8 +462,7 @@ wrapped <- strsplit(sub_wrap(paste(rep("word", 60), collapse = " "), "short"), "
 ok(all(nchar(wrapped) <= 96) && identical(wrapped[length(wrapped)], "short"),
    "sub_wrap() wraps each paragraph on its own")
 ok(identical(box_text(suppressWarnings(plot_coverage_grid(cd, dd, y = "metier4", what = "length",
-                                                          catchCategory = "Lan", min_cov = 50,
-                                                          min_trip = 2, min_fish = 1000))),
+                                                          catchCategory = "Lan", thresholds = list(cov = 50, trips = 2, fish = 1000)))),
              paste("coverage >= 50%: share of landed weight with length distributions.",
                    "trips >= 2: sampled trips behind the length distributions, summed across strata.",
                    "measured fish >= 1,000: fish measured for NaL/MWaL estimates, summed across strata.",
