@@ -188,6 +188,7 @@ numbers and mean weights with one column per class.
 
 Other stock coordination format: 
 \code{\link{catchAllocation}()},
-\code{\link{catchCombined}()}
+\code{\link{catchCombined}()},
+\code{\link{distributionAllocation}()}
 }
 \concept{stock coordination format}

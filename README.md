@@ -263,6 +263,25 @@ alloc_tables$CAR
 alloc_tables$CAS
 ```
 
+The length (or age) allocation has its own two tables, made by `distributionAllocation()`
+from both tables of `catchAllocationAoL()` and the conditions of its groups: the
+**Distribution Allocation Results** (DAR), the numbers and the mean weight at every class
+of every stratum, with the group it was allocated in
+(`distributionAllocationGroupNameTarget`, on the estimated strata, `imported` `"N"`) or
+fed (`distributionAllocationGroupNameSource`, on the sampled donors, `imported` `"Y"`);
+and the **Distribution Allocation Settings** (DAS), one row per group, with how its
+donors were combined:
+
+```r
+dist_tables <- distributionAllocation(alloc$catch, alloc$distribution,
+                                      allocStrataCond, bioMatchedCond,
+                                      distributionType = "LengthTotal",
+                                      workingGroupYear = 2026, version = 1,
+                                      versionDescription = "first run")
+dist_tables$DAR
+dist_tables$DAS
+```
+
 Raising uses the discard estimates whose `originType` matches the `originType`
 argument (`"WGEstimate"` by default, or `"Official"`), so that is the value the
 rows you want raised must carry.

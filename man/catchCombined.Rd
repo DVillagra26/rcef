@@ -141,6 +141,7 @@ catchCombined(raised, originType_catch = "WGEstimate", unit = "t",
 
 Other stock coordination format: 
 \code{\link{catchAllocation}()},
+\code{\link{distributionAllocation}()},
 \code{\link{distributionsCombined}()}
 }
 \concept{stock coordination format}

@@ -1,6 +1,6 @@
 # =====================================================================
 #  rcef_scf.R   (the Stock Coordination Format: Catch Combined, Distributions Combined
-#                and the Catch Allocation Results and Settings)
+#                and the Catch and Distribution Allocation Results and Settings)
 #
 #  ORIGIN: this project (ILVO / RCEF Workbench). Freely refactorable.
 #
@@ -15,7 +15,11 @@
 #    catchAllocation()        the CAR and the CAS: every stratum of the raised
 #                             catch, imported or raised, with the group it was
 #                             raised for or fed, and the donors behind each
-#                             group's discard ratio.
+#                             group's discard ratio;
+#    distributionAllocation() the DAR and the DAS: the same for the length or age
+#                             allocation - every stratum's distribution, sampled
+#                             or estimated, with the group it was allocated in or
+#                             fed, and how each group combined its donors.
 #
 #  The adding up of the distributions is catchAtAoL() and meanWoLatAoL(). They
 #  do what catchAtAoLAggregation() and meanWoLatAoLAggregation() did in one
@@ -465,14 +469,14 @@ scf_header <- function(workingGroupYear, version, versionDescription, calendarYe
 # of the file (scf_header()) on every row, the codes checked against the ones the
 # format accepts (a code of another kind is a warning, not an error: the table is
 # still the table, and the vocabularies grow), and sorted. `record` is "CC", "DC"
-# or, for the allocation setup, "CAR" and "CAS".
+# or, for the allocation setup, "CAR", "CAS", "DAR" and "DAS".
 #' @noRd
 #' @export
 scf_table <- function(d, record, header, fn)
 {
     d <- d %>%
         mutate(recordType = record, !!!header)
-    alloc <- record %in% c("CAR", "CAS")
+    alloc <- record %in% c("CAR", "CAS", "DAR", "DAS")
 
     ## The converted InterCatch files name the country (Belgium, UK(Scotland)); the
     ## SCF wants its ISO 3166 code (BE, GB-SCT): the names that have a code get it, the
@@ -529,7 +533,24 @@ scf_table <- function(d, record, header, fn)
                              "versionDescription", "catchAllocationSchemeName",
                              "catchAllocationGroupName", stratum, "rate",
                              "averagingMethod", "weightingCategory",
-                             "weightingParameter", "weightingTotal", "comment"))
+                             "weightingParameter", "weightingTotal", "comment"),
+                     ## the distribution allocation setup has names of its own for the
+                     ## variables, and `attibuteValue` as the format spells it
+                     DAR = c("recordType", "workingGroupYear", "version",
+                             "versionDescription", "distributionAllocationSchemeName",
+                             "distributionAllocationGroupNameTarget",
+                             "distributionAllocationGroupNameSource", "imported", stratum,
+                             "totalvariableType", "totalvariableUnit", "total",
+                             "distributionType", "distributionUnit", "distributionClass",
+                             "ageGroupPlus", "attributeType", "attibuteValue",
+                             "distributionvariableType", "variableUnit",
+                             "distributionvalueType", "value", "variance", "PSU", "numPSUs",
+                             "numTrips", "numMeasurements"),
+                     DAS = c("recordType", "workingGroupYear", "version",
+                             "versionDescription", "distributionAllocationSchemeName",
+                             "distributionAllocationGroupName", "workingGroup", "stock",
+                             "speciesCode", "averagingMethod", "weightingParameter",
+                             "comment"))
     integer_fields <- c("workingGroupYear", "version", "year", "seasonValue",
                         "speciesCode", "distributionClass", "ageGroupPlus", "numPSUs",
                         "numTrips", "numMeasurements")
@@ -589,7 +610,7 @@ scf_table <- function(d, record, header, fn)
                     call. = FALSE)
     }
     weight_units <- if (record %in% c("CC", "CAR")) c("t", "kg") else c("g", "kg")
-    if ("variableUnit" %in% fields)
+    if ("variableUnit" %in% fields && ! identical(record, "DAR"))     # the DAR checks its own, below
     {
         unit_ok <- ifelse(d$variableType %in% "WeightLive", d$variableUnit %in% weight_units,
                           ifelse(d$variableType %in% "Number",
@@ -601,7 +622,22 @@ scf_table <- function(d, record, header, fn)
                     paste(weight_units, collapse = ", "), "; Number: N, NE3) - give `unit`",
                     call. = FALSE)
     }
-    if (identical(record, "DC"))
+    if (identical(record, "DAR"))
+    {
+        ## the catch of the stratum and the variable of the distribution, each with its unit
+        unit_ok <- function(type, unit, weights)
+            ifelse(type %in% "WeightLive", unit %in% weights,
+                   ifelse(type %in% "Number", unit %in% c("N", "NE3"), TRUE))
+        bad <- ! unit_ok(d$totalvariableType, d$totalvariableUnit, c("t", "kg")) |
+               ! unit_ok(d$distributionvariableType, d$variableUnit, c("g", "kg"))
+        if (any(bad))
+            warning(fn, "(): ", sum(bad), " rows have a unit that does not go with its ",
+                    "variable (WeightLive: t or kg for the catch, g or kg for the mean weight; ",
+                    "Number: N, NE3)", call. = FALSE)
+        check("distributionvalueType", c("Total", "Mean"))
+        check("attibuteValue", c("F", "M"))
+    }
+    if (record %in% c("DC", "DAR"))
     {
         check("distributionType",
               c("Age", "WidthCarapace", "LengthCarapace", "LengthMantle",
@@ -621,6 +657,10 @@ scf_table <- function(d, record, header, fn)
                        CAR = c("vesselFlagCountry", "year", "workingGroup", "stock", place,
                                "catchCategory", "variableType"),
                        CAS = c(".group", "vesselFlagCountry", "year", "workingGroup", "stock", place),
+                       DAR = c("vesselFlagCountry", "year", "workingGroup", "stock", place,
+                               "catchCategory", "distributionType", "attributeType",
+                               "attibuteValue", "distributionvariableType", "distributionClass"),
+                       DAS = ".group",
                        c("year", "workingGroup", "stock", "catchCategory", place,
                          if (identical(record, "DC"))
                              c("distributionType", "attributeType", "attributeValue",
@@ -628,6 +668,8 @@ scf_table <- function(d, record, header, fn)
                          else "variableType"))
     if (identical(record, "CAS"))
         d$.group <- match(d$catchAllocationGroupName, unique(d$catchAllocationGroupName))
+    if (identical(record, "DAS"))
+        d$.group <- match(d$distributionAllocationGroupName, unique(d$distributionAllocationGroupName))
     d %>%
         arrange(across(all_of(order_by))) %>%
         select(any_of(fields))
@@ -1359,6 +1401,402 @@ catchAllocation <- function(catch_data,
 
     long <- unique(c(tables$CAR$catchAllocationGroupNameTarget,
                      tables$CAS$catchAllocationGroupName))
+    long <- long[! is.na(long) & nchar(long) > 25]
+    if (length(long))
+        warning(fn, "(): the group names ", paste0("'", long, "'", collapse = ", "),
+                " are longer than the 25 characters the SCF takes", call. = FALSE)
+    tables
+}
+
+#' Distribution Allocation (DAR and DAS): how the distributions were allocated, in the format of the stock coordination
+#'
+#' @description
+#' The allocated distributions written down stratum by stratum, the way the allocation
+#' setup of the stock coordination format wants them: the **Distribution Allocation
+#' Results (DAR)**, the numbers and the mean weight at every class of every stratum of
+#' the catch - sampled or allocated - with the group it was allocated in or fed, and the
+#' **Distribution Allocation Settings (DAS)**, one row for every group, with how its
+#' donors were combined. Give it what [catchAllocationAoL()] was given and made: both
+#' tables of the allocation and the conditions of the groups. It is to the allocation
+#' what [catchAllocation()] is to the raising.
+#'
+#' @details
+#' ## The DAR
+#'
+#' Every stratum of the catch that has a distribution of `distributionType` is a set of
+#' rows, one for each class and variable: a `Number` row (`distributionvalueType`
+#' `"Total"`) and a `WeightLive` row (`"Mean"`), with the catch of the stratum in
+#' `total`. `imported` says which strata were allocated: `"N"` for a stratum whose
+#' distribution the allocation estimated (`sampledOrEstimated == "estimated"`), `"Y"` for
+#' a stratum with a sampled one. The two names of the group say how the strata took part:
+#'
+#' * `distributionAllocationGroupNameTarget`: the group the stratum was **allocated in**,
+#'   on the estimated strata (`imported = "N"`) and on those only - the `allocGroup` of
+#'   its distribution.
+#' * `distributionAllocationGroupNameSource`: the group(s) the stratum **feeds**, on the
+#'   sampled strata (`imported = "Y"`) and on those only - the strata whose sampled
+#'   distribution went into the distribution a group estimated. A stratum that feeds
+#'   several groups has them all, separated by `"; "`. A group's donors are the strata of
+#'   its `condition_matched_data_list` condition with a sampled distribution of the type
+#'   and a catch, and the other rows of the same domains, as [catchAllocationAoL()] picks
+#'   them.
+#' * `distributionAllocationSchemeName` is written on the allocated strata only.
+#'
+#' A group that estimated nothing (all its strata were sampled) is neither a target nor
+#' a source, and has no DAS row.
+#'
+#' A distribution several strata share (one `domainBiology` for several catch rows) is
+#' shared among them in proportion to their catch: the numbers of each stratum are its
+#' part of the distribution, the mean weights are the distribution's. So the numbers of
+#' the DAR add up to those of [distributionsCombined()], which counts a distribution once.
+#' A distribution the allocation table repeats - [catchAllocationAoL()] writes a sampled
+#' distribution once for every catch row of its domain - is counted once. Within one
+#' stratum of the format (which has no `metier6`) the numbers of its rows add up, and
+#' their mean weights are averaged, weighted by the numbers. The sampling - `PSU`,
+#' `numPSUs`, `numTrips` and `numMeasurements` - is that of the distributions, counted
+#' once for each, as in [distributionsCombined()]; the allocation leaves it empty on the
+#' estimated strata. `variance` is left empty. `vesselFlagCountry` is the ISO 3166 code,
+#' as in [catchAllocation()].
+#'
+#' The numbers of the estimated strata are checked against their donors: in
+#' [catchAllocationAoL()] the numbers of a stratum are the pooled numbers of the donors
+#' times the catch of the stratum over the catch of the donors. A group whose estimated
+#' numbers are not that is warned about - the conditions are not those of the
+#' allocation, or the allocation counted a donor distribution more than once (a domain
+#' that several donor catch rows share).
+#'
+#' ## The DAS
+#'
+#' One row for each group that estimated a distribution: `averagingMethod` `"Weighted"`
+#' and `weightingParameter` the variable of the catch (`"WeightLive"`). The numbers of
+#' a stratum are the donors' numbers per unit of catch, the donors weighted by their
+#' catch; the mean weights are averaged by the numbers at each class.
+#'
+#' ## The header
+#'
+#' `workingGroupYear`, `version`, `versionDescription`, `calendarYear` and
+#' `startDateYear` are those of [catchCombined()] - give them the same values.
+#' `distributionAllocationSchemeName` is the name of the scheme the distributions were
+#' allocated by; it is the `versionDescription` when not given.
+#'
+#' The field names are the format's own, `attibuteValue` (sic) among them: the DAR
+#' names the variable of the catch `totalvariableType` and `totalvariableUnit`, and
+#' that of the distribution `distributionvariableType`, `variableUnit` and
+#' `distributionvalueType`.
+#'
+#' @param catch_data The catch of the allocation: the `catch` table of
+#'   [catchAllocationAoL()], which has the domains the allocation made up for the strata
+#'   it estimated.
+#' @param distribution_data The `distribution` table of the same allocation, with its
+#'   `sampledOrEstimated` and `allocGroup`.
+#' @param condition_alloc_st_list,condition_matched_data_list The conditions the
+#'   distributions were allocated with, as in [catchAllocationAoL()] (the same names and
+#'   order; quosures or text). The matched data default to the strata.
+#' @param distributionType `"LengthTotal"` (default) or `"Age"`: the distributions to
+#'   report. One at a time.
+#' @param originType,variableType The origin and the variable of the catch rows the
+#'   distributions were allocated to, as in [catchAllocationAoL()]: `"WGEstimate"` and
+#'   `"WeightLive"` by default.
+#' @param distributionAllocationSchemeName The name of the scheme the distributions were
+#'   allocated by, a string; default the `versionDescription`.
+#' @param unit The units of the numbers and the mean weights: `c("NE3", "g")` (default),
+#'   as in [distributionsCombined()].
+#' @param unit_total The unit to convert the catch to: `"t"` or `"kg"`. `NULL` (default)
+#'   leaves it as it is (kg after an allocation).
+#' @param round Digits to round `total` and `value` to; `NULL` (default) does not round.
+#' @param workingGroupYear,version,versionDescription,calendarYear,startDateYear The
+#'   header of [catchCombined()]; `workingGroupYear` has no default.
+#' @return A list of two tibbles, with the fields of the SCF in their order: `DAR`
+#'   (`recordType`, `workingGroupYear`, `version`, `versionDescription`,
+#'   `distributionAllocationSchemeName`, `distributionAllocationGroupNameTarget`,
+#'   `distributionAllocationGroupNameSource`, `imported`, the stratum as in the CAR,
+#'   `totalvariableType`, `totalvariableUnit`, `total`, `distributionType`,
+#'   `distributionUnit`, `distributionClass`, `ageGroupPlus`, `attributeType`,
+#'   `attibuteValue`, `distributionvariableType`, `variableUnit`,
+#'   `distributionvalueType`, `value`, `variance`, `PSU`, `numPSUs`, `numTrips`,
+#'   `numMeasurements`) and `DAS` (`recordType`, `workingGroupYear`, `version`,
+#'   `versionDescription`, `distributionAllocationSchemeName`,
+#'   `distributionAllocationGroupName`, `workingGroup`, `stock`, `speciesCode`,
+#'   `averagingMethod`, `weightingParameter`, `comment`). A code the SCF does not accept
+#'   is warned about.
+#' @seealso [catchAllocationAoL()] for the allocation, [catchAllocation()] for the CAR
+#'   and the CAS of the raising, [distributionsCombined()] for the distributions added up.
+#' @family stock coordination format
+#' @md
+#' @examples
+#' \dontrun{
+#' allocStrataCond <- list(TBB = rlang::quo(metier4 == "TBB"), REST = rlang::quo(metier4 != "TBB"))
+#' alloc <- catchAllocationAoL(raised, distributions, allocStrataCond,
+#'                             distributionType = "LengthTotal",
+#'                             logFile = tempfile(fileext = ".txt"))
+#'
+#' tables <- distributionAllocation(alloc$catch, alloc$distribution, allocStrataCond,
+#'                                  workingGroupYear = 2026, version = 1,
+#'                                  versionDescription = "WGNSSK 2026, first run")
+#' tables$DAR
+#' tables$DAS
+#' }
+#' @export
+distributionAllocation <- function(catch_data,
+                                   distribution_data,
+                                   condition_alloc_st_list,
+                                   condition_matched_data_list = condition_alloc_st_list,
+                                   distributionType = c("LengthTotal", "Age"),
+                                   originType = c("WGEstimate", "Official"),
+                                   variableType = c("WeightLive", "Number"),
+                                   distributionAllocationSchemeName = NULL,
+                                   unit = c("NE3", "g"),
+                                   unit_total = NULL,
+                                   round = NULL,
+                                   workingGroupYear,
+                                   version = 1,
+                                   versionDescription = NA_character_,
+                                   calendarYear = "Y",
+                                   startDateYear = NA_character_)
+{
+    fn <- "distributionAllocation"
+    header <- scf_header(workingGroupYear, version, versionDescription,
+                         calendarYear, startDateYear, fn)
+    type <- match.arg(distributionType, c("LengthTotal", "Age"), several.ok = FALSE)
+    originType <- match.arg(originType, c("WGEstimate", "Official"), several.ok = FALSE)
+    variableType <- match.arg(variableType, c("WeightLive", "Number"), several.ok = FALSE)
+    scheme <- if (is.null(distributionAllocationSchemeName)) header$versionDescription
+              else distributionAllocationSchemeName
+    if (! (is.character(scheme) && length(scheme) == 1 && ! is.na(scheme) && nzchar(scheme)))
+        stop(fn, "(): `distributionAllocationSchemeName` is the name of the scheme the ",
+             "distributions were allocated by, which the SCF asks for: give it, or a ",
+             "`versionDescription` to take it from", call. = FALSE)
+
+    ## ---- the catch: the rows the allocation was run for
+    keys <- c("vesselFlagCountry", "year", "workingGroup", "stock", "speciesCode", "catchCategory")
+    stratum <- c("vesselFlagCountry", "year", "workingGroup", "stock", "speciesCode",
+                 "catchCategory", "seasonType", "seasonValue", "areaType", "areaValue",
+                 "fisheriesManagementUnit", "fleetType", "fleetValue")
+    d <- as.data.frame(catch_data, stringsAsFactors = FALSE)
+    miss <- setdiff(c(setdiff(stratum, "fisheriesManagementUnit"), "originType",
+                      "variableType", "variableUnit", "total", "domainBiology"), names(d))
+    if (length(miss))
+        stop(fn, "(): `catch_data` has no column ", paste0("'", miss, "'", collapse = ", "),
+             " - it is the `catch` of catchAllocationAoL()", call. = FALSE)
+    if (! "fisheriesManagementUnit" %in% names(d)) d$fisheriesManagementUnit <- NA
+    w <- d[d$originType %in% originType & d$variableType %in% variableType &
+           is.finite(d$total), , drop = FALSE]
+    if (nrow(w) == 0)
+        stop(fn, "(): no catch rows with originType '", originType, "' and variableType '",
+             variableType, "'", call. = FALSE)
+    if (! is.null(unit_total))
+        w <- convert_field(w, valueField = "total", to = unit_total)
+    rownames(w) <- NULL
+    n <- nrow(w)
+    w$.dom <- catch_domain(w)
+    w$.key <- do.call(paste, c(unname(as.list(w[c(keys, ".dom")])), sep = "\r"))
+
+    ## ---- the groups: the conditions of the allocation, a group's name for both
+    as_quo <- function(x, what)
+    {
+        if (is.character(x)) x <- eval(rlang::parse_expr(paste0("rlang::quo(", x, ")")))
+        if (! rlang::is_quosure(x))
+            stop(fn, "(): `", what, "` are conditions as catchAllocationAoL() takes them, ",
+                 "quosures (rlang::quo(metier4 == \"TBB\")) or text", call. = FALSE)
+        x
+    }
+    if (length(condition_alloc_st_list) != length(condition_matched_data_list))
+        stop(fn, "(): `condition_alloc_st_list` and `condition_matched_data_list` are the ",
+             "conditions of the same groups: they have to be as long", call. = FALSE)
+    strata  <- lapply(condition_alloc_st_list, as_quo, what = "condition_alloc_st_list")
+    matched <- lapply(condition_matched_data_list, as_quo, what = "condition_matched_data_list")
+    if (is.null(names(strata))) names(strata) <- paste0("GA", seq_along(strata))
+    names(matched) <- names(strata)
+    rows_of <- function(q)
+    {
+        r <- rep_len(rlang::eval_tidy(q, data = w), n)
+        r[is.na(r)] <- FALSE
+        r
+    }
+    in_strata <- matrix(vapply(strata, rows_of, logical(n)), nrow = n)
+    if (any(rowSums(in_strata) > 1))
+        stop(fn, "(): ", sum(rowSums(in_strata) > 1), " rows fall in the strata of more than ",
+             "one group - the strata of `condition_alloc_st_list` do not overlap, as ",
+             "catchAllocationAoL() asks", call. = FALSE)
+    group_of <- ifelse(rowSums(in_strata) == 1, names(strata)[max.col(in_strata * 1, "first")],
+                       NA_character_)
+
+    ## ---- the distributions of the type, in the units of the SCF, one row per class
+    cls <- c(keys, "domainBiology", "distributionType", "distributionUnit",
+             "distributionClass", "attributeType", "attributeValue", "variableType",
+             "variableUnit")
+    dd <- as.data.frame(distribution_data, stringsAsFactors = FALSE)
+    miss <- setdiff(c(setdiff(cls, c("attributeType", "attributeValue")), "value",
+                      "sampledOrEstimated", "allocGroup"), names(dd))
+    if (length(miss))
+        stop(fn, "(): `distribution_data` has no column ", paste0("'", miss, "'", collapse = ", "),
+             " - it is the `distribution` of catchAllocationAoL()", call. = FALSE)
+    for (f in setdiff(c("attributeType", "attributeValue", "ageGroupPlus", "PSU", "numPSUs",
+                        "numTrips", "numMeasurements"), names(dd)))
+        dd[[f]] <- NA
+    dd <- dd[dd$distributionType %in% type & dd$variableType %in% c("Number", "WeightLive"), ,
+             drop = FALSE]
+    if (nrow(dd) == 0)
+        stop(fn, "(): no ", type, " distributions in `distribution_data`", call. = FALSE)
+    if (! is.null(unit))
+        dd <- convert_field(dd, valueField = "value", to = unit)
+    if (! identical(type, "Age"))
+    {
+        ## The classes of a length are in mm, as the SCF has them:
+        r <- unit2ratio(from = unique(dd$distributionUnit), to = "mm")
+        dd <- dd %>%
+            mutate(distributionClass = distributionClass *
+                       r$ratio[match(distributionUnit, r$from)],
+                   distributionUnit = "mm")
+    }
+    ## the allocation writes a sampled distribution once for every catch row of its domain,
+    ## and an estimated one once for every row it estimated it for: the first are one, the
+    ## second add up
+    dd <- dd %>%
+        distinct() %>%
+        dplyr::group_by(across(all_of(cls))) %>%
+        summarize(value = if (variableType[1] == "Number") sum(value, na.rm = TRUE)
+                          else mean(value, na.rm = TRUE),
+                  across(all_of(c("sampledOrEstimated", "allocGroup", "ageGroupPlus", "PSU",
+                                  "numPSUs", "numTrips", "numMeasurements")), ~ .x[1]),
+                  .groups = "drop")
+    status <- dd %>%
+        distinct(across(all_of(c(keys, "domainBiology"))), sampledOrEstimated, allocGroup)
+    if (anyDuplicated(status[c(keys, "domainBiology")]))
+        warning(fn, "(): some distributions are sampled in one group and estimated in ",
+                "another: each is reported as the first", call. = FALSE)
+    status <- status[! duplicated(status[c(keys, "domainBiology")]), , drop = FALSE]
+    status$.key <- do.call(paste, c(unname(as.list(status[c(keys, "domainBiology")])), sep = "\r"))
+
+    ## ---- the strata: the catch rows with a distribution, and their part of it
+    at <- match(w$.key, status$.key)
+    lacking <- is.na(at) & w$total > 0
+    if (any(lacking))
+        warning(fn, "(): ", sum(lacking), " catch strata (", signif(sum(w$total[lacking]), 4),
+                " ", w$variableUnit[lacking][1], ") have no ", type, " distribution and are ",
+                "not in the DAR", call. = FALSE)
+    w$.status <- status$sampledOrEstimated[at]
+    w$.group  <- status$allocGroup[at]
+    estimated <- w$.status %in% "estimated"
+    sampled   <- w$.status %in% "sampled"
+    other <- estimated & ! is.na(w$.group) & (is.na(group_of) | group_of != w$.group)
+    if (any(other))
+        warning(fn, "(): ", sum(other), " strata were allocated in another group than ",
+                "`condition_alloc_st_list` puts them in (the allocGroup of the allocation): ",
+                "the conditions are not those of the allocation", call. = FALSE)
+    w$.target <- ifelse(estimated, coalesce(w$.group, group_of), NA_character_)
+    ## a distribution several rows share is theirs in proportion to their catch
+    w$.share <- ave(w$total, w$.key, FUN = function(x) if (sum(x) > 0) x / sum(x) else 1 / length(x))
+
+    ## ---- the donors of each group that estimated something: the strata of its matched
+    ## data with a sampled distribution and a catch, and the other rows of their domains
+    groups <- names(strata)[names(strata) %in% unique(w$.target[estimated])]
+    source_of <- vector("list", n)
+    for (g in groups)
+    {
+        m <- rows_of(matched[[g]])
+        m <- (m | w$.key %in% w$.key[m]) & sampled
+        if (! any(m))
+        {
+            warning(fn, "(): group '", g, "' estimated distributions but has no donor with a ",
+                    "sampled one in its matched data", call. = FALSE)
+            next
+        }
+        for (r in which(m)) source_of[[r]] <- c(source_of[[r]], g)
+
+        ## the check: the pooled numbers of the donors, per unit of their catch, times the
+        ## catch of each estimated stratum
+        num <- dd[dd$variableType == "Number", , drop = FALSE]
+        num$.key <- do.call(paste, c(unname(as.list(num[c(keys, "domainBiology")])), sep = "\r"))
+        cell <- c("distributionClass", "attributeType", "attributeValue")
+        pooled <- num[num$.key %in% w$.key[m], , drop = FALSE] %>%
+            dplyr::group_by(across(all_of(cell))) %>%
+            summarize(per_catch = sum(value) / sum(w$total[m]), .groups = "drop")
+        est <- num[num$.key %in% w$.key[estimated & w$.target %in% g], , drop = FALSE]
+        est$.total <- as.numeric(tapply(w$total, w$.key, sum)[est$.key])
+        est <- left_join(est, pooled, by = cell)
+        off <- abs(est$value - est$per_catch * est$.total) > 1e-6 * pmax(1, abs(est$value))
+        if (any(off | is.na(off)))
+            warning(fn, "(): the numbers group '", g, "' estimated are not its donors' numbers ",
+                    "per unit of catch times the catch of the strata - the conditions are not ",
+                    "those of the allocation, or a donor distribution was counted more than ",
+                    "once", call. = FALSE)
+    }
+    w$.source <- vapply(source_of, function(g)
+        if (is.null(g)) NA_character_
+        else paste(unique(g)[order(match(unique(g), names(strata)))], collapse = "; "), "")
+    w$.source[! sampled] <- NA_character_
+
+    ## ---- the DAR: every stratum with a distribution, class by class
+    w <- w[! is.na(at), , drop = FALSE]
+    w$imported <- ifelse(w$.status %in% "estimated", "N", "Y")
+    w$distributionAllocationGroupNameTarget <- w$.target
+    w$distributionAllocationGroupNameSource <- w$.source
+    w$distributionAllocationSchemeName <- ifelse(w$imported == "N", scheme, NA_character_)
+    w$.row <- seq_len(nrow(w))
+    strat <- c(stratum, "imported", "distributionAllocationSchemeName",
+               "distributionAllocationGroupNameTarget", "distributionAllocationGroupNameSource")
+    cell <- c("distributionType", "distributionUnit", "distributionClass", "ageGroupPlus",
+              "attributeType", "attributeValue")
+    rows <- w[c(strat, ".row", ".dom", ".share", "variableType", "variableUnit", "total")] %>%
+        dplyr::rename(totalvariableType = variableType, totalvariableUnit = variableUnit) %>%
+        inner_join(dd, by = c(keys, ".dom" = "domainBiology"), relationship = "many-to-many") %>%
+        mutate(domainBiology = .dom)        # what a sample is, for scf_sampling()
+    wide <- rows %>%
+        select(all_of(c(strat, "totalvariableType", "totalvariableUnit", ".row", ".dom",
+                        ".share", cell, "variableType", "variableUnit", "value"))) %>%
+        mutate(variableType = ifelse(variableType == "Number", "N", "W")) %>%
+        select(-variableUnit) %>%
+        tidyr::pivot_wider(names_from = variableType, values_from = value)
+    for (f in c("N", "W")) if (! f %in% names(wide)) wide[[f]] <- NA_real_
+    wide$N <- wide$N * wide$.share
+    by <- c(strat, "totalvariableType", "totalvariableUnit", cell)
+    totals <- w %>%
+        dplyr::group_by(across(all_of(c(strat, "variableType", "variableUnit")))) %>%
+        summarize(total = sum(total), .groups = "drop") %>%
+        dplyr::rename(totalvariableType = variableType, totalvariableUnit = variableUnit)
+    sampling <- rows %>%
+        filter(variableType %in% "Number") %>%
+        scf_sampling(by, "DC")
+    dar <- wide %>%
+        dplyr::group_by(across(all_of(by))) %>%
+        summarize(Number = sum(N, na.rm = TRUE),
+                  WeightLive = if (sum(N[! is.na(W)], na.rm = TRUE) > 0)
+                                   stats::weighted.mean(W, N, na.rm = TRUE)
+                               else mean(W, na.rm = TRUE),
+                  .groups = "drop") %>%
+        tidyr::pivot_longer(c(Number, WeightLive), names_to = "distributionvariableType",
+                            values_to = "value") %>%
+        filter(ifelse(distributionvariableType == "Number", value > 0, is.finite(value))) %>%
+        mutate(variableUnit = ifelse(distributionvariableType == "Number", unit[1], unit[2]),
+               distributionvalueType = ifelse(distributionvariableType == "Number", "Total", "Mean")) %>%
+        left_join(totals, by = c(strat, "totalvariableType", "totalvariableUnit")) %>%
+        left_join(sampling, by = by) %>%
+        dplyr::rename(attibuteValue = attributeValue)
+    twice <- dar %>% distinct(across(all_of(c(strat, "totalvariableType")))) %>%
+        dplyr::count(across(all_of(stratum))) %>% filter(n > 1)
+    if (nrow(twice))
+        warning(fn, "(): ", nrow(twice), " strata are in the DAR more than once, sampled in ",
+                "some of their rows and estimated in others, or with other groups", call. = FALSE)
+
+    ## ---- the DAS: one row for each group that estimated something
+    das <- w[w$imported == "N" & ! is.na(w$.target), , drop = FALSE] %>%
+        distinct(workingGroup, stock, speciesCode, distributionAllocationGroupName = .target) %>%
+        mutate(distributionAllocationSchemeName = scheme,
+               averagingMethod = "Weighted",
+               weightingParameter = !!variableType,
+               .group = match(distributionAllocationGroupName, names(strata))) %>%
+        arrange(.group) %>%
+        select(-.group)
+
+    if (! is.null(round) && is.numeric(round))
+        dar <- dar %>% mutate(total = round(total, digits = round),
+                              value = round(value, digits = round))
+    tables <- list(DAR = scf_table(dar, "DAR", header, fn),
+                   DAS = scf_table(das, "DAS", header, fn))
+
+    long <- unique(c(tables$DAR$distributionAllocationGroupNameTarget,
+                     tables$DAS$distributionAllocationGroupName))
     long <- long[! is.na(long) & nchar(long) > 25]
     if (length(long))
         warning(fn, "(): the group names ", paste0("'", long, "'", collapse = ", "),

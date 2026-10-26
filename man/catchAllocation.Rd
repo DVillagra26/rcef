@@ -157,6 +157,7 @@ with(alloc$CAS[alloc$CAS$catchAllocationGroupName == "TBB", ],
 
 Other stock coordination format: 
 \code{\link{catchCombined}()},
+\code{\link{distributionAllocation}()},
 \code{\link{distributionsCombined}()}
 }
 \concept{stock coordination format}
