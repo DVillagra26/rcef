@@ -59,6 +59,23 @@ asked for REPEATS rather than becoming `NA`: `27.4` is its own division and
 subdivision as far as the data goes, so a stratum reported at that
 resolution is never silently dropped from a finer grouping.
 
+A record can name several areas in one `areaValue`, `;`-separated: the CEF
+format lets a discard record cover a set of areas whose landings are reported
+one by one (`27.4.b;27.4.c;27.7.d;27.7.e`). Each area is split on its own,
+and each of the three columns holds the distinct pieces at its level, sorted
+and `;`-joined - a set, so the same areas listed in another order are the same
+value: `ICESSubArea` `27.4;27.7`, `ICESDivision` `27.4.b;27.4.c;27.7.d;27.7.e`,
+and the subdivision, which these areas do not reach, repeats the division.
+Pieces that agree at a coarser level collapse into one, so `27.7.d;27.7.e` is
+just `27.7` as a subarea. The same goes for a `fleetValue` that lists several
+fleets (`GNS_DEF_all_0_0_all;GTR_DEF_all_0_0_all`): `metier4` `GNS;GTR`,
+`target` `DEF`, `mesh` `all`, `metier4_mesh` `GNS_all;GTR_all` (the gear and
+mesh of each fleet stay together). The record stays ONE row: nothing is
+repeated or divided, `areaValue`, `fleetValue` and `Stratum` are as reported,
+and the columns only say what it is relevant for. Blanks around a `;` are
+ignored and so is an empty piece. A record with one area and one fleet is as
+it always was.
+
 With `what = "distribution"` the same fields come back on the distributions
 table instead: `derive_fields(catch_data, distribution_data, what =
 "distribution")`. `derive_fields(catch_data)` is the catch, as it always was.
@@ -90,6 +107,13 @@ call, say) are replaced.
 
 catch <- derive_fields(catch)
 head(catch[, c("fleetValue", "metier4", "metier4_mesh", "ICESDivision")], 3)
+
+# a record that names several areas (or fleets) gets the set of them at every level
+listed <- data.frame(vesselFlagCountry = c("BE", "SE"), seasonValue = 2025,
+                     fleetValue = c("TBB_DEF_70-99_0_0_all",
+                                    "GNS_DEF_all_0_0_all;GTR_DEF_all_0_0_all"),
+                     areaValue = c("27.4.b;27.4.c;27.7.d;27.7.e", "27.3.a.21"))
+derive_fields(listed)[, c("ICESSubArea", "ICESDivision", "metier4", "metier4_mesh")]
 
 # the distributions get the same fields, read off the catch on domainBiology
 dist <- derive_fields(catch, distributions, what = "distribution")

@@ -59,6 +59,23 @@
 #' subdivision as far as the data goes, so a stratum reported at that
 #' resolution is never silently dropped from a finer grouping.
 #'
+#' A record can name several areas in one `areaValue`, `;`-separated: the CEF
+#' format lets a discard record cover a set of areas whose landings are reported
+#' one by one (`27.4.b;27.4.c;27.7.d;27.7.e`). Each area is split on its own,
+#' and each of the three columns holds the distinct pieces at its level, sorted
+#' and `;`-joined - a set, so the same areas listed in another order are the same
+#' value: `ICESSubArea` `27.4;27.7`, `ICESDivision` `27.4.b;27.4.c;27.7.d;27.7.e`,
+#' and the subdivision, which these areas do not reach, repeats the division.
+#' Pieces that agree at a coarser level collapse into one, so `27.7.d;27.7.e` is
+#' just `27.7` as a subarea. The same goes for a `fleetValue` that lists several
+#' fleets (`GNS_DEF_all_0_0_all;GTR_DEF_all_0_0_all`): `metier4` `GNS;GTR`,
+#' `target` `DEF`, `mesh` `all`, `metier4_mesh` `GNS_all;GTR_all` (the gear and
+#' mesh of each fleet stay together). The record stays ONE row: nothing is
+#' repeated or divided, `areaValue`, `fleetValue` and `Stratum` are as reported,
+#' and the columns only say what it is relevant for. Blanks around a `;` are
+#' ignored and so is an empty piece. A record with one area and one fleet is as
+#' it always was.
+#'
 #' With `what = "distribution"` the same fields come back on the distributions
 #' table instead: `derive_fields(catch_data, distribution_data, what =
 #' "distribution")`. `derive_fields(catch_data)` is the catch, as it always was.
@@ -100,6 +117,13 @@
 #'
 #' catch <- derive_fields(catch)
 #' head(catch[, c("fleetValue", "metier4", "metier4_mesh", "ICESDivision")], 3)
+#'
+#' # a record that names several areas (or fleets) gets the set of them at every level
+#' listed <- data.frame(vesselFlagCountry = c("BE", "SE"), seasonValue = 2025,
+#'                      fleetValue = c("TBB_DEF_70-99_0_0_all",
+#'                                     "GNS_DEF_all_0_0_all;GTR_DEF_all_0_0_all"),
+#'                      areaValue = c("27.4.b;27.4.c;27.7.d;27.7.e", "27.3.a.21"))
+#' derive_fields(listed)[, c("ICESSubArea", "ICESDivision", "metier4", "metier4_mesh")]
 #'
 #' # the distributions get the same fields, read off the catch on domainBiology
 #' dist <- derive_fields(catch, distributions, what = "distribution")
@@ -155,40 +179,75 @@ derive_fields <- function(catch_data, distribution_data = NULL,
   # needs them, so deriving a catch that is already derived costs nothing.
   d <- catch_data
   put <- function(col, value) if (!col %in% names(d)) d[[col]] <<- value
-  tok <- area <- NULL
-  fleet_tok <- function() {
-    if (is.null(tok)) tok <<- strsplit(as.character(catch_data$fleetValue), "_", fixed = TRUE)
-    tok
+  fleet <- area <- NULL
+  # A field of the CEF can list several codes, ';'-separated: a discard record that covers a set
+  # of areas or of fleets whose landings are reported one by one (27.4.b;27.4.c;27.7.d;27.7.e).
+  # Each code of the list is cut on its own and a derived column holds the DISTINCT pieces, sorted
+  # and ';'-joined - a set, so that the same areas listed in another order are the same value - and
+  # pieces that agree at a coarser level collapse into one: 27.7.d;27.7.e is 27.7 as a subarea. A
+  # field with one code gets the plain value, as ever. The record stays ONE row; the sets only say
+  # what it is relevant for. The cutting is done on the distinct values of the field only.
+  as_set <- function(x) {
+    x <- x[!is.na(x) & nzchar(x)]
+    if (length(x)) paste(sort(unique(x), method = "radix"), collapse = ";") else NA_character_
   }
-  area_tok <- function() {
-    if (is.null(area)) area <<- strsplit(as.character(catch_data$areaValue), ".", fixed = TRUE)
+  pieces_of <- function(code)                       # the codes of a field, cut at ';' (blanks and empty pieces gone)
+    lapply(strsplit(code, ";", fixed = TRUE), function(p) { p <- trimws(p); p[!is.na(p) & nzchar(p)] })
+  # A fleet code is gear_target_mesh_..., cut to its first 1, 2 or 3 parts for metier4 to metier6;
+  # the target is the 2nd part, the mesh the 3rd, and metier4_mesh the gear and mesh together.
+  fleet_levels <- function() {
+    if (is.null(fleet)) {
+      code <- as.character(catch_data$fleetValue)
+      one  <- unique(code)
+      lv <- lapply(pieces_of(one), function(f) {
+        z    <- strsplit(f, "_", fixed = TRUE)
+        at   <- function(i) vapply(z, function(t) if (length(t) >= i) t[i] else NA_character_, character(1))
+        join <- function(n) vapply(z, function(t) paste(t[seq_len(min(n, length(t)))], collapse = "_"), character(1))
+        gm   <- ifelse(is.na(at(3)) | !nzchar(at(3)), join(1), paste(join(1), at(3), sep = "_"))
+        vapply(list(join(1), join(2), join(3), at(2), at(3), gm), as_set, character(1))
+      })
+      i <- match(code, one)
+      fleet <<- lapply(1:6, function(k) vapply(lv, `[`, character(1), k)[i])
+    }
+    fleet
+  }
+  fleet_join <- function(k) fleet_levels()[[k]]    # 1-3: metier4 to metier6, 4: target, 5: mesh, 6: metier4_mesh
+  # An area code is a nested path (27.4.b.1), cut to its first 2, 3 or 4 parts for the subarea,
+  # division and subdivision.
+  area_cut <- function(a, n) vapply(strsplit(a, ".", fixed = TRUE), function(z)
+    paste(z[seq_len(min(n, length(z)))], collapse = "."), character(1))
+  area_levels <- function() {
+    if (is.null(area)) {
+      code <- as.character(catch_data$areaValue)
+      one  <- unique(code)
+      lv   <- lapply(pieces_of(one), function(a) vapply(2:4, function(n) as_set(area_cut(a, n)), character(1)))
+      i    <- match(code, one)
+      area <<- lapply(1:3, function(k) vapply(lv, `[`, character(1), k)[i])
+    }
     area
   }
-  tok_at <- function(i) vapply(fleet_tok(), function(z)
-    if (length(z) >= i) z[i] else NA_character_, character(1))
-  tok_join <- function(n) vapply(fleet_tok(), function(z)
-    paste(z[seq_len(min(n, length(z)))], collapse = "_"), character(1))
-  area_join <- function(n) vapply(area_tok(), function(z) {
-    if (!length(z) || all(is.na(z))) return(NA_character_)
-    paste(z[seq_len(min(n, length(z)))], collapse = ".")
-  }, character(1))
+  area_join <- function(k) area_levels()[[k]]      # 1: subarea, 2: division, 3: subdivision
 
-  put("metier4", tok_join(1))                # GNS
-  put("metier5", tok_join(2))                # GNS_DEF
-  put("metier6", tok_join(3))                # GNS_DEF_120-219
-  put("target",  tok_at(2))
-  put("mesh",    tok_at(3))
+  put("metier4", fleet_join(1))              # GNS
+  put("metier5", fleet_join(2))              # GNS_DEF
+  put("metier6", fleet_join(3))              # GNS_DEF_120-219
+  put("target",  fleet_join(4))
+  put("mesh",    fleet_join(5))
   # Gear and mesh together, e.g. TBB_70-99. A mesh size only means
   # something within its gear, so this is the level a fleet is usually
   # read at - and as one label it can sit on a single axis, fill or
   # filter. A fleet code with no mesh part ("All", "OTB_DEF") is just
   # its gear, the way metier5 / metier6 stop at the last part there
-  # is, rather than becoming "TBB_NA" or dropping out as NA.
-  put("metier4_mesh", ifelse(is.na(d$mesh) | !nzchar(as.character(d$mesh)), d$metier4,
-                             paste(d$metier4, d$mesh, sep = "_")))
-  put("ICESSubArea",     area_join(2))       # 27.X
-  put("ICESDivision",    area_join(3))       # 27.X.X
-  put("ICESSubdivision", area_join(4))       # 27.X.X.X
+  # is, rather than becoming "TBB_NA" or dropping out as NA. Composed from
+  # the metier4 and mesh the catch has - so a regrouped metier4 flows into
+  # it - except for a record that lists several fleets, where the gear and
+  # mesh of each fleet are kept together: GNS_all;GTR_all, not GNS;GTR_all.
+  put("metier4_mesh", ifelse(grepl(";", as.character(catch_data$fleetValue), fixed = TRUE), fleet_join(6),
+                             ifelse(is.na(d$mesh) | !nzchar(as.character(d$mesh)), d$metier4,
+                                    paste(d$metier4, d$mesh, sep = "_"))))
+  put("ICESSubArea",     area_join(1))       # 27.X
+  put("ICESDivision",    area_join(2))       # 27.X.X
+  put("ICESSubdivision", area_join(3))       # 27.X.X.X
   # The stratum AS UPLOADED: the four native CEF keys, joined. This
   # is the finest grouping the data itself defines, and it is the
   # only one that needs no interpretation - every other column here
