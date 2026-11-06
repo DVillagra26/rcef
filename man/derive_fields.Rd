@@ -92,10 +92,22 @@ described above, run once on the catch: the distributions only look its
 results up, so the two tables can never disagree about what a field means.
 
 A \code{domainBiology} can be used by catch rows of several strata (a
-distribution covers every catch row that names it). The fields those rows
-share are kept and the ones they differ on are \code{NA}, with a message, rather
-than one of them being picked at random. A distribution row with no catch
-row behind it gets \code{NA} throughout, with a warning: the two files disagree.
+distribution is one sample and covers every catch row that names it: the
+Belgian landings of one fleet, 14 records in four areas and four quarters, are
+one distribution). It takes the fields from the catch rows' own columns - never
+from the text of the \code{domainBiology} - and what those rows agree on is kept.
+Where they differ it takes all their values, distinct, sorted and
+\verb{;}-separated, the set a record that lists several areas gets: \code{areaValue}
+\verb{27.4.b;27.4.c;27.7.d;27.7.e}, \code{ICESSubArea} \verb{27.4;27.7}, and \code{Stratum} the
+four native keys joined from these sets (\verb{... | 1;2;3;4}). So no value is
+picked at random and none of the text fields is \code{NA} - said once, with a
+message. The exception is a column the catch holds as a number, \code{seasonValue}
+as read from a csv: a distribution must have the types of the catch's columns,
+or the allocation cannot combine the two tables, so a number cannot hold the
+set \verb{1;2;3;4} and is \code{NA} there; the seasons are in \code{Stratum}. (A catch whose
+\code{seasonValue} is text gets the set.) A distribution row with no catch row
+behind it has nothing to be read from and gets \code{NA} throughout, with a
+warning: the two files disagree.
 The rows of \code{distribution_data} come back as they went in (empty text apart), same
 number and same order; columns of the same name already on it (an earlier
 call, say) are replaced.

@@ -121,17 +121,22 @@ ok(identical(out$metier4[9], "DRB") && identical(out$metier4[10], "MIS") &&
 
 # one domainBiology, two seasons behind it
 r5 <- out[5, ]
-ok(is.na(r5$seasonValue) && is.na(r5$Stratum),
-   "a domain used by two seasons: the season is NA - and so is the stratum, which needs it")
+ok(is.na(r5$seasonValue) && identical(r5$Stratum, "A | OTB_DEF_70-99_0_0 | 27.4.b | 1;2"),
+   "a domain used by two seasons: seasonValue is a number in the catch, so it cannot hold both and is NA - the stratum carries them (1;2)")
 ok(identical(r5$fleetValue, "OTB_DEF_70-99_0_0") && identical(r5$metier4_mesh, "OTB_70-99") &&
      identical(r5$ICESDivision, "27.4.b"),
    "... but what both seasons share is kept")
 ok(is.integer(out$seasonValue) && is.character(out$metier4) && is.character(out$Stratum),
-   "the columns keep their types (seasonValue stays an integer)")
+   "the columns keep their types (seasonValue stays an integer): the engines cannot combine a number and a text")
 ok(length(h$messages) == 1L && grepl("1 distribution(s) are used", h$messages, fixed = TRUE) &&
-     grepl("D3", h$messages, fixed = TRUE) && grepl("seasonValue, Stratum are NA", h$messages, fixed = TRUE) &&
-     grepl("1 of 10 distribution rows", h$messages, fixed = TRUE),
-   "the ambiguity is said once, naming the domain, the fields that are NA for it and how many distribution rows it touches")
+     grepl("D3", h$messages, fixed = TRUE) && grepl("Stratum (1 of 10 distribution rows)", h$messages, fixed = TRUE) &&
+     grepl("seasonValue is a number in the catch, so it is NA there", h$messages, fixed = TRUE),
+   "the sharing is said once, naming the domain, how many distribution rows it touches and that the season, a number, is NA there")
+## a catch whose seasonValue is text can say it
+ctext <- catch; ctext$seasonValue <- as.character(ctext$seasonValue)
+rt <- suppressWarnings(quiet(derive_fields(ctext, dist, what = "distribution")))
+ok(identical(rt$seasonValue[5], "1;2") && is.character(rt$seasonValue) && identical(rt$Stratum[5], r5$Stratum),
+   "... and where the catch holds the season as text, the distribution takes the set (1;2)")
 
 # no catch row behind it
 orph <- c(6L, 7L, 8L)
@@ -162,9 +167,10 @@ ok(identical(suppressWarnings(suppressMessages(derive_fields(dc, dist, what = "d
    "a catch that was derived already gives the same distributions")
 no_cty <- dist[setdiff(names(dist), "vesselFlagCountry")]
 oc <- suppressWarnings(suppressMessages(derive_fields(catch, no_cty, what = "distribution")))
-ok(identical(oc$vesselFlagCountry[4], "A") && is.na(oc$vesselFlagCountry[1]) &&
-     identical(oc$metier4[4], "GNS") && is.na(oc$Stratum[1]),
-   "distributions with no country of their own get it from the catch - NA where two countries share the domain")
+ok(identical(oc$vesselFlagCountry[4], "A") && identical(oc$vesselFlagCountry[1], "A;B") &&
+     identical(oc$metier4[4], "GNS") &&
+     identical(oc$Stratum[1], "A;B | OTB_DEF_70-99_0_0;TBB_DEF_120-219_0_0 | 27.4.b;27.7.d | 1;3"),
+   "distributions with no country of their own get it from the catch - both countries, as a set, where two share the domain")
 
 ## ---- the mistakes it names --------------------------------------------------------------
 m <- err(derive_fields(dist))
@@ -201,14 +207,18 @@ ok(nrow(dd23) == nrow(d23) && identical(dd23[names(d23)], blank_na(d23)) && leng
    "fixture: all the rows back, nothing orphaned (the blank cells as NA)")
 ok(!anyNA(dd23[c("fleetValue", "areaValue", "metier4", "metier4_mesh", "ICESDivision")]),
    "fixture: fleet, area and the fields from them are there for every row")
-# the example's distributions cover whole domains (all seasons): season is the one thing they cannot say
+# the example's distributions cover whole domains (all seasons): season is the one thing a number cannot say
 ok(anyNA(dd23$seasonValue) && length(ha$messages) == 1L,
-   "fixture: a domain spans seasons, so seasonValue is NA there - and said")
+   "fixture: a domain spans seasons, so seasonValue (a number) is NA there - and said")
 k <- paste(dd23$domainBiology, dd23$catchCategory, dd23$vesselFlagCountry)
 one_season <- tapply(c23$seasonValue, paste(c23$domainBiology, c23$catchCategory, c23$vesselFlagCountry),
                      function(s) length(unique(s)) == 1L)
 ok(identical(!is.na(dd23$seasonValue), as.vector(one_season[k])),
    "fixture: seasonValue is there exactly where the domain has one season")
+seasons_of <- tapply(as.character(c23$seasonValue), paste(c23$domainBiology, c23$catchCategory, c23$vesselFlagCountry),
+                     function(s) paste(sort(unique(s), method = "radix"), collapse = ";"))
+ok(identical(sub("^.* \\| ", "", dd23$Stratum), as.vector(seasons_of[k])) && !anyNA(dd23$Stratum) && !anyNA(dd23$areaValue),
+   "fixture: ... and the stratum carries exactly the seasons of the catch rows that use the distribution; no area is NA")
 
 ## ---- deriving the distributions changes nothing downstream ----------------------------------------
 cv0 <- build_coverage_strata(c23, c("metier4", "vesselFlagCountry"), distributions = d23, what = "length")

@@ -168,8 +168,11 @@ ok(nrow(dd) == 3L && identical(dd$ICESSubArea[1:2], rep("27.4;27.7", 2)) &&
      identical(dd$ICESDivision[1:2], rep("27.4.b;27.4.c;27.7.d;27.7.e", 2)) &&
      identical(dd$areaValue[1:2], rep("27.4.b;27.4.c;27.7.d;27.7.e", 2)),
    "a distribution takes the set of areas of its catch record, at every level")
-ok(is.na(dd$areaValue[3]) && is.na(dd$ICESDivision[3]) && is.na(dd$ICESSubArea[3]) && identical(dd$metier4[3], "OTB"),
-   "a distribution of two records with different areas: the areas are NA, what they share (the fleet) is kept")
+ok(identical(dd$areaValue[3], "27.4.b;27.7.d;27.7.e") && identical(dd$ICESDivision[3], "27.4.b;27.7.d;27.7.e") &&
+     identical(dd$ICESSubArea[3], "27.4;27.7") && identical(dd$metier4[3], "OTB") &&
+     identical(dd$Stratum[3], "BE | OTB_DEF_70-99_0_0_all | 27.4.b;27.7.d;27.7.e | 2025"),
+   "a distribution of two records with different areas (one of them a list) takes all their areas, as a set - not NA; what they share (the fleet) is kept")
+ok(identical(dd$seasonValue, rep(2025L, 3)), "the season, which they agree on, is still a number")
 ok(length(h$messages) == 1L && grepl("1 distribution(s) are used", h$messages, fixed = TRUE) && !length(h$warnings),
    "... said once")
 

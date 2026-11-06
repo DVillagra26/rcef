@@ -94,10 +94,22 @@
 #' results up, so the two tables can never disagree about what a field means.
 #'
 #' A `domainBiology` can be used by catch rows of several strata (a
-#' distribution covers every catch row that names it). The fields those rows
-#' share are kept and the ones they differ on are `NA`, with a message, rather
-#' than one of them being picked at random. A distribution row with no catch
-#' row behind it gets `NA` throughout, with a warning: the two files disagree.
+#' distribution is one sample and covers every catch row that names it: the
+#' Belgian landings of one fleet, 14 records in four areas and four quarters, are
+#' one distribution). It takes the fields from the catch rows' own columns - never
+#' from the text of the `domainBiology` - and what those rows agree on is kept.
+#' Where they differ it takes all their values, distinct, sorted and
+#' `;`-separated, the set a record that lists several areas gets: `areaValue`
+#' `27.4.b;27.4.c;27.7.d;27.7.e`, `ICESSubArea` `27.4;27.7`, and `Stratum` the
+#' four native keys joined from these sets (`... | 1;2;3;4`). So no value is
+#' picked at random and none of the text fields is `NA` - said once, with a
+#' message. The exception is a column the catch holds as a number, `seasonValue`
+#' as read from a csv: a distribution must have the types of the catch's columns,
+#' or the allocation cannot combine the two tables, so a number cannot hold the
+#' set `1;2;3;4` and is `NA` there; the seasons are in `Stratum`. (A catch whose
+#' `seasonValue` is text gets the set.) A distribution row with no catch row
+#' behind it has nothing to be read from and gets `NA` throughout, with a
+#' warning: the two files disagree.
 #' The rows of `distribution_data` come back as they went in (empty text apart), same
 #' number and same order; columns of the same name already on it (an earlier
 #' call, say) are replaced.
@@ -279,30 +291,48 @@ derive_fields <- function(catch_data, distribution_data = NULL,
   d   <- d[has_domain, , drop = FALSE]
   k_c <- biology_key(d, by)
   k_d <- biology_key(distribution_data, by)
-  # one value per key, or NA when the catch rows of the key disagree on it
-  one <- function(v) {
-    u <- unique(v[!is.na(v)])
-    if (length(u) == 1L) u else v[NA_integer_]
+  # One value per key: what the catch rows of the key agree on - or, when they differ, ALL their values,
+  # distinct, sorted and ';'-joined, the set a record that lists several areas gets (27.4.b;27.4.c;27.7.d).
+  # A distribution is one sample and can serve several strata (the Belgian landings of a fleet, 14 records in 4
+  # areas and 4 quarters, are ONE distribution): it takes the area, season and fleet of every catch row that
+  # uses it, read off the catch's own columns, so none is picked at random and none is NA. Only a key no
+  # catch row is behind has nothing to be read from.
+  set_of <- function(v) {
+    p <- sort(unique(unlist(.field_pieces(v))), method = "radix")
+    if (length(p)) paste(p, collapse = ";") else NA_character_
   }
+  sets <- setdiff(carry, "Stratum")
   lk <- d %>%
     mutate(.key = k_c, .stratum = Stratum, .domain = as.character(domainBiology)) %>%
     group_by(.key) %>%
     summarise(.n_strata = dplyr::n_distinct(.stratum),
               .domain   = dplyr::first(.domain),
-              across(all_of(carry), one),
+              .stratum1 = dplyr::first(.stratum),
+              .country  = set_of(vesselFlagCountry),
+              across(all_of(sets), set_of),
               .groups = "drop")
+  lk <- lk[lk$.key %in% k_d, , drop = FALSE]                      # the keys the distributions use
+  # the stratum of a key of several is the four native keys joined from the sets, as a record that lists several has it
+  lk$Stratum <- as.character(ifelse(lk$.n_strata == 1L, lk$.stratum1,
+                                    paste(lk$.country, lk$fleetValue, lk$areaValue, lk$seasonValue, sep = " | ")))
+  # A column the catch holds as a NUMBER (seasonValue, read from a csv) cannot hold a set. The distributions
+  # must have the types of the catch's columns - the engines cannot combine a number and a text - so there the
+  # value stays a number and is NA where the catch rows of a key differ; the seasons are in Stratum.
+  is_num <- vapply(sets, function(col) is.numeric(d[[col]]), NA)
+  num_set <- sets[is_num][vapply(sets[is_num], function(col) any(grepl(";", lk[[col]][lk$.n_strata > 1L], fixed = TRUE)), NA)]
+  for (col in sets[is_num])
+    lk[[col]] <- suppressWarnings(if (is.integer(d[[col]])) as.integer(lk[[col]]) else as.numeric(lk[[col]]))
   i <- match(k_d, lk$.key)
 
-  # a distribution is one sample: when catch rows of several strata use it (the Belgian landings of
-  # one fleet, 14 records in 4 areas and 4 quarters, are ONE distribution) it has no single area,
-  # season or fleet - what its rows agree on is kept, what they differ on is NA. Said, with the fields.
-  is_shared <- lk$.n_strata > 1L & lk$.key %in% k_d
+  is_shared <- lk$.n_strata > 1L
   if (any(is_shared)) {
-    na_fields <- carry[vapply(carry, function(col) any(is.na(lk[[col]][is_shared])), NA)]
+    set_fields <- sets[!is_num][vapply(sets[!is_num], function(col) any(grepl(";", lk[[col]][is_shared], fixed = TRUE)), NA)]
     message("derive_fields(): ", sum(is_shared), " distribution(s) are used by catch rows of more than one stratum - one sample for several ",
             "areas, seasons or fleets (e.g. ", paste(utils::head(unique(lk$.domain[is_shared]), 3), collapse = ", "), "). A distribution ",
-            "takes the fleet, area and season of its catch rows; where they differ it has no single value, so ", paste(na_fields, collapse = ", "),
-            " are NA for them (", sum(k_d %in% lk$.key[is_shared]), " of ", length(k_d), " distribution rows)")
+            "takes the fleet, area and season of its catch rows; where they differ it takes all of them, ';'-separated, as a record that ",
+            "lists several does: ", paste(c(set_fields, "Stratum"), collapse = ", "), " (", sum(k_d %in% lk$.key[is_shared]), " of ",
+            length(k_d), " distribution rows)",
+            if (length(num_set)) paste0("; ", paste(num_set, collapse = ", "), " is a number in the catch, so it is NA there - the values are in Stratum"))
   }
   if (anyNA(i))
     warning("derive_fields(): ", sum(is.na(i)), " of ", length(i),
