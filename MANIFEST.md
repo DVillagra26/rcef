@@ -52,6 +52,14 @@ length classes of the InterCatch files "mm" (they are millimetres: class 130 is 
 where upstream says "cm" and `funIntercatchCEF()` then multiplies them by 10 (a brill of 13 to 70 cm came
 out as 1300 to 7000). All four belong upstream.
 
+A fifth, a change of behaviour and not a repair, also marked `## [pkg]`: the check of the strata in
+`check_group_conditions()` - which `catchRaising()` runs - stops when the groups cut a domain: landings whose
+`domainCatchDis` has a discard estimate, but not in the stratum the landings are in. The raising takes the
+estimate from the rows of the stratum, so those landings are raised again and the estimate is counted twice or
+left out (a domain with an estimate for each season, each in the stratum of its own landings, is fine); on the real
+RDBES catch of 2025 the Belgian discards of one fleet came out as 7,563 kg imported plus 6,822 kg raised on the
+same landings. The check is `.cut_domains()` in `rcef_multi_area.R`; the hook in the vendored file is five lines.
+
 The roxygen text of the vendored files has additions of ours (no marker: it is not
 code): the help pages of `catchRaising()`, `catchAllocationAoL()` and the two
 aggregations, and the arguments of `funICoutCEF()`, `funIntercatchCEF()` and
@@ -65,7 +73,8 @@ every return shape, every algorithm.
 | file | was | what |
 |---|---|---|
 | `aaa-package.R` | *(new)* | package doc, `@import`, `globals` |
-| `rcef_utils.R` | `R_development/0_Functions_utils.R` | `derive_fields()` (the nested fleet and area levels, on the catch or on its distributions), `convert_units()` (the one unit conversion: weights to tonnes, numbers to N, mean weights to g, length classes to mm) |
+| `rcef_utils.R` | `R_development/0_Functions_utils.R` | `derive_fields()` (the nested fleet and area levels, on the catch or on its distributions; a field that lists several codes - `27.4.b;27.4.c;27.7.d;27.7.e` - gives the set of them at every level), `convert_units()` (the one unit conversion: weights to tonnes, numbers to N, mean weights to g, length classes to mm) |
+| `rcef_multi_area.R` | *(new)* | the records that name several areas, fleets or seasons in one field (one discard estimate for a set of areas): `flag_multi_area()` finds them and says what the split would do, `split_multi_area()` cuts each into one record per code - the amount shared out by the landings of its domain (or equally, or by a column), the domains re-keyed on the parts and on their landings, the distributions with it - and `.cut_domains()`, the check `check_group_conditions()` makes that the groups of a raising keep every domain with an estimate whole |
 | `rcef_coverage.R` | *(new)* | `build_coverage_strata()`: the discard-rate / sampling-coverage table (CAR / CAS-style columns, no status) the coverage and discard-rate plots draw, usable on its own - it also holds the link between the catch and the distributions that gives length and age coverage; `coverage_cells()`, which pools that table to the cells a coverage plot draws and words what the figure is about; `coverage_thresholds()`, which reads the one `thresholds = list(cov, trips, fish)` list that `plot_coverage_grid()` and `recommend_groups()` both take |
 | `rcef_groups.R` | *(new; the first versions of the package had `recommend_raising()` for this)* | `recommend_groups()`: chooses the groups of `catchRaising()` and `catchAllocationAoL()` from a hierarchy of variables (from the one that matters most to the one that matters least) and the coverage a pool needs - every stratum takes the narrowest pool that reaches it, on the pooled coverage of `build_coverage_strata()` and `coverage_cells()` - and returns the two lists of conditions (`strataCond`, `matchedDataCond`) with the tables of how the strata fell into the levels (`print.rcef_groups()` prints them) |
 | `rcef_length.R` | `R_development/mod_length.R` | the distributions: `prep_distributions()` (one unit, one class scale), the match between catch and distributions through `domainBiology` and the country, `biology_dist_prep()` (the link, the plus-group and length-bin pooling, numbers and mean weight at length / age, before the allocation and after it: the data half of `plot_NaLoA()` and `plot_MWaLoA()`) |

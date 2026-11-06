@@ -28,9 +28,10 @@ groups).}
 \item{domain}{The domain, used to match records with extra info.}
 
 \item{originType}{Origin of the records the groups are for: "unspecified" (default), "WGEstimate" or "Official".
-Not used for now: the groups are checked on every row of \code{catch_data}, whatever its origin.}
+Only the check that a domain lies in one stratum looks at it - at the rows of this origin; the other checks look
+at every row of \code{catch_data}, whatever its origin.}
 
-\item{variableType}{Variable type (for info in the log-file only).}
+\item{variableType}{Variable type (for info in the log-file, and the check that a domain lies in one stratum).}
 
 \item{logFile}{Log-file path.}
 
@@ -41,6 +42,15 @@ Group conditions as a named list of logicals (1 per group).
 }
 \description{
 Function to check groups consistency.
+}
+\details{
+Besides the checks of upstream - a record that belongs to no stratum, or to more than one - the check of the strata of
+a discard raising stops when the groups cut a domain: landings whose \code{domainCatchDis} has a discard estimate, but
+not in the stratum the landings are in. The raising takes the estimate of a domain from the rows of the stratum, so
+those landings would be raised again and the estimate counted twice - or, in no stratum, left out. (A domain with an
+estimate for each season, say, each in the stratum of its own landings, is fine.) It happens when groups that tell the
+areas apart meet a record that names several (see \code{\link{flag_multi_area}}); \code{\link{split_multi_area}} puts
+it right.
 }
 \author{
 Yves Reecht

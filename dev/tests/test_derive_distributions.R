@@ -128,9 +128,10 @@ ok(identical(r5$fleetValue, "OTB_DEF_70-99_0_0") && identical(r5$metier4_mesh, "
    "... but what both seasons share is kept")
 ok(is.integer(out$seasonValue) && is.character(out$metier4) && is.character(out$Stratum),
    "the columns keep their types (seasonValue stays an integer)")
-ok(length(h$messages) == 1L && grepl("1 distribution key", h$messages) &&
-     grepl("D3", h$messages, fixed = TRUE),
-   "the ambiguity is said once, naming the domain")
+ok(length(h$messages) == 1L && grepl("1 distribution(s) are used", h$messages, fixed = TRUE) &&
+     grepl("D3", h$messages, fixed = TRUE) && grepl("seasonValue, Stratum are NA", h$messages, fixed = TRUE) &&
+     grepl("1 of 10 distribution rows", h$messages, fixed = TRUE),
+   "the ambiguity is said once, naming the domain, the fields that are NA for it and how many distribution rows it touches")
 
 # no catch row behind it
 orph <- c(6L, 7L, 8L)

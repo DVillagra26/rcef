@@ -16,6 +16,7 @@ RDBESStockCoord engines on them.
    To ... \tab Use \cr
    read InterCatch files into CEF \tab \code{\link[=funICoutCEF]{funICoutCEF()}}, \code{\link[=funIntercatchCEF]{funIntercatchCEF()}}, and \code{\link[=funMakeRelation]{funMakeRelation()}} for the stock relation they need \cr
    add the strata-ready columns (\code{metier4}, \code{mesh}, ICES area levels, ...), to the catch or to its distributions \tab \code{\link[=derive_fields]{derive_fields()}} \cr
+   find the records that name several areas, fleets or seasons in one field (one discard estimate for a set of areas), and cut each into one record per code, its amount shared out by the landings of its domain \tab \code{\link[=flag_multi_area]{flag_multi_area()}}, \code{\link[=split_multi_area]{split_multi_area()}} \cr
    see discard rates and sampling coverage per stratum, as a table \tab \code{\link[=build_coverage_strata]{build_coverage_strata()}} \cr
    look at them \tab \link{coverage-plots} (heatmap, bubbles, bars), \code{\link[=plot_coverage_map]{plot_coverage_map()}} \cr
    look at the catch weight and the discard rate per stratum, as reported or after the raising (imported against raised) \tab \code{\link[=plot_catches]{plot_catches()}}, \code{\link[=plot_DR]{plot_DR()}} \cr
@@ -58,8 +59,14 @@ itself, so columns of your own - a fleet grouping, say - sit beside the
 derived ones and are used the same way. \code{\link[=build_coverage_strata]{build_coverage_strata()}} is the
 discard-rate / sampling-coverage table (CAR / CAS-style columns, no status)
 the plots draw; they take the catch or that table, so the same numbers can
-be read as a table and looked at as a figure. Raising and allocation then
-run:
+be read as a table and looked at as a figure.
+
+A discard record can name several areas (or fleets) in one field,
+\verb{27.4.b;27.4.c;27.7.d;27.7.e}: \code{\link[=derive_fields]{derive_fields()}} gives it the set of them at
+every level, \code{\link[=flag_multi_area]{flag_multi_area()}} finds it, and \code{\link[=split_multi_area]{split_multi_area()}} cuts it
+into one record per area, its amount shared out by the landings of its domain.
+Do that once, before the coverage by area and the raising - whose check of the
+groups stops when they cut a domain. Raising and allocation then run:
 
 \if{html}{\out{<div class="sourceCode">}}\preformatted{derive_fields() -> your strataCond / matchedDataCond -> check_group_conditions()
                     (or recommend_groups(), which chooses them from the data)
@@ -98,13 +105,16 @@ split is visible in git:
 \itemize{
 \item \code{R/RDBESStockCoord_*.R}: vendored from the ICES RDBESStockCoord working
 group code. Algorithms, argument lists and return shapes are upstream's.
-Local edits are packaging, plus one - \code{distributionType} takes CEF's own
-\code{"LengthTotal"} where upstream says \code{"Length"} - and are marked
-\verb{## [pkg]}. The help pages of \code{\link[=catchRaising]{catchRaising()}}, \code{\link[=catchAllocationAoL]{catchAllocationAoL()}}
+Local edits are packaging, plus a few - \code{distributionType} takes CEF's own
+\code{"LengthTotal"} where upstream says \code{"Length"}, and the check of the strata
+in \code{\link[=check_group_conditions]{check_group_conditions()}} stops when the groups of a raising cut a domain
+\itemize{
+\item and are marked \verb{## [pkg]}. The help pages of \code{\link[=catchRaising]{catchRaising()}}, \code{\link[=catchAllocationAoL]{catchAllocationAoL()}}
 and the two aggregation functions are written here, as are the arguments
 of \code{\link[=funICoutCEF]{funICoutCEF()}}, \code{\link[=funIntercatchCEF]{funIntercatchCEF()}} and \code{\link[=check_group_conditions]{check_group_conditions()}}
 that upstream leaves undocumented. Do not refactor these files; fix
 upstream and re-vendor.
+}
 \item \code{R/rcef_*.R}: written here - field derivation and units, the coverage
 table, the groups, the distributions, the raised-catch summaries. Free to
 refactor.

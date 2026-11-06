@@ -129,6 +129,7 @@
 #' dist <- derive_fields(catch, distributions, what = "distribution")
 #' head(dist[, c("domainBiology", "fleetValue", "metier4_mesh", "ICESDivision")], 3)
 #' }
+#' @md
 #' @export
 derive_fields <- function(catch_data, distribution_data = NULL,
                           what = c("catch", "distribution")) {
@@ -191,15 +192,13 @@ derive_fields <- function(catch_data, distribution_data = NULL,
     x <- x[!is.na(x) & nzchar(x)]
     if (length(x)) paste(sort(unique(x), method = "radix"), collapse = ";") else NA_character_
   }
-  pieces_of <- function(code)                       # the codes of a field, cut at ';' (blanks and empty pieces gone)
-    lapply(strsplit(code, ";", fixed = TRUE), function(p) { p <- trimws(p); p[!is.na(p) & nzchar(p)] })
   # A fleet code is gear_target_mesh_..., cut to its first 1, 2 or 3 parts for metier4 to metier6;
   # the target is the 2nd part, the mesh the 3rd, and metier4_mesh the gear and mesh together.
   fleet_levels <- function() {
     if (is.null(fleet)) {
       code <- as.character(catch_data$fleetValue)
       one  <- unique(code)
-      lv <- lapply(pieces_of(one), function(f) {
+      lv <- lapply(.field_pieces(one), function(f) {
         z    <- strsplit(f, "_", fixed = TRUE)
         at   <- function(i) vapply(z, function(t) if (length(t) >= i) t[i] else NA_character_, character(1))
         join <- function(n) vapply(z, function(t) paste(t[seq_len(min(n, length(t)))], collapse = "_"), character(1))
@@ -220,7 +219,7 @@ derive_fields <- function(catch_data, distribution_data = NULL,
     if (is.null(area)) {
       code <- as.character(catch_data$areaValue)
       one  <- unique(code)
-      lv   <- lapply(pieces_of(one), function(a) vapply(2:4, function(n) as_set(area_cut(a, n)), character(1)))
+      lv   <- lapply(.field_pieces(one), function(a) vapply(2:4, function(n) as_set(area_cut(a, n)), character(1)))
       i    <- match(code, one)
       area <<- lapply(1:3, function(k) vapply(lv, `[`, character(1), k)[i])
     }
@@ -294,12 +293,17 @@ derive_fields <- function(catch_data, distribution_data = NULL,
               .groups = "drop")
   i <- match(k_d, lk$.key)
 
-  shared <- lk$.domain[lk$.n_strata > 1L & lk$.key %in% k_d]
-  if (length(shared))
-    message("derive_fields(): ", length(shared), " distribution key(s) are used ",
-            "by catch rows of more than one stratum (e.g. ",
-            paste(utils::head(unique(shared), 3), collapse = ", "),
-            "); the fields those rows differ on are NA for them")
+  # a distribution is one sample: when catch rows of several strata use it (the Belgian landings of
+  # one fleet, 14 records in 4 areas and 4 quarters, are ONE distribution) it has no single area,
+  # season or fleet - what its rows agree on is kept, what they differ on is NA. Said, with the fields.
+  is_shared <- lk$.n_strata > 1L & lk$.key %in% k_d
+  if (any(is_shared)) {
+    na_fields <- carry[vapply(carry, function(col) any(is.na(lk[[col]][is_shared])), NA)]
+    message("derive_fields(): ", sum(is_shared), " distribution(s) are used by catch rows of more than one stratum - one sample for several ",
+            "areas, seasons or fleets (e.g. ", paste(utils::head(unique(lk$.domain[is_shared]), 3), collapse = ", "), "). A distribution ",
+            "takes the fleet, area and season of its catch rows; where they differ it has no single value, so ", paste(na_fields, collapse = ", "),
+            " are NA for them (", sum(k_d %in% lk$.key[is_shared]), " of ", length(k_d), " distribution rows)")
+  }
   if (anyNA(i))
     warning("derive_fields(): ", sum(is.na(i)), " of ", length(i),
             " distribution row(s) have no catch row with the same ",
@@ -310,6 +314,16 @@ derive_fields <- function(catch_data, distribution_data = NULL,
   for (col in carry) out[[col]] <- lk[[col]][i]
   out
 }
+
+# The codes of a field that can list several, ';'-separated (27.4.b;27.4.c;27.7.d;27.7.e), one element
+# for each value of `x`: the codes themselves - blanks around a ';', empty pieces, NA gone - distinct and
+# sorted, so that the same codes in another order are the same set. derive_fields() cuts each of them,
+# flag_multi_area() and split_multi_area() find and share out the records that list more than one.
+.field_pieces <- function(x)
+  lapply(strsplit(as.character(x), ";", fixed = TRUE), function(p) {
+    p <- trimws(p)
+    sort(unique(p[!is.na(p) & nzchar(p)]), method = "radix")
+  })
 
 #' What to add to the error of a column the catch lacks
 #'

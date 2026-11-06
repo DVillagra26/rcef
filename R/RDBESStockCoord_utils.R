@@ -17,6 +17,10 @@
 #    - CRLF -> LF
 #    - roxygen @family / @source added for provenance
 #    - fieldsToStrata() removed: nothing in the package called it
+#  and one change of behaviour, also marked ## [pkg]: check_group_conditions()
+#  stops when the groups of a raising cut a domain (landings in a stratum
+#  that has no estimate of their domain, which has one elsewhere) -
+#  .cut_domains() in rcef_multi_area.R says which and why
 #
 #  Exported: check_group_conditions(), convert_field(), unit2ratio()
 # =====================================================================
@@ -40,6 +44,14 @@
 ##' 
 ##' @title Function to check groups consistency
 ##' @name check_group_conditions
+##' @details
+##' Besides the checks of upstream - a record that belongs to no stratum, or to more than one - the check of the strata of
+##' a discard raising stops when the groups cut a domain: landings whose \code{domainCatchDis} has a discard estimate, but
+##' not in the stratum the landings are in. The raising takes the estimate of a domain from the rows of the stratum, so
+##' those landings would be raised again and the estimate counted twice - or, in no stratum, left out. (A domain with an
+##' estimate for each season, say, each in the stratum of its own landings, is fine.) It happens when groups that tell the
+##' areas apart meet a record that names several (see \code{\link{flag_multi_area}}); \code{\link{split_multi_area}} puts
+##' it right.
 ##' @param catch_data census (or assembled census+estimated+raised) data.
 ##' @param condition_list A (named) list of conditions, with one condition per group. Supported formats are logical
 ##'     (same length as number of rows in census data), expressions, quosures, calls. A character strings describing the
@@ -48,8 +60,9 @@
 ##'     groups).
 ##' @param domain The domain, used to match records with extra info.
 ##' @param originType Origin of the records the groups are for: "unspecified" (default), "WGEstimate" or "Official".
-##'     Not used for now: the groups are checked on every row of \code{catch_data}, whatever its origin.
-##' @param variableType Variable type (for info in the log-file only).
+##'     Only the check that a domain lies in one stratum looks at it - at the rows of this origin; the other checks look
+##'     at every row of \code{catch_data}, whatever its origin.
+##' @param variableType Variable type (for info in the log-file, and the check that a domain lies in one stratum).
 ##' @param logFile Log-file path.
 ##' @param append Whether to append to the log file (FALSE: override it).
 ##' @return Group conditions as a named list of logicals (1 per group).
@@ -232,6 +245,15 @@ check_group_conditions <- function(catch_data,
             errorList <- c(errorList,
                            paste0("Error: ", sum(replicated), " records assigned to more than one stratum!"))
             message("Error: ", sum(replicated), " records assigned to more than one stratum!")
+        }
+
+        ## [pkg] A domain with an estimate must lie in ONE stratum: the raising takes the estimate from the rows of the
+        ##   stratum, so landings whose estimate is in another stratum are raised again (see .cut_domains()).
+        cutDomains <- .cut_domains(catch_data, cond_st, domain, originType, variableType)
+        if (! is.null(cutDomains))
+        {
+            errorList <- c(errorList, paste0("Error: ", cutDomains))
+            message("Error: ", cutDomains)
         }
     }else{ # Matched data:
 

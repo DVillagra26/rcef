@@ -14,91 +14,89 @@ derive_fields(
 \item{catch_data}{A CEF catch table (data frame).}
 
 \item{distribution_data}{A CEF distributions table. Only with
-`what = "distribution"`, which needs it.}
+\code{what = "distribution"}, which needs it.}
 
-\item{what}{`"catch"` (default): `catch_data` with the derived columns.
-`"distribution"`: `distribution_data` with them.}
+\item{what}{\code{"catch"} (default): \code{catch_data} with the derived columns.
+\code{"distribution"}: \code{distribution_data} with them.}
 }
 \value{
-With `what = "catch"`, `catch_data` with the derived columns added.
-  With `what = "distribution"`, `distribution_data` with `fleetValue`,
-  `areaValue`, `seasonValue` (and `vesselFlagCountry`, when the
-  distributions have none of their own) and the derived columns added.
+With \code{what = "catch"}, \code{catch_data} with the derived columns added.
+With \code{what = "distribution"}, \code{distribution_data} with \code{fleetValue},
+\code{areaValue}, \code{seasonValue} (and \code{vesselFlagCountry}, when the
+distributions have none of their own) and the derived columns added.
 }
 \description{
 Adds the columns an assessment groups by, none of which the CEF format
-carries directly: the nested metier levels (`metier4` to `metier6`),
-`target` and `mesh` from `fleetValue`; `metier4_mesh`, the gear and the
-mesh joined (`"TBB_70-99"`; just the gear when the fleet code has no mesh
-part); the three ICES area levels from `areaValue`; and `Stratum`, the four
+carries directly: the nested metier levels (\code{metier4} to \code{metier6}),
+\code{target} and \code{mesh} from \code{fleetValue}; \code{metier4_mesh}, the gear and the
+mesh joined (\code{"TBB_70-99"}; just the gear when the fleet code has no mesh
+part); the three ICES area levels from \code{areaValue}; and \code{Stratum}, the four
 native keys joined. Country and season are not among them -
-`vesselFlagCountry` and `seasonValue` already name them, so a `Country` /
-`Season` alias would only be a second name for the same column.
+\code{vesselFlagCountry} and \code{seasonValue} already name them, so a \code{Country} /
+\code{Season} alias would only be a second name for the same column.
 }
 \details{
 Run it once, on the raw CEF data, and build on the result. The coverage
 table and the plots read the columns your catch has and derive nothing
 themselves, so a column you add (a fleet grouping of your own, say) or
-regroup (your own `metier4`) is used as it stands. A column the catch
+regroup (your own \code{metier4}) is used as it stands. A column the catch
 already has is left as it is - an edit of yours, or a column from an earlier
 call - so calling it again, or deriving the distributions from a catch you
 have edited, never undoes the edit; drop a column first to have it derived
 afresh.
 
-An empty field of a CEF csv arrives as `""` in a text column when the file is
-read with `read.csv()` or `read.taf()` (and as `NA` when it is read with
-readr). Empty text is missing in the CEF format, so it comes back as `NA` - on
-the catch and, with `what = "distribution"`, on the distributions - and the
+An empty field of a CEF csv arrives as \code{""} in a text column when the file is
+read with \code{read.csv()} or \code{read.taf()} (and as \code{NA} when it is read with
+readr). Empty text is missing in the CEF format, so it comes back as \code{NA} - on
+the catch and, with \code{what = "distribution"}, on the distributions - and the
 raising, the allocation and the link between catch and distributions all see
-the same missing id. Left as `""`, every catch row with no `domainBiology`
-would share the domain `""` and be taken for one distribution.
+the same missing id. Left as \code{""}, every catch row with no \code{domainBiology}
+would share the domain \code{""} and be taken for one distribution.
 
-An ICES area code is a nested path (`27.4.b.1`), so it is split into
+An ICES area code is a nested path (\verb{27.4.b.1}), so it is split into
 subarea, division and subdivision. A code already coarser than the level
-asked for REPEATS rather than becoming `NA`: `27.4` is its own division and
+asked for REPEATS rather than becoming \code{NA}: \code{27.4} is its own division and
 subdivision as far as the data goes, so a stratum reported at that
 resolution is never silently dropped from a finer grouping.
 
-A record can name several areas in one `areaValue`, `;`-separated: the CEF
+A record can name several areas in one \code{areaValue}, \verb{;}-separated: the CEF
 format lets a discard record cover a set of areas whose landings are reported
-one by one (`27.4.b;27.4.c;27.7.d;27.7.e`). Each area is split on its own,
+one by one (\verb{27.4.b;27.4.c;27.7.d;27.7.e}). Each area is split on its own,
 and each of the three columns holds the distinct pieces at its level, sorted
-and `;`-joined - a set, so the same areas listed in another order are the same
-value: `ICESSubArea` `27.4;27.7`, `ICESDivision` `27.4.b;27.4.c;27.7.d;27.7.e`,
+and \verb{;}-joined - a set, so the same areas listed in another order are the same
+value: \code{ICESSubArea} \verb{27.4;27.7}, \code{ICESDivision} \verb{27.4.b;27.4.c;27.7.d;27.7.e},
 and the subdivision, which these areas do not reach, repeats the division.
-Pieces that agree at a coarser level collapse into one, so `27.7.d;27.7.e` is
-just `27.7` as a subarea. The same goes for a `fleetValue` that lists several
-fleets (`GNS_DEF_all_0_0_all;GTR_DEF_all_0_0_all`): `metier4` `GNS;GTR`,
-`target` `DEF`, `mesh` `all`, `metier4_mesh` `GNS_all;GTR_all` (the gear and
+Pieces that agree at a coarser level collapse into one, so \verb{27.7.d;27.7.e} is
+just \code{27.7} as a subarea. The same goes for a \code{fleetValue} that lists several
+fleets (\verb{GNS_DEF_all_0_0_all;GTR_DEF_all_0_0_all}): \code{metier4} \verb{GNS;GTR},
+\code{target} \code{DEF}, \code{mesh} \code{all}, \code{metier4_mesh} \verb{GNS_all;GTR_all} (the gear and
 mesh of each fleet stay together). The record stays ONE row: nothing is
-repeated or divided, `areaValue`, `fleetValue` and `Stratum` are as reported,
-and the columns only say what it is relevant for. Blanks around a `;` are
+repeated or divided, \code{areaValue}, \code{fleetValue} and \code{Stratum} are as reported,
+and the columns only say what it is relevant for. Blanks around a \verb{;} are
 ignored and so is an empty piece. A record with one area and one fleet is as
 it always was.
 
-With `what = "distribution"` the same fields come back on the distributions
-table instead: `derive_fields(catch_data, distribution_data, what =
-"distribution")`. `derive_fields(catch_data)` is the catch, as it always was.
-
+With \code{what = "distribution"} the same fields come back on the distributions
+table instead: \code{derive_fields(catch_data, distribution_data, what = "distribution")}. \code{derive_fields(catch_data)} is the catch, as it always was.
 
 A distribution carries none of the stratum columns - the fleet, the area
 and the season belong to the catch - so deriving its fields needs both
 tables. Each distribution row is linked to the catch rows it describes
-through `domainBiology`, together with the catch category and every other
+through \code{domainBiology}, together with the catch category and every other
 column both tables carry among the ones the allocation itself matches on
-(`vesselFlagCountry`, `year`, `workingGroup`, `stock`, `speciesCode`: a
-`domainBiology` names no country, so two countries can use the same one).
-The row takes the `fleetValue`, `areaValue` and `seasonValue` of those
+(\code{vesselFlagCountry}, \code{year}, \code{workingGroup}, \code{stock}, \code{speciesCode}: a
+\code{domainBiology} names no country, so two countries can use the same one).
+The row takes the \code{fleetValue}, \code{areaValue} and \code{seasonValue} of those
 catch rows and every field derived from them. The derivation is the one
 described above, run once on the catch: the distributions only look its
 results up, so the two tables can never disagree about what a field means.
 
-A `domainBiology` can be used by catch rows of several strata (a
+A \code{domainBiology} can be used by catch rows of several strata (a
 distribution covers every catch row that names it). The fields those rows
-share are kept and the ones they differ on are `NA`, with a message, rather
+share are kept and the ones they differ on are \code{NA}, with a message, rather
 than one of them being picked at random. A distribution row with no catch
-row behind it gets `NA` throughout, with a warning: the two files disagree.
-The rows of `distribution_data` come back as they went in (empty text apart), same
+row behind it gets \code{NA} throughout, with a warning: the two files disagree.
+The rows of \code{distribution_data} come back as they went in (empty text apart), same
 number and same order; columns of the same name already on it (an earlier
 call, say) are replaced.
 }
@@ -121,5 +119,5 @@ head(dist[, c("domainBiology", "fleetValue", "metier4_mesh", "ICESDivision")], 3
 }
 }
 \seealso{
-[build_coverage_strata()]
+\code{\link[=build_coverage_strata]{build_coverage_strata()}}
 }

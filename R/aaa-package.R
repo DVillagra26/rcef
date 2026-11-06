@@ -27,6 +27,7 @@
 #' |:-------|:----|
 #' | read InterCatch files into CEF | [funICoutCEF()], [funIntercatchCEF()], and [funMakeRelation()] for the stock relation they need |
 #' | add the strata-ready columns (`metier4`, `mesh`, ICES area levels, ...), to the catch or to its distributions | [derive_fields()] |
+#' | find the records that name several areas, fleets or seasons in one field (one discard estimate for a set of areas), and cut each into one record per code, its amount shared out by the landings of its domain | [flag_multi_area()], [split_multi_area()] |
 #' | see discard rates and sampling coverage per stratum, as a table | [build_coverage_strata()] |
 #' | look at them | [coverage-plots] (heatmap, bubbles, bars), [plot_coverage_map()] |
 #' | look at the catch weight and the discard rate per stratum, as reported or after the raising (imported against raised) | [plot_catches()], [plot_DR()] |
@@ -67,8 +68,14 @@
 #' derived ones and are used the same way. [build_coverage_strata()] is the
 #' discard-rate / sampling-coverage table (CAR / CAS-style columns, no status)
 #' the plots draw; they take the catch or that table, so the same numbers can
-#' be read as a table and looked at as a figure. Raising and allocation then
-#' run:
+#' be read as a table and looked at as a figure.
+#'
+#' A discard record can name several areas (or fleets) in one field,
+#' `27.4.b;27.4.c;27.7.d;27.7.e`: [derive_fields()] gives it the set of them at
+#' every level, [flag_multi_area()] finds it, and [split_multi_area()] cuts it
+#' into one record per area, its amount shared out by the landings of its domain.
+#' Do that once, before the coverage by area and the raising - whose check of the
+#' groups stops when they cut a domain. Raising and allocation then run:
 #'
 #' ```
 #' derive_fields() -> your strataCond / matchedDataCond -> check_group_conditions()
@@ -107,9 +114,10 @@
 #'
 #' * `R/RDBESStockCoord_*.R`: vendored from the ICES RDBESStockCoord working
 #'   group code. Algorithms, argument lists and return shapes are upstream's.
-#'   Local edits are packaging, plus one - `distributionType` takes CEF's own
-#'   `"LengthTotal"` where upstream says `"Length"` - and are marked
-#'   `## [pkg]`. The help pages of [catchRaising()], [catchAllocationAoL()]
+#'   Local edits are packaging, plus a few - `distributionType` takes CEF's own
+#'   `"LengthTotal"` where upstream says `"Length"`, and the check of the strata
+#'   in [check_group_conditions()] stops when the groups of a raising cut a domain
+#'   - and are marked `## [pkg]`. The help pages of [catchRaising()], [catchAllocationAoL()]
 #'   and the two aggregation functions are written here, as are the arguments
 #'   of [funICoutCEF()], [funIntercatchCEF()] and [check_group_conditions()]
 #'   that upstream leaves undocumented. Do not refactor these files; fix

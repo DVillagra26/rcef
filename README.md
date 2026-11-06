@@ -73,11 +73,31 @@ plot_NaLoA(catch, distributions, fill = "mesh", palette = "gradual")
 argument, and `vignette("part1-explore-sampling-coverage", package = "rcef")`
 draws them all.
 
+### A record that names several areas
+
+The RDBES download can hold one discard record for a set of areas, whose landings are
+reported one by one (`areaValue` `27.4.b;27.4.c;27.7.d;27.7.e`; the same for
+`fleetValue`). `derive_fields()` gives it the set of its codes at every level
+(`ICESSubArea` `27.4;27.7`, `ICESDivision` `27.4.b;27.4.c;27.7.d;27.7.e`), but left as it
+is the record is a stratum of its own with no landings, while its landings show no
+discards - and groups that tell the areas apart cut the domain it links to them, so the
+raising counts the discards twice (`catchRaising()` now stops there). `flag_multi_area()`
+finds such records; `split_multi_area()` cuts each into one record per area, the amount
+shared out by the landings of its domain (`weight = "landings"`; `"equal"` or a column of
+your own are the other choices), the distributions with it:
+
+```r
+flag_multi_area(catch, distributions)                   # which, and how their amount would be shared
+s <- split_multi_area(catch, distributions)             # once, before the coverage by area and the raising
+catch <- s$catch; distributions <- s$distribution
+```
+
 ## Raise and allocate
 
 The groups are yours to define: conditions for the strata that are raised together,
 and for the data each group takes its discard ratio from.
-`check_group_conditions()` tells you if a stratum sits in two groups.
+`check_group_conditions()` tells you if a stratum sits in two groups, or cuts a domain
+with a discard estimate (its landings and its estimate in different groups).
 
 ```r
 library(rcef)

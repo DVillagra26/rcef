@@ -170,7 +170,7 @@ ok(nrow(dd) == 3L && identical(dd$ICESSubArea[1:2], rep("27.4;27.7", 2)) &&
    "a distribution takes the set of areas of its catch record, at every level")
 ok(is.na(dd$areaValue[3]) && is.na(dd$ICESDivision[3]) && is.na(dd$ICESSubArea[3]) && identical(dd$metier4[3], "OTB"),
    "a distribution of two records with different areas: the areas are NA, what they share (the fleet) is kept")
-ok(length(h$messages) == 1L && grepl("1 distribution key", h$messages) && !length(h$warnings),
+ok(length(h$messages) == 1L && grepl("1 distribution(s) are used", h$messages, fixed = TRUE) && !length(h$warnings),
    "... said once")
 
 cat(sprintf("\nDONE  %d failure(s)\n", FAIL))
