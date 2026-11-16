@@ -28,6 +28,7 @@ plot_coverage_bar(
   facet = NULL,
   what = "discard",
   catchCategory = NULL,
+  alpha = c("importedOrRaised", "sampledOrEstimated"),
   palette = c("default", "colorblind", "gradual"),
   save = NULL
 )
@@ -78,6 +79,11 @@ return it: a folder, a file name, or a list of options - see
 \link{saving-plots}.}
 
 \item{fill}{Bar fill category (bars only). \code{NULL} uses \code{y}.}
+
+\item{alpha}{Bars only: what to draw transparent, \code{"importedOrRaised"} (what
+the raising added) and / or \code{"sampledOrEstimated"} (what the allocation
+estimated); the default, both, marks whichever the data has - the
+allocation's when both. \code{NULL} marks nothing.}
 }
 \value{
 A ggplot object, or \code{NULL} when there is nothing to draw.
@@ -187,11 +193,36 @@ changes, so it takes none: passing \code{thresholds} is an error.
 bubbles.
 }
 
+\subsection{After the raising or the allocation}{
+
+The plots take the raised catch (\code{\link[=catchRaising]{catchRaising()}}) as well as the raw one, and
+distributions the allocation estimated (\code{\link[=catchAllocationAoL]{catchAllocationAoL()}}) as well as the
+sampled ones, and the title says which they were given: \emph{imported + raised} or
+\emph{only imported} for a catch that carries \code{importedOrRaised}, \emph{sampled +
+estimated} or \emph{only sampled} for distributions that carry \code{sampledOrEstimated}
+\itemize{
+\item "Discards - Sampling of Length, imported + raised". The weights are those of
+all the data, so a raised catch has more weight and none of what the raising
+added has a distribution: the sampled share falls.
+}
+
+The bar chart tells the two apart as well. With \code{alpha} (the default) the part
+of a bar that a step added is transparent and hatched, the part that was in the
+data solid, so one bar shows both what was sampled and what is only raised or
+estimated; the colours, the order of the bars and the brackets are those of
+the whole bar. When both are in the data the allocation's step is the one
+marked (the later one, it also covers the raised discards); \code{alpha = "importedOrRaised"} marks the raising instead, \code{alpha = NULL} marks nothing
+(the title still says what the data holds). Nothing is marked when no weight
+was added - the landings of a raised catch, a raw catch - or when the status
+is one of the plotted columns, which then draws it. The grid and the map do
+not mark: a cell or a pie cannot be split in two legibly.
+}
+
 \subsection{Argument order}{
 
 What data (\code{catch}, \code{distributions}, \code{what}, \code{catchCategory}), then which
 columns are the strata (\code{y}, \code{x} or \code{fill}, \code{facet}), then the \code{thresholds},
-then \code{palette}.
+then \code{alpha} (bars only), then \code{palette}.
 }
 }
 \examples{

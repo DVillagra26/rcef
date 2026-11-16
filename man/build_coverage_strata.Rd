@@ -94,6 +94,8 @@ counted: BMS is a third catch part with its own raising, not a discard.\tabular{
    \code{coverage} \tab \code{weightingTotal / landings}, in percent; \code{NA} when there are no landings. \cr
    \code{numTrips} \tab The trips behind the stratum; \code{NA} when the data does not report them. The largest count among the stratum's rows (one trip repeats across the rows of a sample), and summed when the plots pool strata into one cell. \cr
    \code{importedOrRaised} \tab Only when \code{catch} is a raised catch (the output of \code{\link[=catchRaising]{catchRaising()}}): \code{"raised"} when the stratum's discard rows were added by the raising, \code{"imported"} when they came with the data. Worked out per stratum, never from the landings rows beside the discards, which are always imported - so it is a column of the result and cannot be one of \code{dims}. A raised catch is counted on the rows the raising ran on, those of the origin and variable type of the rows it raised. \cr
+   \code{totalRaised} \tab Only for a raised catch: the part of \code{total} that the raising added, the discards of the rows it made (\code{NA} as \code{total} is). \cr
+   \code{weightingTotalRaised} \tab Only for a raised catch: the part of \code{weightingTotal} whose discard estimate the raising added - the landings of the domain that a raised discard row carries - so the weight that was raised is told from the weight that came with an estimate. \cr
 }
 
 }
@@ -111,6 +113,9 @@ default) gives a \code{Lan} and a \code{Dis} row for every stratum.\tabular{ll}{
    \code{coverage} \tab The share of \code{total}, in percent, whose \code{domainBiology} matches a distribution of that type and catch part; \code{NA} when \code{total} is 0. \cr
    \code{numMeasurements} \tab The measurements behind those distributions (0 when there are none). \cr
    \code{numTrips} \tab As above. \cr
+   \code{totalRaised} \tab Only when \code{catch} is a raised catch (it carries \code{importedOrRaised}): the part of \code{total} that the raising added, the rows with \code{importedOrRaised} \code{"raised"} - all of them discards. \cr
+   \code{coveredRaised} \tab Only for a raised catch: how much of \code{totalRaised} has a distribution linked, in tonnes. None of it, unless the catch is the one the allocation returns, where the raised rows were given estimated distributions. \cr
+   \code{coveredEstimated} \tab Only when the distributions carry \code{sampledOrEstimated} (the ones the allocation returns): the weight covered by a distribution the allocation estimated, in tonnes - a part of \code{total * coverage / 100}. \cr
 }
 
 }

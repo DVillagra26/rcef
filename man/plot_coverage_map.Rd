@@ -63,7 +63,9 @@ position.
 \link{coverage-plots}): the weight carries a discard estimate (\code{what = "discard"}) or a linked length / age distribution. Like them, the map takes
 raw catch (plus \code{distributions} for length and age) or a
 \code{\link[=build_coverage_strata]{build_coverage_strata()}} table that has the \code{area} column (and the
-\code{group} column) among its \code{dims}.
+\code{group} column) among its \code{dims}. Given the raised catch, or distributions the
+allocation estimated, the title says so (\emph{imported + raised}, \emph{sampled +
+estimated}, see \link{coverage-plots}); the pies are not split by it.
 \subsection{Where a pie is placed}{
 
 Areas are placed at approximate centroids of the ICES divisions and

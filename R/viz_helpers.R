@@ -134,8 +134,8 @@ STATUS_LEVELS <- list(importedOrRaised   = c("imported", "raised"),
 #' Whether, and how, a plot marks what the raising or the allocation added
 #'
 #' One rule for the plots that look at a catch or at distributions before or
-#' after a step - [plot_catches()], [plot_DR()], [plot_NaLoA()], [plot_MWaLoA()]
-#' and [plot_compare_raised()]. The status column (`S`) is a variable like any
+#' after a step - [plot_catches()], [plot_DR()], [plot_NaLoA()], [plot_MWaLoA()],
+#' [plot_compare_raised()] and the bars of [plot_coverage_bar()]. The status column (`S`) is a variable like any
 #' other: by default it is the mark, and what the mark is depends on what is
 #' drawn. What was in the data is drawn plain; what the step added is a cross
 #' where the data are points, a dotted line where they are lines, and a
@@ -159,7 +159,10 @@ STATUS_LEVELS <- list(importedOrRaised   = c("imported", "raised"),
 #' @return A list: `shown` (it is mapped elsewhere), `on` (it is the mark:
 #'   something was raised or estimated), `word` (what the title says the data
 #'   is: `"imported + raised"`, `"only imported"`, `"only raised"`, `"sampled +
-#'   estimated"`, `"only sampled"` or `"only estimated"`), `status` (a function
+#'   estimated"`, `"only sampled"` or `"only estimated"`), `says` (what the solid
+#'   and the marked part are called in a caption: `"imported from the data"` and
+#'   `"added by raising"`, or `"sampled"` and `"estimated by the allocation"`),
+#'   `status` (a function
 #'   turning the column's values into the factor the mark is mapped to:
 #'   `Imported` / `Raised`, `Sampled` / `Estimated`), the scales to add when
 #'   `on`: `scale` (transparency, 1 and 0.45 - the bars', and the points' when
@@ -188,6 +191,8 @@ status_marks <- function(S, alpha, named, present, fn, override = list(fill = "g
        on = !is.null(alpha) && !shown && lv[2] %in% have,
        word = if (length(have) == 2) paste(have, collapse = " + ")
               else paste("only", have),
+       says = if (identical(S, "importedOrRaised")) c("imported from the data", "added by raising")
+              else c("sampled", "estimated by the allocation"),
        status = function(x) factor(lab[match(as.character(x), lv)], levels = lab),
        scale = scale_alpha_manual(values = setNames(c(1, 0.45), lab), name = NULL,
                                   guide = guide_legend(override.aes = override)),

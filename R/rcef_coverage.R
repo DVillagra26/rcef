@@ -56,6 +56,8 @@
 #' | `coverage` | `weightingTotal / landings`, in percent; `NA` when there are no landings. |
 #' | `numTrips` | The trips behind the stratum; `NA` when the data does not report them. The largest count among the stratum's rows (one trip repeats across the rows of a sample), and summed when the plots pool strata into one cell. |
 #' | `importedOrRaised` | Only when `catch` is a raised catch (the output of [catchRaising()]): `"raised"` when the stratum's discard rows were added by the raising, `"imported"` when they came with the data. Worked out per stratum, never from the landings rows beside the discards, which are always imported - so it is a column of the result and cannot be one of `dims`. A raised catch is counted on the rows the raising ran on, those of the origin and variable type of the rows it raised. |
+#' | `totalRaised` | Only for a raised catch: the part of `total` that the raising added, the discards of the rows it made (`NA` as `total` is). |
+#' | `weightingTotalRaised` | Only for a raised catch: the part of `weightingTotal` whose discard estimate the raising added - the landings of the domain that a raised discard row carries - so the weight that was raised is told from the weight that came with an estimate. |
 #'
 #' ## Length and age tables (`what = "length"`, `what = "age"`)
 #'
@@ -72,6 +74,9 @@
 #' | `coverage` | The share of `total`, in percent, whose `domainBiology` matches a distribution of that type and catch part; `NA` when `total` is 0. |
 #' | `numMeasurements` | The measurements behind those distributions (0 when there are none). |
 #' | `numTrips` | As above. |
+#' | `totalRaised` | Only when `catch` is a raised catch (it carries `importedOrRaised`): the part of `total` that the raising added, the rows with `importedOrRaised` `"raised"` - all of them discards. |
+#' | `coveredRaised` | Only for a raised catch: how much of `totalRaised` has a distribution linked, in tonnes. None of it, unless the catch is the one the allocation returns, where the raised rows were given estimated distributions. |
+#' | `coveredEstimated` | Only when the distributions carry `sampledOrEstimated` (the ones the allocation returns): the weight covered by a distribution the allocation estimated, in tonnes - a part of `total * coverage / 100`. |
 #'
 #' ## Choosing the aggregation
 #'
@@ -267,6 +272,14 @@ build_coverage_strata <- function(catch, dims = NULL, distributions = NULL,
     link_key <- do.call(paste, c(unname(as.list(d[c(link, "domainCatchDis")])), sep = "\r"))
     d$.est <- d$.lan & (has_status |
                           (has_dom & link_key %in% link_key[!d$.lan & has_dom & !is.na(d$.t)]))
+    # What the raising added, in a raised catch: the discard rows it made, and the landings it
+    # made them for (those of the domain such a row carries - the raising gives the two the same
+    # domain, the landings' own or its "[raised]_..." one) - the weights the plots draw
+    # transparent, and the table reports as totalRaised and weightingTotalRaised.
+    if (has_status) {
+      d$.rd <- !d$.lan & d$importedOrRaised %in% "raised"
+      d$.lr <- d$.lan & link_key %in% link_key[d$.rd]
+    }
     has_trips  <- "numTrips" %in% names(d)
     st <- d %>%
       group_by(across(all_of(dims))) %>%
@@ -278,6 +291,8 @@ build_coverage_strata <- function(catch, dims = NULL, distributions = NULL,
                 # a stratum is raised when its discard rows were, never judged
                 # from the landings rows next to them (those are always imported)
                 raised = has_status && any(importedOrRaised[!.lan] %in% "raised"),
+                raised_dis = if (has_status) sum(.t[.rd], na.rm = TRUE) else NA_real_,
+                raised_lan = if (has_status) sum(.t[.lr], na.rm = TRUE) else NA_real_,
                 # max(), not sum(): numTrips is reported per raw CEF row and the
                 # same trip count is often repeated across several rows of one
                 # sample (by catch category, by length class in the wide files);
@@ -307,8 +322,11 @@ build_coverage_strata <- function(catch, dims = NULL, distributions = NULL,
     out$landings          <- st$landings
     out$coverage          <- st$coverage
     out$numTrips          <- st$numTrips
-    if (has_status)
-      out$importedOrRaised <- ifelse(st$raised, "raised", "imported")
+    if (has_status) {
+      out$importedOrRaised     <- ifelse(st$raised, "raised", "imported")
+      out$totalRaised          <- ifelse(looked, st$raised_dis, NA_real_)
+      out$weightingTotalRaised <- st$raised_lan
+    }
     ex <- extras(d)
     if (!is.null(ex)) out <- left_join(out, ex, by = dims)
     return(out)
@@ -346,6 +364,14 @@ build_coverage_strata <- function(catch, dims = NULL, distributions = NULL,
     !is.na(d$domainBiology) & nzchar(as.character(d$domainBiology)) else FALSE
   d$.measured <- d$.has_key & d$.k %in% (if (is.null(pd)) character(0)
                                            else unique(biology_key(pd, by)))
+  # What the steps added, when the inputs say so: the catch rows the raising made, and the rows
+  # whose distribution the allocation estimated - the weights the plots draw transparent, and
+  # the table reports as totalRaised, coveredRaised and coveredEstimated.
+  has_raised <- "importedOrRaised" %in% names(d)
+  has_estim  <- !is.null(pd) && "sampledOrEstimated" %in% names(pd)
+  d$.raised    <- if (has_raised) d$importedOrRaised %in% "raised" else rep(FALSE, nrow(d))
+  d$.estimated <- d$.measured & d$.k %in% (if (has_estim)
+    unique(biology_key(pd[pd$sampledOrEstimated %in% "estimated", , drop = FALSE], by)) else character(0))
   # The measurements behind a distribution: numMeasurements repeats across the
   # classes of a domain, so it is taken once per domain (of each country: two
   # countries can use the same domain name, each with its own distribution)
@@ -365,6 +391,9 @@ build_coverage_strata <- function(catch, dims = NULL, distributions = NULL,
       group_by(across(all_of(dims)), catchCategory) %>%
       summarise(weight          = sum(.t, na.rm = TRUE),
                 weight_measured = sum(.t[.measured], na.rm = TRUE),
+                weight_raised   = sum(.t[.raised], na.rm = TRUE),
+                measured_raised = sum(.t[.raised & .measured], na.rm = TRUE),
+                measured_estimated = sum(.t[.estimated], na.rm = TRUE),
                 # max(), not sum(): numTrips is reported per raw CEF row and the
                 # same trip count is routinely repeated across several rows of
                 # one sample (by length class in the wide files); summing would
@@ -397,6 +426,11 @@ build_coverage_strata <- function(catch, dims = NULL, distributions = NULL,
   out$coverage         <- bl$coverage
   out$numMeasurements  <- bl$numMeasurements
   out$numTrips         <- bl$numTrips
+  if (has_raised) {
+    out$totalRaised   <- bl$weight_raised
+    out$coveredRaised <- bl$measured_raised
+  }
+  if (has_estim) out$coveredEstimated <- bl$measured_estimated
   # the extra columns are read off the same table the strata came from, so a
   # column a csv gave back as a number (ICESSubArea 27.4) meets itself in the
   # join below and not its text
@@ -505,7 +539,10 @@ coverage_what <- function(x) {
 #' (weights and trips add up; coverage and rate are re-derived from the
 #' summed weights, never averaged). It also words what the cells are about,
 #' once, for every coverage plot: the weight they are judged against, the
-#' title and the phrase for what "covered" means.
+#' title and the phrase for what "covered" means. The title says what the data
+#' holds - `imported + raised` or `only imported` for a catch that carries
+#' `importedOrRaised`, `sampled + estimated` or `only sampled` for distributions
+#' that carry `sampledOrEstimated` - whether or not it is marked.
 #'
 #' @param catch Raw CEF catch, or a [build_coverage_strata()] table.
 #' @param distributions Distributions table (raw length / age only).
@@ -514,17 +551,30 @@ coverage_what <- function(x) {
 #'   actually typed it (a table brings its own).
 #' @param catchCategory The `catchCategory` argument.
 #' @param fn The calling function's name, for messages.
+#' @param alpha `NULL` (default, the cells are one row each), or the status the
+#'   caller draws transparent: `"importedOrRaised"`, `"sampledOrEstimated"` or
+#'   both. A cell then comes in two rows, what was in the data and what the
+#'   step added, each with its own weights, coverage, trips and measurements
+#'   (what a step added has no trips and no fish measured), and the two add up
+#'   to the cell as it was. Of the two statuses the allocation's is marked when
+#'   both are in the data; nothing is when no weight was added, or the status
+#'   is one of `keys`.
 #' @return `NULL` (nothing to draw) or `list(cells, what, weight_label, title,
-#'   share)`: the weight word (`"landings"`, `"discards"`, `"catch"`, `"BMS
-#'   catch"`; always landings for discards, which are judged against them),
-#'   the plot title ("Landings - Sampling of Length", "Sampling of
-#'   Discards") and the phrase for the covered share ("share of landed weight
-#'   with discard estimates").
+#'   share, status)`: the weight word (`"landings"`, `"discards"`, `"catch"`,
+#'   `"BMS catch"`; always landings for discards, which are judged against
+#'   them), the plot title ("Landings - Sampling of Length, only imported",
+#'   "Sampling of Discards"), the phrase for the covered share ("share of
+#'   landed weight with discard estimates") and the status that splits the
+#'   cells (`NULL` when they are not split).
 #' @keywords internal
 #' @noRd
 #' @export
 coverage_cells <- function(catch, distributions, keys, what, what_given,
-                           catchCategory, fn) {
+                           catchCategory, fn, alpha = NULL) {
+  if (!is.null(alpha) && !all(alpha %in% c("importedOrRaised", "sampledOrEstimated")))
+    stop(fn, "(): `alpha` is \"importedOrRaised\" and / or \"sampledOrEstimated\" (what to draw ",
+         "transparent: what the raising or the allocation added), or NULL for no mark",
+         call. = FALSE)
   keys <- unique(keys[!is.na(keys) & nzchar(keys)])
   tw <- coverage_what(catch)
   if (!is.na(tw)) {
@@ -569,10 +619,17 @@ coverage_cells <- function(catch, distributions, keys, what, what_given,
                                      "weightingCategory", "distributionType",
                                      "total", "weightingTotal", "rate",
                                      "discardRate", "landings", "coverage",
-                                     "numTrips", "numMeasurements")),
+                                     "numTrips", "numMeasurements", "totalRaised",
+                                     "weightingTotalRaised", "coveredRaised",
+                                     "coveredEstimated")),
                collapse = ", "),
          ")", call. = FALSE)
 
+  # The weights the raising and the allocation added (a table built from a raised catch, or
+  # from distributions the allocation estimated, has them) add up like the others. Raised
+  # discards of strata that have no estimate stay NA, as `total` does.
+  added  <- intersect(c("weightingTotalRaised", "coveredRaised", "coveredEstimated"), names(tbl))
+  has_tr <- "totalRaised" %in% names(tbl)
   cells <- if (identical(what, "discard")) {
     tbl %>%
       group_by(across(all_of(keys))) %>%
@@ -582,7 +639,11 @@ coverage_cells <- function(catch, distributions, keys, what, what_given,
                 landings = sum(landings, na.rm = TRUE),
                 numTrips = if (all(is.na(numTrips))) NA_real_
                            else sum(numTrips, na.rm = TRUE),
-                n_strata = dplyr::n(), .groups = "drop") %>%
+                n_strata = dplyr::n(),
+                across(all_of(added), ~ sum(.x, na.rm = TRUE)),
+                totalRaised = if (has_tr) { if (all(is.na(totalRaised))) NA_real_
+                                            else sum(totalRaised, na.rm = TRUE) } else NA_real_,
+                .groups = "drop") %>%
       mutate(rate = ifelse(!is.na(total) & weightingTotal > 0,
                            total / weightingTotal, NA_real_),
              discardRate = ifelse(!is.na(total) & weightingTotal + total > 0,
@@ -598,9 +659,13 @@ coverage_cells <- function(catch, distributions, keys, what, what_given,
                 numMeasurements = sum(numMeasurements, na.rm = TRUE),
                 numTrips = if (all(is.na(numTrips))) NA_real_
                            else sum(numTrips, na.rm = TRUE),
-                n_strata = dplyr::n(), .groups = "drop") %>%
+                n_strata = dplyr::n(),
+                across(all_of(added), ~ sum(.x, na.rm = TRUE)),
+                totalRaised = if (has_tr) sum(totalRaised, na.rm = TRUE) else NA_real_,
+                .groups = "drop") %>%
       mutate(coverage = ifelse(total > 0, covered / total * 100, NA_real_))
   }
+  if (!has_tr) cells$totalRaised <- NULL
 
   # The weight the cells are judged against, in words: discards always against
   # the landings; length and age against the catch part(s) the table holds.
@@ -610,11 +675,77 @@ coverage_cells <- function(catch, distributions, keys, what, what_given,
                 Dis = "discards", BMS = "BMS catch", All = "catch", "landings")
   adjective <- switch(weight_label, landings = "landed", discards = "discarded",
                       weight_label)
-  list(cells = as.data.frame(cells), what = what, weight_label = weight_label,
-       title = if (identical(what, "discard")) "Sampling of Discards"
-               else paste0(tools::toTitleCase(weight_label), " - Sampling of ",
-                           if (identical(what, "age")) "Age" else "Length"),
+  title <- if (identical(what, "discard")) "Sampling of Discards"
+           else paste0(tools::toTitleCase(weight_label), " - Sampling of ",
+                       if (identical(what, "age")) "Age" else "Length")
+  cells <- as.data.frame(cells)
+
+  # ---- What a step added ----------------------------------------------------------------------
+  # For each status, the weight of its second level - what the raising made (the landings that carry
+  # a raised discard estimate, or the raised discards' weight), or what the allocation estimated
+  # (the weight covered by a distribution it estimated) - or NULL where the data has no such column.
+  lv2 <- list(importedOrRaised   = if (identical(what, "discard")) cells$weightingTotalRaised
+                                   else cells$totalRaised,
+              sampledOrEstimated = if (!identical(what, "discard")) cells$coveredEstimated)
+  some <- function(s) sum(lv2[[s]], na.rm = TRUE) > 1e-9
+  # The title says what the cells hold, whether or not it is marked: the catch as imported + raised
+  # or only imported, the distributions as sampled + estimated or only sampled - for whichever of
+  # the two the data carries.
+  words <- vapply(names(lv2)[!vapply(lv2, is.null, NA)], function(s)
+    if (some(s)) paste(STATUS_LEVELS[[s]], collapse = " + ") else paste("only", STATUS_LEVELS[[s]][1]), "")
+  if (length(words)) title <- paste0(title, ", ", paste(words, collapse = ", "))
+  # What `alpha` marks - the plots that take it draw it transparent: the allocation's step when both
+  # are in the data (it is the later one), or the one `alpha` names; nothing when `alpha` is NULL,
+  # when nothing was added, or when the status is itself one of the plotted columns.
+  cand <- c("sampledOrEstimated", "importedOrRaised")
+  cand <- cand[cand %in% names(words) & cand %in% alpha]
+  S <- cand[vapply(cand, some, NA)][1]
+  split <- !is.na(S) && !S %in% keys
+  if (split) {
+    # One row per cell and status, each judged on its own weights: the part that was in the
+    # data (imported, sampled) and the part the step added (raised, estimated). Summed over
+    # the two they are the cell as it was. A raised or estimated part has no trips behind it
+    # and no fish measured: it was not sampled.
+    tiny <- function(x) ifelse(!is.na(x) & abs(x) < 1e-9, 0, x)
+    c1 <- c2 <- cells
+    w2 <- lv2[[S]]
+    if (identical(what, "discard")) {
+      d2 <- if ("totalRaised" %in% names(cells)) cells$totalRaised else rep(NA_real_, nrow(cells))
+      c2$landings <- w2;                     c1$landings <- tiny(cells$landings - w2)
+      c2$weightingTotal <- w2;               c1$weightingTotal <- tiny(cells$weightingTotal - w2)
+      c2$total <- d2;                        c1$total <- tiny(cells$total - d2)
+      fix <- function(v) {
+        v$rate <- ifelse(!is.na(v$total) & v$weightingTotal > 0, v$total / v$weightingTotal, NA_real_)
+        v$discardRate <- ifelse(!is.na(v$total) & v$weightingTotal + v$total > 0,
+                                v$total / (v$weightingTotal + v$total), NA_real_)
+        v$coverage <- ifelse(v$landings > 0, v$weightingTotal / v$landings * 100, NA_real_)
+        v
+      }
+      keep2 <- c2$landings > 1e-9 | (!is.na(c2$total) & c2$total > 1e-9)
+      keep1 <- c1$landings > 1e-9 | (!is.na(c1$total) & c1$total > 1e-9)
+    } else {
+      cov2 <- if (identical(S, "sampledOrEstimated")) w2
+              else if ("coveredRaised" %in% names(cells)) cells$coveredRaised else rep(0, nrow(cells))
+      c2$total <- w2;                        c1$total <- tiny(cells$total - w2)
+      c2$covered <- cov2;                    c1$covered <- tiny(cells$covered - cov2)
+      c2$numMeasurements <- 0
+      fix <- function(v) {
+        v$coverage <- ifelse(v$total > 0, v$covered / v$total * 100, NA_real_)
+        v
+      }
+      keep2 <- c2$total > 1e-9
+      keep1 <- c1$total > 1e-9
+    }
+    c2$numTrips <- NA_real_
+    keep1 <- keep1 | !keep2                    # a cell is never left without a row
+    c1 <- fix(c1); c2 <- fix(c2)
+    cells <- rbind(c1[keep1, , drop = FALSE], c2[keep2, , drop = FALSE])
+    cells[[S]] <- c(rep(STATUS_LEVELS[[S]][1], sum(keep1)), rep(STATUS_LEVELS[[S]][2], sum(keep2)))
+    rownames(cells) <- NULL
+  }
+  list(cells = cells, what = what, weight_label = weight_label, title = title,
        share = sprintf("share of %s weight with %s", adjective,
                        switch(what, length = "length distributions",
-                              age = "age distributions", "discard estimates")))
+                              age = "age distributions", "discard estimates")),
+       status = if (split) S)
 }

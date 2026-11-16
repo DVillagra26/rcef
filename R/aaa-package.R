@@ -164,7 +164,7 @@ utils::globalVariables(c(
   "importedOrRaised", "originType", "variableType", "groupName",
   # build_coverage_strata() / coverage_cells() column names
   "total", "weightingTotal", "landings", "numTrips", "coverage",
-  "numMeasurements", "covered", ".covered", "rate",
+  "numMeasurements", "covered", ".covered", "rate", "totalRaised",
   # scf_sampling(): the sampling columns of the CEF, and what a row is a sample of
   "PSU", "numPSUs", ".sample"
 ))

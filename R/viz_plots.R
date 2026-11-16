@@ -26,7 +26,10 @@
 #  arguments: the raising adds importedOrRaised to the catch and the
 #  allocation adds sampledOrEstimated to the distributions, and that
 #  variable - the mark, by default: a cross, a dotted line, a hatched bar - and
-#  the title say which it is (status_marks() in R/viz_helpers.R).
+#  the title say which it is (status_marks() in R/viz_helpers.R). The coverage
+#  plots take the raised catch and the allocated distributions too: all three
+#  say in the title which data they hold, and the bar chart hatches the weight a
+#  step added (coverage_cells() in R/rcef_coverage.R splits the cells for it).
 #
 #  The coverage and discard-rate plots draw the table that
 #  build_coverage_strata() (R/rcef_coverage.R) returns. Given raw CEF
@@ -83,7 +86,9 @@ NULL
 #' "discard"`) or a linked length / age distribution. Like them, the map takes
 #' raw catch (plus `distributions` for length and age) or a
 #' [build_coverage_strata()] table that has the `area` column (and the
-#' `group` column) among its `dims`.
+#' `group` column) among its `dims`. Given the raised catch, or distributions the
+#' allocation estimated, the title says so (*imported + raised*, *sampled +
+#' estimated*, see [coverage-plots]); the pies are not split by it.
 #'
 #' ## Where a pie is placed
 #'
@@ -503,11 +508,34 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #' `palette` recolours the bars, and the status scale of the heatmap and the
 #' bubbles.
 #'
+#' ## After the raising or the allocation
+#'
+#' The plots take the raised catch ([catchRaising()]) as well as the raw one, and
+#' distributions the allocation estimated ([catchAllocationAoL()]) as well as the
+#' sampled ones, and the title says which they were given: *imported + raised* or
+#' *only imported* for a catch that carries `importedOrRaised`, *sampled +
+#' estimated* or *only sampled* for distributions that carry `sampledOrEstimated`
+#' - "Discards - Sampling of Length, imported + raised". The weights are those of
+#' all the data, so a raised catch has more weight and none of what the raising
+#' added has a distribution: the sampled share falls.
+#'
+#' The bar chart tells the two apart as well. With `alpha` (the default) the part
+#' of a bar that a step added is transparent and hatched, the part that was in the
+#' data solid, so one bar shows both what was sampled and what is only raised or
+#' estimated; the colours, the order of the bars and the brackets are those of
+#' the whole bar. When both are in the data the allocation's step is the one
+#' marked (the later one, it also covers the raised discards); `alpha =
+#' "importedOrRaised"` marks the raising instead, `alpha = NULL` marks nothing
+#' (the title still says what the data holds). Nothing is marked when no weight
+#' was added - the landings of a raised catch, a raw catch - or when the status
+#' is one of the plotted columns, which then draws it. The grid and the map do
+#' not mark: a cell or a pie cannot be split in two legibly.
+#'
 #' ## Argument order
 #'
 #' What data (`catch`, `distributions`, `what`, `catchCategory`), then which
 #' columns are the strata (`y`, `x` or `fill`, `facet`), then the `thresholds`,
-#' then `palette`.
+#' then `alpha` (bars only), then `palette`.
 #'
 #' @param catch CEF catch data carrying the columns you plot by ([derive_fields()]
 #'   output, or columns of your own), or a table from [build_coverage_strata()].
@@ -538,6 +566,10 @@ plot_coverage_map <- function(catch, distributions = NULL, area = "areaValue",
 #'   check. `fish` is not used with `what = "discard"` (a warning: no fish are
 #'   measured for a discard estimate). Leave out of the list what you do not set;
 #'   [recommend_groups()] takes the same list.
+#' @param alpha Bars only: what to draw transparent, `"importedOrRaised"` (what
+#'   the raising added) and / or `"sampledOrEstimated"` (what the allocation
+#'   estimated); the default, both, marks whichever the data has - the
+#'   allocation's when both. `NULL` marks nothing.
 #' @param palette `"default"`, `"colorblind"` or `"gradual"`. Recolours the bar
 #'   fill, or the status colours of the heatmap and the bubbles.
 #' @inheritParams saving-plots
@@ -828,6 +860,7 @@ plot_coverage_grid <- function(catch, distributions = NULL, y, x = NULL,
 plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
                               facet = NULL, what = "discard",
                               catchCategory = NULL,
+                              alpha = c("importedOrRaised", "sampledOrEstimated"),
                               palette = c("default", "colorblind",
                                          "gradual"), save = NULL) {
   save_on_exit(save, "plot_coverage_bar")
@@ -839,7 +872,7 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
   # and the shortfall a threshold would miss never reaches its colouring
   # (that is the `fill` variable, not a status) - so nothing is judged.
   cv <- coverage_cells(catch, distributions, c(y, fill, facet), what,
-                       !missing(what), catchCategory, fn)
+                       !missing(what), catchCategory, fn, alpha)
   if (is.null(cv)) return(NULL)
   what <- cv$what; weight_label <- cv$weight_label
   y_var <- y; fill_var <- fill; facet_var <- facet
@@ -869,6 +902,13 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
   wi <- paste("With", what, "sampling")
   wo <- paste("Without", what, "sampling")
 
+  # What the raising or the allocation added (the cells come in two rows, one for what was
+  # in the data and one for what the step added) is drawn transparent and hatched, in the
+  # same bar: a bar is the weight of a cell, the transparent part of it the weight a step added.
+  S  <- cv$status
+  st <- if (!is.null(S)) status_marks(S, S, c(y, fill, facet), unique(d[[S]]), paste0(fn, "(): "))
+  d$.status <- if (is.null(st)) "all" else st$status(d[[S]])
+
   # Split each stratum's weight into the part that carries a <what>
   # estimate (landings_with_discards) and the part that does not
   # (landings - landings_with_discards), then sum per cell and draw the
@@ -879,7 +919,7 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
   # sum(landings_with_discards) / sum(landings) is identical whatever the
   # grouping variable.
   d <- d %>%
-    group_by(.facet, .lab, .fill) %>%
+    group_by(.facet, .lab, .fill, .status) %>%
     summarise(.samp   = sum(landings_with_discards, na.rm = TRUE),
               .unsamp = sum(landings, na.rm = TRUE) -
                         sum(landings_with_discards, na.rm = TRUE),
@@ -889,27 +929,34 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
     filter(landings > 1e-9) %>%
     mutate(sampled = factor(ifelse(.part == ".samp", wi, wo),
                             levels = c(wi, wo))) %>%
-    arrange(.facet, desc(sampled), landings) %>%
+    group_by(.facet, .lab, .fill, sampled) %>%
+    mutate(.tot = sum(landings)) %>% ungroup() %>%
+    arrange(.facet, desc(sampled), .tot, .status) %>%
     mutate(.key = factor(
       paste0(.lab, "\u001F", .fill, "\u001F", sampled, "\u001F", .facet),
       levels = unique(paste0(.lab, "\u001F", .fill, "\u001F", sampled,
                              "\u001F", .facet)))) %>%
     group_by(.facet) %>%
-    mutate(y_num = row_number(), facet_total = sum(landings)) %>% ungroup()
+    mutate(y_num = dplyr::dense_rank(as.integer(.key)),
+           facet_total = sum(landings)) %>% ungroup()
+  # one row per bar of the chart (the status rows of a bar are its segments): what the order of
+  # the bars, the brackets and the staircase are made from
+  dk <- d %>% group_by(.facet, .lab, .fill, sampled, .key, y_num, facet_total) %>%
+    summarise(landings = sum(landings), .groups = "drop")
 
-  gmax   <- max(d$landings, na.rm = TRUE)
+  gmax   <- max(dk$landings, na.rm = TRUE)
   x_edge <- gmax * 1.05
   # the sampled share is annotated on the plot itself (the bracket labels
   # below, per facet), so it is not repeated in words here
-  br <- d %>% group_by(.facet, sampled) %>%
+  br <- dk %>% group_by(.facet, sampled) %>%
     summarise(y_min = min(y_num) - 0.5, y_max = max(y_num) + 0.5,
               y_mid = (min(y_num) + max(y_num)) / 2,
               pctg = sum(landings) / first(facet_total) * 100, .groups = "drop") %>%
     mutate(x_pos = x_edge,
            disp = ifelse(sampled == wi, "Sampled", "Not sampled"))
-  both <- intersect(d$.facet[d$sampled == wo], d$.facet[d$sampled == wi])
+  both <- intersect(dk$.facet[dk$sampled == wo], dk$.facet[dk$sampled == wi])
   sep <- if (length(both)) {
-    d %>% filter(sampled == wo, .facet %in% both) %>%
+    dk %>% filter(sampled == wo, .facet %in% both) %>%
       group_by(.facet) %>% summarise(sep_y = max(y_num) + 0.5, .groups = "drop")
   } else data.frame(.facet = character(0), sep_y = numeric(0))
 
@@ -918,20 +965,24 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
   # against the secondary top axis. Where it crosses the sampled /
   # not-sampled block boundary is the sampled fraction. Per facet, its
   # own total, mapped onto the shared weight x by the global max.
-  stair <- d %>% arrange(.facet, desc(y_num)) %>%
+  stair <- dk %>% arrange(.facet, desc(y_num)) %>%
     group_by(.facet) %>%
     mutate(cum = cumsum(landings) / first(facet_total) * 100,
            x_map = cum / 100 * gmax) %>%
     ungroup() %>% select(.facet, y_num, x_map)
   stair <- bind_rows(
-    d %>% group_by(.facet) %>%
+    dk %>% group_by(.facet) %>%
       summarise(y_num = max(y_num) + 0.5, x_map = 0, .groups = "drop"),
     stair) %>% arrange(.facet, desc(y_num))
 
-  ggplot(d, aes(x = landings, y = .key, fill = .fill)) +
+  ae <- aes(x = landings, y = .key, fill = .fill)
+  if (!is.null(st)) ae <- modifyList(ae, aes(alpha = .status))
+  p <- ggplot(d, ae) +
     geom_vline(xintercept = c(0.9, 0.95, 1) * gmax, colour = "grey85",
                linewidth = 0.3) +
-    geom_col(width = 0.72, colour = OUTLINE) +
+    (if (is.null(st)) geom_col(width = 0.72, colour = OUTLINE)
+     else geom_col_hatch(position = position_stack(reverse = TRUE), width = 0.72,
+                         colour = OUTLINE)) +
     geom_step(data = stair, aes(x = x_map, y = y_num), direction = "vh",
               inherit.aes = FALSE, colour = "grey20", linewidth = 0.5) +
     geom_segment(data = br, aes(x = x_pos, xend = x_pos, y = y_min, yend = y_max),
@@ -942,14 +993,14 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
               colour = OUTLINE) +
     geom_segment(data = sep, aes(x = 0, xend = x_edge, y = sep_y, yend = sep_y),
                  inherit.aes = FALSE, linetype = "dashed", colour = "grey50") +
-    scale_y_discrete(labels = setNames(d$.lab, as.character(d$.key))) +
+    scale_y_discrete(labels = setNames(dk$.lab, as.character(dk$.key))) +
     scale_x_continuous(labels = scales::comma,
                        expand = expansion(mult = c(0, 0.34)),
                        sec.axis = sec_axis(~ . / gmax * 100,
                                            name = sprintf("Cumulative %% of %s weight",
                                                           weight_label),
                                            breaks = c(0, 25, 50, 75, 100))) +
-    scale_fill_manual(values = plot_colours(d$.fill, if (has(fill_var)) fill_var else y_var,
+    scale_fill_manual(values = plot_colours(dk$.fill, if (has(fill_var)) fill_var else y_var,
                                             palette),
                       name = if (has(fill_var)) fill_var else y_var,
                       na.value = "grey85") +
@@ -959,11 +1010,14 @@ plot_coverage_bar <- function(catch, distributions = NULL, y, fill = NULL,
            strata_sentence(c(y, fill, facet), catch),
            sprintf("staircase = cumulative %% of %s weight (top axis).", weight_label),
            sprintf("bar = %s weight (bottom axis).", weight_label),
+           if (!is.null(st)) sprintf("solid = %s, hatched = %s.", st$says[1], st$says[2]),
            width = 110),
          x = sprintf("%s (t)", tools::toTitleCase(weight_label)), y = NULL,
          fill = if (has(fill_var)) fill_var else y_var) +
     coord_cartesian(clip = "off") + app_theme() +
     theme(plot.margin = margin(10, 120, 10, 10))
+  if (!is.null(st)) p <- p + st$scale
+  p
 }
 
 # ----------------------------------------------------------
@@ -1247,7 +1301,8 @@ plot_DR <- function(catch, x, colour = NULL, shape = NULL, facet = NULL,
                                      "weightingCategory", "total",
                                      "weightingTotal", "rate",
                                      "discardRate", "landings", "coverage",
-                                     "numTrips", ".y", "Stratum", S, ".status"))
+                                     "numTrips", ".y", "Stratum", S, ".status",
+                                     "totalRaised", "weightingTotalRaised"))
   strata_vars <- strata_vars[!vapply(strata_vars,
                                      function(v) anyNA(d[[v]]), logical(1))]
   # The rates as they were reported get a backdrop: the mean of each x level
