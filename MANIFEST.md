@@ -60,6 +60,11 @@ left out (a domain with an estimate for each season, each in the stratum of its 
 RDBES catch of 2025 the Belgian discards of one fleet came out as 7,563 kg imported plus 6,822 kg raised on the
 same landings. The check is `.cut_domains()` in `rcef_multi_area.R`; the hook in the vendored file is five lines.
 
+A sixth, a repair, also marked `## [pkg]`: `grp_AoL_alloc_N()` / `grp_AoL_alloc_WL()` make an estimated
+distribution row from the catch row of its stratum, and that row's `recordType` (`"CN"`) and `variance` went
+with it - on the 2025 allocation all 94,494 estimated rows were `"CN"`, so a filter on `"DN"` dropped them.
+They are `"DN"` now, with no variance; every other value is as before. Belongs upstream.
+
 The roxygen text of the vendored files has additions of ours (no marker: it is not
 code): the help pages of `catchRaising()`, `catchAllocationAoL()` and the two
 aggregations, and the arguments of `funICoutCEF()`, `funIntercatchCEF()` and

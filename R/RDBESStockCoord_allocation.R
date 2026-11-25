@@ -33,6 +33,10 @@
 #      stops: `1:n()` of no rows is `1:0`, two numbers, and bind_cols() cannot recycle no
 #      rows), and the group keeps its sampled distributions. A stratum that is sampled
 #      well enough is a group of its own in recommend_groups(). Belongs upstream.
+#    - grp_AoL_alloc_N() and grp_AoL_alloc_WL() make an estimated distribution row from the
+#      catch row of its stratum: that row's recordType ("CN") and variance are left out and
+#      recordType "DN" is written (upstream keeps them, so every estimated row was "CN" and
+#      carried the catch's variance). Belongs upstream.
 #
 #  Exported: catchAllocationAoL(), catchAtAoLAggregation(), meanWoLatAoLAggregation(),
 #            grp_AoL_alloc_N(), grp_AoL_alloc_WL(), grp_AoL_alloc_condition()
@@ -208,10 +212,14 @@ grp_AoL_alloc_N <- function(alloc_st_catch,
         {
             ## browser()
             cdata %>%
+                ## [pkg] the row made here is a distribution, not the catch row it is made from: the
+                ## catch's record type and variance do not go with it (see the header)
+                dplyr::select(-any_of(c("recordType", "variance"))) %>%
                 rename_with(~paste0(.x, ".c"),
                             all_of(c("variableType", "variableUnit", "numTrips", "numPSUs", "PSU"))) %>%
                 bind_cols(aggr_N_samp) %>%
                 mutate(value = value.samp * total / CATON.samp,
+                       recordType = "DN", ## [pkg] a CEF distribution row
                        sampledOrEstimated = "estimated") 
                 ## head(2) %>% as.data.frame()
         }, aggr_N_samp = aggr_N_samp) %>%
@@ -436,11 +444,14 @@ grp_AoL_alloc_WL <- function(alloc_st_catch,
         {
             ## browser()
             cdata %>%
+                ## [pkg] as for the numbers: not the catch's record type or variance (see the header)
+                dplyr::select(-any_of(c("recordType", "variance"))) %>%
                 rename_with(~paste0(.x, ".c"),
                             all_of(c("variableType", "variableUnit", "numTrips", "numPSUs", "PSU"))) %>%
                 bind_cols(aggr_W_samp) %>%
                 mutate(value = value.samp, # just repeating the estimated means for all catches
                                         # without samples.
+                       recordType = "DN", ## [pkg] a CEF distribution row
                        sampledOrEstimated = "estimated") 
         }, aggr_W_samp = aggr_W_samp) %>%
         bind_rows() %>%
@@ -717,7 +728,9 @@ grp_AoL_alloc_condition <- function(catch_data,
 #'   the estimated ones - with `sampledOrEstimated` (`"sampled"` or
 #'   `"estimated"`) and `allocGroup`, the group they were allocated in.
 #'   Numbers are `variableType == "Number"` rows, mean weights
-#'   `"WeightLive"` rows.
+#'   `"WeightLive"` rows. An estimated row is a CEF distribution row like the
+#'   others (`recordType` `"DN"`) and has no `variance`: the allocation
+#'   estimates none.
 #' * `catch`: the allocated catch rows, with `allocGroup`. A stratum without a
 #'   `domainBiology` is given one (`"[alloc]_<season>_<area>_<unit>_<fleet>_<category>"`),
 #'   and its estimated distributions carry it, so the two tables join on

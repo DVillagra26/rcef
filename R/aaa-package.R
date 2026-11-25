@@ -115,9 +115,10 @@
 #' * `R/RDBESStockCoord_*.R`: vendored from the ICES RDBESStockCoord working
 #'   group code. Algorithms, argument lists and return shapes are upstream's.
 #'   Local edits are packaging, plus a few - `distributionType` takes CEF's own
-#'   `"LengthTotal"` where upstream says `"Length"`, and the check of the strata
-#'   in [check_group_conditions()] stops when the groups of a raising cut a domain
-#'   - and are marked `## [pkg]`. The help pages of [catchRaising()], [catchAllocationAoL()]
+#'   `"LengthTotal"` where upstream says `"Length"`, the check of the strata
+#'   in [check_group_conditions()] stops when the groups of a raising cut a domain,
+#'   and the distributions the allocation estimates are `"DN"` records without the
+#'   catch's variance - and are marked `## [pkg]`. The help pages of [catchRaising()], [catchAllocationAoL()]
 #'   and the two aggregation functions are written here, as are the arguments
 #'   of [funICoutCEF()], [funIntercatchCEF()] and [check_group_conditions()]
 #'   that upstream leaves undocumented. Do not refactor these files; fix

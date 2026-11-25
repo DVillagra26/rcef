@@ -106,15 +106,14 @@ split is visible in git:
 \item \code{R/RDBESStockCoord_*.R}: vendored from the ICES RDBESStockCoord working
 group code. Algorithms, argument lists and return shapes are upstream's.
 Local edits are packaging, plus a few - \code{distributionType} takes CEF's own
-\code{"LengthTotal"} where upstream says \code{"Length"}, and the check of the strata
-in \code{\link[=check_group_conditions]{check_group_conditions()}} stops when the groups of a raising cut a domain
-\itemize{
-\item and are marked \verb{## [pkg]}. The help pages of \code{\link[=catchRaising]{catchRaising()}}, \code{\link[=catchAllocationAoL]{catchAllocationAoL()}}
+\code{"LengthTotal"} where upstream says \code{"Length"}, the check of the strata
+in \code{\link[=check_group_conditions]{check_group_conditions()}} stops when the groups of a raising cut a domain,
+and the distributions the allocation estimates are \code{"DN"} records without the
+catch's variance - and are marked \verb{## [pkg]}. The help pages of \code{\link[=catchRaising]{catchRaising()}}, \code{\link[=catchAllocationAoL]{catchAllocationAoL()}}
 and the two aggregation functions are written here, as are the arguments
 of \code{\link[=funICoutCEF]{funICoutCEF()}}, \code{\link[=funIntercatchCEF]{funIntercatchCEF()}} and \code{\link[=check_group_conditions]{check_group_conditions()}}
 that upstream leaves undocumented. Do not refactor these files; fix
 upstream and re-vendor.
-}
 \item \code{R/rcef_*.R}: written here - field derivation and units, the coverage
 table, the groups, the distributions, the raised-catch summaries. Free to
 refactor.

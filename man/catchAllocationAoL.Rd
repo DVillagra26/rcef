@@ -117,7 +117,9 @@ A list of two tables:
 the estimated ones - with \code{sampledOrEstimated} (\code{"sampled"} or
 \code{"estimated"}) and \code{allocGroup}, the group they were allocated in.
 Numbers are \code{variableType == "Number"} rows, mean weights
-\code{"WeightLive"} rows.
+\code{"WeightLive"} rows. An estimated row is a CEF distribution row like the
+others (\code{recordType} \code{"DN"}) and has no \code{variance}: the allocation
+estimates none.
 \item \code{catch}: the allocated catch rows, with \code{allocGroup}. A stratum without a
 \code{domainBiology} is given one (\code{"[alloc]_<season>_<area>_<unit>_<fleet>_<category>"}),
 and its estimated distributions carry it, so the two tables join on
